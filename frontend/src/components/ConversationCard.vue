@@ -10,7 +10,7 @@
         <v-icon :color="statusColor" size="10">mdi-circle</v-icon>
         <v-chip :color="kindColor" size="x-small" variant="flat">{{ conversation.kind }}</v-chip>
         <span class="text-caption font-weight-mono text-medium-emphasis">
-          <v-tooltip :text="conversation.id" location="top">
+          <v-tooltip :text="conversation.id" location="top" :open-delay="150" content-class="ccx-tooltip">
             <template #activator="{ props: tp }">
               <span v-bind="tp">{{ conversation.id.slice(0, 12) }}...</span>
             </template>

@@ -2,13 +2,13 @@
   <div class="conversation-dashboard">
     <!-- 过滤栏 -->
     <div class="d-flex align-center mb-4 flex-wrap ga-2">
-      <v-chip-group v-model="kindFilter" mandatory>
-        <v-chip value="" variant="elevated" size="small">All</v-chip>
-        <v-chip value="messages" variant="elevated" size="small">Messages</v-chip>
-        <v-chip value="chat" variant="elevated" size="small">Chat</v-chip>
-        <v-chip value="responses" variant="elevated" size="small">Responses</v-chip>
-        <v-chip value="gemini" variant="elevated" size="small">Gemini</v-chip>
-        <v-chip value="images" variant="elevated" size="small">Images</v-chip>
+      <v-chip-group v-model="kindFilter" mandatory selected-class="text-primary">
+        <v-chip value="" variant="tonal" size="small" filter>All</v-chip>
+        <v-chip value="messages" variant="tonal" size="small" color="purple" filter>Messages</v-chip>
+        <v-chip value="chat" variant="tonal" size="small" color="blue" filter>Chat</v-chip>
+        <v-chip value="responses" variant="tonal" size="small" color="teal" filter>Responses</v-chip>
+        <v-chip value="gemini" variant="tonal" size="small" color="orange" filter>Gemini</v-chip>
+        <v-chip value="images" variant="tonal" size="small" color="pink" filter>Images</v-chip>
       </v-chip-group>
       <v-spacer />
       <span class="text-caption text-medium-emphasis">
