@@ -139,7 +139,7 @@ export interface Channel {
   supportedModels?: string[]  // 支持的模型白名单（空=全部），支持通配符如 gpt-4*
   noVision?: boolean                       // 整个渠道不支持图片输入
   noVisionModels?: string[]                // 不支持图片输入的模型列表（匹配 modelMapping 后的实际模型名）
-  visionFallbackModel?: Record<string, string> // 含图请求的模型降级映射
+  visionFallbackModel?: string               // 含图请求命中 noVisionModels 时使用的替代模型
   rpm?: number                // 能力测试发送速率（仅影响能力测试）
 }
 

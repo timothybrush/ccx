@@ -260,12 +260,6 @@ func (u *UpstreamConfig) Clone() *UpstreamConfig {
 		cloned.NoVisionModels = make([]string, len(u.NoVisionModels))
 		copy(cloned.NoVisionModels, u.NoVisionModels)
 	}
-	if u.VisionFallbackModel != nil {
-		cloned.VisionFallbackModel = make(map[string]string, len(u.VisionFallbackModel))
-		for k, v := range u.VisionFallbackModel {
-			cloned.VisionFallbackModel[k] = v
-		}
-	}
 
 	return &cloned
 }

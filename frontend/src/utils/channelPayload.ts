@@ -32,7 +32,7 @@ export interface ChannelFormLike {
   stripCodexClientTools?: boolean
   noVision: boolean
   noVisionModels: string[]
-  visionFallbackModel: Record<string, string>
+  visionFallbackModel: string
 
 }
 

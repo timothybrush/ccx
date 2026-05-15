@@ -235,7 +235,7 @@ func (cm *ConfigManager) UpdateChatUpstream(index int, updates UpstreamUpdate) (
 		upstream.NoVisionModels = updates.NoVisionModels
 	}
 	if updates.VisionFallbackModel != nil {
-		upstream.VisionFallbackModel = updates.VisionFallbackModel
+		upstream.VisionFallbackModel = *updates.VisionFallbackModel
 	}
 
 	// 检测配置是否真的发生了变化

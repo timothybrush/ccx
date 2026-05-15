@@ -230,6 +230,7 @@ export type MessageKey =
   | 'addChannel.visionChannelEnabled'
   | 'addChannel.visionFallbackLabel'
   | 'addChannel.visionFallbackPlaceholder'
+  | 'addChannel.visionFallbackHint'
   | 'addChannel.passbackReasoningContentLabel'
   | 'addChannel.passbackReasoningContentHint'
   | 'addChannel.customHeadersLabel'
@@ -631,6 +632,7 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'addChannel.visionChannelEnabled': 'This channel supports image input',
     'addChannel.visionFallbackLabel': 'Vision fallback model',
     'addChannel.visionFallbackPlaceholder': 'Model to use when request contains images',
+    'addChannel.visionFallbackHint': 'When a request contains images and the target model does not support vision, this model will be used instead. Leave empty to failover to the next channel.',
     'addChannel.passbackReasoningContentLabel': 'Passback reasoning content',
     'addChannel.passbackReasoningContentHint': 'Convert thinking blocks to reasoning_content when forwarding to Claude-protocol upstreams that require OpenAI-style reasoning_content (e.g. mimo).',
     'addChannel.customHeadersLabel': 'Custom headers (optional)',
@@ -1031,6 +1033,7 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'addChannel.visionChannelEnabled': 'Channel ini mendukung input gambar',
     'addChannel.visionFallbackLabel': 'Model fallback vision',
     'addChannel.visionFallbackPlaceholder': 'Model yang digunakan saat permintaan mengandung gambar',
+    'addChannel.visionFallbackHint': 'Saat permintaan mengandung gambar dan model target tidak mendukung vision, model ini akan digunakan. Kosongkan untuk failover ke channel berikutnya.',
     'addChannel.passbackReasoningContentLabel': 'Teruskan reasoning content',
     'addChannel.passbackReasoningContentHint': 'Ubah thinking block menjadi reasoning_content saat diteruskan ke upstream protokol Claude yang mewajibkan reasoning_content ala OpenAI (misalnya mimo).',
     'addChannel.customHeadersLabel': 'Custom header (opsional)',
@@ -1431,6 +1434,7 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'addChannel.visionChannelEnabled': '此渠道支持图片输入',
     'addChannel.visionFallbackLabel': '视觉回退模型',
     'addChannel.visionFallbackPlaceholder': '含图请求时使用的替代模型',
+    'addChannel.visionFallbackHint': '当请求包含图片且目标模型不支持 vision 时，使用此模型替代。留空则 failover 到下一个渠道。',
     'addChannel.passbackReasoningContentLabel': '回传 Reasoning Content',
     'addChannel.passbackReasoningContentHint': '将 thinking 块转为 reasoning_content 回传，兼容 mimo 等要求 OpenAI 风格 reasoning_content 的 Claude 协议上游',
     'addChannel.customHeadersLabel': '自定义请求头 (可选)',

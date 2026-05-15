@@ -318,19 +318,6 @@
                           </div>
                         </template>
                       </v-list-item>
-                      <!-- Vision fallback 输入（当模型标记为不支持视觉时显示） -->
-                      <v-text-field
-                        v-if="isModelNoVision(target)"
-                        v-model="form.visionFallbackModel[target]"
-                        :label="t('addChannel.visionFallbackLabel')"
-                        :placeholder="t('addChannel.visionFallbackPlaceholder')"
-                        variant="outlined"
-                        density="compact"
-                        hide-details
-                        class="ml-10 mb-2"
-                        style="max-width: 320px"
-                        clearable
-                      />
                       </template>
                     </v-list>
                   </div>
@@ -424,6 +411,22 @@
                   </v-row>
                 </v-card-text>
               </v-card>
+            </v-col>
+
+            <!-- Vision 回退模型 -->
+            <v-col v-if="form.noVisionModels.length > 0 || form.noVision" cols="12">
+              <v-combobox
+                v-model="form.visionFallbackModel"
+                :label="t('addChannel.visionFallbackLabel')"
+                :placeholder="t('addChannel.visionFallbackPlaceholder')"
+                :hint="t('addChannel.visionFallbackHint')"
+                :items="targetModelOptions"
+                prepend-inner-icon="mdi-eye"
+                persistent-hint
+                clearable
+                variant="outlined"
+                density="comfortable"
+              />
             </v-col>
 
             <!-- 支持的模型白名单 -->
@@ -1693,7 +1696,7 @@ const form = reactive({
   stripCodexClientTools: false,
   noVision: false,
   noVisionModels: [] as string[],
-  visionFallbackModel: {} as Record<string, string>,
+  visionFallbackModel: '',
 })
 
 // 多 BaseURL 文本输入（独立变量，保留用户输入的换行）
@@ -2011,7 +2014,7 @@ const hasEditableDraftChanges = computed(() => {
     stripCodexClientTools: props.channel.codexToolCompat ?? props.channel.stripCodexClientTools ?? false,
     noVision: !!props.channel.noVision,
     noVisionModels: [...(props.channel.noVisionModels || [])],
-    visionFallbackModel: { ...(props.channel.visionFallbackModel || {}) },
+    visionFallbackModel: props.channel.visionFallbackModel || '',
   }
 
   return JSON.stringify(currentPayload) !== JSON.stringify(originalPayload)
@@ -2086,7 +2089,7 @@ const resetForm = () => {
   form.stripCodexClientTools = false
   form.noVision = false
   form.noVisionModels = []
-  form.visionFallbackModel = {}
+  form.visionFallbackModel = ''
 
   // 重置 baseUrlsText
   baseUrlsText.value = ''
@@ -2155,7 +2158,7 @@ const loadChannelData = (channel: Channel) => {
   form.stripCodexClientTools = channel.codexToolCompat ?? channel.stripCodexClientTools ?? false
   form.noVision = !!channel.noVision
   form.noVisionModels = [...(channel.noVisionModels || [])]
-  form.visionFallbackModel = { ...(channel.visionFallbackModel || {}) }
+  form.visionFallbackModel = channel.visionFallbackModel || ''
 
   // 立即同步 baseUrl 到预览变量，避免等待 debounce
   formBaseUrlPreview.value = channel.baseUrl
@@ -2342,11 +2345,9 @@ const removeModelMapping = (source: string) => {
   const target = form.modelMapping[source]
   delete form.modelMapping[source]
   delete form.reasoningMapping[source]
-  // 清理 vision 相关数据
   if (target) {
     const idx = form.noVisionModels.indexOf(target)
     if (idx >= 0) form.noVisionModels.splice(idx, 1)
-    delete form.visionFallbackModel[target]
   }
 }
 
@@ -2358,7 +2359,6 @@ const toggleModelVision = (model: string) => {
   const idx = form.noVisionModels.indexOf(model)
   if (idx >= 0) {
     form.noVisionModels.splice(idx, 1)
-    delete form.visionFallbackModel[model]
   } else {
     form.noVisionModels.push(model)
   }

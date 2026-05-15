@@ -31,7 +31,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.name).toBe('test-channel')
@@ -76,7 +76,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.baseUrl).toBe('https://api.example.com')
@@ -116,7 +116,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.baseUrl).toBe('https://new.timefiles.online')
@@ -152,7 +152,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.baseUrl).toBe('https://new.timefiles.online')
@@ -188,7 +188,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.modelMapping).toEqual({ opus: 'claude-3-7-sonnet' })
@@ -227,7 +227,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.autoBlacklistBalance).toBe(false)
@@ -262,7 +262,7 @@ describe('buildChannelPayload', () => {
       codexToolCompat: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.normalizeMetadataUserId).toBe(false)
@@ -298,7 +298,7 @@ describe('buildChannelPayload', () => {
       normalizeNonstandardChatRoles: true,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: {}
+      visionFallbackModel: ''
     })
 
     expect(result.normalizeNonstandardChatRoles).toBe(true)

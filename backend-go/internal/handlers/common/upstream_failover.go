@@ -125,7 +125,8 @@ func TryUpstreamWithAllKeys(
 			return false, "", 0, nil, nil, fmt.Errorf("channel %s does not support vision", upstream.Name)
 		}
 		if isNoVisionModel(upstream, redirectedModel) {
-			if fallback, ok := upstream.VisionFallbackModel[redirectedModel]; ok && fallback != "" {
+			if upstream.VisionFallbackModel != "" {
+				fallback := upstream.VisionFallbackModel
 				log.Printf("[%s-Vision] 模型 %s 不支持视觉，使用 fallback: %s (渠道 [%d] %s)", apiType, redirectedModel, fallback, channelIndex, upstream.Name)
 				if replaced, err := sjson.SetBytes(requestBody, "model", fallback); err == nil {
 					requestBody = replaced
