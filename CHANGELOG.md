@@ -1,3 +1,10 @@
+## [v2.6.96] - 2026-05-15
+
+### 修复
+
+- **前端暗色模式对话框按钮文字对比度优化** - 改善 dark mode 下对话框按钮文字的可读性
+- **BuildChannelView 补充 vision 相关字段返回** - 修复 noVision/noVisionModels/visionFallbackModel 字段在构建渠道视图时未正确返回的问题
+
 ## [v2.6.95] - 2026-05-15
 
 ### 新增
