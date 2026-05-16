@@ -36,7 +36,9 @@ func TestConversationTracker_UpdateTitle(t *testing.T) {
 	defer ct.Stop()
 
 	ct.Track("messages", "session-123", "claude-opus-4-7", 0, "primary", "", "", 0)
-	ct.UpdateTitle("messages", "session-123", "Build docs preview")
+	if !ct.UpdateTitle("messages", "session-123", "Build docs preview") {
+		t.Fatal("expected UpdateTitle to update existing conversation")
+	}
 
 	convs := ct.GetActiveConversations("")
 	if len(convs) != 1 {
@@ -48,6 +50,196 @@ func TestConversationTracker_UpdateTitle(t *testing.T) {
 	if convs[0].RequestCount != 1 {
 		t.Errorf("expected requestCount=1, got %d", convs[0].RequestCount)
 	}
+}
+
+func TestConversationTracker_UpdateTitleMissingConversation(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	if ct.UpdateTitle("messages", "session-123", "Build docs preview") {
+		t.Fatal("expected UpdateTitle to report missing conversation")
+	}
+	if convs := ct.GetActiveConversations(""); len(convs) != 0 {
+		t.Fatalf("expected no conversation to be created by UpdateTitle, got %d", len(convs))
+	}
+}
+
+func TestConversationTracker_PersistAndRestore(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/state.json"
+
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	ct.Track("messages", "user-abc", "claude-opus-4-7", 0, "primary", "", "你好世界", 1)
+	ct.UpdateTitle("messages", "user-abc", "确认驾驶舱对话卡片保存时长")
+	ct.Stop()
+
+	ct2 := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	defer ct2.Stop()
+
+	convs := ct2.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation after restore, got %d", len(convs))
+	}
+	if convs[0].Title != "确认驾驶舱对话卡片保存时长 — 你好世界" {
+		t.Errorf("expected restored title, got %q", convs[0].Title)
+	}
+	if convs[0].CreatedAt.IsZero() {
+		t.Error("expected non-zero createdAt after restore")
+	}
+
+	ct2.Track("messages", "user-abc", "claude-opus-4-7", 1, "backup", "", "", 2)
+	convs2 := ct2.GetActiveConversations("")
+	if len(convs2) != 1 {
+		t.Fatalf("expected mapping to work after restore, got %d conversations", len(convs2))
+	}
+	if convs2[0].CurrentChannel != 1 {
+		t.Errorf("expected channel=1 after re-track, got %d", convs2[0].CurrentChannel)
+	}
+}
+
+func TestConversationTracker_PersistAndRestoreSessionMapping(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/state.json"
+
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	ct.Track("responses", "user-abc", "model-a", 0, "primary", "sess-1", "第一轮", 1)
+	ct.Stop()
+
+	ct2 := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	defer ct2.Stop()
+	ct2.Track("responses", "user-abc", "model-b", 1, "backup", "sess-1", "第二轮", 2)
+
+	convs := ct2.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected restored session mapping to keep one conversation, got %d", len(convs))
+	}
+	if convs[0].CurrentChannel != 1 {
+		t.Errorf("expected updated channel after restored session mapping, got %d", convs[0].CurrentChannel)
+	}
+}
+
+func TestConversationTracker_StatusUpdatePersists(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/state.json"
+
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	ct.Track("messages", "user-abc", "model-a", 0, "primary", "", "第一轮", 1)
+	ct.Stop()
+
+	ct2 := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	ct2.UpdateStatus("messages", "user-abc", "idle")
+	ct2.Stop()
+
+	ct3 := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	defer ct3.Stop()
+	convs := ct3.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation after status restore, got %d", len(convs))
+	}
+	if convs[0].Status != "idle" {
+		t.Errorf("expected persisted status idle, got %s", convs[0].Status)
+	}
+}
+
+func TestConversationTracker_TTLFilterOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/state.json"
+
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	ct.Track("messages", "user-fresh", "model-a", 0, "ch1", "", "新对话", 1)
+	ct.Track("messages", "user-old", "model-b", 0, "ch2", "", "旧对话", 1)
+
+	ct.mu.Lock()
+	for _, conv := range ct.conversations {
+		if conv.RawUserID == "user-old" {
+			conv.LastActiveAt = time.Now().Add(-3 * time.Hour)
+		}
+	}
+	ct.dirty = true
+	ct.mu.Unlock()
+	ct.Stop()
+
+	ct2 := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
+	defer ct2.Stop()
+
+	convs := ct2.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation (expired filtered), got %d", len(convs))
+	}
+	if convs[0].RawUserID != "user-fresh" {
+		t.Errorf("expected user-fresh to survive, got %s", convs[0].RawUserID)
+	}
+}
+
+func TestConversationTracker_ShortTitleConcatenation(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.Track("messages", "user-x", "model", 0, "ch", "", "驾驶舱对话卡片保存时长", 1)
+	ct.UpdateTitle("messages", "user-x", "Hi")
+
+	convs := ct.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(convs))
+	}
+	if convs[0].Title != "Hi — 驾驶舱对话卡片保存时长" {
+		t.Errorf("expected concatenated title, got %q", convs[0].Title)
+	}
+}
+
+func TestConversationTracker_TitleCompletesWithFallbackUntilLimit(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.Track("messages", "user-x", "model", 0, "ch", "", "怎么给 Go self-update 选择一个合适的实现方案", 1)
+	ct.UpdateTitle("messages", "user-x", "Evaluate Go self-update options")
+
+	convs := ct.GetActiveConversations("")
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(convs))
+	}
+	want := "Evaluate Go self-update options — 怎么给 Go self-update 选择一个合适的实现方案"
+	if convs[0].Title != want {
+		t.Errorf("expected completed title %q, got %q", want, convs[0].Title)
+	}
+}
+
+func TestConversationTracker_UpdatesTitleWhenFallbackChanges(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.Track("messages", "user-x", "model", 0, "ch", "", "第一轮问题", 1)
+	ct.UpdateTitle("messages", "user-x", "Evaluate Go self-update options")
+	ct.Track("messages", "user-x", "model", 0, "ch", "", "第二轮追问如何自动更新", 2)
+
+	convs := ct.GetActiveConversations("")
+	want := "Evaluate Go self-update options — 第二轮追问如何自动更新"
+	if convs[0].Title != want {
+		t.Errorf("expected title to use latest fallback %q, got %q", want, convs[0].Title)
+	}
+}
+
+func TestConversationTracker_ShortTitleNoDuplicate(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.Track("messages", "user-x", "model", 0, "ch", "", "驾驶舱对话卡片保存时长", 1)
+	ct.UpdateTitle("messages", "user-x", "OK")
+	first := ct.GetActiveConversations("")[0].Title
+	if first != "OK — 驾驶舱对话卡片保存时长" {
+		t.Fatalf("expected first concatenation, got %q", first)
+	}
+	ct.UpdateTitle("messages", "user-x", "OK")
+	second := ct.GetActiveConversations("")[0].Title
+	if second != first {
+		t.Errorf("expected no duplicate concatenation, got %q (was %q)", second, first)
+	}
+}
+
+func TestConversationTracker_StopIdempotent(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	ct.Stop()
+	ct.Stop()
 }
 
 func TestConversationTracker_TrackMultipleRequests(t *testing.T) {

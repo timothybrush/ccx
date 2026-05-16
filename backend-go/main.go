@@ -137,7 +137,7 @@ func main() {
 		messagesMetricsManager.GetFailureThreshold()*100, messagesMetricsManager.GetWindowSize())
 
 	// 初始化对话追踪器和覆盖管理器
-	conversationTracker := conversation.NewConversationTracker(1*time.Hour, 2*time.Hour)
+	conversationTracker := conversation.NewConversationTracker(1*time.Hour, 2*time.Hour, ".config/conversation_state.json")
 	overrideManager := conversation.NewOverrideManager(30 * time.Minute)
 	channelScheduler.SetConversationComponents(conversationTracker, overrideManager)
 	log.Printf("[Conversation-Init] 对话追踪器和覆盖管理器已初始化 (idle: 1h, expire: 2h, override TTL: 30m)")
@@ -600,6 +600,10 @@ func main() {
 				log.Println("[Metrics-Shutdown] 指标存储已安全关闭")
 			}
 		}
+
+		// 关闭对话追踪器（flush 持久化状态）
+		conversationTracker.Stop()
+		log.Println("[Conversation-Shutdown] 对话追踪器已安全关闭")
 
 		close(scheduledRecoveryStop)
 		close(shutdownDone)

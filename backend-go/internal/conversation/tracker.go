@@ -15,6 +15,9 @@ type Conversation struct {
 	UserID         string    `json:"userId"`
 	RawUserID      string    `json:"-"`
 	Title          string    `json:"title,omitempty"`
+	GeneratedTitle string    `json:"-"`
+	FallbackTitle  string    `json:"-"`
+	SessionID      string    `json:"-"`
 	CreatedAt      time.Time `json:"createdAt"`
 	LastActiveAt   time.Time `json:"lastActiveAt"`
 	RequestCount   int       `json:"requestCount"`
@@ -26,6 +29,19 @@ type Conversation struct {
 	LastRequestID  string    `json:"lastRequestId"`
 }
 
+func (conv *Conversation) recomputeTitle() {
+	if conv.GeneratedTitle != "" {
+		const maxTitleRunes = 80
+		if len([]rune(conv.GeneratedTitle)) < maxTitleRunes && conv.FallbackTitle != "" {
+			conv.Title = composeTitleWithFallback(conv.GeneratedTitle, conv.FallbackTitle)
+			return
+		}
+		conv.Title = truncateTitle(conv.GeneratedTitle)
+		return
+	}
+	conv.Title = conv.FallbackTitle
+}
+
 type ConversationTracker struct {
 	mu             sync.RWMutex
 	conversations  map[string]*Conversation
@@ -33,19 +49,36 @@ type ConversationTracker struct {
 	userMapping    map[string]string // kind:userID → conversationID (for Chat/Messages/Gemini)
 	idleTTL        time.Duration
 	expireTTL      time.Duration
+	persistPath    string
+	dirty          bool
 	stopCh         chan struct{}
+	stopOnce       sync.Once
 }
 
-func NewConversationTracker(idleTTL, expireTTL time.Duration) *ConversationTracker {
+func NewConversationTracker(idleTTL, expireTTL time.Duration, persistPath ...string) *ConversationTracker {
+	path := ""
+	if len(persistPath) > 0 {
+		path = persistPath[0]
+	}
+
 	ct := &ConversationTracker{
 		conversations:  make(map[string]*Conversation),
 		sessionMapping: make(map[string]string),
 		userMapping:    make(map[string]string),
 		idleTTL:        idleTTL,
 		expireTTL:      expireTTL,
+		persistPath:    path,
 		stopCh:         make(chan struct{}),
 	}
+
+	if path != "" {
+		ct.loadFromDisk()
+	}
+
 	go ct.cleanupLoop()
+	if path != "" {
+		go ct.persistLoop()
+	}
 	return ct
 }
 
@@ -74,6 +107,7 @@ func (ct *ConversationTracker) Track(kind, userID, model string, channelIndex in
 		ct.conversations[convID] = conv
 
 		if sessionID != "" {
+			conv.SessionID = sessionID
 			ct.sessionMapping[sessionID] = convID
 		}
 		compositeKey := kind + ":" + userID
@@ -95,33 +129,31 @@ func (ct *ConversationTracker) Track(kind, userID, model string, channelIndex in
 		conv.Models = append(conv.Models, model)
 	}
 
-	if conv.Title == "" && lastUserMessage != "" {
-		msg := strings.ReplaceAll(lastUserMessage, "\n", " ")
-		msg = strings.ReplaceAll(msg, "\r", "")
-		msg = strings.TrimSpace(msg)
-		if msg != "" {
-			runes := []rune(msg)
-			if len(runes) > 50 {
-				conv.Title = string(runes[:50]) + "..."
-			} else {
-				conv.Title = msg
-			}
-		}
+	if fallback := fallbackTitleFromUserMessage(lastUserMessage); fallback != "" {
+		conv.FallbackTitle = fallback
+		conv.recomputeTitle()
 	}
+	ct.dirty = true
 }
 
-func (ct *ConversationTracker) UpdateTitle(kind, userID, title string) {
+func (ct *ConversationTracker) UpdateTitle(kind, userID, title string) bool {
 	if userID == "" || title == "" {
-		return
+		return false
 	}
 
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
 
 	convID := ct.resolveConversationID(kind, userID, "")
-	if conv, exists := ct.conversations[convID]; exists {
-		conv.Title = title
+	conv, exists := ct.conversations[convID]
+	if !exists {
+		return false
 	}
+
+	conv.GeneratedTitle = strings.TrimSpace(title)
+	conv.recomputeTitle()
+	ct.dirty = true
+	return true
 }
 
 func (ct *ConversationTracker) UpdateStatus(kind, userID, status string) {
@@ -143,6 +175,7 @@ func (ct *ConversationTracker) UpdateStatus(kind, userID, status string) {
 	}
 	conv.Status = status
 	conv.LastActiveAt = time.Now()
+	ct.dirty = true
 }
 
 func (ct *ConversationTracker) SetLastRequestID(kind, userID, requestID string) {
@@ -163,6 +196,7 @@ func (ct *ConversationTracker) SetLastRequestID(kind, userID, requestID string) 
 		return
 	}
 	conv.LastRequestID = requestID
+	ct.dirty = true
 }
 
 func (ct *ConversationTracker) GetActiveConversations(kindFilter string) []*Conversation {
@@ -201,7 +235,12 @@ func (ct *ConversationTracker) GetConversationByUser(kind, userID string) (*Conv
 }
 
 func (ct *ConversationTracker) Stop() {
-	close(ct.stopCh)
+	ct.stopOnce.Do(func() {
+		close(ct.stopCh)
+		if ct.persistPath != "" {
+			ct.flushToDisk()
+		}
+	})
 }
 
 func (ct *ConversationTracker) resolveConversationID(kind, userID, sessionID string) string {
@@ -219,6 +258,78 @@ func (ct *ConversationTracker) resolveConversationID(kind, userID, sessionID str
 
 	hash := sha256.Sum256([]byte(compositeKey))
 	return "conv_" + hex.EncodeToString(hash[:6])
+}
+
+func (ct *ConversationTracker) loadFromDisk() {
+	items, skipped, err := loadPersistedState(ct.persistPath, ct.expireTTL)
+	if err != nil {
+		log.Printf("[ConversationTracker-Load] 读取失败: %v", err)
+		return
+	}
+	if len(items) == 0 && skipped == 0 {
+		return
+	}
+
+	for _, item := range items {
+		conv := &Conversation{
+			ID:             item.ID,
+			Kind:           item.Kind,
+			UserID:         item.UserID,
+			RawUserID:      item.RawUserID,
+			Title:          item.Title,
+			GeneratedTitle: item.GeneratedTitle,
+			FallbackTitle:  item.FallbackTitle,
+			SessionID:      item.SessionID,
+			CreatedAt:      item.CreatedAt,
+			LastActiveAt:   item.LastActiveAt,
+			Status:         "idle",
+			Models:         []string{},
+		}
+		ct.conversations[item.ID] = conv
+
+		compositeKey := item.Kind + ":" + item.RawUserID
+		ct.userMapping[compositeKey] = item.ID
+		if item.SessionID != "" {
+			ct.sessionMapping[item.SessionID] = item.ID
+		}
+	}
+	log.Printf("[ConversationTracker-Load] 恢复 %d 个对话, 跳过 %d 个过期条目", len(items), skipped)
+}
+
+func (ct *ConversationTracker) persistLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ct.stopCh:
+			return
+		case <-ticker.C:
+			ct.flushToDisk()
+		}
+	}
+}
+
+func (ct *ConversationTracker) flushToDisk() {
+	ct.mu.Lock()
+	if !ct.dirty {
+		ct.mu.Unlock()
+		return
+	}
+	ct.dirty = false
+	snapshot := make(map[string]*Conversation, len(ct.conversations))
+	for id, conv := range ct.conversations {
+		c := *conv
+		snapshot[id] = &c
+	}
+	ct.mu.Unlock()
+
+	if err := savePersistedState(ct.persistPath, snapshot); err != nil {
+		ct.mu.Lock()
+		ct.dirty = true
+		ct.mu.Unlock()
+		log.Printf("[ConversationTracker-Save] 写入失败: %v", err)
+	}
 }
 
 func (ct *ConversationTracker) cleanupLoop() {
@@ -271,6 +382,7 @@ func (ct *ConversationTracker) removeConversation(id string, conv *Conversation)
 			delete(ct.sessionMapping, sessID)
 		}
 	}
+	ct.dirty = true
 }
 
 func maskUserID(userID string) string {
@@ -297,4 +409,37 @@ func containsString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func fallbackTitleFromUserMessage(message string) string {
+	msg := strings.ReplaceAll(message, "\n", " ")
+	msg = strings.ReplaceAll(msg, "\r", "")
+	msg = strings.TrimSpace(msg)
+	return truncateTitle(msg)
+}
+
+func composeTitleWithFallback(title, fallback string) string {
+	title = strings.TrimSpace(title)
+	fallback = strings.TrimSpace(fallback)
+	if title == "" || fallback == "" {
+		return title
+	}
+	if title == fallback || strings.Contains(title, " — "+fallback) {
+		return truncateTitle(title)
+	}
+	combined := title + " — " + fallback
+	return truncateTitle(combined)
+}
+
+func truncateTitle(title string) string {
+	const maxTitleRunes = 80
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	runes := []rune(title)
+	if len(runes) > maxTitleRunes {
+		return string(runes[:maxTitleRunes]) + "..."
+	}
+	return title
 }

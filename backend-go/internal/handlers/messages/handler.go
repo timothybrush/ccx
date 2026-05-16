@@ -65,8 +65,14 @@ func Handler(envCfg *config.EnvConfig, cfgManager *config.ConfigManager, channel
 		affinityBody := common.NormalizeMetadataUserID(bodyBytes)
 		userID := utils.ExtractUnifiedSessionID(c, affinityBody)
 
+		isTitleRequest := isClaudeCodeTitleRequest(bodyBytes)
+		if envCfg.ShouldLog("debug") && isTitleRequest {
+			log.Printf("[Messages-Title-Debug] 检测到 Claude Code title 请求: user=%s, model=%s, stream=%t",
+				scheduler.MaskUserIDForLog(userID), claudeReq.Model, claudeReq.Stream)
+		}
+
 		// 提取用户最后一条消息用于对话标题 fallback
-		if !isClaudeCodeTitleRequest(bodyBytes) {
+		if !isTitleRequest {
 			c.Set("lastUserMessage", extractLastUserMessage(claudeReq.Messages))
 			c.Set("userMessageCount", countUserMessages(claudeReq.Messages))
 		}
@@ -96,6 +102,8 @@ func handleMultiChannel(
 	userID string,
 	startTime time.Time,
 ) {
+	isTitleRequest := isClaudeCodeTitleRequest(bodyBytes)
+
 	common.HandleMultiChannelFailover(
 		c,
 		envCfg,
@@ -176,9 +184,14 @@ func handleMultiChannel(
 			}
 		},
 		func(selection *scheduler.SelectionResult, result common.MultiChannelAttemptResult) {
-			if isClaudeCodeTitleRequest(bodyBytes) && result.ResponseText != "" {
-				title := extractTitleFromResponseText(result.ResponseText)
-				channelScheduler.UpdateConversationTitle(scheduler.ChannelKindMessages, userID, title)
+			if !isTitleRequest || result.ResponseText == "" {
+				return
+			}
+			title := extractTitleFromResponseText(result.ResponseText)
+			updated := channelScheduler.UpdateConversationTitle(scheduler.ChannelKindMessages, userID, title)
+			if envCfg.ShouldLog("debug") {
+				log.Printf("[Messages-Title-Debug] title 更新结果: user=%s, title=%q, updated=%t, responseTextLen=%d",
+					scheduler.MaskUserIDForLog(userID), title, updated, len(result.ResponseText))
 			}
 		},
 		func(ctx *gin.Context, failoverErr *common.FailoverError, lastError error) {
@@ -263,6 +276,26 @@ func handleSingleChannel(
 		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
 	)
 	if handled {
+		userID := utils.ExtractUnifiedSessionID(c, common.NormalizeMetadataUserID(bodyBytes))
+		isTitleRequest := isClaudeCodeTitleRequest(bodyBytes)
+		if !isTitleRequest {
+			lastUserMessage := extractLastUserMessage(claudeReq.Messages)
+			userMessageCount := countUserMessages(claudeReq.Messages)
+			channelScheduler.SetTraceAffinity(userID, channelIndex, scheduler.ChannelKindMessages)
+			channelScheduler.TrackConversation(scheduler.ChannelKindMessages, userID, claudeReq.Model, channelIndex, upstream.Name, "", lastUserMessage, userMessageCount)
+			if envCfg.ShouldLog("debug") {
+				log.Printf("[Messages-Conversation-Debug] 已追踪单渠道对话: user=%s, model=%s, channel=%d, userMessages=%d, hasFallbackTitle=%t",
+					scheduler.MaskUserIDForLog(userID), claudeReq.Model, channelIndex, userMessageCount, lastUserMessage != "")
+			}
+		} else {
+			responseText, _ := c.Get("responseText")
+			title := extractTitleFromResponseText(responseTextString(responseText))
+			updated := channelScheduler.UpdateConversationTitle(scheduler.ChannelKindMessages, userID, title)
+			if envCfg.ShouldLog("debug") {
+				log.Printf("[Messages-Title-Debug] 单渠道 title 更新结果: user=%s, title=%q, updated=%t, responseTextLen=%d",
+					scheduler.MaskUserIDForLog(userID), title, updated, len(responseTextString(responseText)))
+			}
+		}
 		return
 	}
 
@@ -445,7 +478,7 @@ func responseTextString(value interface{}) string {
 func countUserMessages(messages []types.ClaudeMessage) int {
 	count := 0
 	for _, msg := range messages {
-		if msg.Role == "user" {
+		if msg.Role == "user" && len(extractUserTextBlocks(msg)) > 0 {
 			count++
 		}
 	}
@@ -453,26 +486,91 @@ func countUserMessages(messages []types.ClaudeMessage) int {
 }
 
 func extractLastUserMessage(messages []types.ClaudeMessage) string {
+	const maxLen = 80
+	var parts []string
+	totalLen := 0
+
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role != "user" {
 			continue
 		}
-		switch content := messages[i].Content.(type) {
-		case string:
-			return content
-		case []interface{}:
-			for _, block := range content {
-				if m, ok := block.(map[string]interface{}); ok {
-					if m["type"] == "text" {
-						if text, ok := m["text"].(string); ok {
-							return text
-						}
-					}
-				}
+		texts := extractUserTextBlocks(messages[i])
+		for j := len(texts) - 1; j >= 0; j-- {
+			parts = append(parts, texts[j])
+			totalLen += len([]rune(texts[j]))
+			if totalLen >= maxLen {
+				break
+			}
+		}
+		if totalLen >= maxLen {
+			break
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	for left, right := 0, len(parts)-1; left < right; left, right = left+1, right-1 {
+		parts[left], parts[right] = parts[right], parts[left]
+	}
+	return strings.Join(parts, " / ")
+}
+
+func extractUserTextBlocks(message types.ClaudeMessage) []string {
+	texts := []string{}
+	appendText := func(text string) {
+		if cleaned := cleanUserTitleText(text); cleaned != "" {
+			texts = append(texts, cleaned)
+		}
+	}
+
+	switch content := message.Content.(type) {
+	case string:
+		appendText(content)
+	case []interface{}:
+		for _, block := range content {
+			m, ok := block.(map[string]interface{})
+			if !ok || m["type"] != "text" {
+				continue
+			}
+			if text, ok := m["text"].(string); ok {
+				appendText(text)
 			}
 		}
 	}
-	return ""
+	return texts
+}
+
+func cleanUserTitleText(text string) string {
+	text = removeTaggedBlocks(text, "system-reminder")
+	text = removeTaggedBlocks(text, "local-command-caveat")
+	text = removeTaggedBlocks(text, "command-name")
+	text = removeTaggedBlocks(text, "command-message")
+	text = removeTaggedBlocks(text, "command-args")
+	text = removeTaggedBlocks(text, "local-command-stdout")
+	text = removeTaggedBlocks(text, "local-command-stderr")
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "<") && strings.Contains(text, ">") {
+		return ""
+	}
+	return text
+}
+
+func removeTaggedBlocks(text, tag string) string {
+	for {
+		start := strings.Index(text, "<"+tag+">")
+		if start < 0 {
+			return text
+		}
+		endTag := "</" + tag + ">"
+		end := strings.Index(text[start:], endTag)
+		if end < 0 {
+			return strings.TrimSpace(text[:start])
+		}
+		end += start + len(endTag)
+		text = text[:start] + text[end:]
+	}
 }
 
 // CountTokensHandler 处理 /v1/messages/count_tokens 请求

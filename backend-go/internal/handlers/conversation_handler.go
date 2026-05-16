@@ -30,10 +30,22 @@ func GetConversations(deps *ConversationHandlerDeps) gin.HandlerFunc {
 			}
 		}
 
+		channelsByKind := gin.H{}
+		for _, kind := range []scheduler.ChannelKind{
+			scheduler.ChannelKindMessages,
+			scheduler.ChannelKindChat,
+			scheduler.ChannelKindImages,
+			scheduler.ChannelKindResponses,
+			scheduler.ChannelKindGemini,
+		} {
+			channelsByKind[string(kind)] = deps.ChannelScheduler.GetConversationChannelsByKind(kind)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"conversations": conversations,
-			"total":         len(conversations),
-			"overrides":     overridesResponse,
+			"conversations":  conversations,
+			"total":          len(conversations),
+			"overrides":      overridesResponse,
+			"channelsByKind": channelsByKind,
 		})
 	}
 }

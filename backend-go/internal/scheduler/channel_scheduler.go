@@ -843,10 +843,11 @@ func (s *ChannelScheduler) TrackConversation(kind ChannelKind, userID, model str
 	}
 }
 
-func (s *ChannelScheduler) UpdateConversationTitle(kind ChannelKind, userID, title string) {
-	if s.conversationTracker != nil && userID != "" && title != "" {
-		s.conversationTracker.UpdateTitle(string(kind), userID, title)
+func (s *ChannelScheduler) UpdateConversationTitle(kind ChannelKind, userID, title string) bool {
+	if s.conversationTracker == nil || userID == "" || title == "" {
+		return false
 	}
+	return s.conversationTracker.UpdateTitle(string(kind), userID, title)
 }
 
 // GetMessagesMetricsManager 获取 Messages 渠道指标管理器
@@ -1047,6 +1048,18 @@ func (s *ChannelScheduler) GetActiveChannelCount(kind ChannelKind) int {
 // IsMultiChannelMode 判断是否为多渠道模式
 func (s *ChannelScheduler) IsMultiChannelMode(kind ChannelKind) bool {
 	return s.GetActiveChannelCount(kind) > 1
+}
+
+func (s *ChannelScheduler) GetConversationChannelsByKind(kind ChannelKind) []ChannelInfo {
+	return s.getActiveChannels(kind, "")
+}
+
+// MaskUserIDForLog 掩码 user_id 供跨包日志使用。
+func MaskUserIDForLog(userID string) string {
+	if userID == "" {
+		return ""
+	}
+	return maskUserID(userID)
 }
 
 // maskUserID 掩码 user_id（保护隐私）

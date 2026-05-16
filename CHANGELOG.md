@@ -2,6 +2,7 @@
 
 ### 新增
 
+- **会话标题持久化与实时补全** - 对话追踪器新增 `.config/conversation_state.json` 本地持久化，保存 `title`、AI 生成标题与最新用户消息兜底摘要，服务重启后驾驶舱卡片仍可保留标题和创建时间；用户每轮输入后实时用最新消息摘要补全卡片标题。
 - **会话调度看板（Conversation Dashboard）** - 新增前端"Sessions"Tab 和后端 API，管理员可实时观察当前所有经过网关的活跃对话（按 kind:userID 聚合），并为单个对话自定义渠道优先级序列（含 failover 顺序）。支持拖拽排序、点击置顶、降级操作，覆盖规则 30 分钟 TTL 自动过期。
 - **对话追踪器（ConversationTracker）** - 后端新模块 `internal/conversation/`，自动追踪所有成功请求的对话元数据（模型、渠道、请求次数、状态），1 小时无活动标记 idle，2 小时后自动清理
 - **渠道序列覆盖（OverrideManager）** - 支持为单个对话设置完整的渠道调度序列，调度优先级：X-Channel > 促销期 > 手动覆盖 > Trace 亲和 > 默认排序
