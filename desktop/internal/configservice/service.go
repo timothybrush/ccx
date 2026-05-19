@@ -528,13 +528,48 @@ func extractTomlStringField(content string, key string) (string, bool) {
 	return match[1], true
 }
 
+func findNamedTomlBlock(content string, table string) (int, int, bool) {
+	header := "[" + table + "]"
+	for lineStart := 0; lineStart < len(content); {
+		lineEnd := strings.IndexByte(content[lineStart:], '\n')
+		if lineEnd < 0 {
+			lineEnd = len(content)
+		} else {
+			lineEnd += lineStart
+		}
+		if strings.TrimSpace(content[lineStart:lineEnd]) == header {
+			for nextLineStart := lineEnd + 1; nextLineStart < len(content); {
+				nextLineEnd := strings.IndexByte(content[nextLineStart:], '\n')
+				if nextLineEnd < 0 {
+					nextLineEnd = len(content)
+				} else {
+					nextLineEnd += nextLineStart
+				}
+				nextLine := strings.TrimSpace(content[nextLineStart:nextLineEnd])
+				if strings.HasPrefix(nextLine, "[") && strings.Contains(nextLine, "]") {
+					return lineStart, nextLineStart, true
+				}
+				if nextLineEnd == len(content) {
+					break
+				}
+				nextLineStart = nextLineEnd + 1
+			}
+			return lineStart, len(content), true
+		}
+		if lineEnd == len(content) {
+			break
+		}
+		lineStart = lineEnd + 1
+	}
+	return 0, 0, false
+}
+
 func extractNamedTomlBlock(content string, table string) (string, bool) {
-	re := regexp.MustCompile(`(?ms)^\[` + regexp.QuoteMeta(table) + `\]\n.*?(?:\n(?=\[[^\n]+\])|\z)`)
-	match := re.FindString(content)
-	if match == "" {
+	start, end, ok := findNamedTomlBlock(content, table)
+	if !ok {
 		return "", false
 	}
-	return strings.TrimRight(match, "\n"), true
+	return strings.TrimRight(content[start:end], "\n"), true
 }
 
 func upsertTopLevelTomlString(content string, key string, value string) string {
@@ -562,10 +597,9 @@ func restoreTopLevelTomlString(content string, key string, original *string) str
 }
 
 func upsertNamedTomlBlock(content string, table string, block string) string {
-	re := regexp.MustCompile(`(?ms)^\[` + regexp.QuoteMeta(table) + `\]\n.*?(?:\n(?=\[[^\n]+\])|\z)`)
 	block = strings.TrimRight(block, "\n")
-	if re.MatchString(content) {
-		return re.ReplaceAllString(content, block+"\n")
+	if start, end, ok := findNamedTomlBlock(content, table); ok {
+		return content[:start] + block + "\n" + content[end:]
 	}
 	content = strings.TrimRight(content, "\n")
 	if content == "" {
@@ -575,13 +609,16 @@ func upsertNamedTomlBlock(content string, table string, block string) string {
 }
 
 func restoreNamedTomlBlock(content string, table string, original *string) string {
-	re := regexp.MustCompile(`(?ms)^\[` + regexp.QuoteMeta(table) + `\]\n.*?(?:\n(?=\[[^\n]+\])|\z)`)
+	start, end, ok := findNamedTomlBlock(content, table)
 	if original == nil {
-		return strings.TrimRight(re.ReplaceAllString(content, ""), "\n") + "\n"
+		if !ok {
+			return strings.TrimRight(content, "\n") + "\n"
+		}
+		return strings.TrimRight(content[:start]+content[end:], "\n") + "\n"
 	}
 	block := strings.TrimRight(*original, "\n") + "\n"
-	if re.MatchString(content) {
-		return re.ReplaceAllString(content, block)
+	if ok {
+		return content[:start] + block + content[end:]
 	}
 	content = strings.TrimRight(content, "\n")
 	if content == "" {

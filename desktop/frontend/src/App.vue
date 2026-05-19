@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: 0;
   color: #e5eefc;
   background: radial-gradient(circle at top, #21314f 0, #0d1422 48%, #080d17 100%);
 }
@@ -408,8 +408,13 @@ p {
   color: #ff9b9b;
 }
 
+.topbar,
 .tabs {
-  margin: 20px 0;
+  padding: 20px 24px 0;
+}
+
+.tabs {
+  margin: 0 0 20px;
 }
 
 .tab,
@@ -442,11 +447,11 @@ p {
 .panel {
   display: grid;
   gap: 16px;
-  padding: 20px;
-  border: 1px solid rgba(137, 163, 214, 0.16);
-  border-radius: 18px;
-  background: rgba(7, 13, 24, 0.72);
-  backdrop-filter: blur(16px);
+  padding: 20px 24px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .metrics {

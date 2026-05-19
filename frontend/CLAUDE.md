@@ -105,6 +105,19 @@ const iconMap = {
 
 **图标查找**: https://pictogrammers.com/library/mdi/
 
+## 依赖与安全检查
+
+前端以 Bun 为主包管理器，`bun.lock` 是依赖锁文件的权威来源。不要为了运行 `npm audit` 重新生成 `package-lock.json`，否则会引入重复锁文件并可能产生误报。
+
+```bash
+bun install                                      # 安装依赖并触发 Socket 安全扫描器
+bun audit --registry=https://registry.npmjs.org # 使用 npm 官方 registry 执行漏洞审计
+```
+
+说明：如果本地 registry 指向 `npmmirror`，直接运行 `bun audit` 可能因镜像源不支持 audit 接口而返回 404；审计时显式指定 npm 官方 registry。
+
+`pnpm install` 可作为兼容性验证，但新增或升级依赖优先使用 `bun add` / `bun update`。
+
 ## 构建产物
 
 生产构建输出到 `dist/`，会被嵌入到 Go 后端二进制文件中（`embed.FS`）。

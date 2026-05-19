@@ -129,6 +129,9 @@ Go 测试优先使用表驱动测试 + `httptest`。
 
 ## 前端注意事项
 
+- `frontend/` 与 `desktop/frontend/` 均以 Bun 为主包管理器，`bun.lock` 是权威锁文件；`pnpm-lock.yaml` 仅用于兼容验证
+- 不要为了运行 `npm audit` 重新生成 `package-lock.json`，避免重复锁文件和旧锁文件误报
+- 安全检查优先使用 `bun install` 触发 Socket 扫描器，漏洞审计使用 `bun audit --registry=https://registry.npmjs.org`
 - Vuetify 组件采用手动按需导入
 - 图标使用 `@mdi/js` SVG 按需导入
 - 新增 `mdi-xxx` 图标时，必须同时补 `@mdi/js` 导入和 `iconMap` 映射
@@ -137,7 +140,9 @@ Go 测试优先使用表驱动测试 + `httptest`。
 ## 模块文档
 
 - [backend-go/CLAUDE.md](backend-go/CLAUDE.md) - 后端模块索引
-- [frontend/CLAUDE.md](frontend/CLAUDE.md) - 前端模块索引
+- [frontend/CLAUDE.md](frontend/CLAUDE.md) - Web 前端模块索引
+- [desktop/CLAUDE.md](desktop/CLAUDE.md) - 桌面模块索引
+- [desktop/frontend/CLAUDE.md](desktop/frontend/CLAUDE.md) - 桌面前端模块索引
 - [backend-go/README.md](backend-go/README.md) - 后端专项文档
 - [ARCHITECTURE.md](ARCHITECTURE.md) - 架构说明
 - [DEVELOPMENT.md](DEVELOPMENT.md) - 开发指南
