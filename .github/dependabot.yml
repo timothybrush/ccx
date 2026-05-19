@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    reviewers: []
+    labels:
+      - "dependencies"
+      - "security"
+    groups:
+      vite-ecosystem:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "rollup"
+      vue-ecosystem:
+        patterns:
+          - "vue"
+          - "vue-router"
+          - "pinia"
+          - "@vue/*"
+      vuetify-ecosystem:
+        patterns:
+          - "vuetify"
+          - "@mdi/*"
+      dev-dependencies:
+        dependency-type: "development"
+    # 安全更新不设分组，立即创建 PR
+    security-updates-only: false
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
