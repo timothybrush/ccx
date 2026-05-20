@@ -212,7 +212,7 @@
     <v-main>
       <v-container fluid class="pa-4 pa-md-6">
         <!-- 全局统计顶部可折叠卡片（根据当前 Tab 显示对应统计） -->
-        <v-card v-if="isAuthenticated && route.path !== '/conversations'" class="mb-4 global-stats-panel">
+        <v-card v-if="isAuthenticated && route.path !== '/conversations'" class="mb-6 global-stats-panel">
           <div
             class="global-stats-header d-flex align-center justify-space-between px-4 py-2"
             style="cursor: pointer;"
@@ -2403,13 +2403,13 @@ a.api-type-text {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px; /* 下调按钮 Gap，使添加渠道按钮与后续的操作功能键更加紧密聚合、富有内聚感 */
 }
 
 .action-bar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px; /* 同样收敛至 8px，提供完美的对称视觉对齐 */
 }
 
 .action-btn {
