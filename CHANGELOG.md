@@ -11,6 +11,10 @@
 
 ### 修复
 
+- **`messages` 走 Gemini 上游时 MCP / 自定义工具历史丢失导致重复调用**：
+  - 修复 `backend-go/internal/converters/responses_to_gemini.go` 中 `responsesItemToGeminiContents` 漏掉 `custom_tool_call` 与 `custom_tool_call_output` 两类 item 的问题。归一化阶段会把 MCP 工具（如 `mcp__serena__*`）落到这两种类型，原实现走 switch 的隐式 default 直接丢弃，导致历史里只剩模型空回合，Gemini 视为"工具调用未返回"并不停重复发起同一工具调用。
+  - 现在两类 item 分别转为 `model` 角色的 `FunctionCall`（携带 `DummyThoughtSignature`，与 `function_call` 行为一致）和 `user` 角色的 `FunctionResponse`，并对缺 `call_id`/`name` 的孤立项做兜底丢弃，避免构造出 Name 为空的 part 触发上游 400。
+  - 在 `backend-go/internal/converters/gemini_responses_roundtrip_test.go` 新增 `TestResponsesToGeminiRequest_PreservesCustomToolCallHistory` 和 `TestResponsesToGeminiRequest_CustomToolCallOutputWithoutCallIDDropped` 两条回归用例。
 - **SUBSCRIPTION_NOT_FOUND 余额不足故障转移**：
   - 将 `SUBSCRIPTION_NOT_FOUND` 错误码和 `"no active subscription found"` 错误信息识别为余额不足（`insufficient_balance`），从而正确触发渠道黑名单和故障转移。
   - 在 `failover_test.go` 和 `stream_test.go` 中补充了对应的普通请求与流式请求测试用例。

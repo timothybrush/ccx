@@ -827,3 +827,126 @@ func TestResponsesToGeminiRequest_FunctionCallOutputFallsBackToName(t *testing.T
 		t.Fatalf("expected function response name weather_call, got %q", functionResponse.Name)
 	}
 }
+
+func TestResponsesToGeminiRequest_PreservesCustomToolCallHistory(t *testing.T) {
+	// 回归测试：MCP / Codex 自定义工具的调用与结果必须随历史一并转换给 Gemini，
+	// 否则上游会因为缺少 functionResponse 而在下一轮重复发起同样的工具调用。
+	sess := &session.Session{ID: "sess_test"}
+	req := &types.ResponsesRequest{
+		Model: "gpt-4.1",
+		Input: []interface{}{
+			map[string]interface{}{
+				"type":    "custom_tool_call",
+				"call_id": "toolu_serena_1",
+				"name":    "mcp__serena__find_symbol",
+				"input":   `{"name_path_pattern":"Foo","relative_path":"bar.go"}`,
+			},
+			map[string]interface{}{
+				"type":    "custom_tool_call_output",
+				"call_id": "toolu_serena_1",
+				"output":  `{"result":"Onboarding was already performed"}`,
+			},
+		},
+	}
+
+	geminiReq, err := ResponsesToGeminiRequest(sess, req, "gemini-2.5-pro")
+	if err != nil {
+		t.Fatalf("ResponsesToGeminiRequest failed: %v", err)
+	}
+
+	if len(geminiReq.Contents) != 2 {
+		t.Fatalf("expected 2 contents (call + response), got %d", len(geminiReq.Contents))
+	}
+
+	callPart := geminiReq.Contents[0].Parts[0].FunctionCall
+	if callPart == nil {
+		t.Fatal("expected custom_tool_call to be converted to FunctionCall")
+	}
+	if callPart.Name != "mcp__serena__find_symbol" {
+		t.Fatalf("expected function name mcp__serena__find_symbol, got %q", callPart.Name)
+	}
+	if callPart.ThoughtSignature != types.DummyThoughtSignature {
+		t.Fatalf("expected DummyThoughtSignature, got %q", callPart.ThoughtSignature)
+	}
+	// 关键断言：custom_tool_call 的 input 已是 JSON 字符串，必须被解析为 map，
+	// 而不是被二次 JSON 编码后变成 nil/空 map（否则历史回放中上游会丢失入参）。
+	if callPart.Args == nil {
+		t.Fatal("expected FunctionCall.Args to be parsed from input JSON, got nil")
+	}
+	if callPart.Args["name_path_pattern"] != "Foo" {
+		t.Fatalf("expected args.name_path_pattern Foo, got %#v", callPart.Args["name_path_pattern"])
+	}
+	if callPart.Args["relative_path"] != "bar.go" {
+		t.Fatalf("expected args.relative_path bar.go, got %#v", callPart.Args["relative_path"])
+	}
+
+	respPart := geminiReq.Contents[1].Parts[0].FunctionResponse
+	if respPart == nil {
+		t.Fatal("expected custom_tool_call_output to be converted to FunctionResponse")
+	}
+	if respPart.Name != "toolu_serena_1" {
+		t.Fatalf("expected function response name toolu_serena_1, got %q", respPart.Name)
+	}
+	responseMap, ok := respPart.Response.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected response map, got %T", respPart.Response)
+	}
+	if _, hasResult := responseMap["result"]; !hasResult {
+		t.Fatalf("expected response to carry result field, got %#v", responseMap)
+	}
+}
+
+func TestResponsesToGeminiRequest_CustomToolCallEmptyInputYieldsEmptyOrNilArgs(t *testing.T) {
+	// 无参工具（如 mcp__serena__check_onboarding_performed）的 input 为 "{}"，
+	// 必须解析为合法 map（空或 nil 都可），而不是被二次编码后再次解析出错误结构。
+	sess := &session.Session{ID: "sess_test"}
+	req := &types.ResponsesRequest{
+		Model: "gpt-4.1",
+		Input: []interface{}{
+			map[string]interface{}{
+				"type":    "custom_tool_call",
+				"call_id": "toolu_0",
+				"name":    "mcp__serena__check_onboarding_performed",
+				"input":   "{}",
+			},
+		},
+	}
+
+	geminiReq, err := ResponsesToGeminiRequest(sess, req, "gemini-2.5-pro")
+	if err != nil {
+		t.Fatalf("ResponsesToGeminiRequest failed: %v", err)
+	}
+	if len(geminiReq.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(geminiReq.Contents))
+	}
+	callPart := geminiReq.Contents[0].Parts[0].FunctionCall
+	if callPart == nil {
+		t.Fatal("expected FunctionCall")
+	}
+	if callPart.Args != nil && len(callPart.Args) != 0 {
+		t.Fatalf("expected empty args map (or nil), got %#v", callPart.Args)
+	}
+}
+
+func TestResponsesToGeminiRequest_CustomToolCallOutputWithoutCallIDDropped(t *testing.T) {
+	// 没有 call_id 且没有 name 时，无法定位到对应的工具调用，必须丢弃，
+	// 否则会构造出 Name 为空的 FunctionResponse 触发上游 400。
+	sess := &session.Session{ID: "sess_test"}
+	req := &types.ResponsesRequest{
+		Model: "gpt-4.1",
+		Input: []interface{}{
+			map[string]interface{}{
+				"type":   "custom_tool_call_output",
+				"output": `{"result":"orphan"}`,
+			},
+		},
+	}
+
+	geminiReq, err := ResponsesToGeminiRequest(sess, req, "gemini-2.5-pro")
+	if err != nil {
+		t.Fatalf("ResponsesToGeminiRequest failed: %v", err)
+	}
+	if len(geminiReq.Contents) != 0 {
+		t.Fatalf("expected orphan custom_tool_call_output to be dropped, got %d contents", len(geminiReq.Contents))
+	}
+}

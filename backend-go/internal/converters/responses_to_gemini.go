@@ -152,6 +152,56 @@ func responsesItemToGeminiContents(item types.ResponsesItem) []types.GeminiConte
 				},
 			},
 		})
+
+	case "custom_tool_call":
+		// 自定义工具调用（如 MCP 工具）也需要落地为 Gemini 的 functionCall，
+		// 否则历史中只保留模型的调用而丢失参数，等价于"模型调用但没成功"。
+		// 注意：Gemini 的 FunctionCall 用 name 做相关性键、不存 call_id，
+		// 所以这里只校验 name 是否有效；call_id 仅在 *_output 一侧需要回填。
+		name := item.Name
+		if name == "" {
+			return nil
+		}
+		// customToolInputFromItem 返回的 string 已经是 JSON 字符串（与 function_call 的 arguments 同形），
+		// 必须直接传给 parseGeminiFunctionCallArgs 解析为 map；
+		// 再做一次 JSONMarshal 会把 `{}` 变成 `"{}"` 导致解析失败、Args 丢失。
+		argsJSON := customToolInputFromItem(item)
+		contents = append(contents, types.GeminiContent{
+			Role: "model",
+			Parts: []types.GeminiPart{
+				{
+					FunctionCall: &types.GeminiFunctionCall{
+						Name:             name,
+						Args:             parseGeminiFunctionCallArgs(argsJSON),
+						ThoughtSignature: types.DummyThoughtSignature,
+					},
+				},
+			},
+		})
+
+	case "custom_tool_call_output":
+		// 自定义工具的执行结果必须随历史一并转交给上游，
+		// 否则 Gemini 视为"工具调用未返回"，会在下一轮重复发起同样的工具调用。
+		callID := item.CallID
+		output := item.Output
+		if callID == "" {
+			callID = item.Name
+		}
+		if callID == "" {
+			return nil
+		}
+
+		contents = append(contents, types.GeminiContent{
+			Role: "user",
+			Parts: []types.GeminiPart{
+				{
+					FunctionResponse: &types.GeminiFunctionResponse{
+						Name:     callID,
+						Response: buildGeminiFunctionResponsePayload(output),
+					},
+				},
+			},
+		})
 	}
 
 	return contents
