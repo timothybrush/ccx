@@ -20,6 +20,9 @@ const props = defineProps<{
   claudeMiMoBaseUrl?: string
   claudeProviderLabel?: (value?: string) => string
   claudeTargetBaseUrl?: () => string
+  selectedCodexProvider?: AgentProvider
+  codexProviderLabels?: Record<string, string>
+  codexProviderLabel?: (value?: string) => string
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +31,7 @@ const emit = defineEmits<{
   'update:selectedClaudeProvider': [value: AgentProvider]
   'update:claudeProviderKeys': [value: Record<AgentProvider, string>]
   'update:claudeMiMoBaseUrl': [value: string]
+  'update:selectedCodexProvider': [value: AgentProvider]
 }>()
 
 const badgeClass = computed(() => {
@@ -40,7 +44,7 @@ const applyLabel = computed(() => {
   if (props.platform === 'claude') {
     return `应用 ${props.claudeProviderLabel?.(props.selectedClaudeProvider) || 'CCX'} 配置`
   }
-  return '应用 CCX 配置'
+  return `应用 ${props.codexProviderLabel?.(props.selectedCodexProvider) || 'CCX'} 配置`
 })
 </script>
 
@@ -59,7 +63,7 @@ const applyLabel = computed(() => {
     <CardContent class="space-y-4">
       <div class="space-y-2 text-sm">
         <div v-for="detail in [
-          { label: '当前 Provider', value: claudeProviderLabel?.(agentStatus?.provider) || agentStatus?.provider || '未设置' },
+          { label: '当前 Provider', value: (platform === 'codex' ? codexProviderLabel : claudeProviderLabel)?.(agentStatus?.provider) || agentStatus?.provider || '未设置' },
           { label: '当前 URL', value: agentStatus?.currentBaseUrl || '未设置' },
           { label: '目标 URL', value: platform === 'claude' ? claudeTargetBaseUrl?.() : agentStatus?.targetBaseUrl || '--' },
           { label: '配置文件', value: agentStatus?.configPath || '--' },
@@ -82,9 +86,19 @@ const applyLabel = computed(() => {
         @update:provider-keys="emit('update:claudeProviderKeys', $event)"
         @update:mi-m-o-base-url="emit('update:claudeMiMoBaseUrl', $event)"
       />
-      <p v-else class="text-xs text-muted-foreground">
-        Codex 固定写入 CCX Responses 配置，暂不直连厂商。
-      </p>
+      <div v-else-if="platform === 'codex'" class="space-y-3">
+        <div class="space-y-1.5">
+          <Label class="text-xs text-muted-foreground">Provider</Label>
+          <select
+            :value="selectedCodexProvider"
+            class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            @change="emit('update:selectedCodexProvider', ($event.target as HTMLSelectElement).value as AgentProvider)"
+          >
+            <option value="ccx">CCX 本地网关</option>
+            <option value="openai">OpenAI 官方</option>
+          </select>
+        </div>
+      </div>
 
       <p v-if="agentStatus?.lastError" class="text-sm text-destructive-foreground">{{ agentStatus.lastError }}</p>
 

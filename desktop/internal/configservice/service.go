@@ -17,6 +17,7 @@ const (
 	ProviderDeepSeek = "deepseek"
 	ProviderMiMo     = "mimo"
 	ProviderCustom   = "custom"
+	ProviderOpenAI   = "openai"
 
 	deepSeekClaudeBaseURL = "https://api.deepseek.com/anthropic"
 	defaultMiMoBaseURL    = "https://api.mimo.xiaomi.com/v1"
@@ -112,6 +113,10 @@ func (s *Service) Apply(req ApplyAgentConfigRequest, port int, accessKey string)
 	case PlatformClaude:
 		return s.applyClaude(req, port, accessKey)
 	case PlatformCodex:
+		provider := strings.TrimSpace(req.Provider)
+		if provider == ProviderOpenAI {
+			return s.applyCodexOpenAI()
+		}
 		if port == 0 {
 			return fmt.Errorf("CCX 端口未设置")
 		}
@@ -187,9 +192,11 @@ func (s *Service) getCodexStatus(port int) (AgentConfigStatus, error) {
 	status.CurrentBaseURL = baseURL
 	if modelProvider == ProviderCCX {
 		status.Provider = ProviderCCX
+	} else {
+		status.Provider = ProviderOpenAI
 	}
 	status.MatchesCurrentPort = modelProvider == ProviderCCX && baseURL == target
-	status.Configured = status.MatchesCurrentPort
+	status.Configured = status.MatchesCurrentPort || status.Provider == ProviderOpenAI
 	status.NeedsUpdate = (modelProvider == ProviderCCX || isLocalBaseURL(baseURL)) && !status.MatchesCurrentPort
 	return status, nil
 }
@@ -332,6 +339,17 @@ func (s *Service) applyCodex(port int, accessKey string) error {
 	}
 	authData["OPENAI_API_KEY"] = accessKey
 	return writeJSONAtomic(authPath, authData)
+}
+
+func (s *Service) applyCodexOpenAI() error {
+	configPath := s.codexConfigPath()
+	configContent, _, err := readTextFile(configPath)
+	if err != nil {
+		return err
+	}
+	updated := upsertTopLevelTomlString(configContent, "model_provider", "openai")
+	updated = restoreNamedTomlBlock(updated, "model_providers.ccx", nil)
+	return writeTextAtomic(configPath, updated)
 }
 
 func (s *Service) restoreCodex() error {

@@ -15,6 +15,15 @@ const claudeProviderLabels: Record<AgentProvider | 'custom', string> = {
   ccx: 'CCX',
   deepseek: 'DeepSeek',
   mimo: 'MiMo',
+  openai: 'OpenAI',
+  custom: '自定义',
+}
+
+const codexProviderLabels: Record<AgentProvider | 'custom', string> = {
+  ccx: 'CCX 本地网关',
+  openai: 'OpenAI 官方',
+  deepseek: 'DeepSeek',
+  mimo: 'MiMo',
   custom: '自定义',
 }
 
@@ -31,8 +40,10 @@ const claudeProviderKeys = ref<Record<AgentProvider, string>>({
   ccx: '',
   deepseek: '',
   mimo: '',
+  openai: '',
 })
 const claudeMiMoBaseUrl = ref('https://api.mimo.xiaomi.com/v1')
+const selectedCodexProvider = ref<AgentProvider>('ccx')
 
 const isClaudeProvider = (value?: string): value is AgentProvider => {
   return value === 'ccx' || value === 'deepseek' || value === 'mimo'
@@ -43,6 +54,11 @@ const claudeProviderLabel = (value?: string) => {
   return claudeProviderLabels[value as AgentProvider | 'custom'] || value
 }
 
+const codexProviderLabel = (value?: string) => {
+  if (!value) return '未识别'
+  return codexProviderLabels[value as AgentProvider | 'custom'] || value
+}
+
 const claudeTargetBaseUrl = () => {
   switch (selectedClaudeProvider.value) {
     case 'ccx':
@@ -51,6 +67,8 @@ const claudeTargetBaseUrl = () => {
       return 'https://api.deepseek.com/anthropic'
     case 'mimo':
       return claudeMiMoBaseUrl.value || 'https://api.mimo.xiaomi.com/v1'
+    default:
+      return ''
   }
 }
 
@@ -82,6 +100,11 @@ const loadAgentStatuses = async () => {
     if (claude.provider === 'mimo' && claude.currentBaseUrl) {
       claudeMiMoBaseUrl.value = claude.currentBaseUrl
     }
+    if (codex.provider === 'openai') {
+      selectedCodexProvider.value = 'openai'
+    } else {
+      selectedCodexProvider.value = 'ccx'
+    }
   } catch (error) {
     // error is handled by caller
   } finally {
@@ -91,7 +114,10 @@ const loadAgentStatuses = async () => {
 
 const canApplyAgent = (platform: AgentPlatform, serviceRunning: boolean) => {
   if (configLoading.value) return false
-  if (platform === 'codex') return serviceRunning
+  if (platform === 'codex') {
+    if (selectedCodexProvider.value === 'openai') return true
+    return serviceRunning
+  }
   if (selectedClaudeProvider.value === 'ccx') return serviceRunning
   return claudeProviderKeys.value[selectedClaudeProvider.value].trim() !== ''
 }
@@ -108,6 +134,9 @@ const applyAgent = async (platform: AgentPlatform) => {
       if (selectedClaudeProvider.value === 'mimo') {
         request.baseUrl = claudeMiMoBaseUrl.value.trim()
       }
+    }
+    if (platform === 'codex') {
+      request.provider = selectedCodexProvider.value
     }
     await ApplyAgentConfig(request)
     if (platform === 'claude' && selectedClaudeProvider.value !== 'ccx') {
@@ -136,6 +165,7 @@ export function useAgentConfig() {
     claudeMiMoBaseUrl,
     agentLabels,
     claudeProviderLabels,
+    codexProviderLabels,
     agentPlatforms,
     isClaudeProvider,
     claudeProviderLabel,
@@ -146,5 +176,7 @@ export function useAgentConfig() {
     canApplyAgent,
     applyAgent,
     restoreAgent,
+    selectedCodexProvider,
+    codexProviderLabel,
   }
 }

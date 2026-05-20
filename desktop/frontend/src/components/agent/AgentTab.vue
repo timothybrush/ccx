@@ -22,6 +22,9 @@ const {
   canApplyAgent,
   applyAgent,
   restoreAgent,
+  selectedCodexProvider,
+  codexProviderLabels,
+  codexProviderLabel,
 } = useAgentConfig()
 
 onMounted(() => {
@@ -68,11 +71,15 @@ const handleRestore = async (platform: AgentPlatform) => {
         :claude-mi-m-o-base-url="claudeMiMoBaseUrl"
         :claude-provider-label="claudeProviderLabel"
         :claude-target-base-url="claudeTargetBaseUrl"
+        :selected-codex-provider="selectedCodexProvider"
+        :codex-provider-labels="codexProviderLabels"
+        :codex-provider-label="codexProviderLabel"
         @apply="handleApply(platform)"
         @restore="handleRestore(platform)"
         @update:selected-claude-provider="selectedClaudeProvider = $event"
         @update:claude-provider-keys="claudeProviderKeys = $event"
         @update:mi-m-o-base-url="claudeMiMoBaseUrl = $event"
+        @update:selected-codex-provider="selectedCodexProvider = $event"
       />
     </div>
     <p v-if="actionError" class="text-sm text-destructive-foreground">{{ actionError }}</p>
