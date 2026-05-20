@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import type { DesktopStatus } from '@/types'
 import { Server, Clock, GitBranch, ArrowUpRight } from 'lucide-vue-next'
 
@@ -7,16 +7,65 @@ const props = defineProps<{
   status: DesktopStatus
 }>()
 
-// 精细运行时长计算
+// 本地微秒级仿真模拟时钟，实现毫秒级自增长进化
+const localUptime = ref(0)
+let localTimer: ReturnType<typeof setInterval> | undefined
+
+// 监听远程 uptime，定时与其物理同步校准，避免前端漂移
+watch(() => props.status.health?.uptime, (newVal) => {
+  if (typeof newVal === 'number') {
+    localUptime.value = newVal
+  }
+}, { immediate: true })
+
+// 100ms 物理高频仿真自增时钟
+const startLocalTimer = () => {
+  localTimer = setInterval(() => {
+    // 只有在网关 running 时才进行高频累增仿真，精度保持一位小数
+    if (props.status.running && props.status.health?.uptime) {
+      localUptime.value = Math.round((localUptime.value + 0.1) * 10) / 10
+    }
+  }, 100)
+}
+
+onMounted(() => {
+  startLocalTimer()
+})
+
+onUnmounted(() => {
+  if (localTimer) {
+    clearInterval(localTimer)
+  }
+})
+
+// 辅助格式化函数：最多保留 1 位小数，若是整数则不显示小数点
+const formatDecimal = (num: number) => {
+  const val = Math.round(num * 10) / 10
+  return val % 1 === 0 ? String(val) : val.toFixed(1)
+}
+
+// 自动演进计时器设计
 const uptimeDisplay = computed(() => {
-  const uptime = props.status.health?.uptime
-  if (!uptime) return '——'
-  if (uptime < 60) return `${uptime}s`
-  const minutes = Math.floor(uptime / 60)
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  const remainingMinutes = minutes % 60
-  return `${hours}h ${remainingMinutes}m`
+  const t = localUptime.value
+  if (!props.status.running || !t) return '——'
+
+  // 1. 进化阶段 A（小于 1 分钟）：显示为秒，如 12.3s，由于 100ms 计时，数值将在眼前丝滑流动累加
+  if (t < 60) {
+    return `${formatDecimal(t)}s`
+  }
+
+  // 2. 进化阶段 B（小于 1 小时 / 3600 秒）：显示为分钟，如 12.4m
+  if (t < 3600) {
+    return `${formatDecimal(t / 60)}m`
+  }
+
+  // 3. 进化阶段 C（小于 1 天 / 86400 秒）：显示为小时，如 4.2h
+  if (t < 86400) {
+    return `${formatDecimal(t / 3600)}h`
+  }
+
+  // 4. 进化阶段 D（大于 1 天）：进化为天，如 3.1d
+  return `${formatDecimal(t / 86400)}d`
 })
 </script>
 
@@ -40,7 +89,7 @@ const uptimeDisplay = computed(() => {
       </div>
     </div>
 
-    <!-- 2. 网关运行时长 -->
+    <!-- 2. 网关运行时长 (自适应秒、分、时、天自动流式演进) -->
     <div class="bg-glass bg-glass-hover rounded-xl p-4.5 border border-white/[0.03] flex flex-col justify-between group">
       <div class="flex items-center justify-between">
         <span class="text-[11px] font-bold tracking-wider text-slate-500 uppercase">运行时长</span>
@@ -52,8 +101,8 @@ const uptimeDisplay = computed(() => {
         <span class="text-xl font-bold font-mono tracking-tight text-slate-100 truncate">
           {{ uptimeDisplay }}
         </span>
-        <span class="text-[9px] text-slate-500 font-medium shrink-0" v-if="status.health?.uptime">
-          uptime
+        <span class="text-[9px] text-emerald-500/80 font-bold tracking-wide uppercase shrink-0" v-if="status.running">
+          Evolving
         </span>
       </div>
     </div>
