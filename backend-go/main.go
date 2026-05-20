@@ -654,8 +654,10 @@ func maskKey(key string) string {
 	}
 	n := len(key)
 	var masked string
-	if n <= 4 {
-		masked = "****"
+	if n <= 3 {
+		masked = key[:1] + "****"
+	} else if n <= 4 {
+		masked = key[:1] + "****" + key[n-1:]
 	} else if n <= 8 {
 		masked = key[:1] + "****" + key[n-1:]
 	} else {
