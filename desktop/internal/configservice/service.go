@@ -79,8 +79,17 @@ type CodexProxyState struct {
 }
 
 type ProviderKeyStore struct {
-	Version int               `json:"version"`
-	Keys    map[string]string `json:"keys"`
+	Version int                         `json:"version"`
+	Keys    map[string]string           `json:"keys"`
+	Assets  map[string]ProviderKeyAsset `json:"assets,omitempty"`
+}
+
+type ProviderKeyAsset struct {
+	Provider string   `json:"provider"`
+	APIKey   string   `json:"apiKey"`
+	BaseURL  string   `json:"baseUrl,omitempty"`
+	PlanID   string   `json:"planId,omitempty"`
+	Usages   []string `json:"usages,omitempty"`
 }
 
 func New(dataDir string) (*Service, error) {
@@ -140,7 +149,62 @@ func (s *Service) GetSavedProviderKeys() map[string]string {
 	for name, key := range store.Keys {
 		keys[name] = key
 	}
+	for provider, asset := range store.Assets {
+		if strings.TrimSpace(asset.APIKey) == "" {
+			continue
+		}
+		keys["channel:"+provider] = asset.APIKey
+		switch provider {
+		case ProviderDeepSeek, ProviderMiMo:
+			if keys[PlatformClaude+":"+provider] == "" {
+				keys[PlatformClaude+":"+provider] = asset.APIKey
+			}
+		case ProviderOpenAI:
+			if keys[PlatformCodex+":"+provider] == "" {
+				keys[PlatformCodex+":"+provider] = asset.APIKey
+			}
+		}
+	}
 	return keys
+}
+
+func (s *Service) GetProviderKeyAssets() []ProviderKeyAsset {
+	store := s.readProviderKeyStore()
+	assets := make([]ProviderKeyAsset, 0, len(store.Assets))
+	for _, asset := range store.Assets {
+		if asset.Provider == "" || asset.APIKey == "" {
+			continue
+		}
+		assets = append(assets, asset)
+	}
+	return assets
+}
+
+func (s *Service) SaveProviderKeyAsset(asset ProviderKeyAsset) error {
+	provider := strings.TrimSpace(asset.Provider)
+	key := strings.TrimSpace(asset.APIKey)
+	if provider == "" || key == "" {
+		return nil
+	}
+	store := s.readProviderKeyStore()
+	store.Version = stateVersion
+	asset.Provider = provider
+	asset.APIKey = key
+	asset.BaseURL = strings.TrimSpace(asset.BaseURL)
+	asset.PlanID = strings.TrimSpace(asset.PlanID)
+	existing := store.Assets[provider]
+	if existing.Usages != nil {
+		asset.Usages = appendUniqueMany(existing.Usages, asset.Usages)
+	}
+	store.Assets[provider] = asset
+	store.Keys["channel:"+provider] = key
+	switch provider {
+	case ProviderDeepSeek, ProviderMiMo:
+		store.Keys[PlatformClaude+":"+provider] = key
+	case ProviderOpenAI:
+		store.Keys[PlatformCodex+":"+provider] = key
+	}
+	return writeJSONAtomic(s.providerKeysPath(), store)
 }
 
 func (s *Service) Restore(platform string) error {
@@ -456,10 +520,26 @@ func (s *Service) providerKeysPath() string {
 }
 
 func (s *Service) readProviderKeyStore() ProviderKeyStore {
-	store := ProviderKeyStore{Version: stateVersion, Keys: map[string]string{}}
+	store := ProviderKeyStore{Version: stateVersion, Keys: map[string]string{}, Assets: map[string]ProviderKeyAsset{}}
 	_ = readJSONFile(s.providerKeysPath(), &store)
 	if store.Keys == nil {
 		store.Keys = map[string]string{}
+	}
+	if store.Assets == nil {
+		store.Assets = map[string]ProviderKeyAsset{}
+	}
+	for name, key := range store.Keys {
+		provider := providerFromStoreKey(name)
+		if provider == "" || strings.TrimSpace(key) == "" {
+			continue
+		}
+		asset := store.Assets[provider]
+		asset.Provider = provider
+		if asset.APIKey == "" {
+			asset.APIKey = key
+		}
+		asset.Usages = appendUnique(asset.Usages, usageFromStoreKey(name))
+		store.Assets[provider] = asset
 	}
 	return store
 }
@@ -472,7 +552,55 @@ func (s *Service) saveProviderKey(platform string, provider string, key string) 
 	store := s.readProviderKeyStore()
 	store.Version = stateVersion
 	store.Keys[platform+":"+provider] = key
+	asset := store.Assets[provider]
+	asset.Provider = provider
+	asset.APIKey = key
+	asset.Usages = appendUnique(asset.Usages, usageFromStoreKey(platform+":"+provider))
+	store.Assets[provider] = asset
 	return writeJSONAtomic(s.providerKeysPath(), store)
+}
+
+func providerFromStoreKey(name string) string {
+	parts := strings.SplitN(name, ":", 2)
+	if len(parts) != 2 {
+		return strings.TrimSpace(name)
+	}
+	return strings.TrimSpace(parts[1])
+}
+
+func usageFromStoreKey(name string) string {
+	parts := strings.SplitN(name, ":", 2)
+	if len(parts) != 2 {
+		return "manual"
+	}
+	switch parts[0] {
+	case PlatformClaude:
+		return "agent-direct"
+	case PlatformCodex:
+		return "codex-direct"
+	default:
+		return parts[0]
+	}
+}
+
+func appendUnique(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
+func appendUniqueMany(values []string, additions []string) []string {
+	for _, value := range additions {
+		values = appendUnique(values, value)
+	}
+	return values
 }
 
 func (s *Service) readClaudeState() (ClaudeProxyState, bool) {

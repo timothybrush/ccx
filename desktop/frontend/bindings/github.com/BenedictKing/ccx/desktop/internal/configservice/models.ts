@@ -81,3 +81,38 @@ export class ApplyAgentConfigRequest {
         return new ApplyAgentConfigRequest($$parsedSource as Partial<ApplyAgentConfigRequest>);
     }
 }
+
+export class ProviderKeyAsset {
+    "provider": string;
+    "apiKey": string;
+    "baseUrl"?: string;
+    "planId"?: string;
+    "usages"?: string[];
+
+    /** Creates a new ProviderKeyAsset instance. */
+    constructor($$source: Partial<ProviderKeyAsset> = {}) {
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("apiKey" in $$source)) {
+            this["apiKey"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProviderKeyAsset instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProviderKeyAsset {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("usages" in $$parsedSource) {
+            $$parsedSource["usages"] = $$createField4_0($$parsedSource["usages"]);
+        }
+        return new ProviderKeyAsset($$parsedSource as Partial<ProviderKeyAsset>);
+    }
+}
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

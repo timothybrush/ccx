@@ -109,7 +109,9 @@ const loadAgentStatuses = async () => {
       GetSavedProviderKeys(),
     ])
     agentStatuses.value = { claude, codex }
-    savedProviderKeys.value = keys
+    savedProviderKeys.value = Object.fromEntries(
+      Object.entries(keys).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    )
     if (isClaudeProvider(claude.provider)) {
       selectedClaudeProvider.value = claude.provider
     }

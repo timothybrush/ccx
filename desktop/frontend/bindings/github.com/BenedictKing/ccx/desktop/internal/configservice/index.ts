@@ -3,5 +3,6 @@
 
 export {
     AgentConfigStatus,
-    ApplyAgentConfigRequest
+    ApplyAgentConfigRequest,
+    ProviderKeyAsset
 } from "./models.js";

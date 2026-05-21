@@ -52,4 +52,59 @@ export type ApplyAgentConfigRequest = {
   baseUrl?: string
 }
 
-export type TabValue = 'status' | 'agent' | 'env' | 'web'
+export type TabValue = 'status' | 'agent' | 'env' | 'channels' | 'web'
+
+export type ProviderPlan = {
+  id: string
+  label: string
+  baseUrl: string
+  description: string
+  recommended: boolean
+  custom: boolean
+}
+
+export type ChannelTarget = {
+  type: 'messages' | 'chat' | 'responses'
+  label: string
+  description: string
+  recommended: boolean
+}
+
+export type ProviderPreset = {
+  id: string
+  label: string
+  description: string
+  directAgent: boolean
+  nativeMessages: boolean
+  chatCompatible: boolean
+  responsesCompatible: boolean
+  plans: ProviderPlan[]
+  targets: ChannelTarget[]
+  defaultTarget: 'messages' | 'chat' | 'responses'
+}
+
+export type ProviderKeyAsset = {
+  provider: string
+  apiKey: string
+  baseUrl?: string
+  planId?: string
+  usages?: string[]
+}
+
+export type CreateChannelRequest = {
+  provider: string
+  target: string
+  planId?: string
+  baseUrl?: string
+  apiKey?: string
+  name?: string
+  description?: string
+}
+
+export type CreateChannelResult = {
+  provider: string
+  target: string
+  name: string
+  baseUrl: string
+  message: string
+}
