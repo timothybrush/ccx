@@ -5,12 +5,15 @@ import StatusTab from '@/components/status/StatusTab.vue'
 import AgentTab from '@/components/agent/AgentTab.vue'
 import EnvTab from '@/components/env/EnvTab.vue'
 import WebUITab from '@/components/webui/WebUITab.vue'
+import ChannelTab from '@/components/channel/ChannelTab.vue'
 import UpdateDialog from '@/components/update/UpdateDialog.vue'
 import { useStatus } from '@/composables/useStatus'
 import { useUpdater } from '@/composables/useUpdater'
 import { useWailsEvents } from '@/composables/useWailsEvents'
 
-const activeTab = ref<'status' | 'agent' | 'env' | 'web'>('status')
+import type { TabValue } from '@/types'
+
+const activeTab = ref<TabValue>('status')
 const { status, actionError, syncStatus } = useStatus()
 useUpdater()
 
@@ -21,9 +24,10 @@ const switchToWeb = () => {
 }
 
 // 选项卡标题映射
-const tabTitles: Record<typeof activeTab.value, string> = {
+const tabTitles: Record<TabValue, string> = {
   status: '网关状态监控',
   agent: 'Agent 代理配置',
+  channels: '渠道中心',
   env: '环境参数管理',
   web: '内置控制台 Web UI'
 }
@@ -79,6 +83,9 @@ const tabTitles: Record<typeof activeTab.value, string> = {
           </div>
           <div v-show="activeTab === 'agent'" class="h-full">
             <AgentTab />
+          </div>
+          <div v-show="activeTab === 'channels'" class="h-full">
+            <ChannelTab />
           </div>
           <div v-show="activeTab === 'env'" class="h-full">
             <EnvTab />

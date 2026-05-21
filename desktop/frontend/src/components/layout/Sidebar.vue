@@ -11,10 +11,12 @@ import {
   Play,
   Square,
   Power,
-  RefreshCw
+  RefreshCw,
+  Network
 } from 'lucide-vue-next'
+import type { TabValue } from '@/types'
 
-const modelValue = defineModel<'status' | 'agent' | 'env' | 'web'>({ required: true })
+const modelValue = defineModel<TabValue>({ required: true })
 
 const { status, loading, autostartEnabled, startService, stopService, setAutostart } = useStatus()
 const { state: updaterState, check: checkUpdate } = useUpdater()
@@ -22,6 +24,7 @@ const { state: updaterState, check: checkUpdate } = useUpdater()
 const menuItems = [
   { id: 'status', label: '网关监控', icon: Activity, desc: '实时状态及核心日志' },
   { id: 'agent', label: 'Agent 配置', icon: Settings, desc: '本地开发代理控制' },
+  { id: 'channels', label: '渠道中心', icon: Network, desc: '一键添加上游渠道' },
   { id: 'env', label: '环境参数', icon: Sliders, desc: '网关配置文件编辑' },
   { id: 'web', label: '管理界面', icon: Globe, desc: 'CCX Web 控制面板' }
 ] as const

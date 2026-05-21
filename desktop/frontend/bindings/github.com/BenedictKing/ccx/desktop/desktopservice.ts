@@ -10,6 +10,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as backend$0 from "./internal/backend/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as channelpreset$0 from "./internal/channelpreset/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as configservice$0 from "./internal/configservice/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -43,6 +46,12 @@ export function CopyText(text: string): $CancellablePromise<void> {
     return $Call.ByID(2418202931, text);
 }
 
+export function CreateCCXChannelFromPreset(req: channelpreset$0.CreateChannelRequest): $CancellablePromise<channelpreset$0.CreateChannelResult> {
+    return $Call.ByID(3922694447, req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 /**
  * DownloadAndInstall 下载、校验并触发安装。整个流程通过 update:progress 事件推送进度。
  */
@@ -52,7 +61,7 @@ export function DownloadAndInstall(info: $models.UpdateInfo): $CancellablePromis
 
 export function GetAgentConfigStatus(platform: string): $CancellablePromise<configservice$0.AgentConfigStatus> {
     return $Call.ByID(3013260948, platform).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -62,13 +71,25 @@ export function GetAutostartStatus(): $CancellablePromise<boolean> {
 
 export function GetEnvFile(): $CancellablePromise<$models.EnvFileState> {
     return $Call.ByID(4130444060).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
 }
 
 export function GetLogs(): $CancellablePromise<string[]> {
     return $Call.ByID(1688970508).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType4($result);
+    });
+}
+
+export function GetProviderKeyAssets(): $CancellablePromise<configservice$0.ProviderKeyAsset[]> {
+    return $Call.ByID(1999783760).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+export function GetProviderPresets(): $CancellablePromise<channelpreset$0.ProviderPreset[]> {
+    return $Call.ByID(764436626).then(($result: any) => {
+        return $$createType8($result);
     });
 }
 
@@ -76,15 +97,15 @@ export function GetProxyAccessKey(): $CancellablePromise<string> {
     return $Call.ByID(355938326);
 }
 
-export function GetSavedProviderKeys(): $CancellablePromise<Record<string, string>> {
+export function GetSavedProviderKeys(): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(2703245855).then(($result: any) => {
-        return $result as Record<string, string>;
+        return $$createType9($result);
     });
 }
 
 export function GetStatus(): $CancellablePromise<backend$0.Status> {
     return $Call.ByID(2036427713).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType10($result);
     });
 }
 
@@ -93,7 +114,7 @@ export function GetStatus(): $CancellablePromise<backend$0.Status> {
  */
 export function GetVersion(): $CancellablePromise<$models.VersionInfo> {
     return $Call.ByID(3507009081).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType11($result);
     });
 }
 
@@ -150,8 +171,14 @@ export function WebURL(): $CancellablePromise<string> {
 
 // Private type creation functions
 const $$createType0 = $models.UpdateInfo.createFrom;
-const $$createType1 = configservice$0.AgentConfigStatus.createFrom;
-const $$createType2 = $models.EnvFileState.createFrom;
-const $$createType3 = $Create.Array($Create.Any);
-const $$createType4 = backend$0.Status.createFrom;
-const $$createType5 = $models.VersionInfo.createFrom;
+const $$createType1 = channelpreset$0.CreateChannelResult.createFrom;
+const $$createType2 = configservice$0.AgentConfigStatus.createFrom;
+const $$createType3 = $models.EnvFileState.createFrom;
+const $$createType4 = $Create.Array($Create.Any);
+const $$createType5 = configservice$0.ProviderKeyAsset.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = channelpreset$0.ProviderPreset.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = $Create.Map($Create.Any, $Create.Any);
+const $$createType10 = backend$0.Status.createFrom;
+const $$createType11 = $models.VersionInfo.createFrom;
