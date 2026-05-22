@@ -283,6 +283,103 @@ func TestConvertResponsesToOpenAIChatRequest(t *testing.T) {
 	}
 }
 
+func TestConvertResponsesToOpenAIChatRequest_ImageSourceVariants(t *testing.T) {
+	tests := []struct {
+		name       string
+		imageBlock string
+		wantURL    string
+		wantDetail string
+	}{
+		{
+			name:       "base64 source",
+			imageBlock: `{"type":"input_image","source":{"type":"base64","media_type":"image/png","data":"abc"},"detail":"high"}`,
+			wantURL:    "data:image/png;base64,abc",
+			wantDetail: "high",
+		},
+		{
+			name:       "url source",
+			imageBlock: `{"type":"input_image","source":{"type":"url","url":"https://example.com/a.png"},"detail":"low"}`,
+			wantURL:    "https://example.com/a.png",
+			wantDetail: "low",
+		},
+		{
+			name:       "empty image_url falls back to source",
+			imageBlock: `{"type":"input_image","image_url":"","source":{"type":"base64","media_type":"image/jpeg","data":"xyz"}}`,
+			wantURL:    "data:image/jpeg;base64,xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := `{"model":"gpt-4o","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"describe"},` + tt.imageBlock + `]}]}`
+			result := ConvertResponsesToOpenAIChatRequest("gpt-4o", []byte(input), false)
+			content := gjson.ParseBytes(result).Get("messages.0.content")
+			if !content.IsArray() {
+				t.Fatalf("content should be array, got %s", content.Raw)
+			}
+			image := content.Get("1")
+			if image.Get("type").String() != "image_url" {
+				t.Fatalf("image block type mismatch: %s", image.Raw)
+			}
+			if got := image.Get("image_url.url").String(); got != tt.wantURL {
+				t.Fatalf("image_url.url = %q, want %q; body=%s", got, tt.wantURL, result)
+			}
+			if got := image.Get("image_url.detail").String(); got != tt.wantDetail {
+				t.Fatalf("image_url.detail = %q, want %q; body=%s", got, tt.wantDetail, result)
+			}
+		})
+	}
+}
+
+func TestNormalizeResponsesImageURL_SourceVariants(t *testing.T) {
+	tests := []struct {
+		name       string
+		block      map[string]interface{}
+		wantURL    string
+		wantDetail string
+	}{
+		{
+			name: "base64 source",
+			block: map[string]interface{}{
+				"source": map[string]interface{}{"type": "base64", "media_type": "image/png", "data": "abc"},
+				"detail": "high",
+			},
+			wantURL:    "data:image/png;base64,abc",
+			wantDetail: "high",
+		},
+		{
+			name: "url source",
+			block: map[string]interface{}{
+				"source": map[string]interface{}{"type": "url", "url": "https://example.com/a.png"},
+			},
+			wantURL: "https://example.com/a.png",
+		},
+		{
+			name: "empty image_url falls back to source",
+			block: map[string]interface{}{
+				"image_url": "",
+				"source":    map[string]interface{}{"type": "base64", "media_type": "image/jpeg", "data": "xyz"},
+			},
+			wantURL: "data:image/jpeg;base64,xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeResponsesImageURL(tt.block)
+			if result == nil {
+				t.Fatalf("normalizeResponsesImageURL returned nil")
+			}
+			if got := result["url"]; got != tt.wantURL {
+				t.Fatalf("url = %v, want %s", got, tt.wantURL)
+			}
+			if tt.wantDetail != "" && result["detail"] != tt.wantDetail {
+				t.Fatalf("detail = %v, want %s", result["detail"], tt.wantDetail)
+			}
+		})
+	}
+}
+
 func TestConvertOpenAIChatToResponses_Stream(t *testing.T) {
 	ctx := context.Background()
 

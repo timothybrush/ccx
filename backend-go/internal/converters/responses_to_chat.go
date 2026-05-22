@@ -208,11 +208,16 @@ func convertMessageItem(item gjson.Result, out string) string {
 }
 
 func responsesImageContentToChatBlock(contentItem gjson.Result) string {
-	imageURL := contentItem.Get("image_url")
+	if block := responsesImageURLToChatBlock(contentItem.Get("image_url"), contentItem.Get("detail")); block != "" {
+		return block
+	}
+	return responsesImageSourceToChatBlock(contentItem.Get("source"), contentItem.Get("detail"))
+}
+
+func responsesImageURLToChatBlock(imageURL gjson.Result, detail gjson.Result) string {
 	if !imageURL.Exists() {
 		return ""
 	}
-
 	block := `{"type":"image_url","image_url":{}}`
 	if imageURL.Type == gjson.String {
 		if imageURL.String() == "" {
@@ -220,15 +225,49 @@ func responsesImageContentToChatBlock(contentItem gjson.Result) string {
 		}
 		block, _ = sjson.Set(block, "image_url.url", imageURL.String())
 	} else if imageURL.IsObject() {
+		if imageURL.Get("url").String() == "" {
+			return ""
+		}
 		block, _ = sjson.SetRaw(block, "image_url", imageURL.Raw)
 	} else {
 		return ""
 	}
+	return responsesImageChatBlockWithDetail(block, detail)
+}
 
-	if detail := contentItem.Get("detail"); detail.Exists() && detail.String() != "" {
+func responsesImageSourceToChatBlock(source gjson.Result, detail gjson.Result) string {
+	if !source.Exists() {
+		return ""
+	}
+	switch source.Get("type").String() {
+	case "base64":
+		mediaType := source.Get("media_type").String()
+		data := source.Get("data").String()
+		if mediaType == "" || data == "" {
+			return ""
+		}
+		return responsesImageURLStringToChatBlock("data:"+mediaType+";base64,"+data, detail)
+	case "url":
+		url := source.Get("url").String()
+		if url == "" {
+			return ""
+		}
+		return responsesImageURLStringToChatBlock(url, detail)
+	default:
+		return ""
+	}
+}
+
+func responsesImageURLStringToChatBlock(url string, detail gjson.Result) string {
+	block := `{"type":"image_url","image_url":{}}`
+	block, _ = sjson.Set(block, "image_url.url", url)
+	return responsesImageChatBlockWithDetail(block, detail)
+}
+
+func responsesImageChatBlockWithDetail(block string, detail gjson.Result) string {
+	if detail.Exists() && detail.String() != "" {
 		block, _ = sjson.Set(block, "image_url.detail", detail.String())
 	}
-
 	return block
 }
 

@@ -169,30 +169,30 @@ func responsesContentBlockToOpenAIChatPart(block map[string]interface{}) map[str
 }
 
 func normalizeResponsesImageURL(block map[string]interface{}) map[string]interface{} {
-	rawImageURL, ok := block["image_url"]
-	if !ok {
-		return nil
+	if result := normalizeResponsesImageURLValue(block["image_url"], block["detail"]); result != nil {
+		return result
 	}
+	return normalizeResponsesImageSource(block["source"], block["detail"])
+}
 
+func normalizeResponsesImageURLValue(rawImageURL interface{}, rawDetail interface{}) map[string]interface{} {
+	detail, _ := rawDetail.(string)
 	switch imageURL := rawImageURL.(type) {
 	case string:
 		if imageURL == "" {
 			return nil
 		}
-		result := map[string]interface{}{"url": imageURL}
-		if detail, _ := block["detail"].(string); detail != "" {
-			result["detail"] = detail
-		}
-		return result
+		return responsesImageResult(imageURL, detail)
 	case map[string]interface{}:
-		if _, ok := imageURL["url"].(string); !ok {
+		url, _ := imageURL["url"].(string)
+		if url == "" {
 			return nil
 		}
 		result := make(map[string]interface{}, len(imageURL)+1)
 		for key, value := range imageURL {
 			result[key] = value
 		}
-		if detail, _ := block["detail"].(string); detail != "" {
+		if detail != "" {
 			result["detail"] = detail
 		}
 		return result
@@ -201,6 +201,38 @@ func normalizeResponsesImageURL(block map[string]interface{}) map[string]interfa
 	}
 }
 
+func normalizeResponsesImageSource(rawSource interface{}, rawDetail interface{}) map[string]interface{} {
+	source, ok := rawSource.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	sourceType, _ := source["type"].(string)
+	switch sourceType {
+	case "base64":
+		mediaType, _ := source["media_type"].(string)
+		data, _ := source["data"].(string)
+		if mediaType == "" || data == "" {
+			return nil
+		}
+		return responsesImageResult("data:"+mediaType+";base64,"+data, rawDetail)
+	case "url":
+		url, _ := source["url"].(string)
+		if url == "" {
+			return nil
+		}
+		return responsesImageResult(url, rawDetail)
+	default:
+		return nil
+	}
+}
+
+func responsesImageResult(url string, rawDetail interface{}) map[string]interface{} {
+	result := map[string]interface{}{"url": url}
+	if detail, _ := rawDetail.(string); detail != "" {
+		result["detail"] = detail
+	}
+	return result
+}
 func extractResponsesReasoningText(item types.ResponsesItem) string {
 	if text := extractReasoningTextFromSummary(item.Summary); text != "" {
 		return text
