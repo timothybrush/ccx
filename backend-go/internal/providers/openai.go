@@ -65,6 +65,9 @@ func (p *OpenAIProvider) ConvertToProviderRequest(c *gin.Context, upstream *conf
 		requestMap["tools"] = openaiReq.Tools
 		requestMap["tool_choice"] = openaiReq.ToolChoice
 	}
+	if userID, ok := claudeReq.Metadata["user_id"].(string); ok && userID != "" {
+		requestMap["user_id"] = userID
+	}
 	if effort := config.ResolveReasoningEffort(claudeReq.Model, upstream); effort != "" {
 		requestMap["reasoning"] = map[string]interface{}{"effort": effort}
 	}

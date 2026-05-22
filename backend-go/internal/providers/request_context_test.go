@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -135,5 +136,26 @@ func TestConvertToProviderRequest_UsesUpdatedRequestBodyBytesContext(t *testing.
 	}
 	if string(reqBody) != string(normalized) {
 		t.Fatalf("request body = %s, want %s", string(reqBody), string(normalized))
+	}
+}
+
+func TestOpenAIProvider_ConvertToProviderRequest_MapsMetadataUserID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"gpt-4o","metadata":{"user_id":"deepseek_user_123"},"messages":[{"role":"user","content":"hi"}]}`)
+	c := newGinContext(http.MethodPost, "/v1/messages", body, context.Background())
+	upstream := &config.UpstreamConfig{BaseURL: "https://api.example.com", ServiceType: "openai"}
+
+	p := &OpenAIProvider{}
+	req, _, err := p.ConvertToProviderRequest(c, upstream, "sk-test")
+	if err != nil {
+		t.Fatalf("ConvertToProviderRequest() err = %v", err)
+	}
+
+	var got map[string]interface{}
+	if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	if got["user_id"] != "deepseek_user_123" {
+		t.Fatalf("user_id = %v, want deepseek_user_123", got["user_id"])
 	}
 }

@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### 修复
+
+- **DeepSeek `user_id` 限速与隔离字段透传**：
+  - 让内部会话标识提取支持 Chat 请求体顶层 `user_id`，用于 Trace 亲和性与调度追踪。
+  - 补齐 Chat → Claude、Messages → OpenAI/Responses、Responses → Claude 跨协议转换中的 `user_id` / `metadata.user_id` 映射，避免用户隔离标识在协议转换时丢失。
+  - 增加相关单元测试覆盖关键转换路径。
+- **Responses 转 Claude 上游 reasoning 回传补齐**：
+  - 在 Responses 转 Claude/Messages 风格请求且启用 `PassbackReasoningContent` 时，同步补齐 `reasoning_content`，避免 MiMo 等上游跨渠道历史请求缺少 reasoning 回传字段。
+
 ## [v2.7.12] - 2026-05-22
 
 ### 修复

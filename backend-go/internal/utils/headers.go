@@ -45,6 +45,9 @@ func ExtractUnifiedSessionID(c *gin.Context, bodyBytes []byte) string {
 	if user, ok := req["user"].(string); ok && user != "" {
 		return user
 	}
+	if userID, ok := req["user_id"].(string); ok && userID != "" {
+		return userID
+	}
 	if promptCacheKey, ok := req["prompt_cache_key"].(string); ok && promptCacheKey != "" {
 		return promptCacheKey
 	}

@@ -59,6 +59,23 @@ func TestBuildProviderRequest_InjectsReasoningBeforeModelRedirect(t *testing.T) 
 	}
 }
 
+func TestConvertChatToClaudeRequest_MapsUserIDToMetadata(t *testing.T) {
+	bodyBytes := []byte(`{"model":"deepseek-v4-pro","user_id":"deepseek_user_123","messages":[{"role":"user","content":"hi"}]}`)
+
+	got, err := convertChatToClaudeRequest(bodyBytes, "claude-3-5-sonnet", false)
+	if err != nil {
+		t.Fatalf("convertChatToClaudeRequest() err = %v", err)
+	}
+
+	metadata, ok := got["metadata"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("metadata missing or invalid: %#v", got["metadata"])
+	}
+	if metadata["user_id"] != "deepseek_user_123" {
+		t.Fatalf("metadata.user_id = %v, want deepseek_user_123", metadata["user_id"])
+	}
+}
+
 func TestBuildProviderRequest_InjectsReasoningEffortStyle(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

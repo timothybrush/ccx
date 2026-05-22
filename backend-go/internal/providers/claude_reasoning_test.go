@@ -377,7 +377,7 @@ func TestConvertThinkingToReasoningContent(t *testing.T) {
 			},
 		},
 		{
-			name: "已有顶层 reasoning_content 的 assistant string content 保持原值",
+			name:  "已有顶层 reasoning_content 的 assistant string content 保持原值",
 			input: `{"model": "mimo-v2.5-pro", "messages": [{"role": "assistant", "reasoning_content": "prior reasoning", "content": "plain answer"}]}`,
 			wantJSON: map[string]interface{}{
 				"model": "mimo-v2.5-pro",
@@ -391,7 +391,7 @@ func TestConvertThinkingToReasoningContent(t *testing.T) {
 			},
 		},
 		{
-			name: "assistant 仅 tool_use 且无 thinking 时补非空 reasoning_content",
+			name:  "assistant 仅 tool_use 且无 thinking 时补非空 reasoning_content",
 			input: `{"model": "mimo-v2.5-pro", "messages": [{"role": "assistant", "content": [{"type": "tool_use", "id": "call_x", "name": "Edit", "input": {"file_path": "a.go"}}]}]}`,
 			wantJSON: map[string]interface{}{
 				"model": "mimo-v2.5-pro",
@@ -407,7 +407,7 @@ func TestConvertThinkingToReasoningContent(t *testing.T) {
 			},
 		},
 		{
-			name: "assistant 顶层 reasoning_content 为空串时回填占位",
+			name:  "assistant 顶层 reasoning_content 为空串时回填占位",
 			input: `{"model": "mimo-v2.5-pro", "messages": [{"role": "assistant", "reasoning_content": "", "content": [{"type": "tool_use", "id": "call_y", "name": "Edit", "input": {"file_path": "b.go"}}]}]}`,
 			wantJSON: map[string]interface{}{
 				"model": "mimo-v2.5-pro",
@@ -423,7 +423,7 @@ func TestConvertThinkingToReasoningContent(t *testing.T) {
 			},
 		},
 		{
-			name: "已有顶层 reasoning_content 时不覆盖原值",
+			name:  "已有顶层 reasoning_content 时不覆盖原值",
 			input: `{"model": "mimo-v2.5-pro", "messages": [{"role": "assistant", "reasoning_content": "exact-passthrough", "content": [{"type": "thinking", "thinking": "new thinking that should not override"}, {"type": "text", "text": "plain answer"}]}]}`,
 			wantJSON: map[string]interface{}{
 				"model": "mimo-v2.5-pro",
@@ -680,3 +680,42 @@ done:
 	}
 }
 
+func TestConvertThinkingToReasoningContent_ChannelSwitch(t *testing.T) {
+	// 模拟 MiMo → GPT → MiMo 切换场景
+	// assistant[1] 来自 MiMo 阶段：已有 reasoning_content + thinking blocks
+	// assistant[3] 来自 GPT 阶段：Claude Code 空 thinking block + text
+	input := `{
+		"model": "mimo-v2.5-pro",
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "hello"}]},
+			{"role": "assistant", "reasoning_content": "real thinking", "content": [
+				{"type": "thinking", "thinking": "real thinking"},
+				{"type": "text", "text": "mimo answer"}
+			]},
+			{"role": "user", "content": [{"type": "text", "text": "next"}]},
+			{"role": "assistant", "content": [
+				{"type": "thinking"},
+				{"type": "text", "text": "gpt channel answer"}
+			]}
+		]
+	}`
+
+	result := convertThinkingToReasoningContent([]byte(input))
+
+	var got map[string]interface{}
+	if err := json.Unmarshal(result, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	messages := got["messages"].([]interface{})
+	for i, m := range messages {
+		msg := m.(map[string]interface{})
+		if role, _ := msg["role"].(string); role != "assistant" {
+			continue
+		}
+		rc, hasRC := msg["reasoning_content"].(string)
+		if !hasRC || strings.TrimSpace(rc) == "" {
+			t.Errorf("assistant[%d] missing/empty reasoning_content: has=%v rc=%q", i, hasRC, rc)
+		}
+	}
+}

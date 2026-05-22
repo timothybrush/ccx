@@ -91,6 +91,23 @@ func TestClaudeConverter_ToProviderRequest_PreservesTools(t *testing.T) {
 	assert.NotNil(t, tools[0]["input_schema"])
 }
 
+func TestClaudeConverter_ToProviderRequest_MapsUserToMetadataUserID(t *testing.T) {
+	req := &types.ResponsesRequest{
+		Model: "claude-3-5-sonnet",
+		Input: "hello",
+		User:  "deepseek_user_123",
+	}
+
+	converted, err := (&ClaudeConverter{}).ToProviderRequest(&session.Session{}, req)
+	assert.NoError(t, err)
+
+	requestMap, ok := converted.(map[string]interface{})
+	assert.True(t, ok)
+	metadata, ok := requestMap["metadata"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "deepseek_user_123", metadata["user_id"])
+}
+
 func TestOpenAIChatConverter_ToolRequiredField_FilledWhenMissing(t *testing.T) {
 	req := &types.ResponsesRequest{
 		Model: "gpt-5.5",

@@ -275,3 +275,11 @@ func TestApplyCustomHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractUnifiedSessionID_UsesTopLevelUserID(t *testing.T) {
+	body := []byte(`{"model":"deepseek-v4-pro","user_id":"deepseek_user_123"}`)
+
+	if got := ExtractUnifiedSessionID(nil, body); got != "deepseek_user_123" {
+		t.Fatalf("ExtractUnifiedSessionID() = %q, want deepseek_user_123", got)
+	}
+}

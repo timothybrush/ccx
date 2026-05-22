@@ -621,6 +621,10 @@ func convertChatToClaudeRequest(bodyBytes []byte, model string, isStream bool) (
 	}
 
 	// 转换 tools：OpenAI function → Claude tools
+	if userID, ok := reqMap["user_id"].(string); ok && userID != "" {
+		claudeReq["metadata"] = map[string]interface{}{"user_id": userID}
+	}
+
 	if tools, ok := reqMap["tools"].([]interface{}); ok && len(tools) > 0 {
 		var claudeTools []map[string]interface{}
 		for _, tool := range tools {
