@@ -347,5 +347,5 @@ concurrency:
 - **编译验证是强制步骤**：commit 后必须通过 `make test` 和 `make build`，否则不允许创建 tag 和推送
 - 编译验证失败时，已提交的 commit 保留在本地，用户修复后可手动推送
 - 推送 tag 后，GitHub Actions 需要几分钟完成编译
-- 可在 GitHub Actions 页面查看构建进度
+- 查看构建进度：`gh run list --limit 5`
 - 所有构建完成后，draft release 会包含全部平台产物，需手动确认发布
