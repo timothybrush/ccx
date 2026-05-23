@@ -128,8 +128,8 @@ jobs:
           {
             cd backend-go
             shasum -a 256 ccx-darwin-arm64 ccx-darwin-amd64
-            cd ..
-            for f in desktop/bin/CCX-Desktop-*-darwin-*.dmg; do
+            cd ../desktop/bin
+            for f in CCX-Desktop-*-darwin-*.dmg; do
               shasum -a 256 "$f"
             done
           } > checksums-macos.txt
@@ -158,14 +158,6 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload macOS checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums-macos
-          path: |
-            checksums-macos.txt
-            checksums-macos.txt.sigstore.json
 
   build-windows:
     runs-on: windows-latest
@@ -313,8 +305,8 @@ jobs:
           {
             cd backend-go
             sha256sum ccx-windows-amd64.exe ccx-windows-arm64.exe
-            cd ..
-            for f in desktop/.release-staging/CCX-Desktop-*-windows-*-setup.exe; do
+            cd ../desktop/.release-staging
+            for f in CCX-Desktop-*-windows-*-setup.exe; do
               sha256sum "$f"
             done
           } > checksums-windows.txt
@@ -343,14 +335,6 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums-windows
-          path: |
-            checksums-windows.txt
-            checksums-windows.txt.sigstore.json
 
   build-linux:
     runs-on: ubuntu-latest
@@ -439,8 +423,8 @@ jobs:
           {
             cd backend-go
             sha256sum ccx-linux-amd64 ccx-linux-arm64
-            cd ..
-            for f in desktop/bin/CCX-Desktop-*-linux-*.AppImage; do
+            cd ../desktop/bin
+            for f in CCX-Desktop-*-linux-*.AppImage; do
               sha256sum "$f"
             done
           } > checksums-linux.txt
@@ -467,14 +451,6 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Linux checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums-linux
-          path: |
-            checksums-linux.txt
-            checksums-linux.txt.sigstore.json
 
   build-linux-arm64-desktop:
     runs-on: ubuntu-24.04-arm
@@ -546,13 +522,8 @@ jobs:
 
       - name: Generate Linux arm64 checksums
         run: |
-          sha256sum desktop/bin/CCX-Desktop-*-linux-arm64.AppImage > checksums-linux-arm64.txt
-
-      - name: Upload Linux arm64 checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums-linux-arm64
-          path: checksums-linux-arm64.txt
+          cd desktop/bin
+          sha256sum CCX-Desktop-*-linux-arm64.AppImage > checksums-linux-arm64.txt
 
       - name: Upload Linux arm64 Assets
         uses: softprops/action-gh-release@v2.0.5
@@ -569,39 +540,6 @@ jobs:
   finalize:
     runs-on: ubuntu-latest
     needs: [build-macos, build-windows, build-linux, build-linux-arm64-desktop]
-    permissions:
-      contents: write
-      id-token: write
     steps:
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v4.0.0
-
-      - name: Download checksum artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: checksums-*
-          merge-multiple: true
-          path: ./signing
-
-      - name: Merge and sign consolidated checksums
-        run: |
-          cat signing/checksums-macos.txt \
-              signing/checksums-windows.txt \
-              signing/checksums-linux.txt \
-              signing/checksums-linux-arm64.txt > checksums.txt
-          cosign sign-blob checksums.txt \
-            --bundle checksums.txt.sigstore.json \
-            --yes
-        env:
-          COSIGN_YES: "true"
-
-      - name: Publish Release
-        uses: softprops/action-gh-release@v2.0.5
-        with:
-          draft: false
-          generate_release_notes: true
-          files: |
-            checksums.txt
-            checksums.txt.sigstore.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Notify release ready
+        run: echo "All builds complete. Draft release is ready for review."
