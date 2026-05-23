@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### 修复
+
+- **MiMo 不同计费模式支持独立 API Key** - ProviderKeyAsset 的 Assets map 改为 `provider:planID` 复合 key，同一 provider 不同 plan 不再互相覆盖；前端查找保存的 key 时优先匹配 plan-specific key，回退到 provider-only key 兼容旧数据
+
 ## [v2.7.22] - 2026-05-23
 
 ### 修复
