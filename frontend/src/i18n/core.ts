@@ -9,7 +9,7 @@ const SUPPORTED_LOCALE_MAP: Record<string, SupportedLocale> = {
   'zh-cn': 'zh-CN',
 }
 
-export const DEFAULT_LOCALE: SupportedLocale = 'en'
+export const DEFAULT_LOCALE: SupportedLocale = 'zh-CN'
 
 export function normalizeLocale(locale?: string | null): SupportedLocale {
   if (!locale) return DEFAULT_LOCALE
