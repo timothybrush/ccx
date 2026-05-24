@@ -436,6 +436,8 @@ func applyTargetDefaults(payload *ChannelPayload, provider string, target string
 			payload.ReasoningParamStyle = "reasoning"
 			payload.CodexToolCompat = false
 			payload.StripCodexClientTools = false
+			payload.CodexNativeToolPassthrough = true
+			payload.NormalizeNonstandardChatRoles = true
 			payload.NoVision = true
 		case ProviderMiMo:
 			payload.ModelMapping = map[string]string{"gpt": "mimo-v2.5-pro"}
