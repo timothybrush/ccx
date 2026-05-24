@@ -106,6 +106,23 @@ const claudeTargetBaseUrl = () => {
   }
 }
 
+const codexTargetBaseUrl = () => {
+  switch (selectedCodexProvider.value) {
+    case 'ccx':
+      return agentStatuses.value.codex?.targetBaseUrl || '当前 CCX 网关'
+    case 'openai':
+      return 'https://api.openai.com/v1'
+    case 'dashscope':
+      return 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    case 'opencode-zen':
+      return 'https://opencode.ai/zen/v1'
+    case 'opencode-go':
+      return 'https://opencode.ai/zen/go/v1'
+    default:
+      return ''
+  }
+}
+
 const agentStatusText = (item: AgentConfigStatus | null) => {
   if (!item) return '检测中'
   if (item.configured) return '已配置'
@@ -247,5 +264,6 @@ export function useAgentConfig() {
     restoreAgent,
     selectedCodexProvider,
     codexProviderLabel,
+    codexTargetBaseUrl,
   }
 }

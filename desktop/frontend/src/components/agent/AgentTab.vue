@@ -28,6 +28,7 @@ const {
   selectedCodexProvider,
   codexProviderLabels,
   codexProviderLabel,
+  codexTargetBaseUrl,
 } = useAgentConfig()
 
 onMounted(() => {
@@ -80,6 +81,7 @@ const handleRestore = async (platform: AgentPlatform) => {
         :codex-open-a-i-key="codexOpenAIKey"
         :codex-provider-labels="codexProviderLabels"
         :codex-provider-label="codexProviderLabel"
+        :codex-target-base-url="codexTargetBaseUrl"
         @apply="handleApply(platform)"
         @restore="handleRestore(platform)"
         @update:selected-claude-provider="selectedClaudeProvider = $event"
