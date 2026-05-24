@@ -486,8 +486,6 @@ func (s *Service) applyCodexOpenAI(apiKey string) error {
 	}
 	updated := upsertTopLevelTomlString(configContent, "model_provider", "openai")
 	updated = restoreNamedTomlBlock(updated, "model_providers.ccx", nil)
-	// 添加 OpenAI provider 配置块（如果不存在）
-	updated = upsertNamedTomlBlock(updated, "model_providers.openai", codexOpenAIProviderBlock())
 	if err := writeTextAtomic(configPath, updated); err != nil {
 		return err
 	}
@@ -507,8 +505,6 @@ func (s *Service) restoreCodex() error {
 		}
 		content = restoreTopLevelTomlString(content, "model_provider", state.OriginalModelProvider)
 		content = restoreNamedTomlBlock(content, "model_providers.ccx", state.OriginalProviderBlock)
-		// 移除我们添加的 OpenAI provider 配置块
-		content = restoreNamedTomlBlock(content, "model_providers.openai", nil)
 		if err := writeTextAtomic(state.ConfigPath, content); err != nil {
 			return err
 		}
@@ -743,14 +739,6 @@ wire_api = "responses"
 temp_env_key = "OPENAI_API_KEY"
 requires_openai_auth = false
 `, baseURL)
-}
-
-func codexOpenAIProviderBlock() string {
-	return `[model_providers.openai]
-name = "OpenAI"
-base_url = "https://api.openai.com/v1"
-wire_api = "responses"
-`
 }
 
 func readJSONMap(path string) (map[string]any, bool, error) {
