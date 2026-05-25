@@ -551,10 +551,11 @@ func applyTargetDefaults(payload *ChannelPayload, provider string, target string
 		case ProviderKimi:
 		case ProviderGLM:
 		case ProviderMiniMax:
-			payload.ModelMapping = map[string]string{"gpt": "MiniMax-M2.7"}
+			payload.ModelMapping = map[string]string{"gpt-5": "MiniMax-M2.7"}
 			payload.CodexToolCompat = false
 			payload.StripCodexClientTools = false
 			payload.CodexNativeToolPassthrough = true
+			payload.NormalizeNonstandardChatRoles = true
 		case ProviderDashScope:
 			payload.ModelMapping = map[string]string{
 				"gpt-5.5":       "glm-5.1",
