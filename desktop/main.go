@@ -45,13 +45,21 @@ func main() {
 }
 
 func run() error {
+	bootstrapCloser := setupBootstrapLog()
+	defer bootstrapCloser()
+	log.Printf("[Desktop-Boot] process starting cwd=%s exe=%s", mustGetwd(), mustExecutable())
+
+	log.Printf("[Desktop-Boot] creating backend manager")
 	manager := backend.NewManager(backend.Options{})
+	log.Printf("[Desktop-Boot] backend manager created dataDir=%s", manager.DataDir())
 
 	// 文件日志：同时写入 dataDir/desktop.log 和 stderr
 	logCloser := setupFileLog(manager.DataDir())
 	defer logCloser()
+	log.Printf("[Desktop-Boot] cwd=%s exe=%s dataDir=%s", mustGetwd(), mustExecutable(), manager.DataDir())
 
 	// 单实例互斥锁：检测已有实例时弹窗退出
+	log.Printf("[Desktop-Boot] acquiring single instance lock")
 	lock, err := singleinstance.Acquire(singleInstanceArg(manager.DataDir()))
 	if err != nil {
 		if err == singleinstance.ErrAlreadyRunning {
@@ -61,16 +69,19 @@ func run() error {
 		return fmt.Errorf("获取单实例锁失败: %w", err)
 	}
 	defer lock.Release()
+	log.Printf("[Desktop-Boot] single instance lock acquired")
 	desktopService := NewDesktopService(manager)
 	desktopService.setVersion(VersionInfo{
 		Version:   Version,
 		BuildTime: BuildTime,
 		GitCommit: GitCommit,
 	})
+	log.Printf("[Desktop-Boot] desktop service initialized")
 	dockService := dock.New()
 	notificationService := notifications.New()
 	desktopService.setNotifications(notificationService)
 
+	log.Printf("[Desktop-Boot] creating Wails application")
 	app := application.New(application.Options{
 		Name:        "CCX Desktop",
 		Description: "CCX desktop shell and core service supervisor",
@@ -86,6 +97,7 @@ func run() error {
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
+	log.Printf("[Desktop-Boot] Wails application created")
 	desktopService.setApp(app)
 
 	// macOS 首启请求通知权限（系统自身记忆已授权状态，不会反复弹窗）
@@ -140,6 +152,7 @@ func run() error {
 		mainWindow.Maximise()
 	}
 	desktopService.setMainWindow(mainWindow)
+	log.Printf("[Desktop-Boot] main window scheduled")
 
 	saveWindowState := func() {
 		x, y := mainWindow.Position()
@@ -202,6 +215,7 @@ func run() error {
 	})
 
 	tray := app.SystemTray.New()
+	log.Printf("[Desktop-Boot] system tray created")
 	tray.SetTooltip("CCX Desktop")
 	if icon, err := assets.ReadFile("frontend/dist/wails.png"); err == nil && len(icon) > 0 {
 		tray.SetTemplateIcon(icon)
@@ -353,9 +367,13 @@ func run() error {
 
 	// 初始化托盘菜单
 	initialStatus := desktopService.GetStatus()
+	log.Printf("[Desktop-Boot] initial status read: running=%v port=%d pid=%d", initialStatus.Running, initialStatus.Port, initialStatus.PID)
+	log.Printf("[Desktop-Boot] reading autostart status")
 	initialAutostart, _ := app.Autostart.IsEnabled()
+	log.Printf("[Desktop-Boot] autostart status read: enabled=%v", initialAutostart)
 	tray.SetMenu(buildTrayMenu(initialStatus.Running, initialStatus.Port, initialStatus.PID, initialAutostart))
 	tray.SetTooltip(tooltipFor(initialStatus))
+	log.Printf("[Desktop-Boot] tray menu initialized")
 
 	// 状态变化时动态刷新菜单与 tooltip
 	go func() {
@@ -419,23 +437,69 @@ func run() error {
 	}()
 
 	showMainWindow(false)
+	log.Printf("[Desktop-Boot] main window show requested")
 
+	log.Printf("[Desktop-Boot] entering app.Run")
 	if err := app.Run(); err != nil {
 		return err
 	}
+	log.Printf("[Desktop-Boot] app.Run returned")
 	return nil
 }
 
 // setupFileLog 在 dataDir 下打开 desktop.log 并将 log 输出同时写入文件和 stderr。
 // 返回的关闭函数应通过 defer 调用。
 func setupFileLog(dataDir string) func() {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Printf("[Desktop-Log] 无法创建日志目录 %s: %v", dataDir, err)
+		return func() {}
+	}
 	logPath := filepath.Join(dataDir, "desktop.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		log.Printf("[Desktop-Log] 无法打开日志文件 %s: %v", logPath, err)
 		return func() {}
 	}
-	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	log.SetOutput(io.MultiWriter(f, os.Stderr))
 	log.Printf("[Desktop-Log] 日志文件: %s", logPath)
 	return func() { f.Close() }
+}
+
+// setupBootstrapLog 在 backend manager 初始化前写入固定位置日志，覆盖 dataDir 计算阶段的启动问题。
+func setupBootstrapLog() func() {
+	base, err := os.UserConfigDir()
+	if err != nil || base == "" {
+		base, _ = os.UserHomeDir()
+	}
+	if base == "" {
+		base = "."
+	}
+	logDir := filepath.Join(base, "ccx-desktop")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return func() {}
+	}
+	logPath := filepath.Join(logDir, "bootstrap.log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return func() {}
+	}
+	log.SetOutput(io.MultiWriter(f, os.Stderr))
+	log.Printf("[Desktop-Log] 启动日志文件: %s", logPath)
+	return func() { f.Close() }
+}
+
+func mustGetwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "<error: " + err.Error() + ">"
+	}
+	return wd
+}
+
+func mustExecutable() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "<error: " + err.Error() + ">"
+	}
+	return exe
 }
