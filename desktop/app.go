@@ -182,6 +182,26 @@ func (s *DesktopService) OpenEnvFileInEditor(editorPath string) error {
 	return editor.Open(editorPath, path)
 }
 
+// OpenDirectory 在系统文件管理器中打开目录。
+func (s *DesktopService) OpenDirectory(dirPath string) error {
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return fmt.Errorf("路径不存在: %w", err)
+	}
+	if !info.IsDir() {
+		dirPath = filepath.Dir(dirPath)
+	}
+	return editor.OpenDirectory(dirPath)
+}
+
+// OpenFileInEditor 使用指定编辑器打开任意文件。
+func (s *DesktopService) OpenFileInEditor(editorPath string, filePath string) error {
+	if _, err := os.Stat(filePath); err != nil {
+		return fmt.Errorf("文件不存在: %w", err)
+	}
+	return editor.Open(editorPath, filePath)
+}
+
 func (s *DesktopService) StartService() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
