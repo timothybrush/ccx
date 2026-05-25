@@ -1,3 +1,12 @@
+## [Unreleased]
+
+### 破坏性变更
+
+- **桌面端 dataDir 路径稳定化，移除 sha1 hash 子目录** - 历史版本将 dataDir 计算为 `{UserConfigDir}/ccx-desktop/{sha1(rootDir)[:10]}`，rootDir 由 `os.Getwd()` 决定，导致从 Dock、Spotlight、终端 `wails3 dev` 等不同方式启动时产生不同 hash 目录（实测一台机器下出现 3 个互不相通的目录），用户的 PROXY_ACCESS_KEY、渠道配置、Agent 配置快照在不同启动方式之间相互不可见
+  - 新版本统一使用 `{UserConfigDir}/ccx-desktop/`，与 `bootstrap.log` 同级，dev 与 prod 共用
+  - **升级影响**：从旧版本升级后，原 hash 子目录（如 `ccx-desktop/42099b4af0/`）不会自动迁移，用户首次启动会进入空配置状态，需要重新通过引导页设置或手动从旧 hash 目录复制 `.env`、`agent-config-state/`、`.config/` 到新位置
+  - 不做自动迁移的原因：无法可靠判断哪个 hash 目录代表"主用户数据"
+
 ## [v2.7.30] - 2026-05-25
 
 ### 新增

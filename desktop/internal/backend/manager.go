@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
-	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -75,7 +74,7 @@ func NewManager(options Options) *Manager {
 	}
 	dataDir := options.DataDir
 	if dataDir == "" {
-		dataDir = defaultDataDir(rootDir)
+		dataDir = defaultDataDir()
 	}
 	// 优先使用 .env 中用户配置的端口，确保未启动时监控面板也显示正确端口
 	if envPort, err := readPortFromEnvFile(filepath.Join(dataDir, ".env")); err == nil && envPort > 0 {
@@ -714,7 +713,12 @@ func detectRootDir() string {
 	return cwd
 }
 
-func defaultDataDir(rootDir string) string {
+// defaultDataDir 返回与 cwd / 安装路径解耦的稳定数据目录。
+// 早期版本使用 sha1(rootDir)[:10] 作为子目录，会因启动方式（Dock/Spotlight/终端 dev）
+// 不同导致 cwd 变化，从而生成多个互不相通的 hash 目录，造成数据丢失。
+// 现在直接落到顶层 ccx-desktop/，dev 与 prod 共用同一目录，符合 macOS / Linux / Windows
+// 标准应用数据目录约定。已存在的 hash 子目录不做迁移，由用户自行处理。
+func defaultDataDir() string {
 	base, err := os.UserConfigDir()
 	if err != nil || base == "" {
 		base, _ = os.UserHomeDir()
@@ -722,9 +726,7 @@ func defaultDataDir(rootDir string) string {
 	if base == "" {
 		base = "."
 	}
-	hash := sha1.Sum([]byte(filepath.Clean(rootDir)))
-	instance := hex.EncodeToString(hash[:])[:10]
-	return filepath.Join(base, "ccx-desktop", instance)
+	return filepath.Join(base, "ccx-desktop")
 }
 
 func setEnv(env []string, key, value string) []string {
