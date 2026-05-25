@@ -25,15 +25,19 @@ const openDir = (path: string) => {
         { label: '数据目录', value: status.dataDir || '未设置', action: status.dataDir ? 'open' : null, actionPath: status.dataDir },
         { label: 'PID', value: String(status.pid || '-'), action: null },
         { label: '健康状态', value: status.health?.status || 'unknown', action: null },
-      ]" :key="item.label" class="flex items-center justify-between text-sm">
+      ]" :key="item.label" class="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 text-sm">
         <span class="text-muted-foreground">{{ item.label }}</span>
-        <div class="flex items-center gap-1">
-          <code class="text-xs bg-secondary px-2 py-1 rounded-md break-all max-w-[60%] text-right">{{ item.value }}</code>
+        <div class="flex min-w-0 items-center justify-end gap-2">
+          <code
+            class="inline-block min-w-0 max-w-full rounded-md bg-secondary px-2 py-1 text-right text-xs"
+            :class="item.action ? 'break-all' : 'whitespace-nowrap'"
+          >{{ item.value }}</code>
           <Button
             v-if="item.action"
             variant="ghost"
             size="icon-sm"
             :title="item.action === 'reveal' ? '打开所在目录' : '打开目录'"
+            class="shrink-0"
             @click="openDir(item.actionPath!)"
           >
             <FolderOpen class="w-3.5 h-3.5" />
