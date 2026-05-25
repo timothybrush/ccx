@@ -76,7 +76,7 @@ func Handler(
 		if isMultiChannel {
 			handleMultiChannel(c, envCfg, cfgManager, channelScheduler, sessionManager, bodyBytes, responsesReq, userID, startTime)
 		} else {
-			handleSingleChannel(c, envCfg, cfgManager, channelScheduler, sessionManager, bodyBytes, responsesReq, startTime)
+			handleSingleChannel(c, envCfg, cfgManager, channelScheduler, sessionManager, bodyBytes, userID, responsesReq, startTime)
 		}
 	})
 }
@@ -191,6 +191,7 @@ func handleSingleChannel(
 	channelScheduler *scheduler.ChannelScheduler,
 	sessionManager *session.SessionManager,
 	bodyBytes []byte,
+	userID string,
 	responsesReq types.ResponsesRequest,
 	startTime time.Time,
 ) {
@@ -218,7 +219,7 @@ func handleSingleChannel(
 
 	urlResults := common.BuildDefaultURLResults(baseURLs)
 
-	handled, _, _, lastFailoverError, _, lastError := common.TryUpstreamWithAllKeys(
+	handled, successKey, _, lastFailoverError, _, lastError := common.TryUpstreamWithAllKeys(
 		c,
 		envCfg,
 		cfgManager,
@@ -257,6 +258,32 @@ func handleSingleChannel(
 		channelIndex,
 		channelScheduler.GetChannelLogStore(scheduler.ChannelKindResponses),
 	)
+
+	// 追踪对话（驾驶舱显示）
+	if handled && successKey != "" {
+		lastUserMsg, _ := c.Get("lastUserMessage")
+		lastUserMsgStr, _ := lastUserMsg.(string)
+		userMsgCount, _ := c.Get("userMessageCount")
+		userMsgCountInt, _ := userMsgCount.(int)
+
+		if lastUserMsgStr != "" || userMsgCountInt > 0 {
+			channelName := ""
+			if upstream != nil {
+				channelName = upstream.Name
+			}
+			channelScheduler.TrackConversation(
+				scheduler.ChannelKindResponses,
+				userID,
+				responsesReq.Model,
+				channelIndex,
+				channelName,
+				"",
+				lastUserMsgStr,
+				userMsgCountInt,
+			)
+		}
+	}
+
 	if handled {
 		return
 	}
