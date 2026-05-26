@@ -319,15 +319,9 @@ func BuildPayload(req CreateChannelRequest) (ChannelPayload, error) {
 	if name == "" {
 		name = defaultChannelName(preset.ID, target)
 	}
-	description := strings.TrimSpace(req.Description)
-	if description == "" {
-		description = preset.Description
-	}
-
 	payload := ChannelPayload{
-		Name:        name,
-		Description: description,
-		BaseURL:     baseURL,
+		Name:    name,
+		BaseURL: baseURL,
 		APIKeys:     []string{apiKey},
 		Priority:    1,
 		Status:      "active",

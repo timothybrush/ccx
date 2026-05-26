@@ -76,7 +76,7 @@ func (cm *ConfigManager) AddChatUpstream(upstream UpstreamConfig) error {
 	upstream.BaseURL = utils.CanonicalBaseURL(upstream.BaseURL, upstream.ServiceType)
 	upstream.BaseURLs = deduplicateBaseURLs(upstream.BaseURLs, upstream.ServiceType)
 
-	cm.config.ChatUpstream = append(cm.config.ChatUpstream, upstream)
+	cm.config.ChatUpstream = append([]UpstreamConfig{upstream}, cm.config.ChatUpstream...)
 
 	if err := cm.saveConfigLocked(cm.config); err != nil {
 		return err

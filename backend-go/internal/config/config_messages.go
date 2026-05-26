@@ -76,7 +76,7 @@ func (cm *ConfigManager) AddUpstream(upstream UpstreamConfig) error {
 	upstream.BaseURL = utils.CanonicalBaseURL(upstream.BaseURL, upstream.ServiceType)
 	upstream.BaseURLs = deduplicateBaseURLs(upstream.BaseURLs, upstream.ServiceType)
 
-	cm.config.Upstream = append(cm.config.Upstream, upstream)
+	cm.config.Upstream = append([]UpstreamConfig{upstream}, cm.config.Upstream...)
 
 	if err := cm.saveConfigLocked(cm.config); err != nil {
 		return err
