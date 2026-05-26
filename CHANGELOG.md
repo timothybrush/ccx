@@ -1,8 +1,22 @@
-## [Unreleased]
+## [v2.8.7] - 2026-05-27
 
-### Fixed
+### 文档
+
+- **完善桌面端用户教程与客户端接入入口** - 补充桌面端使用教程与客户端接入文档入口说明。
+
+### 重构
+
+- **MiMo 渠道预设移除自定义 base URL，优化 token plan 切换与下拉标签** - MiMo 渠道预设不再设置自定义 base URL，同时优化 token plan 切换逻辑与下拉标签显示。
+- **go fmt 格式化 channelpreset 缩进对齐** - 对桌面端 channelpreset 模块执行 go fmt 统一格式化。
+
+### 修复
 
 - **含图请求不再覆盖普通文本 Trace 亲和** - 含图请求 failover 到视觉渠道成功后，不再改写同一用户的普通文本 Trace 亲和，避免 DeepSeek 等文本渠道被长时间绕过；`HasImageContentCached` 只读缓存，不影响已有 Images 渠道行为。
+- **恢复 BuildPayload Description 写入，移除 DMG 打包错误静默** - 恢复桌面端 BuildPayload 中 Description 字段的写入，移除 DMG 打包流程中对错误的静默处理以便排查问题，同时格式化相关测试文件。
+
+### 其他
+
+- **补充 NoVisionModels 断言覆盖** - 为桌面端 NoVisionModels 相关逻辑补充断言覆盖，增强测试完整性。
 
 ## [v2.8.6] - 2026-05-26
 
