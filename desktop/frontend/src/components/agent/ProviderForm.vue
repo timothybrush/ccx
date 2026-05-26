@@ -2,7 +2,7 @@
 import { ExternalLink } from 'lucide-vue-next'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { openProviderPromotion, providerPromotionLinks } from '@/lib/external-link'
+import { openProviderPromotion, openProviderConsole, providerConsoleLinks, providerPromotionLinks } from '@/lib/external-link'
 import type { AgentProvider } from '@/types'
 
 const props = defineProps<{
@@ -81,15 +81,26 @@ const keyPlaceholder = (provider: AgentProvider) => {
       </select>
     </div>
 
-    <button
-      v-if="providerPromotionLinks[selectedProvider]"
-      type="button"
-      class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
-      @click="openProviderPromotion(selectedProvider)"
-    >
-      通过推广链接注册，领取 5 元平台试用金
-      <ExternalLink class="h-3 w-3" />
-    </button>
+    <div v-if="selectedProvider !== 'ccx'" class="inline-flex items-center gap-3 flex-wrap">
+      <button
+        v-if="providerPromotionLinks[selectedProvider]"
+        type="button"
+        class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
+        @click="openProviderPromotion(selectedProvider)"
+      >
+        通过推广链接注册，领取 5 元平台试用金
+        <ExternalLink class="h-3 w-3" />
+      </button>
+      <button
+        v-if="providerConsoleLinks[selectedProvider]"
+        type="button"
+        class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+        @click="openProviderConsole(selectedProvider)"
+      >
+        访问官方控制台
+        <ExternalLink class="h-3 w-3" />
+      </button>
+    </div>
 
     <div v-if="selectedProvider === 'mimo'" class="space-y-1.5">
       <Label class="text-xs text-muted-foreground">MiMo 计费模式</Label>

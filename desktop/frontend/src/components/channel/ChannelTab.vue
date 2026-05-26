@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChannelPresets } from '@/composables/useChannelPresets'
-import { openProviderPromotion, providerPromotionLinks } from '@/lib/external-link'
+import { openProviderPromotion, openProviderConsole, providerConsoleLinks, providerPromotionLinks } from '@/lib/external-link'
 import compshareIcon from '@/assets/compshare.png'
 import type { ProviderPreset, ChannelTarget } from '@/types'
 
@@ -187,15 +187,26 @@ const submit = async () => {
           <div>
             <h3 class="text-lg font-semibold text-slate-100">{{ currentPreset.label }}</h3>
             <p class="text-sm text-slate-500 mt-1">{{ currentPreset.description }}</p>
-            <button
-              v-if="providerPromotionLinks[currentPreset.id]"
-              type="button"
-              class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
-              @click="openProviderPromotion(currentPreset.id)"
-            >
-              通过推广链接注册，领取 5 元平台试用金
-              <ExternalLink class="h-3 w-3" />
-            </button>
+            <div class="mt-2 flex items-center gap-3 flex-wrap">
+              <button
+                v-if="providerPromotionLinks[currentPreset.id]"
+                type="button"
+                class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
+                @click="openProviderPromotion(currentPreset.id)"
+              >
+                通过推广链接注册，领取 5 元平台试用金
+                <ExternalLink class="h-3 w-3" />
+              </button>
+              <button
+                v-if="providerConsoleLinks[currentPreset.id]"
+                type="button"
+                class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+                @click="openProviderConsole(currentPreset.id)"
+              >
+                访问官方控制台
+                <ExternalLink class="h-3 w-3" />
+              </button>
+            </div>
           </div>
           <div class="flex flex-wrap gap-1.5">
             <span

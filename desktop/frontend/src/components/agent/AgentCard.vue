@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { ExternalLink } from 'lucide-vue-next'
+import { openProviderConsole, providerConsoleLinks } from '@/lib/external-link'
 import { DetectEditors, OpenFileInEditor } from '@bindings/github.com/BenedictKing/ccx/desktop/desktopservice'
 import ProviderForm from '@/components/agent/ProviderForm.vue'
 import type { AgentPlatform, AgentConfigStatus, AgentProvider } from '@/types'
@@ -170,6 +171,15 @@ const openFileInEditor = async (filePath: string) => {
             <option value="opencode-go">OpenCode Go 直连</option>
           </select>
         </div>
+        <button
+          v-if="selectedCodexProvider && selectedCodexProvider !== 'ccx' && providerConsoleLinks[selectedCodexProvider]"
+          type="button"
+          class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+          @click="openProviderConsole(selectedCodexProvider)"
+        >
+          访问官方控制台
+          <ExternalLink class="h-3 w-3" />
+        </button>
         <div v-if="selectedCodexProvider !== 'ccx'" class="space-y-1.5">
           <Label class="text-xs text-muted-foreground">API Key <span v-if="codexKeyRequired" class="text-destructive">*</span></Label>
           <Input
