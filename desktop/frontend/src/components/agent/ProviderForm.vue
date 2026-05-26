@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ExternalLink } from 'lucide-vue-next'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { openProviderPromotion, providerPromotionLinks } from '@/lib/external-link'
 import type { AgentProvider } from '@/types'
 
 const props = defineProps<{
@@ -78,6 +80,16 @@ const keyPlaceholder = (provider: AgentProvider) => {
         <option value="opencode-go">OpenCode Go 直连</option>
       </select>
     </div>
+
+    <button
+      v-if="providerPromotionLinks[selectedProvider]"
+      type="button"
+      class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
+      @click="openProviderPromotion(selectedProvider)"
+    >
+      通过推广链接注册，领取 5 元平台试用金
+      <ExternalLink class="h-3 w-3" />
+    </button>
 
     <div v-if="selectedProvider === 'mimo'" class="space-y-1.5">
       <Label class="text-xs text-muted-foreground">MiMo 计费模式</Label>

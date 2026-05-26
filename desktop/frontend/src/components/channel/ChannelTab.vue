@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { KeyRound, Network, Sparkles, CheckCircle2, Loader2 } from 'lucide-vue-next'
+import { KeyRound, Network, Sparkles, CheckCircle2, Loader2, ExternalLink } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChannelPresets } from '@/composables/useChannelPresets'
+import { openProviderPromotion, providerPromotionLinks } from '@/lib/external-link'
+import compshareIcon from '@/assets/compshare.png'
 import type { ProviderPreset, ChannelTarget } from '@/types'
 
 const {
@@ -17,6 +19,10 @@ const {
   loadChannelPresets,
   createChannel,
 } = useChannelPresets()
+
+const providerIcons: Record<string, string> = {
+  compshare: compshareIcon,
+}
 
 const selectedProvider = ref('')
 const selectedTarget = ref('')
@@ -156,13 +162,23 @@ const submit = async () => {
           ]"
           @click="selectedProvider = preset.id"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-semibold text-slate-200">{{ preset.label }}</span>
-            <span v-if="keysByProvider[preset.id]" class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-              已有 Key
-            </span>
+          <div class="flex items-start gap-3">
+            <img
+              v-if="providerIcons[preset.id]"
+              :src="providerIcons[preset.id]"
+              :alt="`${preset.label} icon`"
+              class="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-slate-900/60 object-cover ring-1 ring-white/[0.04]"
+            >
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-semibold text-slate-200">{{ preset.label }}</span>
+                <span v-if="keysByProvider[preset.id]" class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                  已有 Key
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ preset.description }}</p>
+            </div>
           </div>
-          <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ preset.description }}</p>
         </button>
       </div>
 
@@ -171,6 +187,15 @@ const submit = async () => {
           <div>
             <h3 class="text-lg font-semibold text-slate-100">{{ currentPreset.label }}</h3>
             <p class="text-sm text-slate-500 mt-1">{{ currentPreset.description }}</p>
+            <button
+              v-if="providerPromotionLinks[currentPreset.id]"
+              type="button"
+              class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-blue-200"
+              @click="openProviderPromotion(currentPreset.id)"
+            >
+              通过推广链接注册，领取 5 元平台试用金
+              <ExternalLink class="h-3 w-3" />
+            </button>
           </div>
           <div class="flex flex-wrap gap-1.5">
             <span
