@@ -31,17 +31,17 @@
 
    ```bash
    # macOS / Linux
-   lsof -i :3000
+   lsof -i :3688
 
    # Windows
-   netstat -ano | findstr :3000
+   netstat -ano | findstr :3688
    ```
 
 2. 停止占用进程，或在 **Environment Params** 中修改 `PORT`，再重启服务。
 
 ### 健康检查超时
 
-**症状**：进程已创建，但 `http://localhost:3000/health` 长时间未变为 healthy。
+**症状**：进程已创建，但 `http://localhost:3688/health` 长时间未变为 healthy。
 
 **可能原因**：
 
@@ -69,9 +69,9 @@ chmod +x backend-go/ccx-go
 
 ### Base URL 根路径与 `/v1` 的区别
 
-- **Claude Code**：填写 `http://localhost:3000`。
-- **Codex CLI / Codex App**：填写 `http://localhost:3000/v1`。
-- **OpenCode**：填写 `http://localhost:3000/v1`。
+- **Claude Code**：填写 `http://localhost:3688`。
+- **Codex CLI / Codex App**：填写 `http://localhost:3688/v1`。
+- **OpenCode**：填写 `http://localhost:3688/v1`。
 
 这是常见错误来源，请严格按照客户端类型选择地址。
 
@@ -111,7 +111,7 @@ printenv OPENAI_BASE_URL
 可改用 Windows 主机的局域网 IPv4 地址，例如：
 
 ```text
-http://192.168.1.23:3000
+http://192.168.1.23:3688
 ```
 
 并把客户端的 API Key 继续设为 `PROXY_ACCESS_KEY`。
@@ -194,4 +194,4 @@ CCX Desktop 会保存窗口状态到数据目录。
 
 1. 确认网关已启动。
 2. 确认 `ENABLE_WEB_UI` 为 `true`。
-3. 尝试在浏览器中直接访问 `http://localhost:3000`。
+3. 尝试在浏览器中直接访问 `http://localhost:3688`。

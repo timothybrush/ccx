@@ -31,17 +31,17 @@ For first-run setup or the full user flow, see [CCX Desktop](./index).
 
    ```bash
    # macOS / Linux
-   lsof -i :3000
+   lsof -i :3688
 
    # Windows
-   netstat -ano | findstr :3000
+   netstat -ano | findstr :3688
    ```
 
 2. Stop the conflicting process or change `PORT` in **Environment Params**, then restart the service.
 
 ### Health check timeout
 
-**Symptom**: The backend process starts, but `http://localhost:3000/health` does not become healthy for a long time.
+**Symptom**: The backend process starts, but `http://localhost:3688/health` does not become healthy for a long time.
 
 **Possible causes**:
 
@@ -69,9 +69,9 @@ Run Desktop as administrator
 
 ### Base URL root vs `/v1`
 
-- **Claude Code**: use `http://localhost:3000`
-- **Codex CLI / Codex App**: use `http://localhost:3000/v1`
-- **OpenCode**: use `http://localhost:3000/v1`
+- **Claude Code**: use `http://localhost:3688`
+- **Codex CLI / Codex App**: use `http://localhost:3688/v1`
+- **OpenCode**: use `http://localhost:3688/v1`
 
 This is a common source of mistakes. Always match the Base URL to the client type.
 
@@ -111,7 +111,7 @@ If the client runs inside cmd, PowerShell, WSL, or Docker, `localhost` may not r
 Use the Windows host LAN IPv4 address instead, for example:
 
 ```text
-http://192.168.1.23:3000
+http://192.168.1.23:3688
 ```
 
 Keep the client API key set to `PROXY_ACCESS_KEY`.
@@ -194,4 +194,4 @@ If the saved state becomes invalid:
 
 1. Confirm the gateway is running.
 2. Confirm `ENABLE_WEB_UI` is `true`.
-3. Try opening `http://localhost:3000` directly in a browser.
+3. Try opening `http://localhost:3688` directly in a browser.

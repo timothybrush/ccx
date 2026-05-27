@@ -57,6 +57,8 @@ AppImage supports in-app auto updates. If you install through deb or rpm package
 
 When you open CCX Desktop, the first-run wizard generates and writes `PROXY_ACCESS_KEY`.
 
+![CCX Desktop first-run wizard](/images/desktop/setup-wizard.png)
+
 ### What `PROXY_ACCESS_KEY` is used for
 
 - It is the proxy key clients use to access CCX.
@@ -76,6 +78,8 @@ You can copy the current `PROXY_ACCESS_KEY` from the tray menu or **Gateway Moni
 ## Start service
 
 Open **Gateway Monitor** and click **Start service**.
+
+![Gateway Monitor](/images/desktop/gateway-monitor.png)
 
 If CCX Desktop reports that the binary is missing, build the backend first:
 
@@ -98,6 +102,8 @@ Gateway Monitor also supports:
 ## Agent configuration
 
 Open **Agent Config** to apply local CCX configuration to supported agent tools:
+
+![Agent Config](/images/desktop/agent-config.png)
 
 - **Claude Code**
 - **Codex**
@@ -122,6 +128,8 @@ For protocol and Base URL details by client, see:
 ## Add channels
 
 Open **Channel Center** and add at least one working channel for the target endpoint:
+
+![Channel Center](/images/desktop/channel-center.png)
 
 - Messages channel: for Claude Code
 - Responses channel: for Codex CLI / Codex App
@@ -156,7 +164,7 @@ After completing installation, key setup, service startup, agent configuration, 
 You can first check the models endpoint:
 
 ```bash
-curl http://localhost:3000/v1/models \
+curl http://localhost:3688/v1/models \
   -H "Authorization: Bearer your-ccx-proxy-key"
 ```
 
@@ -170,9 +178,11 @@ Then confirm the request path expected by each client:
 
 Open **Environment Params** to edit the `.env` file. Common settings:
 
+![Environment Params](/images/desktop/env-params.png)
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 3000 | Gateway port |
+| `PORT` | 3688 | Gateway port |
 | `PROXY_ACCESS_KEY` | - | Client proxy key for accessing CCX |
 | `ADMIN_ACCESS_KEY` | - | Admin key |
 | `LOG_LEVEL` | info | Log level |
@@ -188,6 +198,8 @@ You can open the embedded web UI from **Gateway Monitor** to manage channels, in
 ### System tray
 
 After the window is closed, CCX Desktop minimizes to the system tray.
+
+![CCX Desktop sidebar and daemon panel](/images/desktop/sidebar.png)
 
 Common tray actions:
 

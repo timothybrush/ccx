@@ -58,7 +58,7 @@ const kindDefaults: Record<ErrorKind, Omit<DiagnosticInfo, 'kind'>> = {
     suggestions: [
       '检查是否有其他 CCX 实例已在运行',
       '修改 .env 中 PORT 字段使用其他端口',
-      '使用 lsof -i :3000 (macOS/Linux) 或 netstat -ano | findstr :3000 (Windows) 检查端口占用',
+      '使用 lsof -i :3688 (macOS/Linux) 或 netstat -ano | findstr :3688 (Windows) 检查端口占用',
     ],
   },
   health: {
