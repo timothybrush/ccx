@@ -45,7 +45,7 @@ const checkSetup = async () => {
   return checkPromise
 }
 
-const confirmSetup = async (key: string, target: TabValue = 'channels') => {
+const confirmSetup = async (key: string, target: TabValue = 'agent') => {
   const trimmed = key.trim()
   if (!trimmed) {
     setupError.value = 'PROXY_ACCESS_KEY 不能为空'
