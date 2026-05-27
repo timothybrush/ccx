@@ -6,11 +6,9 @@ import AgentTab from '@/components/agent/AgentTab.vue'
 import EnvTab from '@/components/env/EnvTab.vue'
 import WebUITab from '@/components/webui/WebUITab.vue'
 import ChannelTab from '@/components/channel/ChannelTab.vue'
-import UpdateDialog from '@/components/update/UpdateDialog.vue'
 import SetupLoading from '@/components/setup/SetupLoading.vue'
 import SetupView from '@/components/setup/SetupView.vue'
 import { useStatus } from '@/composables/useStatus'
-import { useUpdater } from '@/composables/useUpdater'
 import { useWailsEvents } from '@/composables/useWailsEvents'
 import { useSetup } from '@/composables/useSetup'
 import { RefreshCw } from 'lucide-vue-next'
@@ -19,7 +17,6 @@ import type { TabValue } from '@/types'
 
 const activeTab = ref<TabValue>('status')
 const { status, actionError, syncStatus } = useStatus()
-useUpdater()
 
 useWailsEvents(activeTab, actionError, syncStatus)
 
@@ -139,7 +136,5 @@ const tabTitles: Record<TabValue, string> = {
         </div>
       </div>
     </main>
-
-    <UpdateDialog />
   </div>
 </template>

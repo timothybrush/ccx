@@ -17,7 +17,6 @@ import (
 	"github.com/BenedictKing/ccx/desktop/internal/channelpreset"
 	"github.com/BenedictKing/ccx/desktop/internal/configservice"
 	"github.com/BenedictKing/ccx/desktop/internal/editor"
-	"github.com/BenedictKing/ccx/desktop/internal/updater"
 	"github.com/pkg/browser"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -28,7 +27,6 @@ type DesktopService struct {
 	configService *configservice.Service
 	app           *application.App
 	mainWindow    application.Window
-	updater       *updater.Updater
 	versionInfo   VersionInfo
 	notifications *notifications.NotificationService
 }
@@ -38,16 +36,6 @@ type VersionInfo struct {
 	BuildTime    string `json:"buildTime"`
 	GitCommit    string `json:"gitCommit"`
 	Distribution string `json:"distribution"`
-}
-
-type UpdateInfo struct {
-	Available      bool   `json:"available"`
-	CurrentVersion string `json:"currentVersion"`
-	LatestVersion  string `json:"latestVersion"`
-	Notes          string `json:"notes"`
-	DownloadURL    string `json:"downloadUrl"`
-	Sha256URL      string `json:"sha256Url"`
-	Size           int64  `json:"size"`
 }
 
 type EnvFileState struct {
@@ -77,9 +65,6 @@ func (s *DesktopService) setVersion(v VersionInfo) {
 		v.Distribution = "github"
 	}
 	s.versionInfo = v
-	if !s.isStoreDistribution() {
-		s.updater = updater.New(v.Version)
-	}
 }
 
 func (s *DesktopService) isStoreDistribution() bool {
@@ -595,124 +580,6 @@ func (s *DesktopService) Shutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	_ = s.manager.Stop(ctx)
-}
-
-// CheckUpdate 查询是否有新版本可用。
-func (s *DesktopService) CheckUpdate() (UpdateInfo, error) {
-	info := UpdateInfo{CurrentVersion: s.versionInfo.Version}
-	if s.isStoreDistribution() {
-		return info, nil
-	}
-	if s.updater == nil {
-		return info, fmt.Errorf("updater 未初始化")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	release, err := s.updater.Check(ctx)
-	if err != nil {
-		return info, err
-	}
-	if release == nil {
-		return info, nil
-	}
-	info.Available = true
-	info.LatestVersion = release.Version
-	info.Notes = release.Notes
-	info.DownloadURL = release.DownloadURL
-	info.Sha256URL = release.Sha256URL
-	info.Size = release.Size
-	if s.app != nil {
-		s.app.Event.Emit("update:available", info)
-	}
-	return info, nil
-}
-
-// DownloadAndInstall 下载、校验并触发安装。整个流程通过 update:progress 事件推送进度。
-func (s *DesktopService) DownloadAndInstall(info UpdateInfo) error {
-	if s.isStoreDistribution() {
-		return fmt.Errorf("Microsoft Store 版本由 Microsoft Store 自动更新")
-	}
-	if s.updater == nil {
-		return fmt.Errorf("updater 未初始化")
-	}
-	if info.DownloadURL == "" {
-		return fmt.Errorf("缺少下载地址")
-	}
-	release := &updater.Release{
-		Version:     info.LatestVersion,
-		DownloadURL: info.DownloadURL,
-		Sha256URL:   info.Sha256URL,
-		Size:        info.Size,
-	}
-	go s.runUpdate(release)
-	return nil
-}
-
-func (s *DesktopService) runUpdate(release *updater.Release) {
-	// 订阅进度并转发到前端
-	if s.app != nil {
-		go func() {
-			for p := range s.updater.Subscribe() {
-				s.app.Event.Emit("update:progress", p)
-				if p.Phase == updater.PhaseDone || p.Phase == updater.PhaseError {
-					return
-				}
-			}
-		}()
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	localPath, err := s.updater.Download(ctx, release)
-	if err != nil {
-		if s.app != nil {
-			s.app.Event.Emit("update:progress", updater.Progress{
-				Phase: updater.PhaseError,
-				Error: err.Error(),
-			})
-		}
-		return
-	}
-
-	if err := s.updater.Verify(ctx, localPath, release.Sha256URL); err != nil {
-		if s.app != nil {
-			s.app.Event.Emit("update:progress", updater.Progress{
-				Phase: updater.PhaseError,
-				Error: err.Error(),
-			})
-		}
-		return
-	}
-
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer stopCancel()
-	if err := s.manager.Stop(stopCtx); err != nil {
-		if s.app != nil {
-			s.app.Event.Emit("update:progress", updater.Progress{
-				Phase: updater.PhaseError,
-				Error: fmt.Sprintf("停止 CCX 后端失败，请手动停止后重试更新: %v", err),
-			})
-		}
-		return
-	}
-
-	if err := s.updater.Install(localPath); err != nil {
-		if s.app != nil {
-			s.app.Event.Emit("update:progress", updater.Progress{
-				Phase: updater.PhaseError,
-				Error: err.Error(),
-			})
-		}
-	}
-}
-
-// CancelUpdate 中止正在进行的下载/安装。
-func (s *DesktopService) CancelUpdate() error {
-	if s.updater != nil {
-		s.updater.Cancel()
-	}
-	return nil
 }
 
 func (s *DesktopService) showWindow() {

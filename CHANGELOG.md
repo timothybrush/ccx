@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 变更
+
+- **桌面端自更新从手写 updater 改为 Wails v3 内置 Updater** - 删除 `desktop/internal/updater/` 包（含 macOS DMG 挂载、Windows NSIS 安装器、Linux AppImage nohup 替换等平台安装器，行为模式易被杀软误杀）；移除 `CheckUpdate`/`DownloadAndInstall`/`CancelUpdate` Go 导出方法和 `UpdateInfo` 结构体；改用 Wails v3 `pkg/updater`（GitHub Releases Provider + SHA256SUMS 校验 + 内置更新 UI 窗口 + 30 分钟定时检查）；删除前端 `useUpdater.ts` composable 和 `UpdateDialog.vue` 组件，Sidebar 版本按钮改为纯展示（更新检查通过托盘菜单触发）；Wails v3 依赖从 alpha.95 升级到 alpha.96
+
 ### 修复
 
 - **Chat 渠道选择 Responses 上游时请求格式与端点错误** - 修复 Chat 渠道 `serviceType: "responses"` 时仍以 Chat 格式发送到 `/v1/chat/completions` 的问题；新增 Chat↔Responses 双向协议转换（请求：messages→input, max_tokens→max_output_tokens；响应：output→choices），流式 SSE 事件转换（response.output_text.delta→Chat chunk），前端预期请求 URL 同步修正为 `/v1/responses`。(#130)

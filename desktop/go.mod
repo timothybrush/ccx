@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.95
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.96
 )
 
 require (
@@ -44,6 +44,7 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/image v0.40.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect

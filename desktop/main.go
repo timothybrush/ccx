@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	_ "embed"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/updater"
+	updaterGithub "github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
 
 //go:embed all:frontend/dist
@@ -34,7 +37,6 @@ var (
 func init() {
 	application.RegisterEvent[string]("desktop:show-tab")
 	application.RegisterEvent[string]("desktop:tray-error")
-	application.RegisterEvent[UpdateInfo]("update:available")
 }
 
 func main() {
@@ -265,6 +267,7 @@ func run() error {
 		}()
 	}
 
+		updaterInitialized := false
 	buildTrayMenu := func(running bool, port int, pid int, autostartEnabled bool) *application.Menu {
 		menu := application.NewMenu()
 
@@ -364,17 +367,15 @@ func run() error {
 		if desktopService.isStoreDistribution() {
 			updateItem := menu.Add("由 Microsoft Store 更新")
 			updateItem.SetEnabled(false)
+		} else if !updaterInitialized {
+			updateItem := menu.Add("更新不可用")
+			updateItem.SetEnabled(false)
 		} else {
 			menu.Add("检查更新…").OnClick(func(ctx *application.Context) {
 				go func() {
-					info, err := desktopService.CheckUpdate()
-					if err != nil {
+					if err := app.Updater.CheckAndInstall(context.Background()); err != nil {
 						log.Printf("[Desktop-Updater] 检查更新失败: %v", err)
 						app.Event.Emit("desktop:tray-error", fmt.Sprintf("检查更新失败: %v", err))
-						return
-					}
-					if !info.Available {
-						app.Event.Emit("desktop:tray-error", "已经是最新版本")
 					}
 				}()
 			})
@@ -454,26 +455,29 @@ func run() error {
 		}
 	})
 
+	// 初始化 Wails v3 内置 Updater（非 Store 分发时）
 	if !desktopService.isStoreDistribution() {
-		go func() {
-			time.Sleep(5 * time.Second)
-			runCheck := func() {
-				info, err := desktopService.CheckUpdate()
-				if err != nil {
-					log.Printf("[Desktop-Updater] 自动检查失败: %v", err)
-					return
-				}
-				if info.Available {
-					log.Printf("[Desktop-Updater] 发现新版本 %s", info.LatestVersion)
-				}
+		gh, err := updaterGithub.New(updaterGithub.Config{
+			Repository:    "BenedictKing/ccx",
+			ChecksumAsset: "SHA256SUMS",
+		})
+		if err != nil {
+			log.Printf("[Desktop-Updater] 创建 GitHub provider 失败: %v", err)
+		} else {
+			if err := app.Updater.Init(updater.Config{
+				CurrentVersion: Version,
+				Providers:      []updater.Provider{gh},
+				CheckInterval:  30 * time.Minute,
+			}); err != nil {
+				log.Printf("[Desktop-Updater] Updater 初始化失败: %v", err)
+			} else {
+				updaterInitialized = true
+				// Updater 初始化成功后刷新托盘菜单，使"检查更新"入口可见
+				st := desktopService.GetStatus()
+				asEnabled, _ := app.Autostart.IsEnabled()
+				tray.SetMenu(buildTrayMenu(st.Running, st.Port, st.PID, asEnabled))
 			}
-			runCheck()
-			ticker := time.NewTicker(30 * time.Minute)
-			defer ticker.Stop()
-			for range ticker.C {
-				runCheck()
-			}
-		}()
+		}
 	}
 
 	showMainWindow(false)

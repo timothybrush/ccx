@@ -8,6 +8,5 @@ export {
 
 export {
     EnvFileState,
-    UpdateInfo,
     VersionInfo
 } from "./models.js";

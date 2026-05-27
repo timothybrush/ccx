@@ -34,51 +34,6 @@ export class EnvFileState {
     }
 }
 
-export class UpdateInfo {
-    "available": boolean;
-    "currentVersion": string;
-    "latestVersion": string;
-    "notes": string;
-    "downloadUrl": string;
-    "sha256Url": string;
-    "size": number;
-
-    /** Creates a new UpdateInfo instance. */
-    constructor($$source: Partial<UpdateInfo> = {}) {
-        if (!("available" in $$source)) {
-            this["available"] = false;
-        }
-        if (!("currentVersion" in $$source)) {
-            this["currentVersion"] = "";
-        }
-        if (!("latestVersion" in $$source)) {
-            this["latestVersion"] = "";
-        }
-        if (!("notes" in $$source)) {
-            this["notes"] = "";
-        }
-        if (!("downloadUrl" in $$source)) {
-            this["downloadUrl"] = "";
-        }
-        if (!("sha256Url" in $$source)) {
-            this["sha256Url"] = "";
-        }
-        if (!("size" in $$source)) {
-            this["size"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new UpdateInfo instance from a string or object.
-     */
-    static createFrom($$source: any = {}): UpdateInfo {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new UpdateInfo($$parsedSource as Partial<UpdateInfo>);
-    }
-}
-
 export class VersionInfo {
     "version": string;
     "buildTime": string;

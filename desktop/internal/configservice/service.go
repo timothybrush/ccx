@@ -27,17 +27,17 @@ const (
 	ProviderCustom      = "custom"
 	ProviderOpenAI      = "openai"
 
-	deepSeekClaudeBaseURL    = "https://api.deepseek.com/anthropic"
-	defaultMiMoBaseURL       = "https://api.xiaomimimo.com/anthropic"
-	compshareClaudeBaseURL   = "https://cp.compshare.cn"
-	kimiClaudeBaseURL        = "https://api.moonshot.cn/anthropic"
-	glmClaudeBaseURL         = "https://open.bigmodel.cn/api/anthropic"
-	miniMaxClaudeBaseURL     = "https://api.minimaxi.com/anthropic"
-	dashScopeClaudeBaseURL             = "https://dashscope.aliyuncs.com/apps/anthropic"
-	dashScopeCodingPlanClaudeBaseURL   = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
-	openCodeZenClaudeBaseURL = "https://opencode.ai/zen"
-	openCodeGoClaudeBaseURL  = "https://opencode.ai/zen/go"
-	stateVersion             = 1
+	deepSeekClaudeBaseURL            = "https://api.deepseek.com/anthropic"
+	defaultMiMoBaseURL               = "https://api.xiaomimimo.com/anthropic"
+	compshareClaudeBaseURL           = "https://cp.compshare.cn"
+	kimiClaudeBaseURL                = "https://api.moonshot.cn/anthropic"
+	glmClaudeBaseURL                 = "https://open.bigmodel.cn/api/anthropic"
+	miniMaxClaudeBaseURL             = "https://api.minimaxi.com/anthropic"
+	dashScopeClaudeBaseURL           = "https://dashscope.aliyuncs.com/apps/anthropic"
+	dashScopeCodingPlanClaudeBaseURL = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+	openCodeZenClaudeBaseURL         = "https://opencode.ai/zen"
+	openCodeGoClaudeBaseURL          = "https://opencode.ai/zen/go"
+	stateVersion                     = 1
 )
 
 type AgentConfigStatus struct {
