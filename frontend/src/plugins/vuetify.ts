@@ -169,6 +169,7 @@ import {
   mdiTagOff,
   mdiShieldLockOutline,
   mdiBrain,
+  mdiHeadSnowflake,
   mdiTestTube,
   mdiMinusCircle,
   mdiMagnify,
@@ -363,6 +364,7 @@ const iconMap: Record<string, string> = {
 
   // 模型白名单
   'brain': mdiBrain,
+  'head-snowflake': mdiHeadSnowflake,
 
   // 能力测试
   'test-tube': mdiTestTube,
