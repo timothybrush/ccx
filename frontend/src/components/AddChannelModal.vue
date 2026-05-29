@@ -1491,6 +1491,7 @@ const allSourceModelOptions = computed(() => {
       { title: 'gpt-5', value: 'gpt-5' },
       { title: 'gpt-5.5', value: 'gpt-5.5' },
       { title: 'gpt-5.4', value: 'gpt-5.4' },
+      { title: 'gpt-5.4-mini', value: 'gpt-5.4-mini' },
       { title: 'gpt-5.3-codex', value: 'gpt-5.3-codex' },
       { title: 'gpt-5.2-codex', value: 'gpt-5.2-codex' },
       { title: 'gpt-5.2', value: 'gpt-5.2' }
@@ -1863,8 +1864,10 @@ const modelPriorityPatterns: RegExp[] = [
   /gpt-5-pro/i,
   /gpt-5/i,
 
-  // Google Gemini（3.1 Pro 旗舰 → 3 Pro / Flash → 2.5 系列）
+  // Google Gemini（3.5 Flash → 3.1 Pro Preview → 3 Pro / Flash Preview → 3.1 Flash Lite → 2.5 系列）
+  /gemini-3\.5-flash/i,
   /gemini-3\.1-pro/i,
+  /gemini-3\.1-flash-lite/i,
   /gemini-3-pro/i,
   /gemini-3-flash/i,
   /gemini-3/i,
