@@ -273,8 +273,8 @@ func TestGetChannelDashboard_Gemini_IncludesAdvancedOptionFields(t *testing.T) {
 	if got := resp.Channels[0]["normalizeMetadataUserId"]; got != true {
 		t.Fatalf("normalizeMetadataUserId=%v, want=true", got)
 	}
-	if got := resp.Channels[0]["stripEmptyTextBlocks"]; got != nil {
-		t.Fatalf("gemini channel should not expose stripEmptyTextBlocks, got=%v", got)
+	if got := resp.Channels[0]["stripEmptyTextBlocks"]; got != false {
+		t.Fatalf("gemini channel stripEmptyTextBlocks=%v, want=false (not configured)", got)
 	}
 }
 

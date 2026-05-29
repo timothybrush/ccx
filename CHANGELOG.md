@@ -1,8 +1,18 @@
-## [Unreleased]
+## [v2.8.15] - 2026-05-29
+
+### 新增
+
+- **重设计应用图标与品牌 Logo** - 桌面端应用图标与品牌 Logo 全新设计。
 
 ### 修复
 
-- **修复 normalizeSystemRoleToTopLevel 开关保存后回显失效** - 将 `normalizeSystemRoleToTopLevel`、`stripEmptyTextBlocks`、`passbackReasoningContent`、`passbackThinkingBlocks`、`injectDummyThoughtSignature`、`stripThoughtSignature` 六个高级开关字段统一收归 `BuildChannelView()` 公共函数输出，消除 messages/chat/responses/gemini 四个 handler 中的重复补丁，确保所有渠道类型的 WebUI 编辑回显与保存一致。
+- **统一 BuildChannelView 高级开关字段输出** - 将 `normalizeSystemRoleToTopLevel`、`stripEmptyTextBlocks`、`passbackReasoningContent`、`passbackThinkingBlocks`、`injectDummyThoughtSignature`、`stripThoughtSignature` 六个高级开关字段统一收归 `BuildChannelView()` 公共函数输出，消除 messages/chat/responses/gemini 四个 handler 中的重复补丁，确保所有渠道类型的 WebUI 编辑回显与保存一致。
+- **移除 PreviewAgentConfigDiff 未使用的 status 变量** - 清理桌面端 PreviewAgentConfigDiff 组件中未使用的 status 变量。
+- **Agent 配置应用使用最新 .env 端口** - 桌面端 Agent 配置应用时使用最新的 .env 端口值。
+- **统一 Web UI Logo 与应用图标** - 统一 Web UI 中的 Logo 和应用图标，保持视觉一致性。
+- **补齐渠道一键模板配置** - 前端补齐渠道一键模板配置功能。
+- **调整 Opus 4.8 能力探测请求** - 调整 Claude Opus 4.8 模型的能力探测请求参数。
+- **修复预设渠道控制台网址和套餐显示** - 修复预设渠道中控制台网址和套餐信息显示不正确的问题。
 
 ## [v2.8.14] - 2026-05-29
 
