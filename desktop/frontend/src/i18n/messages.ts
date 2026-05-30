@@ -342,6 +342,7 @@ export type MessageKey =
   | 'env.openedInEditor'
   | 'sidebar.versionHintStore'
   | 'sidebar.versionHintTray'
+  | 'sidebar.versionClickCheck'
   | 'sidebar.updateAvailable'
   | 'sidebar.updateAvailableHint'
   | 'sidebar.theme'
@@ -687,6 +688,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'env.openedInEditor': '.env opened in editor',
     'sidebar.versionHintStore': 'Microsoft Store version updates automatically via Store',
     'sidebar.versionHintTray': 'Check for updates from the tray menu',
+    'sidebar.versionClickCheck': 'Click to check for updates',
     'sidebar.updateAvailable': 'New {version}',
     'sidebar.updateAvailableHint': 'Click to view release notes',
     'sidebar.theme': 'Theme',
@@ -1029,6 +1031,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'env.openedInEditor': '已在编辑器中打开 .env 文件',
     'sidebar.versionHintStore': 'Microsoft Store 版本由 Store 自动更新',
     'sidebar.versionHintTray': '通过托盘菜单检查更新',
+    'sidebar.versionClickCheck': '点击检查更新',
     'sidebar.updateAvailable': '新版 {version}',
     'sidebar.updateAvailableHint': '点击查看发布说明',
     'sidebar.theme': '主题',

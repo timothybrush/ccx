@@ -20,7 +20,8 @@ import {
   Network,
   Sparkles,
   Sun,
-  Moon
+  Moon,
+  Loader2
 } from 'lucide-vue-next'
 import type { TabValue } from '@/types'
 
@@ -28,7 +29,7 @@ const modelValue = defineModel<TabValue>({ required: true })
 
 const { status, loading, autostartEnabled, startService, stopService, setAutostart } = useStatus()
 const { locale, languageOptions, setLanguage, t } = useLanguage()
-const { releaseInfo } = useReleaseCheck()
+const { releaseInfo, isChecking, manualCheck } = useReleaseCheck()
 const { theme, setTheme } = useTheme()
 
 const themeOptions = computed(() => [
@@ -49,6 +50,12 @@ const handleOpenRelease = () => {
   const url = releaseInfo.value?.releaseUrl
   if (!url) return
   openExternalLink(url)
+}
+
+/** 点击版本号：无更新提示时触发手动检查，计入冷却时间 */
+const handleVersionClick = () => {
+  if (showUpdateBadge.value || isStoreDistribution.value) return
+  manualCheck()
 }
 
 onMounted(async () => {
@@ -243,13 +250,15 @@ const handleDaemonAction = async () => {
               </button>
               <span
                 :class="[
-                  'flex items-center gap-1 px-1.5 py-0.5 rounded border',
-                  isStoreDistribution
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded border transition-all duration-200',
+                  showUpdateBadge || isStoreDistribution
                     ? 'bg-secondary text-muted-foreground border-border'
-                    : 'bg-secondary text-foreground border-border'
+                    : 'bg-secondary text-foreground border-border cursor-pointer hover:bg-card hover:border-primary/30 hover:text-primary'
                 ]"
-                :title="isStoreDistribution ? t('sidebar.versionHintStore') : t('sidebar.versionHintTray')"
+                :title="isStoreDistribution ? t('sidebar.versionHintStore') : showUpdateBadge ? '' : t('sidebar.versionClickCheck')"
+                @click="handleVersionClick"
               >
+                <Loader2 v-if="isChecking" class="w-2.5 h-2.5 animate-spin" />
                 <span>{{ versionInfo?.version || '—' }}</span>
               </span>
             </div>
