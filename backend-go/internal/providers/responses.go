@@ -119,6 +119,9 @@ func (p *ResponsesProvider) buildProviderRequestBody(c *gin.Context, requestPath
 					if effort != "none" {
 						reqMap["thinking"] = map[string]interface{}{"type": "enabled"}
 					}
+				} else if upstream.ReasoningParamStyle == "reasoning_effort" {
+					delete(reqMap, "reasoning")
+					reqMap["reasoning_effort"] = effort
 				} else {
 					reqMap["reasoning"] = map[string]interface{}{"effort": effort}
 				}
