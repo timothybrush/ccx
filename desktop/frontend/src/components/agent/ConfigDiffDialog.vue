@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { AlertTriangle } from 'lucide-vue-next'
 import type { ConfigDiffResult, DiffLine, FileDiff } from '@/types'
 import { useLanguage } from '@/composables/useLanguage'
@@ -65,20 +64,15 @@ const platformLabel = computed(() =>
   props.platform === 'claude' ? 'Claude Code' : props.platform === 'opencode' ? 'OpenCode' : 'Codex'
 )
 
-const actionLabel = (action: string) => {
-  switch (action) {
-    case 'create': return t('agent.diffActionCreate')
-    case 'delete': return t('agent.diffActionDelete')
-    default: return t('agent.diffActionModify')
+// 统计文件增删行数（用于替代易被误认为可点击按钮的状态标签）
+const lineStats = (file: FileDiff) => {
+  let added = 0
+  let removed = 0
+  for (const line of file.lines) {
+    if (line.type === 'added') added++
+    else if (line.type === 'removed') removed++
   }
-}
-
-const actionBadgeClass = (action: string) => {
-  switch (action) {
-    case 'create': return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-0'
-    case 'delete': return 'bg-red-500/20 text-red-700 dark:text-red-400 border-0'
-    default: return 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-0'
-  }
+  return { added, removed }
 }
 
 // --- Context folding ---
@@ -191,11 +185,12 @@ const processedFiles = computed(() => {
                 class="rounded-lg border border-border overflow-hidden"
               >
                 <!-- File header -->
-                <div class="flex items-center justify-between px-4 py-2 bg-secondary/50 border-b border-border">
-                  <code class="text-xs text-foreground break-all">{{ file.path }}</code>
-                  <Badge :class="actionBadgeClass(file.action)" class="text-[10px] px-1.5 py-0">
-                    {{ actionLabel(file.action) }}
-                  </Badge>
+                <div class="flex items-center justify-between gap-3 px-4 py-2 bg-secondary/50 border-b border-border">
+                  <code class="min-w-0 flex-1 text-xs text-foreground break-all">{{ file.path }}</code>
+                  <div class="flex shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums whitespace-nowrap">
+                    <span v-if="lineStats(file).added > 0" class="text-emerald-600 dark:text-emerald-400">+{{ lineStats(file).added }}</span>
+                    <span v-if="lineStats(file).removed > 0" class="text-red-600 dark:text-red-400">-{{ lineStats(file).removed }}</span>
+                  </div>
                 </div>
 
                 <!-- Diff lines -->
