@@ -1130,6 +1130,61 @@ experimental_bearer_token = "old-key"
 	}
 }
 
+func TestPreviewApplyCodex_QuickModeMasksProxyKey(t *testing.T) {
+	svc := newTestService(t)
+	configPath := filepath.Join(svc.homeDir, ".codex", "config.toml")
+	authPath := filepath.Join(svc.homeDir, ".codex", "auth.json")
+	os.MkdirAll(filepath.Dir(configPath), 0o755)
+	os.WriteFile(configPath, []byte(`model_provider = "openai"
+
+[model_providers.ccx]
+name = "CCX Proxy"
+base_url = "http://127.0.0.1:3688/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_bearer_token = "old-plugin-secret-value"
+`), 0o644)
+	writeJSON(authPath, map[string]any{"OPENAI_API_KEY": "old-auth-secret-value", "auth_mode": "chatgpt"})
+
+	result, err := svc.PreviewApply(ApplyAgentConfigRequest{Platform: PlatformCodex, Provider: ProviderCCX, Mode: "quick"}, 3688, "local-proxy-secret-value")
+	if err != nil {
+		t.Fatalf("PreviewApply failed: %v", err)
+	}
+
+	assertDiffDoesNotLeak(t, result, "local-proxy-secret-value", "old-plugin-secret-value", "old-auth-secret-value")
+}
+
+func TestPreviewApplyCodex_PluginModeMasksProxyKey(t *testing.T) {
+	svc := newTestService(t)
+	configPath := filepath.Join(svc.homeDir, ".codex", "config.toml")
+	authPath := filepath.Join(svc.homeDir, ".codex", "auth.json")
+	os.MkdirAll(filepath.Dir(configPath), 0o755)
+	os.WriteFile(configPath, []byte(`model_provider = "openai"
+openai_base_url = "http://127.0.0.1:3688/v1"
+`), 0o644)
+	writeJSON(authPath, map[string]any{"OPENAI_API_KEY": "old-auth-secret-value", "auth_mode": "chatgpt"})
+
+	result, err := svc.PreviewApply(ApplyAgentConfigRequest{Platform: PlatformCodex, Provider: ProviderCCX, Mode: "plugin"}, 3688, "local-proxy-secret-value")
+	if err != nil {
+		t.Fatalf("PreviewApply failed: %v", err)
+	}
+
+	assertDiffDoesNotLeak(t, result, "local-proxy-secret-value", "old-auth-secret-value")
+}
+
+func assertDiffDoesNotLeak(t *testing.T, result ConfigDiffResult, rawValues ...string) {
+	t.Helper()
+	for _, file := range result.Files {
+		for _, line := range file.Lines {
+			for _, raw := range rawValues {
+				if strings.Contains(line.Content, raw) {
+					t.Fatalf("diff for %s leaked raw sensitive value %q in line: %q", file.Path, raw, line.Content)
+				}
+			}
+		}
+	}
+}
+
 // ── helpers ──
 
 func writeJSON(path string, data any) {
