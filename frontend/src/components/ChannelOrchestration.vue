@@ -732,13 +732,13 @@ const copyChannelInfo = async (channel: Channel) => {
 // Active channels (draggable and sortable) - includes active and suspended statuses
 const activeChannels = ref<Channel[]>([])
 
-// 首次渲染时记录内置顺序，用于在保持内置顺序的前提下优先展示已配置 key 的渠道
+// 首次渲染时记录内置顺序，用作缺省优先级兜底
 const initialBuiltInOrder = computed(() => props.channels.map(ch => ch.index))
 const lastKnownActiveOrder = ref<number[]>([])
 const lastKnownInactiveOrder = ref<number[]>([])
 
-// 有 key 的渠道优先展示，同时保持既有的优先级/内置顺序稳定
-const buildKeyFirstOrder = (
+// 按用户排序/后端 priority 稳定排序；有无 key 只作为缺省顺序的兜底，不覆盖用户排序
+const buildChannelOrder = (
   source: Channel[],
   fallbackOrder: number[]
 ): Channel[] => {
@@ -751,24 +751,25 @@ const buildKeyFirstOrder = (
   const hasKey = (ch: Channel) =>
     Array.isArray(ch.apiKeys) && ch.apiKeys.length > 0
 
+  const getRank = (ch: Channel): number =>
+    ch.priority ?? fallbackRank.get(ch.index) ?? originalRank.get(ch.index) ?? ch.index
+
   return [...source].sort((a, b) => {
-    const keyDiff = Number(hasKey(a)) - Number(hasKey(b))
+    const rankDiff = getRank(a) - getRank(b)
+    if (rankDiff !== 0) return rankDiff
+
+    // 只有在优先级完全相同时，才把已配置 key 的渠道排前，避免覆盖用户拖拽/置顶排序
+    const keyDiff = Number(hasKey(b)) - Number(hasKey(a))
     if (keyDiff !== 0) return keyDiff
 
-    const aKnown = fallbackRank.has(a.index)
-    const bKnown = fallbackRank.has(b.index)
-    if (aKnown && bKnown) return fallbackRank.get(a.index)! - fallbackRank.get(b.index)!
-
-    const aPriority = a.priority ?? originalRank.get(a.index) ?? a.index
-    const bPriority = b.priority ?? originalRank.get(b.index) ?? b.index
-    return aPriority - bPriority
+    return a.index - b.index
   })
 }
 
 // Computed: inactive channels - disabled status only
 const inactiveChannels = computed(() => {
   const inactive = props.channels.filter(ch => ch.status === 'disabled')
-  const sortedInactive = buildKeyFirstOrder(inactive, lastKnownInactiveOrder.value)
+  const sortedInactive = buildChannelOrder(inactive, lastKnownInactiveOrder.value)
   lastKnownInactiveOrder.value = sortedInactive.map(ch => ch.index)
   return sortedInactive
 })
@@ -794,7 +795,7 @@ const isMultiChannelMode = computed(() => {
 // 优化策略：仅在结构变化时重建数组，避免频繁重构导致子组件被销毁重建
 const initActiveChannels = () => {
   const filteredActive = props.channels.filter(ch => ch.status !== 'disabled')
-  const newActive = buildKeyFirstOrder(filteredActive, lastKnownActiveOrder.value)
+  const newActive = buildChannelOrder(filteredActive, lastKnownActiveOrder.value)
   lastKnownActiveOrder.value = newActive.map(ch => ch.index)
 
   // 通过索引列表比较，判断是否需要整体重建
