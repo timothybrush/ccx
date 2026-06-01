@@ -256,6 +256,7 @@ export type MessageKey =
   | 'agent.provider.opencodeZenDirect'
   | 'agent.provider.opencodeGoDirect'
   | 'agent.provider.openaiDirect'
+  | 'agent.hasOwnApiKey'
   | 'agent.promo'
   | 'agent.planPayAsYouGo'
   | 'agent.planChina'
@@ -623,6 +624,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.opencodeZenDirect': 'OpenCode Zen direct',
     'agent.provider.opencodeGoDirect': 'OpenCode Go direct',
     'agent.provider.openaiDirect': 'OpenAI direct',
+    'agent.hasOwnApiKey': 'I have my own API key',
     'agent.promo': 'Register via promotion link to claim a ¥5 trial credit',
     'agent.planPayAsYouGo': 'Pay-as-you-go',
     'agent.planChina': 'Subscription - China',
@@ -987,6 +989,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.opencodeZenDirect': 'OpenCode Zen 直连',
     'agent.provider.opencodeGoDirect': 'OpenCode Go 直连',
     'agent.provider.openaiDirect': 'OpenAI 直连',
+    'agent.hasOwnApiKey': '我有自己的 API Key',
     'agent.promo': '通过推广链接注册，领取 5 元平台试用金',
     'agent.planPayAsYouGo': '按量',
     'agent.planChina': '订阅套餐 - 中国',

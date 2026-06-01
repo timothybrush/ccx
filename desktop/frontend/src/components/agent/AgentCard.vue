@@ -58,6 +58,9 @@ const emit = defineEmits<{
   'update:openCodeOpenAIKey': [value: string]
 }>()
 
+// OpenAI 直连 API Key 勾选框状态（默认不显示输入框）
+const showCodexOwnKey = ref(false)
+
 const codexKeyRequired = computed(() => {
   const p = props.selectedCodexProvider
   return p !== 'ccx' && p !== 'openai'
@@ -78,6 +81,12 @@ const editors = ref<EditorInfo[]>([])
 const openingFile = ref('')
 
 onMounted(async () => {
+  // 已保存 OpenAI key 时自动勾选"我有 API Key"
+  if (props.selectedCodexProvider === 'openai') {
+    if (props.savedProviderKeys?.['codex:openai']) {
+      showCodexOwnKey.value = true
+    }
+  }
   try {
     editors.value = (await DetectEditors()) as EditorInfo[] ?? []
   } catch { editors.value = [] }
@@ -193,7 +202,7 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
           <select
             :value="selectedCodexProvider"
             class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            @change="emit('update:selectedCodexProvider', ($event.target as HTMLSelectElement).value as AgentProvider)"
+            @change="showCodexOwnKey = false; emit('update:selectedCodexProvider', ($event.target as HTMLSelectElement).value as AgentProvider)"
           >
             <option value="ccx">{{ t('agent.provider.localGateway') }}</option>
             <option value="openai">{{ t('agent.provider.openaiDirect') }}</option>
@@ -226,16 +235,33 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             {{ codexMode === 'plugin' ? t('agent.codexPluginModeHint') : t('agent.codexQuickModeHint') }}
           </p>
         </div>
-        <button
+        <div
           v-if="selectedCodexProvider && selectedCodexProvider !== 'ccx' && providerConsoleLinks[selectedCodexProvider]"
-          type="button"
-          class="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-          @click="openProviderConsole(selectedCodexProvider)"
+          class="inline-flex items-center gap-2"
         >
-          {{ t('agent.openConsole') }}
-          <ExternalLink class="h-3 w-3" />
-        </button>
-        <div v-if="selectedCodexProvider !== 'ccx'" class="space-y-1.5">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            @click="openProviderConsole(selectedCodexProvider)"
+          >
+            {{ t('agent.openConsole') }}
+            <ExternalLink class="h-3 w-3" />
+          </button>
+          <span class="text-muted-foreground">|</span>
+          <label
+            v-if="selectedCodexProvider === 'openai'"
+            class="inline-flex items-center gap-1 text-xs text-muted-foreground select-none cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="h-3 w-3 rounded border-input accent-primary cursor-pointer"
+              :checked="showCodexOwnKey"
+              @change="showCodexOwnKey = ($event.target as HTMLInputElement).checked"
+            >
+            {{ t('agent.hasOwnApiKey') }}
+          </label>
+        </div>
+        <div v-if="selectedCodexProvider !== 'ccx' && (codexKeyRequired || showCodexOwnKey)" class="space-y-1.5">
           <Label class="text-xs text-muted-foreground">API Key <span v-if="codexKeyRequired" class="text-destructive">*</span></Label>
           <Input
             type="password"
