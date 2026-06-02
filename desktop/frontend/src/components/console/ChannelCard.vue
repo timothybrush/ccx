@@ -130,12 +130,6 @@ const isPromoted = computed(() => {
 const keyCount = computed(() => props.channel.apiKeys?.length ?? 0)
 const disabledKeyCount = computed(() => props.channel.disabledApiKeys?.length ?? 0)
 
-const latencyDisplay = computed(() => {
-  const latency = props.metrics?.latency ?? props.channel.latency
-  if (latency === undefined || latency === null || latency <= 0) return '—'
-  return `${Math.round(latency)}ms`
-})
-
 const successRateDisplay = computed(() => {
   const raw = props.metrics?.successRate
   if (raw === undefined || raw === null) return '—'
@@ -191,7 +185,7 @@ async function copyChannelInfo() {
 <template>
   <div
     :class="[
-      'group grid grid-cols-[42px_minmax(220px,1fr)_120px_96px_96px_88px_150px] items-center gap-3 border px-3 py-2.5 transition-all duration-200',
+      'group grid grid-cols-[42px_minmax(220px,1fr)_120px_96px_88px_150px] items-center gap-3 border px-3 py-2.5 transition-all duration-200',
       'bg-card/75 hover:bg-card dark:bg-card/55 dark:hover:bg-card/80',
       inactive ? 'border-dashed border-border/80 opacity-80' : 'border-border',
       circuitDisplay ? 'ring-1 ring-rose-500/20' : '',
@@ -257,11 +251,6 @@ async function copyChannelInfo() {
     <div class="inline-flex items-center justify-center gap-1.5 border px-2 py-1 text-[11px] font-semibold" :class="statusConfig.class">
       <component :is="statusConfig.icon" class="h-3.5 w-3.5" />
       {{ statusConfig.label }}
-    </div>
-
-    <div class="space-y-0.5 text-right font-mono">
-      <div class="text-xs font-bold text-foreground">{{ latencyDisplay }}</div>
-      <div class="text-[10px] text-muted-foreground">LATENCY</div>
     </div>
 
     <div class="space-y-0.5 text-right font-mono">
