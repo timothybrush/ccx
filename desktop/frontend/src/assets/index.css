@@ -21,6 +21,8 @@
   --color-destructive-foreground: #ffffff;
   --color-warning: #f59e0b;
   --color-warning-foreground: #ffffff;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
   --color-border: rgba(15, 23, 42, 0.08);
   --color-input: rgba(15, 23, 42, 0.12);
   --color-ring: #2563eb;
@@ -51,6 +53,8 @@
   --color-destructive-foreground: #ffffff;
   --color-warning: #f59e0b;
   --color-warning-foreground: #ffffff;
+  --color-popover: #0f172a;
+  --color-popover-foreground: #f1f5f9;
   --color-border: rgba(148, 163, 184, 0.08);
   --color-input: rgba(148, 163, 184, 0.12);
   --color-ring: #3b82f6;
@@ -73,6 +77,8 @@
   --color-destructive-foreground: var(--color-destructive-foreground);
   --color-warning: var(--color-warning);
   --color-warning-foreground: var(--color-warning-foreground);
+  --color-popover: var(--color-popover);
+  --color-popover-foreground: var(--color-popover-foreground);
   --color-border: var(--color-border);
   --color-input: var(--color-input);
   --color-ring: var(--color-ring);
