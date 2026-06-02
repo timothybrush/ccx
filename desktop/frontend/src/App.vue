@@ -5,7 +5,6 @@ import StatusTab from '@/components/status/StatusTab.vue'
 import AgentTab from '@/components/agent/AgentTab.vue'
 import EnvTab from '@/components/env/EnvTab.vue'
 import ConsoleTab from '@/components/console/ConsoleTab.vue'
-import ChannelTab from '@/components/channel/ChannelTab.vue'
 import SetupLoading from '@/components/setup/SetupLoading.vue'
 import SetupView from '@/components/setup/SetupView.vue'
 import { useStatus } from '@/composables/useStatus'
@@ -109,14 +108,11 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
           <div v-show="activeTab === 'agent'" class="h-full">
             <AgentTab />
           </div>
-          <div v-show="activeTab === 'channels'" class="h-full">
-            <ChannelTab />
+          <div v-show="activeTab === 'channels' || activeTab === 'web'" class="h-full">
+            <ConsoleTab :initial-section="activeTab === 'web' ? 'conversations' : 'channels'" />
           </div>
           <div v-show="activeTab === 'env'" class="h-full">
             <EnvTab />
-          </div>
-          <div v-show="activeTab === 'web'" class="h-full">
-            <ConsoleTab />
           </div>
         </div>
       </div>

@@ -23,6 +23,7 @@ export interface ChannelFormLike {
   fastMode: boolean
   customHeaders: Record<string, string>
   proxyUrl: string
+  requestTimeoutMs?: string | number | null
   routePrefix: string
   supportedModels: string[]
   autoBlacklistBalance: boolean
@@ -90,6 +91,11 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
 
   if (deduplicatedUrls.length > 1) {
     channelData.baseUrls = deduplicatedUrls
+  }
+
+  const requestTimeoutMs = Number(form.requestTimeoutMs)
+  if (Number.isInteger(requestTimeoutMs) && requestTimeoutMs > 0) {
+    channelData.requestTimeoutMs = requestTimeoutMs
   }
 
   return channelData

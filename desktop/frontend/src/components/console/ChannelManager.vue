@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Search, Wifi, Loader2 } from 'lucide-vue-next'
+import { Plus, RefreshCw, Search, Wifi, Loader2, Layers, Archive } from 'lucide-vue-next'
 import { useConsoleChannels } from '@/composables/useConsoleChannels'
 import { useLanguage } from '@/composables/useLanguage'
-import ChannelStatusBadge from '@/components/console/ChannelStatusBadge.vue'
 import ChannelCard from '@/components/console/ChannelCard.vue'
 import ChannelEditDialog from '@/components/console/ChannelEditDialog.vue'
+import ChannelLogsDialog from '@/components/console/ChannelLogsDialog.vue'
+import CapabilityTestDialog from '@/components/console/CapabilityTestDialog.vue'
 import type { ManagedChannelType } from '@/utils/channel-type-api'
 import type { Channel, ChannelMetrics, ChannelRecentActivity } from '@/services/admin-api'
 
@@ -35,29 +36,34 @@ const {
   reorderChannels,
 } = useConsoleChannels()
 
-// 切换到当前协议的 tab
 watch(() => props.type, (newType) => {
   activeTab.value = newType
+  void refreshChannels()
 }, { immediate: true })
 
-// 频道数据
 const channels = computed(() => channelsByType.value[props.type]?.channels || [])
+const currentIndex = computed(() => channelsByType.value[props.type]?.current ?? -1)
 const metrics = computed(() => dashboardCache.value[props.type]?.metrics || [])
 const activity = computed(() => dashboardCache.value[props.type]?.recentActivity || [])
+const stats = computed(() => dashboardCache.value[props.type]?.stats)
 
-// 搜索过滤
 const searchQuery = ref('')
-const filteredChannels = computed(() => {
-  if (!searchQuery.value.trim()) return channels.value
-  const q = searchQuery.value.toLowerCase()
-  return channels.value.filter(ch =>
-    ch.name.toLowerCase().includes(q) ||
-    ch.description?.toLowerCase().includes(q) ||
-    ch.baseUrl.toLowerCase().includes(q)
-  )
+const normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase())
+
+const activeChannels = computed(() => {
+  const list = channels.value.filter(ch => ch.status !== 'disabled')
+  return sortChannels(list).filter(matchesSearch)
 })
 
-// Channel metrics map by index
+const inactiveChannels = computed(() => {
+  const list = channels.value.filter(ch => ch.status === 'disabled')
+  return sortChannels(list).filter(matchesSearch)
+})
+
+const activeCount = computed(() => channels.value.filter(ch => ch.status === 'active' || ch.status === undefined || ch.status === '').length)
+const failoverCount = computed(() => channels.value.filter(ch => ch.status !== 'disabled').length)
+const disabledCount = computed(() => channels.value.filter(ch => ch.status === 'disabled').length)
+
 const metricsMap = computed(() => {
   const map = new Map<number, ChannelMetrics>()
   for (const m of metrics.value) {
@@ -66,7 +72,6 @@ const metricsMap = computed(() => {
   return map
 })
 
-// Activity map by index
 const activityMap = computed(() => {
   const map = new Map<number, ChannelRecentActivity>()
   for (const a of activity.value) {
@@ -75,19 +80,51 @@ const activityMap = computed(() => {
   return map
 })
 
-// 加载状态
-const loading = computed(() => channels.value.length === 0)
-
-// 操作状态
+const hasLoaded = computed(() => Boolean(stats.value) || metrics.value.length > 0 || channels.value.length > 0)
+const isInitialLoading = computed(() => !hasLoaded.value && !actionError.value)
 const actionLoading = ref(false)
 const actionError = ref('')
-
-// 对话框状态
+const isRefreshing = ref(false)
 const showAddDialog = ref(false)
 const editingChannel = ref<Channel | null>(null)
+const logsChannel = ref<Channel | null>(null)
+const capabilityChannel = ref<Channel | null>(null)
+const draggedIndex = ref<number | null>(null)
 
 function clearActionError() {
   actionError.value = ''
+}
+
+function sortChannels(source: Channel[]) {
+  return [...source].sort((a, b) => {
+    const priorityDiff = (a.priority ?? a.index) - (b.priority ?? b.index)
+    if (priorityDiff !== 0) return priorityDiff
+    return a.index - b.index
+  })
+}
+
+function matchesSearch(channel: Channel) {
+  if (!normalizedSearch.value) return true
+  const q = normalizedSearch.value
+  return (
+    channel.name?.toLowerCase().includes(q) ||
+    channel.description?.toLowerCase().includes(q) ||
+    channel.serviceType?.toLowerCase().includes(q) ||
+    channel.baseUrl?.toLowerCase().includes(q) ||
+    channel.baseUrls?.some(url => url.toLowerCase().includes(q))
+  )
+}
+
+async function refreshCurrentChannels() {
+  clearActionError()
+  isRefreshing.value = true
+  try {
+    await refreshChannels()
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    isRefreshing.value = false
+  }
 }
 
 async function handlePing(channelId: number) {
@@ -122,9 +159,27 @@ async function handleDelete(channelId: number) {
 
 async function handleStatusToggle(channelId: number, currentStatus: string) {
   clearActionError()
-  const newStatus = currentStatus === 'active' ? 'suspended' : 'active'
+  const newStatus = currentStatus === 'active' || !currentStatus ? 'suspended' : 'active'
   try {
     await setChannelStatus(channelId, newStatus as 'active' | 'suspended')
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+async function handleDisable(channelId: number) {
+  clearActionError()
+  try {
+    await setChannelStatus(channelId, 'disabled')
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+async function handleEnable(channelId: number) {
+  clearActionError()
+  try {
+    await setChannelStatus(channelId, 'active')
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : String(e)
   }
@@ -158,7 +213,19 @@ function handleAdd() {
   showAddDialog.value = true
 }
 
-// 拖拽排序
+function handleSaved() {
+  showAddDialog.value = false
+  refreshCurrentChannels()
+}
+
+function handleLogs(channel: Channel) {
+  logsChannel.value = channel
+}
+
+function handleCapability(channel: Channel) {
+  capabilityChannel.value = channel
+}
+
 async function handleReorder(newOrder: number[]) {
   clearActionError()
   try {
@@ -168,35 +235,30 @@ async function handleReorder(newOrder: number[]) {
   }
 }
 
-// 拖拽状态
-const draggedIndex = ref<number | null>(null)
-
 function onDragStart(e: DragEvent, channelIndex: number) {
   draggedIndex.value = channelIndex
   e.dataTransfer?.setData('text/plain', String(channelIndex))
-  e.dataTransfer!.effectAllowed = 'move'
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
 }
 
 function onDragOver(e: DragEvent) {
   e.preventDefault()
-  e.dataTransfer!.dropEffect = 'move'
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
 
 function onDrop(e: DragEvent, targetIndex: number) {
   e.preventDefault()
   const sourceIndex = draggedIndex.value
-  if (sourceIndex === null || sourceIndex === targetIndex) return
+  if (sourceIndex === null || sourceIndex === targetIndex || normalizedSearch.value) return
 
-  const currentChannels = [...filteredChannels.value]
+  const currentChannels = [...activeChannels.value]
   const sourcePos = currentChannels.findIndex(c => c.index === sourceIndex)
   const targetPos = currentChannels.findIndex(c => c.index === targetIndex)
   if (sourcePos === -1 || targetPos === -1) return
 
-  // 重新排列
   const [moved] = currentChannels.splice(sourcePos, 1)
   currentChannels.splice(targetPos, 0, moved)
-  const newOrder = currentChannels.map(c => c.index)
-  handleReorder(newOrder)
+  void handleReorder(currentChannels.map(c => c.index))
   draggedIndex.value = null
 }
 
@@ -210,9 +272,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- 错误提示 -->
-    <Alert v-if="actionError" variant="destructive" class="mb-4">
+  <div class="flex min-h-full flex-col gap-4">
+    <Alert v-if="actionError" variant="destructive" class="shrink-0">
       <p class="text-sm">{{ actionError }}</p>
       <template #action>
         <Button variant="ghost" size="sm" @click="clearActionError">
@@ -221,33 +282,58 @@ onMounted(() => {
       </template>
     </Alert>
 
-    <!-- 工具栏 -->
-    <div class="flex items-center gap-3">
-      <div class="relative flex-1 max-w-sm">
-        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          v-model="searchQuery"
-          :placeholder="tf('console.searchChannels', '搜索频道...')"
-          class="pl-9"
-        />
+    <div class="border border-border bg-card/75 p-3 shadow-sm dark:bg-card/55">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative min-w-[220px] flex-1 max-w-md">
+          <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            v-model="searchQuery"
+            :placeholder="tf('console.searchChannels', '搜索频道...')"
+            class="pl-9"
+          />
+        </div>
+        <Button variant="outline" size="sm" :disabled="isRefreshing" @click="refreshCurrentChannels">
+          <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+          {{ tf('console.actions.refresh', 'Refresh') }}
+        </Button>
+        <Button variant="outline" size="sm" :disabled="isPingingAll" @click="handlePingAll">
+          <Wifi v-if="!isPingingAll" class="h-3.5 w-3.5" />
+          <Loader2 v-else class="h-3.5 w-3.5 animate-spin" />
+          {{ tf('console.pingAll', '批量测速') }}
+        </Button>
+        <Button size="sm" @click="handleAdd">
+          <Plus class="h-3.5 w-3.5" />
+          {{ tf('console.addChannel', '添加频道') }}
+        </Button>
       </div>
-      <Button variant="outline" size="sm" :disabled="isPingingAll" @click="handlePingAll">
-        <Wifi v-if="!isPingingAll" class="w-3.5 h-3.5 mr-1.5" />
-        <Loader2 v-else class="w-3.5 h-3.5 mr-1.5 animate-spin" />
-        {{ tf('console.pingAll', '批量测速') }}
-      </Button>
-      <Button size="sm" @click="handleAdd">
-        <Plus class="w-3.5 h-3.5 mr-1.5" />
-        {{ tf('console.addChannel', '添加频道') }}
-      </Button>
+
+      <div class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div class="border border-border bg-background/60 px-3 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Active</div>
+          <div class="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-300">{{ activeCount }}</div>
+        </div>
+        <div class="border border-border bg-background/60 px-3 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Failover</div>
+          <div class="font-mono text-lg font-bold text-blue-600 dark:text-blue-300">{{ failoverCount }}</div>
+        </div>
+        <div class="border border-border bg-background/60 px-3 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Disabled</div>
+          <div class="font-mono text-lg font-bold text-rose-600 dark:text-rose-300">{{ disabledCount }}</div>
+        </div>
+        <div class="border border-border bg-background/60 px-3 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Mode</div>
+          <div class="truncate text-sm font-semibold text-foreground">
+            {{ stats?.multiChannelMode ? tf('console.mode.multi', 'Multi-channel') : tf('console.mode.single', 'Single-channel') }}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 频道列表 -->
-    <div v-if="loading" class="space-y-3">
-      <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
+    <div v-if="isInitialLoading" class="space-y-2">
+      <Skeleton v-for="i in 5" :key="i" class="h-16 w-full rounded-none" />
     </div>
 
-    <div v-else-if="filteredChannels.length === 0" class="text-center py-12">
+    <div v-else-if="activeChannels.length === 0 && inactiveChannels.length === 0" class="border border-dashed border-border bg-card/50 py-12 text-center">
       <p class="text-sm text-muted-foreground">
         {{ searchQuery
           ? tf('console.noSearchResults', '没有匹配的频道')
@@ -256,40 +342,105 @@ onMounted(() => {
       </p>
     </div>
 
-    <div v-else class="space-y-2">
-      <div
-        v-for="channel in filteredChannels"
-        :key="channel.index"
-        draggable="true"
-        class="transition-all"
-        :class="{ 'opacity-50': draggedIndex === channel.index }"
-        @dragstart="onDragStart($event, channel.index)"
-        @dragover="onDragOver"
-        @drop="onDrop($event, channel.index)"
-        @dragend="onDragEnd"
-      >
-        <!-- ChannelCard 占位，等 ChannelCard agent 完成后替换 -->
-        <ChannelCard
-          :channel="channel"
-          :metrics="metricsMap.get(channel.index)"
-          :activity="activityMap.get(channel.index)"
-          @edit="handleEdit(channel)"
-          @delete="handleDelete(channel.index)"
-          @ping="handlePing(channel.index)"
-          @status="handleStatusToggle(channel.index, channel.status || 'active')"
-          @resume="handleResume(channel.index)"
-          @promote="handlePromote(channel.index, 300)"
-        />
-      </div>
+    <div v-else class="space-y-4">
+      <section class="border border-border bg-card/50">
+        <div class="flex items-center justify-between border-b border-border bg-secondary/40 px-3 py-2">
+          <div class="flex items-center gap-2">
+            <Layers class="h-4 w-4 text-primary" />
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-foreground">
+              {{ tf('console.pool.active', 'Failover Sequence') }}
+            </span>
+          </div>
+          <span class="font-mono text-[11px] text-muted-foreground">
+            current #{{ currentIndex >= 0 ? currentIndex : '—' }}
+          </span>
+        </div>
+        <div class="divide-y divide-border">
+          <div
+            v-for="(channel, index) in activeChannels"
+            :key="channel.index"
+            :draggable="!normalizedSearch"
+            :class="{ 'opacity-50': draggedIndex === channel.index }"
+            @dragstart="onDragStart($event, channel.index)"
+            @dragover="onDragOver"
+            @drop="onDrop($event, channel.index)"
+            @dragend="onDragEnd"
+          >
+            <ChannelCard
+              :channel="channel"
+              :metrics="metricsMap.get(channel.index)"
+              :activity="activityMap.get(channel.index)"
+              :priority="index + 1"
+              :supports-capability="type !== 'images'"
+              @edit="handleEdit(channel)"
+              @delete="handleDelete(channel.index)"
+              @ping="handlePing(channel.index)"
+              @status="handleStatusToggle(channel.index, channel.status || 'active')"
+              @disable="handleDisable(channel.index)"
+              @enable="handleEnable(channel.index)"
+              @resume="handleResume(channel.index)"
+              @promote="handlePromote(channel.index, 300)"
+              @logs="handleLogs(channel)"
+              @capability="handleCapability(channel)"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section v-if="inactiveChannels.length" class="border border-dashed border-border bg-muted/20">
+        <div class="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Archive class="h-4 w-4 text-muted-foreground" />
+          <span class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            {{ tf('console.pool.inactive', 'Inactive Pool') }}
+          </span>
+        </div>
+        <div class="divide-y divide-border">
+          <ChannelCard
+            v-for="(channel, index) in inactiveChannels"
+            :key="channel.index"
+            :channel="channel"
+            :metrics="metricsMap.get(channel.index)"
+            :activity="activityMap.get(channel.index)"
+            :priority="index + 1"
+            :supports-capability="type !== 'images'"
+            inactive
+            @edit="handleEdit(channel)"
+            @delete="handleDelete(channel.index)"
+            @ping="handlePing(channel.index)"
+            @status="handleStatusToggle(channel.index, channel.status || 'disabled')"
+            @disable="handleDisable(channel.index)"
+            @enable="handleEnable(channel.index)"
+            @resume="handleResume(channel.index)"
+            @promote="handlePromote(channel.index, 300)"
+            @logs="handleLogs(channel)"
+            @capability="handleCapability(channel)"
+          />
+        </div>
+      </section>
     </div>
 
-    <!-- ChannelEditDialog -->
     <ChannelEditDialog
       v-if="showAddDialog"
       :channel="editingChannel"
       :channel-type="type"
       @close="showAddDialog = false"
-      @saved="showAddDialog = false"
+      @saved="handleSaved"
+    />
+
+    <ChannelLogsDialog
+      :open="!!logsChannel"
+      :channel-type="type"
+      :channel-id="logsChannel?.index ?? -1"
+      :channel-name="logsChannel?.name ?? ''"
+      @close="logsChannel = null"
+    />
+
+    <CapabilityTestDialog
+      :open="!!capabilityChannel"
+      :channel-type="type"
+      :channel-id="capabilityChannel?.index ?? -1"
+      :channel-name="capabilityChannel?.name ?? ''"
+      @close="capabilityChannel = null"
     />
   </div>
 </template>

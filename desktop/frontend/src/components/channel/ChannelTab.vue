@@ -11,6 +11,9 @@ import compshareIcon from '@/assets/compshare.png'
 import type { ProviderPreset, ProviderPlan, ChannelTarget } from '@/types'
 
 const { t, tf } = useLanguage()
+const emit = defineEmits<{
+  created: [target: string]
+}>()
 
 const {
   presets,
@@ -182,15 +185,17 @@ const submit = async () => {
     localError.value = t('channel.missingKey')
     return
   }
+  const target = selectedTarget.value || preset.defaultTarget
   await createChannel({
     provider: preset.id,
-    target: selectedTarget.value || preset.defaultTarget,
+    target,
     planId: selectedPlan.value,
     baseUrl: effectiveBaseUrl.value,
     apiKey: apiKey.value.trim() || currentAsset.value?.apiKey || '',
     name: channelName.value.trim(),
   })
   apiKey.value = ''
+  emit('created', target)
 }
 </script>
 
