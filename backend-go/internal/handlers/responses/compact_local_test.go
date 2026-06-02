@@ -69,21 +69,61 @@ func TestFormatItemsAsTranscript_ContentBlocks(t *testing.T) {
 }
 
 func TestFormatItemsAsTranscript_InputImage(t *testing.T) {
-	items := []types.ResponsesItem{
-		{Type: "message", Role: "user", Content: []interface{}{
-			map[string]interface{}{"type": "input_text", "text": "Describe this image"},
-			map[string]interface{}{"type": "input_image", "image_url": "data:image/png;base64,SGVsbG8gV29ybGQh..."},
-		}},
+	tests := []struct {
+		name     string
+		imageURL interface{}
+		leaks    []string
+	}{
+		{
+			name:     "base64 string image_url",
+			imageURL: "data:image/png;base64,SGVsbG8gV29ybGQh...",
+			leaks:    []string{"data:image", "base64", "SGVsbG8gV29ybGQh"},
+		},
+		{
+			name: "base64 object image_url",
+			imageURL: map[string]interface{}{
+				"url": "data:image/jpeg;base64,QUJDREVGRw==",
+			},
+			leaks: []string{"data:image", "base64", "QUJDREVGRw"},
+		},
+		{
+			name:     "remote string image_url",
+			imageURL: "https://example.com/images/cat.png",
+			leaks:    []string{"https://example.com/images/cat.png", "example.com"},
+		},
+		{
+			name: "remote object image_url",
+			imageURL: map[string]interface{}{
+				"url": "https://cdn.example.com/images/dog.png",
+			},
+			leaks: []string{"https://cdn.example.com/images/dog.png", "cdn.example.com"},
+		},
 	}
-	transcript := formatItemsAsTranscript(items)
-	if !strings.Contains(transcript, "[Image]") {
-		t.Fatalf("expected [Image] placeholder, got: %s", transcript)
-	}
-	if strings.Contains(transcript, "data:image") || strings.Contains(transcript, "base64") {
-		t.Fatalf("base64 data leaked into transcript: %s", transcript)
-	}
-	if !strings.Contains(transcript, "Describe this image") {
-		t.Fatalf("text content should be preserved: %s", transcript)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			items := []types.ResponsesItem{
+				{Type: "message", Role: "user", Content: []interface{}{
+					map[string]interface{}{"type": "input_text", "text": "Describe this image"},
+					map[string]interface{}{"type": "input_image", "image_url": tt.imageURL, "detail": "high"},
+				}},
+			}
+			transcript := formatItemsAsTranscript(items)
+			if !strings.Contains(transcript, "[Image]") {
+				t.Fatalf("expected [Image] placeholder, got: %s", transcript)
+			}
+			if strings.Contains(transcript, "[Image:") {
+				t.Fatalf("image URL should not be included in placeholder: %s", transcript)
+			}
+			for _, leak := range tt.leaks {
+				if strings.Contains(transcript, leak) {
+					t.Fatalf("image data leaked into transcript (%s): %s", leak, transcript)
+				}
+			}
+			if !strings.Contains(transcript, "Describe this image") {
+				t.Fatalf("text content should be preserved: %s", transcript)
+			}
+		})
 	}
 }
 
