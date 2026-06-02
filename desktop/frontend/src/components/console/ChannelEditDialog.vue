@@ -1332,7 +1332,6 @@ function buildCurrentPayload() {
                       <div class="grid gap-2 md:grid-cols-2">
                         <div class="flex items-center gap-2"><Switch v-model="form.codexNativeToolPassthrough" /><Label class="text-xs">{{ tf('console.form.codexNativeTools', 'Codex 原生工具透传') }}</Label></div>
                         <div class="flex items-center gap-2"><Switch v-model="form.codexToolCompat" /><Label class="text-xs">{{ tf('console.form.codexCompat', 'Codex 工具兼容') }}</Label></div>
-                        <div class="flex items-center gap-2"><Switch v-model="form.stripCodexClientTools" /><Label class="text-xs">{{ tf('console.form.stripCodexTools', '移除 Codex 客户端工具') }}</Label></div>
                       </div>
                     </div>
 
