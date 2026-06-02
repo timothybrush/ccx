@@ -558,7 +558,7 @@ func (s *DesktopService) ShowWebUITab() error {
 	}
 	s.showWindow()
 	if s.app != nil {
-		s.app.Event.Emit("desktop:show-tab", "web")
+		s.app.Event.Emit("desktop:show-tab", "dashboard")
 	}
 	return nil
 }

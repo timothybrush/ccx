@@ -34,13 +34,13 @@ export type MessageKey =
   | 'nav.channelsDesc'
   | 'nav.env'
   | 'nav.envDesc'
-  | 'nav.web'
-  | 'nav.webDesc'
+  | 'nav.dashboard'
+  | 'nav.dashboardDesc'
   | 'tab.statusTitle'
   | 'tab.agentTitle'
   | 'tab.channelsTitle'
   | 'tab.envTitle'
-  | 'tab.webTitle'
+  | 'tab.dashboardTitle'
   | 'sidebar.language'
   | 'sidebar.languageEnglish'
   | 'sidebar.languageChinese'
@@ -538,13 +538,13 @@ export const messages: Record<SupportedLocale, Messages> = {
     'nav.channelsDesc': 'Protocol channel orchestration',
     'nav.env': 'Environment',
     'nav.envDesc': 'Edit gateway env file',
-    'nav.web': 'Console',
-    'nav.webDesc': 'Native management console',
+    'nav.dashboard': 'Dashboard',
+    'nav.dashboardDesc': 'Native management dashboard',
     'tab.statusTitle': 'Gateway Status',
     'tab.agentTitle': 'Agent Config',
     'tab.channelsTitle': 'Channels Console',
     'tab.envTitle': 'Environment Settings',
-    'tab.webTitle': 'Management Console',
+    'tab.dashboardTitle': 'Management Dashboard',
     'sidebar.language': 'Language',
     'sidebar.languageEnglish': 'English',
     'sidebar.languageChinese': 'Chinese',
@@ -1039,13 +1039,13 @@ export const messages: Record<SupportedLocale, Messages> = {
     'nav.channelsDesc': '协议级渠道编排',
     'nav.env': '环境参数',
     'nav.envDesc': '网关配置文件编辑',
-    'nav.web': '管理控制台',
-    'nav.webDesc': '原生管理控制台',
+    'nav.dashboard': '管理面板',
+    'nav.dashboardDesc': '原生管理面板',
     'tab.statusTitle': '网关状态监控',
     'tab.agentTitle': 'Agent 代理配置',
     'tab.channelsTitle': '渠道管理控制台',
     'tab.envTitle': '环境参数管理',
-    'tab.webTitle': '管理控制台',
+    'tab.dashboardTitle': '管理面板',
     'sidebar.language': '语言',
     'sidebar.languageEnglish': 'English',
     'sidebar.languageChinese': '中文',

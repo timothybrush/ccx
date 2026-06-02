@@ -45,8 +45,8 @@ watch(pendingTab, (tab) => {
   }
 })
 
-const switchToWeb = () => {
-  activeTab.value = 'web'
+const switchToDashboard = () => {
+  activeTab.value = 'dashboard'
 }
 
 const consoleTabSelection = computed<ConsoleSelection>(() => {
@@ -66,7 +66,7 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
   agent: t('tab.agentTitle'),
   channels: t('tab.channelsTitle'),
   env: t('tab.envTitle'),
-  web: t('tab.webTitle'),
+  dashboard: t('tab.dashboardTitle'),
 }))
 </script>
 
@@ -121,7 +121,7 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
         <div class="h-full">
           <!-- v-show 常驻缓存各 Tab，切换时保留内部状态与滚动位置 -->
           <div v-show="activeTab === 'status'" class="h-full">
-            <StatusTab @switch-to-web="switchToWeb" />
+            <StatusTab @switch-to-dashboard="switchToDashboard" />
           </div>
           <div v-show="activeTab === 'agent'" class="h-full">
             <AgentTab />
@@ -129,7 +129,7 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
           <div v-show="activeTab === 'channels'" class="h-full">
             <ChannelTab />
           </div>
-          <div v-show="activeTab === 'web'" class="h-full">
+          <div v-show="activeTab === 'dashboard'" class="h-full">
             <ConsoleTab
               :selection="consoleTabSelection"
               @update:selection="handleConsoleSelectionUpdate"

@@ -9,7 +9,7 @@ import { useStatus } from '@/composables/useStatus'
 const { status, loading, actionError, startService, stopService, restartService, openInBrowser, refresh } = useStatus()
 
 const emit = defineEmits<{
-  switchToWeb: []
+  switchToDashboard: []
 }>()
 </script>
 
@@ -22,7 +22,7 @@ const emit = defineEmits<{
       @start="startService"
       @stop="stopService"
       @restart="restartService"
-      @open-web-u-i="emit('switchToWeb')"
+      @open-web-u-i="emit('switchToDashboard')"
       @open-browser="openInBrowser"
       @refresh="refresh"
     />
