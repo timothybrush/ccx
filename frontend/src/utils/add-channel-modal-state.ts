@@ -52,9 +52,32 @@ export function syncBaseUrlsFormState(rawText: string, serviceType: ServiceType)
   }
 }
 
+// 模型名合法字符：字母、数字、点、下划线、连字符、冒号、斜杠，外加通配符 * 与排除前缀 !
+// 显式排除中文顿号（、）、逗号、分号、竖线等分隔符与其他标点，避免被当作单条规则保留
+const SUPPORTED_MODEL_TOKEN_CHARS = /^[A-Za-z0-9._:/*!-]+$/
+
+// 模型规则的分隔符：空白、中文顿号、逗号（中英文）、分号（中英文）、竖线、换行
+const SUPPORTED_MODEL_SEPARATORS = /[\s、,，;；|]+/
+
+/**
+ * 将用户手动输入的原始文本按合法分隔符拆分为独立规则。
+ * 例如 `GPT-5*、ada*` -> ['GPT-5*', 'ada*']。
+ */
+export function parseSupportedModelInput(raw: string): string[] {
+  return raw
+    .split(SUPPORTED_MODEL_SEPARATORS)
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
 export function isValidSupportedModelPattern(pattern: string): boolean {
   const trimmed = pattern.trim()
   if (!trimmed) {
+    return false
+  }
+
+  // 仅允许模型名合法字符集；含顿号等非法字符直接拒绝
+  if (!SUPPORTED_MODEL_TOKEN_CHARS.test(trimmed)) {
     return false
   }
 
@@ -87,9 +110,8 @@ export function filterValidSupportedModelPatterns(patterns: string[]): {
   validPatterns: string[]
   hasInvalidPatterns: boolean
 } {
-  const normalized = patterns
-    .map(pattern => pattern.trim())
-    .filter(Boolean)
+  // 先按分隔符拆分（兼容用户把多个规则粘进同一项的情况），再做合法性校验
+  const normalized = patterns.flatMap(parseSupportedModelInput)
 
   const validPatterns = normalized.filter(isValidSupportedModelPattern)
   return {

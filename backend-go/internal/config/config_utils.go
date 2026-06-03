@@ -1,6 +1,7 @@
 package config
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -298,30 +299,53 @@ func splitSupportedModelRules(rules []string) (includes []string, excludes []str
 	includes = make([]string, 0, len(rules))
 	excludes = make([]string, 0, len(rules))
 	for _, rawRule := range rules {
-		rule := strings.TrimSpace(rawRule)
-		if rule == "" {
-			continue
-		}
-		if strings.HasPrefix(rule, "!") {
-			pattern := strings.TrimSpace(strings.TrimPrefix(rule, "!"))
-			if strings.HasPrefix(pattern, "!") {
+		// 兼容用户把多条规则用顿号/逗号粘进同一项的情况，先按分隔符拆分
+		for _, rule := range parseSupportedModelInput(rawRule) {
+			if strings.HasPrefix(rule, "!") {
+				pattern := strings.TrimSpace(strings.TrimPrefix(rule, "!"))
+				if strings.HasPrefix(pattern, "!") {
+					continue
+				}
+				if isValidSupportedModelPattern(pattern) {
+					excludes = append(excludes, pattern)
+				}
 				continue
 			}
-			if isValidSupportedModelPattern(pattern) {
-				excludes = append(excludes, pattern)
+			if isValidSupportedModelPattern(rule) {
+				includes = append(includes, rule)
 			}
-			continue
-		}
-		if isValidSupportedModelPattern(rule) {
-			includes = append(includes, rule)
 		}
 	}
 	return includes, excludes
 }
 
+// supportedModelSeparatorPattern 模型规则分隔符：空白、中文顿号、逗号（中英文）、分号（中英文）、竖线
+var supportedModelSeparatorPattern = regexp.MustCompile(`[\s、,，;；|]+`)
+
+// supportedModelTokenPattern 模型名合法字符集：字母、数字、点、下划线、连字符、冒号、斜杠，外加通配符 * 与排除前缀 !
+var supportedModelTokenPattern = regexp.MustCompile(`^[A-Za-z0-9._:/*!-]+$`)
+
+// parseSupportedModelInput 将原始规则文本按合法分隔符拆分为独立规则，过滤空白项。
+// 例如 "GPT-5*、ada*" -> ["GPT-5*", "ada*"]。
+func parseSupportedModelInput(raw string) []string {
+	parts := supportedModelSeparatorPattern.Split(raw, -1)
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 func isValidSupportedModelPattern(pattern string) bool {
 	trimmed := strings.TrimSpace(pattern)
 	if trimmed == "" {
+		return false
+	}
+	// 仅允许模型名合法字符集；含顿号等非法字符直接拒绝
+	if !supportedModelTokenPattern.MatchString(trimmed) {
 		return false
 	}
 	if strings.Count(trimmed, "!") > 1 {

@@ -79,6 +79,10 @@ func TestIsValidSupportedModelPattern(t *testing.T) {
 		{"仅空白非法", "   ", false},
 		{"空 contains 非法", "**", false},
 		{"多重排除前缀非法", "!!gpt-4*", false},
+		{"含中文顿号非法", "gpt-5*、ada*", false},
+		{"含逗号非法", "gpt-5*,ada*", false},
+		{"含空格非法", "gpt 5", false},
+		{"含中文字符非法", "模型", false},
 	}
 
 	for _, tt := range tests {
@@ -87,6 +91,52 @@ func TestIsValidSupportedModelPattern(t *testing.T) {
 				t.Errorf("isValidSupportedModelPattern(%q) = %v, want %v", tt.pattern, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseSupportedModelInput(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"中文顿号拆分", "GPT-5*、ada*", []string{"GPT-5*", "ada*"}},
+		{"混合分隔符", "a, b ; c | d", []string{"a", "b", "c", "d"}},
+		{"中文逗号与多余空白", "  gpt-4*  ，  *image*  ", []string{"gpt-4*", "*image*"}},
+		{"纯分隔符返回空", "、、 ,, ；", []string{}},
+		{"空字符串返回空", "", []string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSupportedModelInput(tt.raw)
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseSupportedModelInput(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("parseSupportedModelInput(%q) = %v, want %v", tt.raw, got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestSplitSupportedModelRulesSeparators(t *testing.T) {
+	includes, excludes := splitSupportedModelRules([]string{"GPT-5*、ada*", "!*image*"})
+	wantIncludes := []string{"GPT-5*", "ada*"}
+	wantExcludes := []string{"*image*"}
+
+	if len(includes) != len(wantIncludes) {
+		t.Fatalf("includes = %v, want %v", includes, wantIncludes)
+	}
+	for i := range includes {
+		if includes[i] != wantIncludes[i] {
+			t.Fatalf("includes = %v, want %v", includes, wantIncludes)
+		}
+	}
+	if len(excludes) != len(wantExcludes) || excludes[0] != wantExcludes[0] {
+		t.Fatalf("excludes = %v, want %v", excludes, wantExcludes)
 	}
 }
 

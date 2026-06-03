@@ -1143,7 +1143,8 @@ import { buildChannelPayload } from '../utils/channelPayload'
 import {
   resolveChannelWatcherAction,
   syncBaseUrlsFormState,
-  filterValidSupportedModelPatterns
+  filterValidSupportedModelPatterns,
+  parseSupportedModelInput
 } from '../utils/add-channel-modal-state'
 import { useI18n } from '../i18n'
 
@@ -2196,10 +2197,10 @@ const maskApiKey = (key: string): string => {
 const normalizeStringArray = (values: string[]): string[] => values.map(v => v.trim()).filter(Boolean)
 
 const handleSupportedModelsChange = (values: Array<string | { title: string; value: string }>) => {
+  // 用户可能把多条规则用顿号/逗号粘进同一项，这里统一按分隔符拆分
   const normalizedValues = values
     .map(getStringValue)
-    .map(v => v.trim())
-    .filter(Boolean)
+    .flatMap(parseSupportedModelInput)
 
   const { validPatterns, hasInvalidPatterns } = filterValidSupportedModelPatterns(normalizedValues)
   form.supportedModels = validPatterns
