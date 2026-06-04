@@ -1083,7 +1083,10 @@ function buildCurrentPayload() {
                     {{ tf('console.form.connection', '连接') }}
                   </h4>
                   <div class="space-y-1.5">
-                    <Label>{{ tf('console.form.baseUrl', 'Base URL') }} *</Label>
+                    <div class="flex items-center justify-between">
+                      <Label>{{ tf('console.form.baseUrl', 'Base URL') }} *</Label>
+                      <span class="text-[10px] text-muted-foreground">{{ tf('console.form.baseUrlHint', '支持多个 Base URL 轮换，每行一个，第一行为主地址') }}</span>
+                    </div>
                     <Textarea
                       v-model="form.baseUrlsText"
                       class="min-h-20 font-mono text-xs"
