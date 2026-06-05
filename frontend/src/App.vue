@@ -505,6 +505,49 @@
             </div>
           </div>
 
+          <!-- 流式健康检测超时 -->
+          <div class="cb-control-grid">
+            <!-- 首字等待超时 -->
+            <div class="cb-control">
+              <div class="cb-control-header">
+                <span class="cb-slider-label">{{ t('dialog.circuitBreaker.streamFirstContentTimeout') }}</span>
+                <span class="cb-slider-value">{{ cbForm.streamFirstContentTimeoutMs === 0 ? 'off' : (cbForm.streamFirstContentTimeoutMs / 1000) + 's' }}</span>
+              </div>
+              <input
+                type="range"
+                :value="cbForm.streamFirstContentTimeoutMs"
+                :min="0"
+                :max="300000"
+                step="1000"
+                class="cb-slider w-100"
+                @input="onSliderChange('streamFirstContentTimeoutMs', $event)"
+              />
+              <div class="cb-slider-range">
+                <span>off</span><span>300s</span>
+              </div>
+            </div>
+
+            <!-- 首字后断流超时 -->
+            <div class="cb-control">
+              <div class="cb-control-header">
+                <span class="cb-slider-label">{{ t('dialog.circuitBreaker.streamInactivityTimeout') }}</span>
+                <span class="cb-slider-value">{{ cbForm.streamInactivityTimeoutMs === 0 ? 'off' : (cbForm.streamInactivityTimeoutMs / 1000) + 's' }}</span>
+              </div>
+              <input
+                type="range"
+                :value="cbForm.streamInactivityTimeoutMs"
+                :min="0"
+                :max="60000"
+                step="1000"
+                class="cb-slider w-100"
+                @input="onSliderChange('streamInactivityTimeoutMs', $event)"
+              />
+              <div class="cb-slider-range">
+                <span>off</span><span>60s</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 预设按钮 -->
           <div class="cb-preset-grid">
             <v-btn
@@ -1699,19 +1742,21 @@ const cbForm = reactive({
   windowSize: 10,
   failureThreshold: 0.5,
   consecutiveFailuresThreshold: 3,
+  streamFirstContentTimeoutMs: 30000,
+  streamInactivityTimeoutMs: 5000,
 })
 
 const cbPresets = [
-  { key: 'gentle', labelKey: 'dialog.circuitBreaker.presetGentle' as const, windowSize: 20, failureThreshold: 0.70, consecutiveFailuresThreshold: 5 },
-  { key: 'balanced', labelKey: 'dialog.circuitBreaker.presetBalanced' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3 },
-  { key: 'aggressive', labelKey: 'dialog.circuitBreaker.presetAggressive' as const, windowSize: 5, failureThreshold: 0.30, consecutiveFailuresThreshold: 2 },
-  { key: 'custom', labelKey: 'dialog.circuitBreaker.presetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3 },
+  { key: 'gentle', labelKey: 'dialog.circuitBreaker.presetGentle' as const, windowSize: 20, failureThreshold: 0.70, consecutiveFailuresThreshold: 5, streamFirstContentTimeoutMs: 60000, streamInactivityTimeoutMs: 10000 },
+  { key: 'balanced', labelKey: 'dialog.circuitBreaker.presetBalanced' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 5000 },
+  { key: 'aggressive', labelKey: 'dialog.circuitBreaker.presetAggressive' as const, windowSize: 5, failureThreshold: 0.30, consecutiveFailuresThreshold: 2, streamFirstContentTimeoutMs: 10000, streamInactivityTimeoutMs: 3000 },
+  { key: 'custom', labelKey: 'dialog.circuitBreaker.presetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 5000 },
 ]
 
 const matchPreset = () => {
   for (const p of cbPresets) {
     if (p.key === 'custom') continue
-    if (cbForm.windowSize === p.windowSize && cbForm.failureThreshold === p.failureThreshold && cbForm.consecutiveFailuresThreshold === p.consecutiveFailuresThreshold) {
+    if (cbForm.windowSize === p.windowSize && cbForm.failureThreshold === p.failureThreshold && cbForm.consecutiveFailuresThreshold === p.consecutiveFailuresThreshold && cbForm.streamFirstContentTimeoutMs === p.streamFirstContentTimeoutMs && cbForm.streamInactivityTimeoutMs === p.streamInactivityTimeoutMs) {
       activePreset.value = p.key
       return
     }
@@ -1724,6 +1769,8 @@ const applyPreset = (preset: typeof cbPresets[number]) => {
   cbForm.windowSize = preset.windowSize
   cbForm.failureThreshold = preset.failureThreshold
   cbForm.consecutiveFailuresThreshold = preset.consecutiveFailuresThreshold
+  cbForm.streamFirstContentTimeoutMs = preset.streamFirstContentTimeoutMs
+  cbForm.streamInactivityTimeoutMs = preset.streamInactivityTimeoutMs
   activePreset.value = preset.key
 }
 
@@ -1735,6 +1782,10 @@ const onSliderChange = (field: string, event: Event) => {
     cbForm.windowSize = val
   } else if (field === 'consecutiveFailuresThreshold') {
     cbForm.consecutiveFailuresThreshold = val
+  } else if (field === 'streamFirstContentTimeoutMs') {
+    cbForm.streamFirstContentTimeoutMs = val
+  } else if (field === 'streamInactivityTimeoutMs') {
+    cbForm.streamInactivityTimeoutMs = val
   }
   matchPreset()
 }
@@ -1745,6 +1796,8 @@ const openCircuitBreakerDialog = async () => {
     cbForm.windowSize = params.windowSize
     cbForm.failureThreshold = params.failureThreshold
     cbForm.consecutiveFailuresThreshold = params.consecutiveFailuresThreshold
+    cbForm.streamFirstContentTimeoutMs = params.streamFirstContentTimeoutMs ?? 30000
+    cbForm.streamInactivityTimeoutMs = params.streamInactivityTimeoutMs ?? 5000
     matchPreset()
   } catch (e) {
     console.error('Failed to load circuit breaker config:', e)
@@ -1759,6 +1812,8 @@ const saveCircuitBreaker = async () => {
       windowSize: cbForm.windowSize,
       failureThreshold: cbForm.failureThreshold,
       consecutiveFailuresThreshold: cbForm.consecutiveFailuresThreshold,
+      streamFirstContentTimeoutMs: cbForm.streamFirstContentTimeoutMs,
+      streamInactivityTimeoutMs: cbForm.streamInactivityTimeoutMs,
     })
     circuitBreakerDialogOpen.value = false
     showToast(t('toast.circuitBreakerSaved'), 'success')

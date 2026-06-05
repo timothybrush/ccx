@@ -429,6 +429,8 @@ export type MessageKey =
   | 'dialog.circuitBreaker.windowSize'
   | 'dialog.circuitBreaker.failureThreshold'
   | 'dialog.circuitBreaker.consecutiveFailuresThreshold'
+  | 'dialog.circuitBreaker.streamFirstContentTimeout'
+  | 'dialog.circuitBreaker.streamInactivityTimeout'
   | 'dialog.circuitBreaker.presetGentle'
   | 'dialog.circuitBreaker.presetBalanced'
   | 'dialog.circuitBreaker.presetAggressive'
@@ -900,6 +902,8 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'dialog.circuitBreaker.windowSize': 'Sliding Window Size',
     'dialog.circuitBreaker.failureThreshold': 'Failure Rate Threshold',
     'dialog.circuitBreaker.consecutiveFailuresThreshold': 'Consecutive Failures Threshold',
+    'dialog.circuitBreaker.streamFirstContentTimeout': 'First Content Timeout',
+    'dialog.circuitBreaker.streamInactivityTimeout': 'Inactivity Timeout',
     'dialog.circuitBreaker.presetGentle': 'Gentle',
     'dialog.circuitBreaker.presetBalanced': 'Balanced',
     'dialog.circuitBreaker.presetAggressive': 'Aggressive',
@@ -1370,6 +1374,8 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'dialog.circuitBreaker.windowSize': 'Ukuran Sliding Window',
     'dialog.circuitBreaker.failureThreshold': 'Ambang Batas Gagal',
     'dialog.circuitBreaker.consecutiveFailuresThreshold': 'Ambang Batas Kegagalan Beruntun',
+    'dialog.circuitBreaker.streamFirstContentTimeout': 'Timeout Konten Pertama',
+    'dialog.circuitBreaker.streamInactivityTimeout': 'Timeout Inaktivitas',
     'dialog.circuitBreaker.presetGentle': 'Ringan',
     'dialog.circuitBreaker.presetBalanced': 'Seimbang',
     'dialog.circuitBreaker.presetAggressive': 'Agresif',
@@ -1840,6 +1846,8 @@ export const messages: Record<SupportedLocale, Record<MessageKey, string>> = {
     'dialog.circuitBreaker.windowSize': '滑动窗口大小',
     'dialog.circuitBreaker.failureThreshold': '失败率阈值',
     'dialog.circuitBreaker.consecutiveFailuresThreshold': '连续失败阈值',
+    'dialog.circuitBreaker.streamFirstContentTimeout': '首字等待超时',
+    'dialog.circuitBreaker.streamInactivityTimeout': '首字后断流超时',
     'dialog.circuitBreaker.presetGentle': '温和',
     'dialog.circuitBreaker.presetBalanced': '均衡',
     'dialog.circuitBreaker.presetAggressive': '激进',
