@@ -726,31 +726,33 @@
                       <span class="text-body-2 font-weight-medium text-error">{{ t('channelCard.disabledKeys') }}</span>
                       <v-chip size="x-small" color="error" variant="tonal">{{ visibleDisabledKeys.length }}</v-chip>
                     </div>
-                    <div class="d-flex flex-column ga-2" style="max-height: 150px; overflow-y: auto;">
-                      <div
+                    <v-list density="compact" class="rounded-lg" style="max-height: 150px; overflow-y: auto;">
+                      <v-list-item
                         v-for="(dk, dkIdx) in visibleDisabledKeys"
                         :key="'disabled-' + dkIdx"
-                        class="d-flex align-center justify-space-between pa-2 rounded"
+                        class="px-3"
                         style="background: rgba(var(--v-theme-error), 0.04);"
                       >
-                        <div class="d-flex flex-column flex-1-1 mr-2" style="min-width: 0;">
-                          <div class="d-flex align-center ga-2">
-                            <v-icon size="small" color="error">mdi-key-alert</v-icon>
-                            <code class="text-caption font-weight-mono text-truncate">{{ dk.key.length > 20 ? dk.key.slice(0, 8) + '***' + dk.key.slice(-5) : dk.key }}</code>
-                          </div>
-                          <div class="d-flex align-center ga-1 mt-1 ml-7">
-                            <v-chip size="x-small" :color="dk.reason === 'insufficient_balance' ? 'warning' : 'error'" variant="tonal">
-                              {{ t(getRestoreDisabledKeyLabel(dk.reason)) }}
-                            </v-chip>
-                            <span class="text-caption">{{ new Date(dk.disabledAt).toLocaleDateString() }}</span>
-                          </div>
-                        </div>
-                        <v-btn size="x-small" color="success" variant="tonal" rounded="lg" :loading="restoringKey === dk.key" @click.stop="restoreDisabledKey(dk.key)">
-                          <v-icon start size="small">mdi-restore</v-icon>
-                          {{ t('channelCard.restoreKey') }}
-                        </v-btn>
-                      </div>
-                    </div>
+                        <template #prepend>
+                          <v-icon size="small" color="error" class="mr-2">mdi-key-alert</v-icon>
+                        </template>
+                        <v-list-item-title class="text-caption font-weight-mono">
+                          {{ dk.key.length > 20 ? dk.key.slice(0, 8) + '***' + dk.key.slice(-5) : dk.key }}
+                        </v-list-item-title>
+                        <v-list-item-subtitle class="d-flex align-center ga-1">
+                          <v-chip size="x-small" :color="dk.reason === 'insufficient_balance' ? 'warning' : 'error'" variant="tonal">
+                            {{ t(getRestoreDisabledKeyLabel(dk.reason)) }}
+                          </v-chip>
+                          <span class="text-caption">{{ new Date(dk.disabledAt).toLocaleDateString() }}</span>
+                        </v-list-item-subtitle>
+                        <template #append>
+                          <v-btn size="x-small" color="success" variant="tonal" rounded="lg" :loading="restoringKey === dk.key" @click="restoreDisabledKey(dk.key)">
+                            <v-icon start size="small">mdi-restore</v-icon>
+                            {{ t('channelCard.restoreKey') }}
+                          </v-btn>
+                        </template>
+                      </v-list-item>
+                    </v-list>
                   </div>
                 </v-card-text>
               </v-card>
