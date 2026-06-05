@@ -370,19 +370,20 @@ func handleStreamSuccess(
 	}
 	reader := newStreamLineReader(chunkChan, bodyErrChan)
 	reader.remainder = bufferedBody
+	progress := common.NewStreamProgressLogger("Gemini", startTime, envCfg.ShouldLog("info"))
 
 	switch upstreamType {
 	case "gemini":
-		totalUsage, streamErr = streamGeminiToGemini(c, reader, flusher, logBuffer, streamLoggingEnabled, timeouts)
+		totalUsage, streamErr = streamGeminiToGemini(c, reader, flusher, logBuffer, streamLoggingEnabled, timeouts, progress)
 	case "claude":
-		totalUsage, streamErr = streamClaudeToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts)
+		totalUsage, streamErr = streamClaudeToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts, progress)
 	case "openai":
-		totalUsage, streamErr = streamOpenAIToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts)
+		totalUsage, streamErr = streamOpenAIToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts, progress)
 	case "responses":
-		totalUsage, streamErr = streamResponsesToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts)
+		totalUsage, streamErr = streamResponsesToGemini(c, reader, flusher, model, logBuffer, streamLoggingEnabled, timeouts, progress)
 	default:
 		// 默认按 Gemini 直通处理
-		totalUsage, streamErr = streamGeminiToGemini(c, reader, flusher, logBuffer, streamLoggingEnabled, timeouts)
+		totalUsage, streamErr = streamGeminiToGemini(c, reader, flusher, logBuffer, streamLoggingEnabled, timeouts, progress)
 	}
 	if streamErr != nil {
 		return nil, streamErr
@@ -407,6 +408,7 @@ func streamGeminiToGemini(
 	logBuffer *common.LimitedLogBuffer,
 	loggingEnabled bool,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	inactivityTimeout := time.Duration(timeouts.InactivityTimeoutMs) * time.Millisecond
@@ -414,14 +416,19 @@ func streamGeminiToGemini(
 	for {
 		line, eof, err, timedOut := reader.NextLine(inactivityTimeout)
 		if timedOut {
+			progress.Finish("stalled")
 			return nil, common.ErrStreamPostCommitStalled
 		}
 		if eof {
 			if err != nil {
+				progress.Finish("error")
 				return totalUsage, err
 			}
+			progress.Finish("completed")
 			return totalUsage, nil
 		}
+		progress.AddBytes(len(line))
+		progress.Tick()
 		if loggingEnabled {
 			logBuffer.WriteString(line + "\n")
 		}
@@ -463,6 +470,7 @@ func streamClaudeToGemini(
 	logBuffer *common.LimitedLogBuffer,
 	loggingEnabled bool,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	var currentText strings.Builder
@@ -471,14 +479,19 @@ func streamClaudeToGemini(
 	for {
 		line, eof, err, timedOut := reader.NextLine(inactivityTimeout)
 		if timedOut {
+			progress.Finish("stalled")
 			return nil, common.ErrStreamPostCommitStalled
 		}
 		if eof {
 			if err != nil {
+				progress.Finish("error")
 				return totalUsage, err
 			}
+			progress.Finish("completed")
 			return totalUsage, nil
 		}
+		progress.AddBytes(len(line))
+		progress.Tick()
 		if loggingEnabled {
 			logBuffer.WriteString(line + "\n")
 		}
@@ -592,6 +605,7 @@ func streamClaudeToGemini(
 			}
 		}
 	}
+	progress.Finish("completed")
 	return totalUsage, nil
 }
 
@@ -604,6 +618,7 @@ func streamOpenAIToGemini(
 	logBuffer *common.LimitedLogBuffer,
 	loggingEnabled bool,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	var currentText strings.Builder
@@ -612,14 +627,19 @@ func streamOpenAIToGemini(
 	for {
 		line, eof, err, timedOut := reader.NextLine(inactivityTimeout)
 		if timedOut {
+			progress.Finish("stalled")
 			return nil, common.ErrStreamPostCommitStalled
 		}
 		if eof {
 			if err != nil {
+				progress.Finish("error")
 				return totalUsage, err
 			}
+			progress.Finish("completed")
 			return totalUsage, nil
 		}
+		progress.AddBytes(len(line))
+		progress.Tick()
 		if loggingEnabled {
 			logBuffer.WriteString(line + "\n")
 		}
@@ -765,6 +785,7 @@ func streamOpenAIToGemini(
 			}
 		}
 	}
+	progress.Finish("completed")
 	return totalUsage, nil
 }
 
@@ -793,6 +814,7 @@ func streamResponsesToGemini(
 	logBuffer *common.LimitedLogBuffer,
 	loggingEnabled bool,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	var converterState any
@@ -801,14 +823,19 @@ func streamResponsesToGemini(
 	for {
 		line, eof, err, timedOut := reader.NextLine(inactivityTimeout)
 		if timedOut {
+			progress.Finish("stalled")
 			return nil, common.ErrStreamPostCommitStalled
 		}
 		if eof {
 			if err != nil {
+				progress.Finish("error")
 				return totalUsage, err
 			}
+			progress.Finish("completed")
 			return totalUsage, nil
 		}
+		progress.AddBytes(len(line))
+		progress.Tick()
 		if loggingEnabled {
 			logBuffer.WriteString(line + "\n")
 		}

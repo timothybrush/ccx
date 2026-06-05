@@ -945,24 +945,25 @@ func handleStreamSuccess(
 	if !ok {
 		log.Printf("[Chat-Stream] 警告: ResponseWriter 不支持 Flusher")
 	}
+	progress := common.NewStreamProgressLogger("Chat", startTime, envCfg.ShouldLog("info"))
 
 	switch upstreamType {
 	case "claude":
 		var streamErr error
-		totalUsage, streamErr = streamClaudeToChat(c, resp, flusher, model, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts)
+		totalUsage, streamErr = streamClaudeToChat(c, resp, flusher, model, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts, progress)
 		if streamErr != nil {
 			return nil, streamErr
 		}
 	case "responses":
 		var streamErr error
-		totalUsage, streamErr = streamResponsesToChat(c, resp, flusher, model, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts)
+		totalUsage, streamErr = streamResponsesToChat(c, resp, flusher, model, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts, progress)
 		if streamErr != nil {
 			return nil, streamErr
 		}
 	default:
 		// OpenAI / Gemini / Responses 等：直接透传 SSE 流
 		var streamErr error
-		totalUsage, streamErr = streamPassthrough(c, resp, flusher, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts)
+		totalUsage, streamErr = streamPassthrough(c, resp, flusher, logBuffer, streamLoggingEnabled, preflight.buffered, timeouts, progress)
 		if streamErr != nil {
 			return nil, streamErr
 		}
@@ -1346,6 +1347,7 @@ func streamPassthrough(
 	loggingEnabled bool,
 	prefetched []byte,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	buf := make([]byte, 32*1024)
@@ -1363,10 +1365,12 @@ func streamPassthrough(
 		} else {
 			remaining := inactivityTimeout - time.Since(lastActivity)
 			if remaining <= 0 {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			n, err, timedOut := readChunkWithTimeout(resp, buf, remaining)
 			if timedOut {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			readErr = err
@@ -1377,6 +1381,8 @@ func streamPassthrough(
 		}
 
 		if len(chunk) > 0 {
+			progress.AddBytes(len(chunk))
+			progress.Tick()
 			if loggingEnabled {
 				logBuffer.Write(chunk)
 			}
@@ -1422,6 +1428,7 @@ func streamPassthrough(
 		}
 	}
 
+	progress.Finish("completed")
 	return totalUsage, nil
 }
 
@@ -1461,6 +1468,7 @@ func streamClaudeToChat(
 	loggingEnabled bool,
 	prefetched []byte,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	var doneSent bool
@@ -1479,10 +1487,12 @@ func streamClaudeToChat(
 		} else {
 			remaining := inactivityTimeout - time.Since(lastActivity)
 			if remaining <= 0 {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			n, err, timedOut := readChunkWithTimeout(resp, buf, remaining)
 			if timedOut {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			readErr = err
@@ -1493,6 +1503,8 @@ func streamClaudeToChat(
 		}
 
 		if len(chunk) > 0 {
+			progress.AddBytes(len(chunk))
+			progress.Tick()
 			if loggingEnabled {
 				logBuffer.Write(chunk)
 			}
@@ -1521,6 +1533,7 @@ func streamClaudeToChat(
 		}
 	}
 
+	progress.Finish("completed")
 	return totalUsage, nil
 }
 
@@ -1702,6 +1715,7 @@ func streamResponsesToChat(
 	loggingEnabled bool,
 	prefetched []byte,
 	timeouts common.StreamPreflightTimeouts,
+	progress *common.StreamProgressLogger,
 ) (*types.Usage, error) {
 	var totalUsage *types.Usage
 	var doneSent bool
@@ -1727,10 +1741,12 @@ func streamResponsesToChat(
 		} else {
 			remaining := inactivityTimeout - time.Since(lastActivity)
 			if remaining <= 0 {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			n, err, timedOut := readChunkWithTimeout(resp, buf, remaining)
 			if timedOut {
+				progress.Finish("stalled")
 				return nil, common.ErrStreamPostCommitStalled
 			}
 			readErr = err
@@ -1741,6 +1757,8 @@ func streamResponsesToChat(
 		}
 
 		if len(chunk) > 0 {
+			progress.AddBytes(len(chunk))
+			progress.Tick()
 			if loggingEnabled {
 				logBuffer.Write(chunk)
 			}
@@ -1929,6 +1947,7 @@ func streamResponsesToChat(
 		}
 	}
 
+	progress.Finish("completed")
 	return totalUsage, nil
 }
 

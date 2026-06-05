@@ -587,8 +587,12 @@ func passthroughStreamingResponseWithLog(c *gin.Context, resp *http.Response, en
 		return err
 	}
 
+	progress := common.NewStreamProgressLogger("Images", startTime, envCfg.ShouldLog("info"))
+
 	// 回放缓冲的首个 chunk
 	if len(bufferedBytes) > 0 {
+		progress.AddBytes(len(bufferedBytes))
+		progress.Tick()
 		if _, writeErr := c.Writer.Write(bufferedBytes); writeErr != nil {
 			if common.IsClientDisconnectError(writeErr) || writeErr == io.ErrClosedPipe || strings.Contains(strings.ToLower(writeErr.Error()), "closed pipe") {
 				return context.Canceled
@@ -616,6 +620,8 @@ func passthroughStreamingResponseWithLog(c *gin.Context, resp *http.Response, en
 				goto streamEnd
 			}
 			if len(chunk) > 0 {
+				progress.AddBytes(len(chunk))
+				progress.Tick()
 				if streamLoggingEnabled {
 					logBuffer.Write(chunk)
 				}
@@ -642,11 +648,13 @@ func passthroughStreamingResponseWithLog(c *gin.Context, resp *http.Response, en
 			}
 			goto streamEnd
 		case <-postCommitChan:
+			progress.Finish("stalled")
 			log.Printf("[Images-StreamStalled] 流式断流: 首字后 %dms 无上游 chunk 到达", timeouts.InactivityTimeoutMs)
 			return common.ErrStreamPostCommitStalled
 		}
 	}
 streamEnd:
+	progress.Finish("completed")
 
 	if logBuffer.Len() > 0 {
 		common.LogUpstreamResponseBody(logBuffer.Bytes(), envCfg, "Images")

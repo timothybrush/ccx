@@ -884,16 +884,22 @@ func ProcessStreamEvents(
 		postCommitChan = postCommitTimer.C
 		defer postCommitTimer.Stop()
 	}
+	progress := NewStreamProgressLogger("Messages", startTime, envCfg.ShouldLog("info"))
 
 	for {
 		select {
 		case event, ok := <-eventChan:
 			if !ok {
+				progress.Finish("completed")
 				usage := logStreamCompletion(ctx, envCfg, startTime)
 				return usage, nil
 			}
 			prevTextLen := ctx.OutputTextBuffer.Len()
 			ProcessStreamEvent(c, w, flusher, event, ctx, envCfg, requestBody)
+			if ctx.OutputTextBuffer.Len() > prevTextLen {
+				progress.AddText(ctx.OutputTextBuffer.String()[prevTextLen:])
+				progress.Tick()
+			}
 			if postCommitTimer != nil && (ctx.OutputTextBuffer.Len() > prevTextLen || HasClaudeSemanticContent(event)) {
 				if !postCommitTimer.Stop() {
 					select {
@@ -919,6 +925,7 @@ func ProcessStreamEvents(
 					flusher.Flush()
 				}
 
+				progress.Finish("error")
 				return nil, err
 			}
 		case <-postCommitChan:
@@ -929,6 +936,7 @@ func ProcessStreamEvents(
 					flusher.Flush()
 				}
 			}
+			progress.Finish("stalled")
 			return nil, ErrStreamPostCommitStalled
 		}
 	}

@@ -890,6 +890,7 @@ func handleStreamSuccess(
 	promptTokensTotal := 0
 	completedEventSent := false
 	eventsSentCount := 0
+	progress := common.NewStreamProgressLogger("Responses", startTime, envCfg.ShouldLog("info"))
 
 	// processLine 处理单行数据（复用于缓冲行回放和后续读取）
 	processLine := func(line string) {
@@ -941,9 +942,14 @@ func handleStreamSuccess(
 		}
 
 		for _, event := range eventsToProcess {
+			prevTextLen := outputTextBuffer.Len()
 			// 提取文本内容用于估算（限制缓冲区大小）
 			if outputTextBuffer.Len() < maxOutputBufferSize {
 				extractResponsesTextFromEvent(event, &outputTextBuffer)
+			}
+			if outputTextBuffer.Len() > prevTextLen {
+				progress.AddText(outputTextBuffer.String()[prevTextLen:])
+				progress.Tick()
 			}
 
 			// 检测并收集 usage
@@ -1053,6 +1059,7 @@ func handleStreamSuccess(
 				postCommitTimer.Reset(time.Duration(timeouts.InactivityTimeoutMs) * time.Millisecond)
 			}
 		case <-postCommitChan:
+			progress.Finish("stalled")
 			log.Printf("[Responses-StreamStalled] 流式断流: 首字后 %dms 无有效输出（Header 已发送）", timeouts.InactivityTimeoutMs)
 			close(scanDone)
 			return nil, common.ErrStreamPostCommitStalled
@@ -1068,6 +1075,7 @@ func handleStreamSuccess(
 		}
 	}
 streamEnd:
+	progress.Finish("completed")
 
 	// 兜底：如果上游未发送终止符（如 MiniMax 不发 [DONE]），补发 response.completed
 	if !completedEventSent && !clientGone {
