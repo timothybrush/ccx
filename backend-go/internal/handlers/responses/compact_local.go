@@ -341,7 +341,7 @@ func handleLocalCompactStream(
 	sessionManager *session.SessionManager,
 ) (bool, *compactError) {
 	needConvert := upstreamType != "responses"
-	var converterState *any
+	var converterState any
 	var summaryBuf strings.Builder
 	var responseID string
 
@@ -368,15 +368,15 @@ func handleLocalCompactStream(
 			switch upstreamType {
 			case "claude":
 				eventsToSend = converters.ConvertClaudeMessagesToResponses(
-					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), converterState,
+					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), &converterState,
 				)
 			case "gemini":
 				eventsToSend = converters.ConvertGeminiStreamToResponses(
-					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), converterState,
+					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), &converterState,
 				)
 			default:
 				eventsToSend = converters.ConvertOpenAIChatToResponses(
-					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), converterState,
+					c.Request.Context(), originalReq.Model, nil, nil, []byte(line), &converterState,
 				)
 			}
 		} else {
