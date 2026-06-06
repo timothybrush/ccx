@@ -93,7 +93,7 @@ func (cm *ConfigManager) AddImagesUpstream(upstream UpstreamConfig) error {
 	if upstream.RequestTimeoutMs < 0 {
 		return fmt.Errorf("请求超时时间不能为负数")
 	}
-	if err := validateStreamTimeouts(upstream.StreamFirstContentTimeoutMs, upstream.StreamInactivityTimeoutMs); err != nil {
+	if err := validateStreamTimeouts(upstream.StreamFirstContentTimeoutMs, upstream.StreamInactivityTimeoutMs, upstream.StreamToolCallTimeoutMs); err != nil {
 		return err
 	}
 
@@ -277,6 +277,12 @@ func (cm *ConfigManager) UpdateImagesUpstream(index int, updates UpstreamUpdate)
 			return false, err
 		}
 		upstream.StreamInactivityTimeoutMs = *updates.StreamInactivityTimeoutMs
+	}
+	if updates.StreamToolCallTimeoutMs != nil {
+		if err := validateStreamToolCallTimeoutMs(*updates.StreamToolCallTimeoutMs); err != nil {
+			return false, err
+		}
+		upstream.StreamToolCallTimeoutMs = *updates.StreamToolCallTimeoutMs
 	}
 	if updates.SupportedModels != nil {
 		upstream.SupportedModels = updates.SupportedModels

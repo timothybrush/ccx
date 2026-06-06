@@ -70,6 +70,7 @@ const (
 	// 流式健康检测默认参数
 	defaultStreamFirstContentTimeoutMs = 30000 // HTTP 200 后首个有效内容等待超时（30秒）
 	defaultStreamInactivityTimeoutMs   = 5000  // 首字后连续性确认窗口（5秒）
+	defaultStreamToolCallTimeoutMs     = 60000 // 工具调用参数生成等待超时（60秒）
 )
 
 // RequestRecord 带时间戳的请求记录（扩展版，支持 Token、Cache 和失败分类数据）。
@@ -168,6 +169,7 @@ type MetricsManager struct {
 	// 流式健康检测参数
 	streamFirstContentTimeoutMs int // HTTP 200 后首个有效内容等待超时（ms，0=禁用）
 	streamInactivityTimeoutMs   int // 首字后连续性确认窗口（ms，0=禁用）
+	streamToolCallTimeoutMs     int // 工具调用参数生成等待超时（ms，0=禁用）
 
 	// 持久化存储（可选）
 	store   PersistenceStore
@@ -223,6 +225,7 @@ func NewMetricsManagerWithConfig(windowSize int, failureThreshold float64) *Metr
 		halfOpenSuccessTarget:        defaultHalfOpenSuccessThreshold,
 		streamFirstContentTimeoutMs:  defaultStreamFirstContentTimeoutMs,
 		streamInactivityTimeoutMs:    defaultStreamInactivityTimeoutMs,
+		streamToolCallTimeoutMs:      defaultStreamToolCallTimeoutMs,
 		stopCh:                       make(chan struct{}),
 	}
 	// 启动后台熔断恢复任务
@@ -248,6 +251,9 @@ func NewMetricsManagerWithPersistence(windowSize int, failureThreshold float64, 
 		circuitBackoffBase:           defaultCircuitBackoffBase,
 		circuitBackoffMax:            defaultCircuitBackoffMax,
 		halfOpenSuccessTarget:        defaultHalfOpenSuccessThreshold,
+		streamFirstContentTimeoutMs:  defaultStreamFirstContentTimeoutMs,
+		streamInactivityTimeoutMs:    defaultStreamInactivityTimeoutMs,
+		streamToolCallTimeoutMs:      defaultStreamToolCallTimeoutMs,
 		stopCh:                       make(chan struct{}),
 		store:                        store,
 		apiType:                      apiType,
@@ -2133,6 +2139,7 @@ type CircuitBreakerParams struct {
 	// 流式健康检测参数
 	StreamFirstContentTimeoutMs int `json:"streamFirstContentTimeoutMs"` // HTTP 200 后首个有效内容等待超时（ms，5000-300000）
 	StreamInactivityTimeoutMs   int `json:"streamInactivityTimeoutMs"`   // 首字后连续性确认窗口（ms，1000-60000）
+	StreamToolCallTimeoutMs     int `json:"streamToolCallTimeoutMs"`     // 工具调用参数生成等待超时（ms，5000-300000）
 }
 
 // GetCircuitBreakerConfig 获取当前运行时生效的熔断器配置
@@ -2145,6 +2152,7 @@ func (m *MetricsManager) GetCircuitBreakerConfig() CircuitBreakerParams {
 		ConsecutiveFailuresThreshold: m.consecutiveFailuresThreshold,
 		StreamFirstContentTimeoutMs:  m.streamFirstContentTimeoutMs,
 		StreamInactivityTimeoutMs:    m.streamInactivityTimeoutMs,
+		StreamToolCallTimeoutMs:      m.streamToolCallTimeoutMs,
 	}
 }
 
@@ -2169,6 +2177,11 @@ func (m *MetricsManager) UpdateCircuitBreakerConfig(params CircuitBreakerParams)
 	} else if params.StreamInactivityTimeoutMs > 60000 {
 		params.StreamInactivityTimeoutMs = 60000
 	}
+	if params.StreamToolCallTimeoutMs < 5000 {
+		params.StreamToolCallTimeoutMs = 5000
+	} else if params.StreamToolCallTimeoutMs > 300000 {
+		params.StreamToolCallTimeoutMs = 300000
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -2178,6 +2191,7 @@ func (m *MetricsManager) UpdateCircuitBreakerConfig(params CircuitBreakerParams)
 	m.consecutiveFailuresThreshold = params.ConsecutiveFailuresThreshold
 	m.streamFirstContentTimeoutMs = params.StreamFirstContentTimeoutMs
 	m.streamInactivityTimeoutMs = params.StreamInactivityTimeoutMs
+	m.streamToolCallTimeoutMs = params.StreamToolCallTimeoutMs
 }
 
 // ============ 兼容旧 API 的方法（基于 channelIndex，需要调用方提供 baseURL 和 keys）============

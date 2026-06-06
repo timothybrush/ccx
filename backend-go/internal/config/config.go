@@ -68,6 +68,7 @@ type UpstreamConfig struct {
 	// 流式健康检测渠道覆盖（0=继承全局，-1=禁用，正数=覆盖全局）
 	StreamFirstContentTimeoutMs int `json:"streamFirstContentTimeoutMs,omitempty"` // HTTP 200 后首个有效内容等待超时
 	StreamInactivityTimeoutMs   int `json:"streamInactivityTimeoutMs,omitempty"`   // 首字后连续性确认窗口
+	StreamToolCallTimeoutMs     int `json:"streamToolCallTimeoutMs,omitempty"`     // 工具调用参数生成等待超时
 	// 模型白名单
 	SupportedModels []string `json:"supportedModels,omitempty"` // 支持的模型白名单（空=全部）；支持精确匹配，以及 prefix* / *suffix / *contains* 形式的包含与排除规则（排除用 ! 前缀）
 	// 路由前缀
@@ -174,6 +175,7 @@ type UpstreamUpdate struct {
 	// 流式健康检测渠道覆盖（0=继承全局，-1=禁用，正数=覆盖全局）
 	StreamFirstContentTimeoutMs *int `json:"streamFirstContentTimeoutMs"`
 	StreamInactivityTimeoutMs   *int `json:"streamInactivityTimeoutMs"`
+	StreamToolCallTimeoutMs     *int `json:"streamToolCallTimeoutMs"`
 	// 模型白名单
 	SupportedModels []string `json:"supportedModels"` // 支持的模型白名单（空=全部）；支持精确匹配，以及 prefix* / *suffix / *contains* 形式的包含与排除规则（排除用 ! 前缀）
 	// 路由前缀
@@ -193,6 +195,7 @@ type CircuitBreakerConfig struct {
 	// 流式健康检测全局默认参数
 	StreamFirstContentTimeoutMs *int `json:"streamFirstContentTimeoutMs,omitempty"` // HTTP 200 后首个有效内容等待超时（ms，范围 5000-300000）
 	StreamInactivityTimeoutMs   *int `json:"streamInactivityTimeoutMs,omitempty"`   // 首字后连续性确认窗口（ms，范围 1000-60000）
+	StreamToolCallTimeoutMs     *int `json:"streamToolCallTimeoutMs,omitempty"`     // 工具调用参数生成等待超时（ms，范围 5000-300000）
 }
 
 type Config struct {
@@ -665,6 +668,15 @@ func (cm *ConfigManager) SetCircuitBreakerConfig(update CircuitBreakerConfig) er
 			v = 60000
 		}
 		cb.StreamInactivityTimeoutMs = &v
+	}
+	if update.StreamToolCallTimeoutMs != nil {
+		v := *update.StreamToolCallTimeoutMs
+		if v < 5000 {
+			v = 5000
+		} else if v > 300000 {
+			v = 300000
+		}
+		cb.StreamToolCallTimeoutMs = &v
 	}
 
 	if err := cm.saveConfigLocked(cm.config); err != nil {

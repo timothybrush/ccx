@@ -57,5 +57,6 @@ func BuildChannelView(up config.UpstreamConfig, index int) gin.H {
 		"requestTimeoutMs":            up.RequestTimeoutMs,
 		"streamFirstContentTimeoutMs": up.StreamFirstContentTimeoutMs,
 		"streamInactivityTimeoutMs":   up.StreamInactivityTimeoutMs,
+		"streamToolCallTimeoutMs":     up.StreamToolCallTimeoutMs,
 	}
 }

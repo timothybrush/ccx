@@ -82,6 +82,7 @@ func GetCircuitBreaker(getCurrent func() metrics.CircuitBreakerParams) gin.Handl
 			"consecutiveFailuresThreshold": params.ConsecutiveFailuresThreshold,
 			"streamFirstContentTimeoutMs":  params.StreamFirstContentTimeoutMs,
 			"streamInactivityTimeoutMs":    params.StreamInactivityTimeoutMs,
+			"streamToolCallTimeoutMs":      params.StreamToolCallTimeoutMs,
 		})
 	}
 }
@@ -95,6 +96,7 @@ func SetCircuitBreaker(cfgManager *config.ConfigManager) gin.HandlerFunc {
 			ConsecutiveFailuresThreshold *int     `json:"consecutiveFailuresThreshold"`
 			StreamFirstContentTimeoutMs  *int     `json:"streamFirstContentTimeoutMs"`
 			StreamInactivityTimeoutMs    *int     `json:"streamInactivityTimeoutMs"`
+			StreamToolCallTimeoutMs      *int     `json:"streamToolCallTimeoutMs"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": "请求格式无效"})
@@ -132,6 +134,12 @@ func SetCircuitBreaker(cfgManager *config.ConfigManager) gin.HandlerFunc {
 				return
 			}
 		}
+		if req.StreamToolCallTimeoutMs != nil {
+			if *req.StreamToolCallTimeoutMs < 5000 || *req.StreamToolCallTimeoutMs > 300000 {
+				c.JSON(400, gin.H{"error": "streamToolCallTimeoutMs 必须在 5000-300000 之间"})
+				return
+			}
+		}
 
 		if err := cfgManager.SetCircuitBreakerConfig(config.CircuitBreakerConfig{
 			WindowSize:                   req.WindowSize,
@@ -139,6 +147,7 @@ func SetCircuitBreaker(cfgManager *config.ConfigManager) gin.HandlerFunc {
 			ConsecutiveFailuresThreshold: req.ConsecutiveFailuresThreshold,
 			StreamFirstContentTimeoutMs:  req.StreamFirstContentTimeoutMs,
 			StreamInactivityTimeoutMs:    req.StreamInactivityTimeoutMs,
+			StreamToolCallTimeoutMs:      req.StreamToolCallTimeoutMs,
 		}); err != nil {
 			c.JSON(500, gin.H{"error": "保存配置失败"})
 			return
@@ -154,6 +163,7 @@ func SetCircuitBreaker(cfgManager *config.ConfigManager) gin.HandlerFunc {
 				"consecutiveFailuresThreshold": updated.ConsecutiveFailuresThreshold,
 				"streamFirstContentTimeoutMs":  updated.StreamFirstContentTimeoutMs,
 				"streamInactivityTimeoutMs":    updated.StreamInactivityTimeoutMs,
+				"streamToolCallTimeoutMs":      updated.StreamToolCallTimeoutMs,
 			},
 		})
 	}

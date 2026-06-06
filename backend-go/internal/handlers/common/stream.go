@@ -40,6 +40,7 @@ var ErrStreamPostCommitStalled = errors.New("stream stalled after response commi
 type StreamPreflightTimeouts struct {
 	FirstContentTimeoutMs int // 阶段A：首个有效内容等待超时（ms，范围 5000-300000）
 	InactivityTimeoutMs   int // 阶段B：首字后连续性确认窗口（ms，范围 1000-60000）
+	ToolCallTimeoutMs     int // 工具调用参数生成等待超时（ms）
 }
 
 // ResolveStreamFirstContentTimeout 解析首字等待超时：渠道 >0 覆盖全局，否则继承全局
@@ -70,11 +71,27 @@ func ResolveStreamInactivityTimeout(channelValue int, globalValue int) int {
 	return val
 }
 
+// ResolveStreamToolCallTimeout 解析工具调用参数生成等待超时：渠道 >0 覆盖全局，否则继承全局
+func ResolveStreamToolCallTimeout(channelValue int, globalValue int) int {
+	val := globalValue
+	if channelValue > 0 {
+		val = channelValue
+	}
+	if val < 5000 {
+		val = 5000
+	} else if val > 300000 {
+		val = 300000
+	}
+	return val
+}
+
 // ResolveStreamPreflightTimeouts 根据渠道覆盖和全局配置解析有效超时参数
 func ResolveStreamPreflightTimeouts(upstream *config.UpstreamConfig, global metrics.CircuitBreakerParams) StreamPreflightTimeouts {
+	inactivityTimeoutMs := ResolveStreamInactivityTimeout(upstream.StreamInactivityTimeoutMs, global.StreamInactivityTimeoutMs)
 	return StreamPreflightTimeouts{
 		FirstContentTimeoutMs: ResolveStreamFirstContentTimeout(upstream.StreamFirstContentTimeoutMs, global.StreamFirstContentTimeoutMs),
-		InactivityTimeoutMs:   ResolveStreamInactivityTimeout(upstream.StreamInactivityTimeoutMs, global.StreamInactivityTimeoutMs),
+		InactivityTimeoutMs:   inactivityTimeoutMs,
+		ToolCallTimeoutMs:     ResolveStreamToolCallTimeout(upstream.StreamToolCallTimeoutMs, global.StreamToolCallTimeoutMs),
 	}
 }
 
@@ -775,6 +792,7 @@ type StreamContext struct {
 	EventCount        int            // 事件总数
 	ContentBlockCount int            // content block 计数
 	ContentBlockTypes map[int]string // 每个 block 的类型
+	ToolCallTracker   *StreamToolCallTracker
 	// 低质量渠道处理
 	RequestModel string // 请求中的 model（用于一致性检查）
 	LowQuality   bool   // 是否为低质量渠道
@@ -800,6 +818,7 @@ func NewStreamContext(envCfg *config.EnvConfig) *StreamContext {
 	ctx := &StreamContext{
 		LoggingEnabled:    envCfg.IsDevelopment() && envCfg.EnableResponseLogs,
 		ContentBlockTypes: make(map[int]string),
+		ToolCallTracker:   NewStreamToolCallTracker(),
 		LogBuffer:         NewLimitedLogBuffer(MaxUpstreamResponseLogBytes),
 	}
 	if ctx.LoggingEnabled {
@@ -879,12 +898,26 @@ func ProcessStreamEvents(
 	// post-commit：Header 已发送后的语义活动 watchdog，只由有效输出重置。
 	var postCommitTimer *time.Timer
 	var postCommitChan <-chan time.Time
-	if timeouts.InactivityTimeoutMs > 0 {
-		postCommitTimer = time.NewTimer(time.Duration(timeouts.InactivityTimeoutMs) * time.Millisecond)
+	activeTimeoutMs := timeouts.InactivityTimeoutMs
+	if activeTimeoutMs > 0 {
+		postCommitTimer = time.NewTimer(time.Duration(activeTimeoutMs) * time.Millisecond)
 		postCommitChan = postCommitTimer.C
 		defer postCommitTimer.Stop()
 	}
 	progress := NewStreamProgressLogger("Messages", startTime, envCfg.ShouldLog("info"))
+	toolCallPending := ctx.ToolCallTracker != nil && ctx.ToolCallTracker.HasPendingToolCall()
+	if toolCallPending && timeouts.ToolCallTimeoutMs > 0 {
+		activeTimeoutMs = timeouts.ToolCallTimeoutMs
+		if postCommitTimer != nil {
+			if !postCommitTimer.Stop() {
+				select {
+				case <-postCommitTimer.C:
+				default:
+				}
+			}
+			postCommitTimer.Reset(time.Duration(activeTimeoutMs) * time.Millisecond)
+		}
+	}
 
 	for {
 		select {
@@ -900,14 +933,25 @@ func ProcessStreamEvents(
 				progress.AddText(ctx.OutputTextBuffer.String()[prevTextLen:])
 				progress.Tick()
 			}
-			if postCommitTimer != nil && (ctx.OutputTextBuffer.Len() > prevTextLen || HasClaudeSemanticContent(event)) {
+			eventHasActivity := ctx.OutputTextBuffer.Len() > prevTextLen || HasClaudeSemanticContent(event)
+			nowToolCallPending := ctx.ToolCallTracker != nil && ctx.ToolCallTracker.HasPendingToolCall()
+			if nowToolCallPending != toolCallPending {
+				toolCallPending = nowToolCallPending
+				if toolCallPending && timeouts.ToolCallTimeoutMs > 0 {
+					activeTimeoutMs = timeouts.ToolCallTimeoutMs
+				} else {
+					activeTimeoutMs = timeouts.InactivityTimeoutMs
+				}
+				eventHasActivity = eventHasActivity || activeTimeoutMs > 0
+			}
+			if postCommitTimer != nil && eventHasActivity && activeTimeoutMs > 0 {
 				if !postCommitTimer.Stop() {
 					select {
 					case <-postCommitTimer.C:
 					default:
 					}
 				}
-				postCommitTimer.Reset(time.Duration(timeouts.InactivityTimeoutMs) * time.Millisecond)
+				postCommitTimer.Reset(time.Duration(activeTimeoutMs) * time.Millisecond)
 			}
 
 		case err, ok := <-errChan:
@@ -929,7 +973,11 @@ func ProcessStreamEvents(
 				return nil, err
 			}
 		case <-postCommitChan:
-			log.Printf("[Messages-StreamStalled] 流式断流: 首字后 %dms 无有效输出（Header 已发送）", timeouts.InactivityTimeoutMs)
+			if toolCallPending {
+				log.Printf("[Messages-StreamStalled] 流式断流: 工具调用参数生成 %dms 无有效输出（Header 已发送）", activeTimeoutMs)
+			} else {
+				log.Printf("[Messages-StreamStalled] 流式断流: Header 已发送后 %dms 无有效输出", activeTimeoutMs)
+			}
 			logPartialResponse(ctx, envCfg)
 			if !ctx.ClientGone {
 				if _, err := w.Write([]byte(BuildStreamErrorEvent(ErrStreamPostCommitStalled))); err == nil {
@@ -973,6 +1021,11 @@ func ProcessStreamEvent(
 	}
 
 	// 提取文本用于估算 token
+	if ctx.ToolCallTracker != nil {
+		if malformed, name := ctx.ToolCallTracker.ProcessClaudeEvent(event); malformed && envCfg.ShouldLog("info") {
+			log.Printf("[Messages-Stream-ToolCall] 检测到畸形工具调用: %s", name)
+		}
+	}
 	ExtractTextFromEvent(event, &ctx.OutputTextBuffer)
 	ctx.ResponseText = ctx.OutputTextBuffer.String()
 

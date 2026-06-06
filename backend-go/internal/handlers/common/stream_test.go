@@ -8,9 +8,60 @@ import (
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 )
+
+type nopFlusher struct{}
+
+func (nopFlusher) Flush() {}
+
+func TestResolveStreamPreflightTimeouts_ToolCallTimeoutIsIndependent(t *testing.T) {
+	upstream := &config.UpstreamConfig{}
+	global := metrics.CircuitBreakerParams{
+		StreamFirstContentTimeoutMs: 30000,
+		StreamInactivityTimeoutMs:   5000,
+		StreamToolCallTimeoutMs:     60000,
+	}
+
+	timeouts := ResolveStreamPreflightTimeouts(upstream, global)
+
+	if timeouts.InactivityTimeoutMs != 5000 {
+		t.Fatalf("InactivityTimeoutMs = %d, want 5000", timeouts.InactivityTimeoutMs)
+	}
+	if timeouts.ToolCallTimeoutMs != 60000 {
+		t.Fatalf("ToolCallTimeoutMs = %d, want 60000", timeouts.ToolCallTimeoutMs)
+	}
+}
+
+func TestResolveStreamPreflightTimeouts_ToolCallChannelOverride(t *testing.T) {
+	upstream := &config.UpstreamConfig{StreamToolCallTimeoutMs: 120000}
+	global := metrics.CircuitBreakerParams{
+		StreamFirstContentTimeoutMs: 30000,
+		StreamInactivityTimeoutMs:   5000,
+		StreamToolCallTimeoutMs:     60000,
+	}
+
+	timeouts := ResolveStreamPreflightTimeouts(upstream, global)
+
+	if timeouts.ToolCallTimeoutMs != 120000 {
+		t.Fatalf("ToolCallTimeoutMs = %d, want 120000", timeouts.ToolCallTimeoutMs)
+	}
+}
+
+func TestProcessStreamEvent_TracksPendingToolCall(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx := NewStreamContext(&config.EnvConfig{})
+	event := "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_test\",\"name\":\"Bash\",\"input\":{}}}\n\n"
+
+	ProcessStreamEvent(c, c.Writer, nopFlusher{}, event, ctx, &config.EnvConfig{}, nil)
+
+	if ctx.ToolCallTracker == nil || !ctx.ToolCallTracker.HasPendingToolCall() {
+		t.Fatalf("expected tool call tracker to mark pending tool call")
+	}
+}
 
 func TestPatchUsageFieldsWithLog_NilInputTokens(t *testing.T) {
 	tests := []struct {
