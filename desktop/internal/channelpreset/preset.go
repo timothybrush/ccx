@@ -11,6 +11,7 @@ const (
 	ProviderDeepSeek    = "deepseek"
 	ProviderMiMo        = "mimo"
 	ProviderCompshare   = "compshare"
+	ProviderRunAPI      = "runapi"
 	ProviderKimi        = "kimi"
 	ProviderGLM         = "glm"
 	ProviderMiniMax     = "minimax"
@@ -113,6 +114,7 @@ var providerConsoleURLs = map[string]string{
 	ProviderDeepSeek:    "https://platform.deepseek.com/usage",
 	ProviderMiMo:        "https://platform.xiaomimimo.com/console/balance",
 	ProviderCompshare:   "https://console.compshare.cn/light-gpu/model-manage",
+	ProviderRunAPI:      "https://runapi.co/register?aff=CqQO",
 	ProviderKimi:        "https://platform.moonshot.cn/console/account",
 	ProviderGLM:         "https://open.bigmodel.cn/coding-plan/personal/overview",
 	ProviderMiniMax:     "https://platform.minimaxi.com/user-center/payment/balance",
@@ -178,6 +180,25 @@ func Presets() []ProviderPreset {
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://cp.compshare.cn", Description: "Claude Messages 原生入口", Recommended: true},
 				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://cp.compshare.cn/v1", Description: "OpenAI Chat / Responses 兼容入口"},
+			},
+			Targets: []ChannelTarget{
+				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
+				{Type: TargetResponses, Label: "Codex Responses", Description: "OpenAI Responses 协议，供 Codex 使用"},
+				{Type: TargetChat, Label: "Chat 渠道透传", Description: "OpenAI Chat 协议，供 Chat 客户端使用"},
+			},
+			DefaultTarget: TargetMessages,
+		},
+		{
+			ID:                  ProviderRunAPI,
+			Label:               "RunAPI",
+			Description:         "RunAPI 是高效稳定的API OpenRouter平替平台，一个 API Key 即可访问 OpenAI、Claude、Gemini、DeepSeek、Grok 等 150+ 主流模型，低至 1 折，极其稳定，可以无缝兼容 Claude Code、OpenClaw 等工具。RunAPI 为 CCX用户提供专属福利：注册联系管理员即可领取￥7的免费额度",
+			DirectAgent:         true,
+			NativeMessages:      true,
+			ChatCompatible:      true,
+			ResponsesCompatible: true,
+			Plans: []ProviderPlan{
+				{ID: "anthropic", Label: "Messages-compatible", BaseURL: "https://runapi.co/v1", Description: "Claude Messages 原生入口", Recommended: true},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://runapi.co/v1", Description: "OpenAI Chat / Responses 兼容入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -515,6 +536,7 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			NoVisionModels:           []string{"deepseek-v4-flash"},
 			VisionFallbackModel:      "MiniMax-M2.7",
 		},
+		ProviderRunAPI: {},
 		ProviderKimi: {
 			ModelMapping: map[string]string{
 				"haiku":  "kimi-k2.6",
@@ -574,6 +596,7 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			NoVisionModels:      []string{"deepseek-v4-flash"},
 			VisionFallbackModel: "MiniMax-M2.7",
 		},
+		ProviderRunAPI:      {},
 		ProviderMiniMax:     {},
 		ProviderDashScope:   {},
 		ProviderOpenCodeZen: {},
@@ -615,6 +638,10 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			NormalizeNonstandardChatRoles: true,
 			NoVisionModels:                []string{"deepseek-v4-flash"},
 			VisionFallbackModel:           "MiniMax-M2.7",
+		},
+		ProviderRunAPI: {
+			CodexToolCompat:       boolRef(false),
+			StripCodexClientTools: boolRef(false),
 		},
 		ProviderMiniMax: {
 			ModelMapping:                  map[string]string{"gpt-5": "MiniMax-M2.7", "codex-auto-review": "MiniMax-M2.7"},
@@ -688,6 +715,11 @@ func applyTargetDefaults(payload *ChannelPayload, provider string, target string
 		payload.ServiceType = "openai"
 		payload.CodexToolCompat = true
 		payload.StripCodexClientTools = true
+		if provider == ProviderRunAPI {
+			payload.ServiceType = "responses"
+			payload.CodexToolCompat = false
+			payload.StripCodexClientTools = false
+		}
 	}
 
 	configs, ok := channelTargetConfigs[target]

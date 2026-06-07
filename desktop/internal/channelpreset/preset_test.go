@@ -18,7 +18,9 @@ func TestBuildPayload(t *testing.T) {
 		wantNativeTool     bool
 		wantModels         []string
 		wantModelMap       map[string]string
+		wantNoModelMap     bool
 		wantReasoning      map[string]string
+		wantNoReasoningMap bool
 		wantFallback       string
 		wantNormalize      bool
 		wantNoVisionModels []string
@@ -147,6 +149,31 @@ func TestBuildPayload(t *testing.T) {
 			},
 			wantNoVisionModels: []string{"deepseek-v4-flash"},
 			wantFallback:       "MiniMax-M2.7",
+		},
+		{
+			name:           "runapi messages",
+			req:            CreateChannelRequest{Provider: ProviderRunAPI, Target: TargetMessages, APIKey: "runapi-test"},
+			wantBaseURL:    "https://runapi.co/v1",
+			wantService:    "claude",
+			wantNoModelMap: true,
+		},
+		{
+			name:           "runapi chat",
+			req:            CreateChannelRequest{Provider: ProviderRunAPI, Target: TargetChat, APIKey: "runapi-test"},
+			wantBaseURL:    "https://runapi.co/v1",
+			wantService:    "openai",
+			wantNormalize:  true,
+			wantNoModelMap: true,
+		},
+		{
+			name:               "runapi responses",
+			req:                CreateChannelRequest{Provider: ProviderRunAPI, Target: TargetResponses, APIKey: "runapi-test"},
+			wantBaseURL:        "https://runapi.co/v1",
+			wantService:        "responses",
+			wantCodex:          false,
+			wantStripCodex:     false,
+			wantNoModelMap:     true,
+			wantNoReasoningMap: true,
 		},
 		{
 			name:          "kimi chat",
@@ -377,10 +404,16 @@ func TestBuildPayload(t *testing.T) {
 					t.Fatalf("ModelMapping[%q] = %q, want %q; all mappings: %#v", source, got.ModelMapping[source], target, got.ModelMapping)
 				}
 			}
+			if tt.wantNoModelMap && len(got.ModelMapping) != 0 {
+				t.Fatalf("ModelMapping = %#v, want empty", got.ModelMapping)
+			}
 			for source, target := range tt.wantReasoning {
 				if got.ReasoningMapping[source] != target {
 					t.Fatalf("ReasoningMapping[%q] = %q, want %q; all mappings: %#v", source, got.ReasoningMapping[source], target, got.ReasoningMapping)
 				}
+			}
+			if tt.wantNoReasoningMap && len(got.ReasoningMapping) != 0 {
+				t.Fatalf("ReasoningMapping = %#v, want empty", got.ReasoningMapping)
 			}
 			if tt.wantNoVisionModels != nil {
 				if !slices.Equal(got.NoVisionModels, tt.wantNoVisionModels) {
@@ -428,6 +461,9 @@ func TestResponsesTargetMustIncludeCodexAutoReview(t *testing.T) {
 		t.Fatal("channelTargetConfigs[TargetResponses] not found")
 	}
 	for provider, config := range responsesConfigs {
+		if len(config.ModelMapping) == 0 {
+			continue
+		}
 		if _, found := config.ModelMapping["codex-auto-review"]; !found {
 			t.Fatalf("provider %q responses config missing codex-auto-review mapping", provider)
 		}
@@ -454,6 +490,9 @@ func TestBestPlanForTarget(t *testing.T) {
 		{ProviderCompshare, TargetMessages, "anthropic"},
 		{ProviderCompshare, TargetChat, "openai-chat"},
 		{ProviderCompshare, TargetResponses, "openai-chat"},
+		{ProviderRunAPI, TargetMessages, "anthropic"},
+		{ProviderRunAPI, TargetChat, "openai-chat"},
+		{ProviderRunAPI, TargetResponses, "openai-chat"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.provider+"/"+tt.target, func(t *testing.T) {
@@ -476,6 +515,16 @@ func TestPresetsIncludesCompshareAtThirdPosition(t *testing.T) {
 	}
 	if presets[2].ID != ProviderCompshare {
 		t.Fatalf("Presets()[2].ID = %q, want %q", presets[2].ID, ProviderCompshare)
+	}
+}
+
+func TestPresetsIncludesRunAPIAfterCompshare(t *testing.T) {
+	presets := Presets()
+	if len(presets) < 4 {
+		t.Fatalf("Presets() length = %d, want at least 4", len(presets))
+	}
+	if presets[3].ID != ProviderRunAPI {
+		t.Fatalf("Presets()[3].ID = %q, want %q", presets[3].ID, ProviderRunAPI)
 	}
 }
 
@@ -508,6 +557,21 @@ func TestBuildPayloadSetsProviderConsoleWebsite(t *testing.T) {
 		t.Fatalf("BuildPayload() error = %v", err)
 	}
 	want := "https://console.compshare.cn/light-gpu/model-manage"
+	if got.Website != want {
+		t.Fatalf("Website = %q, want %q", got.Website, want)
+	}
+}
+
+func TestBuildPayloadSetsRunAPIWebsite(t *testing.T) {
+	got, err := BuildPayload(CreateChannelRequest{
+		Provider: ProviderRunAPI,
+		Target:   TargetResponses,
+		APIKey:   "runapi-test",
+	})
+	if err != nil {
+		t.Fatalf("BuildPayload() error = %v", err)
+	}
+	want := "https://runapi.co/register?aff=CqQO"
 	if got.Website != want {
 		t.Fatalf("Website = %q, want %q", got.Website, want)
 	}

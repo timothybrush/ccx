@@ -126,6 +126,29 @@ func TestGetStatusClaude_CompshareProvider(t *testing.T) {
 	}
 }
 
+func TestGetStatusClaude_RunAPIProvider(t *testing.T) {
+	svc := newTestService(t)
+	settingsPath := filepath.Join(svc.homeDir, ".claude", "settings.json")
+	os.MkdirAll(filepath.Dir(settingsPath), 0o755)
+	data := map[string]any{
+		"env": map[string]any{
+			"ANTHROPIC_BASE_URL": "https://runapi.co/v1",
+		},
+	}
+	writeJSON(settingsPath, data)
+
+	status, err := svc.GetStatus(PlatformClaude, 3688)
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.Provider != ProviderRunAPI {
+		t.Errorf("provider = %q, want %q", status.Provider, ProviderRunAPI)
+	}
+	if !status.Configured {
+		t.Error("should be configured for RunAPI")
+	}
+}
+
 func TestApplyAndRestoreClaude(t *testing.T) {
 	svc := newTestService(t)
 	settingsPath := filepath.Join(svc.homeDir, ".claude", "settings.json")
@@ -185,6 +208,14 @@ func TestSaveAndLoadProviderKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveProviderKeyAsset failed: %v", err)
 	}
+	err = svc.SaveProviderKeyAsset(ProviderKeyAsset{
+		Provider: ProviderRunAPI,
+		APIKey:   "runapi-test-key",
+		BaseURL:  "https://runapi.co/v1",
+	})
+	if err != nil {
+		t.Fatalf("SaveProviderKeyAsset failed: %v", err)
+	}
 
 	keys := svc.GetSavedProviderKeys()
 	if keys["channel:"+ProviderDeepSeek] != "sk-test-key" {
@@ -199,10 +230,17 @@ func TestSaveAndLoadProviderKeys(t *testing.T) {
 	if keys[PlatformClaude+":"+ProviderCompshare] != "cs-test-key" {
 		t.Errorf("compshare claude key = %q", keys[PlatformClaude+":"+ProviderCompshare])
 	}
+	if keys["channel:"+ProviderRunAPI] != "runapi-test-key" {
+		t.Errorf("runapi channel key = %q", keys["channel:"+ProviderRunAPI])
+	}
+	if keys[PlatformClaude+":"+ProviderRunAPI] != "runapi-test-key" {
+		t.Errorf("runapi claude key = %q", keys[PlatformClaude+":"+ProviderRunAPI])
+	}
 
 	assets := svc.GetProviderKeyAssets()
 	foundDeepSeek := false
 	foundCompshare := false
+	foundRunAPI := false
 	for _, a := range assets {
 		switch a.Provider {
 		case ProviderDeepSeek:
@@ -215,6 +253,11 @@ func TestSaveAndLoadProviderKeys(t *testing.T) {
 			if a.APIKey != "cs-test-key" {
 				t.Errorf("compshare asset APIKey = %q", a.APIKey)
 			}
+		case ProviderRunAPI:
+			foundRunAPI = true
+			if a.APIKey != "runapi-test-key" {
+				t.Errorf("runapi asset APIKey = %q", a.APIKey)
+			}
 		}
 	}
 	if !foundDeepSeek {
@@ -222,6 +265,9 @@ func TestSaveAndLoadProviderKeys(t *testing.T) {
 	}
 	if !foundCompshare {
 		t.Error("Compshare asset not found")
+	}
+	if !foundRunAPI {
+		t.Error("RunAPI asset not found")
 	}
 }
 

@@ -8,6 +8,7 @@ import { useChannelPresets } from '@/composables/useChannelPresets'
 import { useLanguage } from '@/composables/useLanguage'
 import { openProviderPromotion, openProviderConsole, providerConsoleLinks, providerPromotionLinks } from '@/lib/external-link'
 import compshareIcon from '@/assets/compshare.png'
+import runapiIcon from '@/assets/runapi.svg'
 import type { ProviderPreset, ProviderPlan, ChannelTarget } from '@/types'
 
 const { t, tf } = useLanguage()
@@ -27,6 +28,7 @@ const {
 
 const providerIcons: Record<string, string> = {
   compshare: compshareIcon,
+  runapi: runapiIcon,
 }
 
 const selectedProvider = ref('')

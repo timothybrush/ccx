@@ -24,6 +24,7 @@ const (
 	ProviderDeepSeek    = "deepseek"
 	ProviderMiMo        = "mimo"
 	ProviderCompshare   = "compshare"
+	ProviderRunAPI      = "runapi"
 	ProviderKimi        = "kimi"
 	ProviderGLM         = "glm"
 	ProviderMiniMax     = "minimax"
@@ -36,6 +37,7 @@ const (
 	deepSeekClaudeBaseURL            = "https://api.deepseek.com/anthropic"
 	defaultMiMoBaseURL               = "https://api.xiaomimimo.com/anthropic"
 	compshareClaudeBaseURL           = "https://cp.compshare.cn"
+	runAPIBaseURL                    = "https://runapi.co/v1"
 	kimiClaudeBaseURL                = "https://api.moonshot.cn/anthropic"
 	glmClaudeBaseURL                 = "https://open.bigmodel.cn/api/anthropic"
 	miniMaxClaudeBaseURL             = "https://api.minimaxi.com/anthropic"
@@ -235,7 +237,7 @@ func (s *Service) GetSavedProviderKeys() map[string]string {
 		planID := asset.PlanID
 		keys["channel:"+provider] = asset.APIKey
 		switch provider {
-		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare:
+		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI:
 			if planID != "" {
 				keys[PlatformClaude+":"+provider+":"+planID] = asset.APIKey
 			}
@@ -294,7 +296,7 @@ func (s *Service) SaveProviderKeyAsset(asset ProviderKeyAsset) error {
 	store.Assets[assetKey] = asset
 	store.Keys["channel:"+provider] = key
 	switch provider {
-	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare:
+	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI:
 		store.Keys[PlatformClaude+":"+provider] = key
 	case ProviderOpenAI:
 		store.Keys[PlatformCodex+":"+provider] = key
@@ -335,7 +337,7 @@ func (s *Service) getClaudeStatus(port int) (AgentConfigStatus, error) {
 	status.CurrentBaseURL = baseURL
 	status.Provider = detectClaudeProvider(baseURL)
 	status.MatchesCurrentPort = baseURL == target
-	status.Configured = status.MatchesCurrentPort || status.Provider == ProviderDeepSeek || status.Provider == ProviderMiMo || status.Provider == ProviderCompshare
+	status.Configured = status.MatchesCurrentPort || status.Provider == ProviderDeepSeek || status.Provider == ProviderMiMo || status.Provider == ProviderCompshare || status.Provider == ProviderRunAPI
 	status.NeedsUpdate = baseURL != "" && isLocalBaseURL(baseURL) && !status.MatchesCurrentPort
 	return status, nil
 }
@@ -682,6 +684,8 @@ func codexResponsesBaseURL(provider string) (string, bool) {
 	switch provider {
 	case ProviderDashScope:
 		return "https://dashscope.aliyuncs.com/compatible-mode/v1", true
+	case ProviderRunAPI:
+		return runAPIBaseURL, true
 	case ProviderOpenCodeZen:
 		return "https://opencode.ai/zen/v1", true
 	case ProviderOpenCodeGo:
@@ -761,6 +765,8 @@ func codexThirdPartyQuickBaseURL(baseURL string) (string, bool) {
 	switch {
 	case strings.Contains(baseURL, "dashscope.aliyuncs.com"):
 		return ProviderDashScope, true
+	case strings.Contains(baseURL, "runapi.co"):
+		return ProviderRunAPI, true
 	case strings.Contains(baseURL, "opencode.ai/zen/go"):
 		return ProviderOpenCodeGo, true
 	case strings.Contains(baseURL, "opencode.ai/zen"):
@@ -903,7 +909,7 @@ func resolveCodexSessionModelProvider(req MigrateCodexSessionsRequest) (string, 
 			return ProviderCCX, nil
 		}
 		return ProviderOpenAI, nil
-	case ProviderDashScope, ProviderOpenCodeZen, ProviderOpenCodeGo:
+	case ProviderDashScope, ProviderRunAPI, ProviderOpenCodeZen, ProviderOpenCodeGo:
 		if mode == "plugin" {
 			return provider, nil
 		}
@@ -1219,6 +1225,8 @@ func normalizeClaudeProvider(provider string) string {
 		return ProviderMiMo
 	case ProviderCompshare:
 		return ProviderCompshare
+	case ProviderRunAPI:
+		return ProviderRunAPI
 	case ProviderKimi:
 		return ProviderKimi
 	case ProviderGLM:
@@ -1244,6 +1252,8 @@ func normalizeCodexProvider(provider string) string {
 		return ProviderCCX
 	case ProviderDashScope:
 		return ProviderDashScope
+	case ProviderRunAPI:
+		return ProviderRunAPI
 	case ProviderOpenCodeZen:
 		return ProviderOpenCodeZen
 	case ProviderOpenCodeGo:
@@ -1254,7 +1264,7 @@ func normalizeCodexProvider(provider string) string {
 }
 
 func isCodexThirdPartyProvider(provider string) bool {
-	return provider == ProviderDashScope || provider == ProviderOpenCodeZen || provider == ProviderOpenCodeGo
+	return provider == ProviderDashScope || provider == ProviderRunAPI || provider == ProviderOpenCodeZen || provider == ProviderOpenCodeGo
 }
 
 func resolveClaudeProvider(req ApplyAgentConfigRequest, port int, accessKey string) (string, string, string, error) {
@@ -1296,6 +1306,16 @@ func resolveClaudeProvider(req ApplyAgentConfigRequest, port int, accessKey stri
 		baseURL := strings.TrimSpace(req.BaseURL)
 		if baseURL == "" {
 			baseURL = compshareClaudeBaseURL
+		}
+		return baseURL, apiKey, "", nil
+	case ProviderRunAPI:
+		apiKey := strings.TrimSpace(req.APIKey)
+		if apiKey == "" {
+			return "", "", "", fmt.Errorf("RunAPI API Key 不能为空")
+		}
+		baseURL := strings.TrimSpace(req.BaseURL)
+		if baseURL == "" {
+			baseURL = runAPIBaseURL
 		}
 		return baseURL, apiKey, "", nil
 	case ProviderKimi:
@@ -1368,6 +1388,8 @@ func detectClaudeProvider(baseURL string) string {
 		return ProviderMiMo
 	case strings.Contains(value, "cp.compshare.cn"):
 		return ProviderCompshare
+	case strings.Contains(value, "runapi.co"):
+		return ProviderRunAPI
 	case strings.Contains(value, "moonshot.cn"):
 		return ProviderKimi
 	case strings.Contains(value, "bigmodel.cn"):
@@ -2278,6 +2300,8 @@ func normalizeOpenCodeProvider(provider string) string {
 		return ProviderMiMo
 	case ProviderCompshare:
 		return ProviderCompshare
+	case ProviderRunAPI:
+		return ProviderRunAPI
 	case ProviderKimi:
 		return ProviderKimi
 	case ProviderGLM:
@@ -2297,7 +2321,7 @@ func normalizeOpenCodeProvider(provider string) string {
 
 func isOpenCodeDirectProvider(provider string) bool {
 	switch provider {
-	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderOpenCodeZen, ProviderOpenCodeGo:
+	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderOpenCodeZen, ProviderOpenCodeGo:
 		return true
 	default:
 		return false
@@ -2312,6 +2336,8 @@ func openCodeDirectBaseURL(provider string) (string, bool) {
 		return "https://api.xiaomimimo.com/v1", true
 	case ProviderCompshare:
 		return "https://cp.compshare.cn/v1", true
+	case ProviderRunAPI:
+		return runAPIBaseURL, true
 	case ProviderKimi:
 		return "https://api.moonshot.cn/v1", true
 	case ProviderGLM:
@@ -2337,6 +2363,8 @@ func openCodeDirectLabel(provider string) string {
 		return "MiMo"
 	case ProviderCompshare:
 		return "Compshare"
+	case ProviderRunAPI:
+		return "RunAPI"
 	case ProviderKimi:
 		return "Kimi"
 	case ProviderGLM:

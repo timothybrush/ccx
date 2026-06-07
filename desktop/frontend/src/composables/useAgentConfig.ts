@@ -24,6 +24,7 @@ const claudeProviderLabels: Record<AgentProvider | 'custom', string> = {
   deepseek: 'DeepSeek',
   mimo: 'MiMo',
   compshare: 'Compshare',
+  runapi: 'RunAPI',
   kimi: 'Kimi',
   glm: 'GLM',
   minimax: 'MiniMax',
@@ -40,6 +41,7 @@ const codexProviderLabels = computed<Record<AgentProvider | 'custom', string>>((
   deepseek: 'DeepSeek',
   mimo: 'MiMo',
   compshare: 'Compshare',
+  runapi: 'RunAPI',
   kimi: 'Kimi',
   glm: 'GLM',
   minimax: 'MiniMax',
@@ -64,6 +66,7 @@ const claudeProviderKeys = ref<Record<AgentProvider, string>>({
   deepseek: '',
   mimo: '',
   compshare: '',
+  runapi: '',
   kimi: '',
   glm: '',
   minimax: '',
@@ -97,12 +100,12 @@ const migrateResult = ref<MigrateCodexSessionsResult | null>(null)
 const migrateError = ref('')
 
 const isClaudeProvider = (value?: string): value is AgentProvider => {
-  return value === 'ccx' || value === 'deepseek' || value === 'mimo' || value === 'compshare' || value === 'kimi' || value === 'glm' || value === 'minimax' || value === 'dashscope' || value === 'opencode-zen' || value === 'opencode-go'
+  return value === 'ccx' || value === 'deepseek' || value === 'mimo' || value === 'compshare' || value === 'runapi' || value === 'kimi' || value === 'glm' || value === 'minimax' || value === 'dashscope' || value === 'opencode-zen' || value === 'opencode-go'
 }
 
 // Codex 支持快捷模式/插件模式切换的第三方 provider
 const isCodexThirdPartyWithMode = (provider?: string) => {
-  return provider === 'dashscope' || provider === 'opencode-zen' || provider === 'opencode-go'
+  return provider === 'dashscope' || provider === 'runapi' || provider === 'opencode-zen' || provider === 'opencode-go'
 }
 
 const claudeProviderLabel = (value?: string) => {
@@ -130,6 +133,8 @@ const claudeTargetBaseUrl = () => {
       return claudeMimoBaseUrl.value || 'https://api.xiaomimimo.com/anthropic'
     case 'compshare':
       return 'https://cp.compshare.cn'
+    case 'runapi':
+      return 'https://runapi.co/v1'
     case 'kimi':
       return 'https://api.moonshot.cn/anthropic'
     case 'glm':
@@ -155,6 +160,8 @@ const codexTargetBaseUrl = () => {
       return 'https://api.openai.com/v1'
     case 'dashscope':
       return 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    case 'runapi':
+      return 'https://runapi.co/v1'
     case 'opencode-zen':
       return 'https://opencode.ai/zen/v1'
     case 'opencode-go':
@@ -176,6 +183,8 @@ const openCodeTargetBaseUrl = () => {
       return 'https://open.bigmodel.cn/api/paas/v4'
     case 'minimax':
       return 'https://api.minimaxi.com/v1'
+    case 'runapi':
+      return 'https://runapi.co/v1'
     case 'opencode-zen':
       return 'https://opencode.ai/zen/v1'
     case 'opencode-go':
@@ -246,7 +255,7 @@ const loadAgentStatuses = async () => {
       selectedCodexProvider.value = 'ccx'
     }
     // 恢复所有支持 mode 切换的 provider 的 mode 状态
-    if (codex.provider === 'ccx' || codex.provider === 'dashscope' || codex.provider === 'opencode-zen' || codex.provider === 'opencode-go') {
+    if (codex.provider === 'ccx' || codex.provider === 'dashscope' || codex.provider === 'runapi' || codex.provider === 'opencode-zen' || codex.provider === 'opencode-go') {
       codexMode.value = codex.mode === 'plugin' ? 'plugin' : 'quick'
     }
     if (opencode.provider && opencode.provider !== 'ccx' && opencode.provider !== '') {

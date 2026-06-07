@@ -88,6 +88,7 @@ const keyPlaceholder = (provider: AgentProvider) => {
         <option value="deepseek">{{ t('agent.provider.deepseekDirect') }}</option>
         <option value="mimo">{{ t('agent.provider.mimoDirect') }}</option>
         <option value="compshare">{{ t('agent.provider.compshareDirect') }}</option>
+        <option value="runapi">{{ t('agent.provider.runapiDirect') }}</option>
         <option value="kimi">{{ t('agent.provider.kimiDirect') }}</option>
         <option value="glm">{{ t('agent.provider.glmDirect') }}</option>
         <option value="minimax">{{ t('agent.provider.minimaxDirect') }}</option>

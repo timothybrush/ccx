@@ -103,6 +103,8 @@ export type MessageKey =
   | 'channel.preset.mimo.description'
   | 'channel.preset.compshare.label'
   | 'channel.preset.compshare.description'
+  | 'channel.preset.runapi.label'
+  | 'channel.preset.runapi.description'
   | 'channel.preset.kimi.label'
   | 'channel.preset.kimi.description'
   | 'channel.preset.glm.label'
@@ -142,6 +144,11 @@ export type MessageKey =
   | 'channel.preset.compshare.plan.anthropic.description'
   | 'channel.preset.compshare.plan.openai-chat.label'
   | 'channel.preset.compshare.plan.openai-chat.description'
+  // RunAPI plans
+  | 'channel.preset.runapi.plan.anthropic.label'
+  | 'channel.preset.runapi.plan.anthropic.description'
+  | 'channel.preset.runapi.plan.openai-chat.label'
+  | 'channel.preset.runapi.plan.openai-chat.description'
   // Kimi plans
   | 'channel.preset.kimi.plan.anthropic.label'
   | 'channel.preset.kimi.plan.anthropic.description'
@@ -261,6 +268,7 @@ export type MessageKey =
   | 'agent.provider.deepseekDirect'
   | 'agent.provider.mimoDirect'
   | 'agent.provider.compshareDirect'
+  | 'agent.provider.runapiDirect'
   | 'agent.provider.kimiDirect'
   | 'agent.provider.glmDirect'
   | 'agent.provider.minimaxDirect'
@@ -686,7 +694,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.title': 'Channel Center',
     'channel.description': 'Use DeepSeek, MiMo, Kimi, GLM, and MiniMax keys for both direct Agent routing and the unified CCX channel pool. Provider presets handle advanced switches automatically.',
     'channel.hasKey': 'Key saved',
-    'channel.promo': 'Register via promotion link to claim a ¥5 trial credit',
+    'channel.promo': 'Register via promotion link to claim the exclusive perk',
     'channel.console': 'Open official console',
     'channel.target': 'Target',
     'channel.keySavedPlaceholder': 'Saved locally; leave empty to reuse this Provider Key',
@@ -707,6 +715,8 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.preset.mimo.description': 'Messages native passthrough, Codex Responses, and Chat passthrough; includes pay-as-you-go and Token Plan endpoints.',
     'channel.preset.compshare.label': 'Compshare Plans',
     'channel.preset.compshare.description': 'Standalone plan BaseURL and API Key, compatible with Anthropic Messages, OpenAI Chat, and Codex Responses.',
+    'channel.preset.runapi.label': 'RunAPI',
+    'channel.preset.runapi.description': "RunAPI is an efficient and stable API platform—an alternative to OpenRouter. A single API Key gives you access to 150+ leading models, including OpenAI, Claude, Gemini, DeepSeek, Grok, and more, at prices as low as 10% of the original (up to 90% off), with exceptional stability. It's seamlessly compatible with tools like Claude Code, OpenClaw, and others. RunAPI offers an exclusive perk for CCX users: register and contact an administrator to claim ¥7 in free credit.",
     'channel.preset.kimi.label': 'Kimi / Moonshot',
     'channel.preset.kimi.description': 'Messages native passthrough, Codex Responses, and Chat passthrough — three protocol support.',
     'channel.preset.glm.label': 'GLM / BigModel',
@@ -746,6 +756,11 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.preset.compshare.plan.anthropic.description': 'Claude Messages native endpoint',
     'channel.preset.compshare.plan.openai-chat.label': 'OpenAI-compatible',
     'channel.preset.compshare.plan.openai-chat.description': 'OpenAI Chat / Responses compatible endpoint',
+    // RunAPI plans
+    'channel.preset.runapi.plan.anthropic.label': 'Messages-compatible',
+    'channel.preset.runapi.plan.anthropic.description': 'Claude Messages native endpoint',
+    'channel.preset.runapi.plan.openai-chat.label': 'OpenAI-compatible',
+    'channel.preset.runapi.plan.openai-chat.description': 'OpenAI Chat / Responses compatible endpoint',
     // Kimi plans
     'channel.preset.kimi.plan.anthropic.label': 'Anthropic-compatible',
     'channel.preset.kimi.plan.anthropic.description': 'Claude Messages native endpoint',
@@ -865,6 +880,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.deepseekDirect': 'DeepSeek direct',
     'agent.provider.mimoDirect': 'MiMo direct',
     'agent.provider.compshareDirect': 'Compshare direct',
+    'agent.provider.runapiDirect': 'RunAPI direct',
     'agent.provider.kimiDirect': 'Kimi direct',
     'agent.provider.glmDirect': 'GLM direct',
     'agent.provider.minimaxDirect': 'MiniMax direct',
@@ -873,7 +889,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.opencodeGoDirect': 'OpenCode Go direct',
     'agent.provider.openaiDirect': 'OpenAI direct',
     'agent.hasOwnApiKey': 'I have my own API key',
-    'agent.promo': 'Register via promotion link to claim a ¥5 trial credit',
+    'agent.promo': 'Register via promotion link to claim the exclusive perk',
     'agent.planPayAsYouGo': 'Pay-as-you-go',
     'agent.planChina': 'Subscription - China',
     'agent.planSingapore': 'Subscription - Singapore',
@@ -1287,7 +1303,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.title': '渠道中心',
     'channel.description': '统一把 DeepSeek、MiMo、Kimi、GLM、MiniMax Key 可同时用于 Agent 直连和 CCX 统一渠道池，复杂开关由预设自动处理。',
     'channel.hasKey': '已有 Key',
-    'channel.promo': '通过推广链接注册，领取 5 元平台试用金',
+    'channel.promo': '通过推广链接注册领取专属福利',
     'channel.console': '访问官方控制台',
     'channel.target': '添加目标',
     'channel.keySavedPlaceholder': '已保存，留空则复用该 Provider Key',
@@ -1308,6 +1324,8 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.preset.mimo.description': 'Messages 原生透传、Codex Responses、Chat 渠道透传；内置按量与 token plan 入口。',
     'channel.preset.compshare.label': '优云智算套餐',
     'channel.preset.compshare.description': '独立套餐 BaseURL 与 API Key，兼容 Anthropic Messages、OpenAI Chat 与 Codex Responses。',
+    'channel.preset.runapi.label': 'RunAPI',
+    'channel.preset.runapi.description': 'RunAPI 是高效稳定的API OpenRouter平替平台，一个 API Key 即可访问 OpenAI、Claude、Gemini、DeepSeek、Grok 等 150+ 主流模型，低至 1 折，极其稳定，可以无缝兼容 Claude Code、OpenClaw 等工具。RunAPI 为 CCX用户提供专属福利：注册联系管理员即可领取￥7的免费额度',
     'channel.preset.kimi.label': 'Kimi / Moonshot',
     'channel.preset.kimi.description': 'Messages 原生透传、Codex Responses、Chat 渠道透传三种用法。',
     'channel.preset.glm.label': 'GLM / BigModel',
@@ -1347,6 +1365,11 @@ export const messages: Record<SupportedLocale, Messages> = {
     'channel.preset.compshare.plan.anthropic.description': 'Claude Messages 原生入口',
     'channel.preset.compshare.plan.openai-chat.label': 'OpenAI-compatible',
     'channel.preset.compshare.plan.openai-chat.description': 'OpenAI Chat / Responses 兼容入口',
+    // RunAPI plans
+    'channel.preset.runapi.plan.anthropic.label': 'Messages-compatible',
+    'channel.preset.runapi.plan.anthropic.description': 'Claude Messages 原生入口',
+    'channel.preset.runapi.plan.openai-chat.label': 'OpenAI-compatible',
+    'channel.preset.runapi.plan.openai-chat.description': 'OpenAI Chat / Responses 兼容入口',
     // Kimi plans
     'channel.preset.kimi.plan.anthropic.label': 'Anthropic-compatible',
     'channel.preset.kimi.plan.anthropic.description': 'Claude Messages 原生入口',
@@ -1466,6 +1489,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.deepseekDirect': 'DeepSeek 直连',
     'agent.provider.mimoDirect': 'MiMo 直连',
     'agent.provider.compshareDirect': 'Compshare 直连',
+    'agent.provider.runapiDirect': 'RunAPI 直连',
     'agent.provider.kimiDirect': 'Kimi 直连',
     'agent.provider.glmDirect': 'GLM 直连',
     'agent.provider.minimaxDirect': 'MiniMax 直连',
@@ -1474,7 +1498,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'agent.provider.opencodeGoDirect': 'OpenCode Go 直连',
     'agent.provider.openaiDirect': 'OpenAI 直连',
     'agent.hasOwnApiKey': '我有自己的 API Key',
-    'agent.promo': '通过推广链接注册，领取 5 元平台试用金',
+    'agent.promo': '通过推广链接注册领取专属福利',
     'agent.planPayAsYouGo': '按量',
     'agent.planChina': '订阅套餐 - 中国',
     'agent.planSingapore': '订阅套餐 - 新加坡',

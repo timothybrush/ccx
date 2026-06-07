@@ -91,7 +91,7 @@ const codexKeyPlaceholder = computed(() => {
 // 支持快捷模式/插件模式切换的 provider 列表
 const codexHasMode = computed(() => {
   const p = props.selectedCodexProvider
-  return p === 'ccx' || p === 'dashscope' || p === 'opencode-zen' || p === 'opencode-go'
+  return p === 'ccx' || p === 'dashscope' || p === 'runapi' || p === 'opencode-zen' || p === 'opencode-go'
 })
 
 const { t } = useLanguage()
@@ -229,6 +229,7 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             <option value="ccx">{{ t('agent.provider.localGateway') }}</option>
             <option value="openai">{{ t('agent.provider.openaiDirect') }}</option>
             <option value="dashscope">{{ t('agent.provider.dashscopeDirect') }}</option>
+            <option value="runapi">{{ t('agent.provider.runapiDirect') }}</option>
             <option value="opencode-zen">{{ t('agent.provider.opencodeZenDirect') }}</option>
             <option value="opencode-go">{{ t('agent.provider.opencodeGoDirect') }}</option>
           </select>
@@ -308,6 +309,7 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             <option value="kimi">{{ t('agent.provider.kimiDirect') }}</option>
             <option value="glm">{{ t('agent.provider.glmDirect') }}</option>
             <option value="minimax">{{ t('agent.provider.minimaxDirect') }}</option>
+            <option value="runapi">{{ t('agent.provider.runapiDirect') }}</option>
             <option value="opencode-zen">{{ t('agent.provider.opencodeZenDirect') }}</option>
             <option value="opencode-go">{{ t('agent.provider.opencodeGoDirect') }}</option>
           </select>

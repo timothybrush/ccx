@@ -4,6 +4,7 @@ export const providerConsoleLinks: Record<string, string> = {
   deepseek: 'https://platform.deepseek.com/usage',
   mimo: 'https://platform.xiaomimimo.com/console/balance',
   compshare: 'https://console.compshare.cn/light-gpu/model-manage',
+  runapi: 'https://runapi.co/register?aff=CqQO',
   kimi: 'https://platform.moonshot.cn/console/account',
   glm: 'https://open.bigmodel.cn/coding-plan/personal/overview',
   minimax: 'https://platform.minimaxi.com/user-center/payment/balance',
@@ -15,6 +16,7 @@ export const providerConsoleLinks: Record<string, string> = {
 
 export const providerPromotionLinks: Record<string, string> = {
   compshare: 'https://www.compshare.cn/?ytag=GPU_YY_git_ccx',
+  runapi: 'https://runapi.co/register?aff=CqQO',
 }
 
 export function openExternalLink(url: string) {

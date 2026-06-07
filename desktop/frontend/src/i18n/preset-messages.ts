@@ -61,6 +61,14 @@ export const presetMessages: Record<SupportedLocale, Record<string, string>> = {
     'channel.preset.compshare.plan.openai-chat.description':
       'OpenAI Chat / Responses-compatible endpoint',
 
+    // RunAPI
+    'channel.preset.runapi.label': 'RunAPI',
+    'channel.preset.runapi.description':
+      "RunAPI is an efficient and stable API platform—an alternative to OpenRouter. A single API Key gives you access to 150+ leading models, including OpenAI, Claude, Gemini, DeepSeek, Grok, and more, at prices as low as 10% of the original (up to 90% off), with exceptional stability. It's seamlessly compatible with tools like Claude Code, OpenClaw, and others. RunAPI offers an exclusive perk for CCX users: register and contact an administrator to claim ¥7 in free credit.",
+    'channel.preset.runapi.plan.anthropic.description': 'Claude Messages native endpoint',
+    'channel.preset.runapi.plan.openai-chat.description':
+      'OpenAI Chat / Responses-compatible endpoint',
+
     // Kimi
     'channel.preset.kimi.description':
       'Messages native passthrough, Codex Responses, and Chat passthrough — three usage modes.',
