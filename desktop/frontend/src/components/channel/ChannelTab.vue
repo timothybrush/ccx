@@ -54,6 +54,8 @@ const presetOrder = [
   'glm',
   'minimax',
   'dashscope',
+  'dashscope',
+  'tencent-lkeap',
   'opencode-zen',
   'opencode-go',
 ]
@@ -236,7 +238,7 @@ const submit = async () => {
           v-for="preset in orderedPresets"
           :key="preset.id"
           :class="[
-            'w-full h-[88px] p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden',
+            'w-full p-3 rounded-xl border text-left transition-colors duration-200',
             selectedProvider === preset.id
               ? 'border-border bg-secondary/60 dark:border-white/10 dark:bg-white/[0.04]'
               : 'border-border bg-card/40 hover:bg-card/70 dark:hover:bg-white/[0.03]'
@@ -248,7 +250,10 @@ const submit = async () => {
               v-if="providerIcons[preset.id]"
               :src="providerIcons[preset.id]"
               :alt="`${preset.label} icon`"
-              class="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-secondary object-cover ring-1 ring-border"
+              :class="[
+                'mt-0.5 shrink-0 bg-secondary object-cover ring-1 ring-border',
+                preset.id === 'runapi' ? 'h-9 w-9 rounded-xl' : 'h-8 w-8 rounded-lg',
+              ]"
             >
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
@@ -257,7 +262,7 @@ const submit = async () => {
                   {{ t('channel.hasKey') }}
                 </span>
               </div>
-              <p class="text-xs text-muted-foreground mt-1 line-clamp-2">{{ localizePresetDescription(preset) }}</p>
+              <p class="text-xs text-muted-foreground mt-1 truncate">{{ localizePresetDescription(preset) }}</p>
             </div>
           </div>
         </button>

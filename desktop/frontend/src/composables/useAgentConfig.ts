@@ -25,6 +25,7 @@ const claudeProviderLabels: Record<AgentProvider | 'custom', string> = {
   mimo: 'MiMo',
   compshare: 'Compshare',
   runapi: 'RunAPI',
+  'tencent-lkeap': '腾讯云 TokenHub',
   kimi: 'Kimi',
   glm: 'GLM',
   minimax: 'MiniMax',
@@ -42,6 +43,7 @@ const codexProviderLabels = computed<Record<AgentProvider | 'custom', string>>((
   mimo: 'MiMo',
   compshare: 'Compshare',
   runapi: 'RunAPI',
+  'tencent-lkeap': '腾讯云 TokenHub',
   kimi: 'Kimi',
   glm: 'GLM',
   minimax: 'MiniMax',
@@ -67,6 +69,7 @@ const claudeProviderKeys = ref<Record<AgentProvider, string>>({
   mimo: '',
   compshare: '',
   runapi: '',
+  'tencent-lkeap': '',
   kimi: '',
   glm: '',
   minimax: '',
@@ -100,7 +103,7 @@ const migrateResult = ref<MigrateCodexSessionsResult | null>(null)
 const migrateError = ref('')
 
 const isClaudeProvider = (value?: string): value is AgentProvider => {
-  return value === 'ccx' || value === 'deepseek' || value === 'mimo' || value === 'compshare' || value === 'runapi' || value === 'kimi' || value === 'glm' || value === 'minimax' || value === 'dashscope' || value === 'opencode-zen' || value === 'opencode-go'
+  return value === 'ccx' || value === 'deepseek' || value === 'mimo' || value === 'compshare' || value === 'runapi' || value === 'tencent-lkeap' || value === 'kimi' || value === 'glm' || value === 'minimax' || value === 'dashscope' || value === 'opencode-zen' || value === 'opencode-go'
 }
 
 // Codex 支持快捷模式/插件模式切换的第三方 provider

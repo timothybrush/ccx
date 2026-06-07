@@ -5,6 +5,7 @@ export const providerConsoleLinks: Record<string, string> = {
   mimo: 'https://platform.xiaomimimo.com/console/balance',
   compshare: 'https://console.compshare.cn/light-gpu/model-manage',
   runapi: 'https://runapi.co/console',
+  'tencent-lkeap': 'https://console.cloud.tencent.com/lkeap/token-plan',
   kimi: 'https://platform.moonshot.cn/console/account',
   glm: 'https://open.bigmodel.cn/coding-plan/personal/overview',
   minimax: 'https://platform.minimaxi.com/user-center/payment/balance',

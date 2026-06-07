@@ -16,6 +16,7 @@ const (
 	ProviderGLM         = "glm"
 	ProviderMiniMax     = "minimax"
 	ProviderDashScope   = "dashscope"
+	ProviderTencentLkeap  = "tencent-lkeap"
 	ProviderOpenCodeZen = "opencode-zen"
 	ProviderOpenCodeGo  = "opencode-go"
 
@@ -120,6 +121,7 @@ var providerConsoleURLs = map[string]string{
 	ProviderGLM:         "https://open.bigmodel.cn/coding-plan/personal/overview",
 	ProviderMiniMax:     "https://platform.minimaxi.com/user-center/payment/balance",
 	ProviderDashScope:   "https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key",
+	ProviderTencentLkeap: "https://console.cloud.tencent.com/lkeap/token-plan",
 	ProviderOpenCodeZen: "https://opencode.ai/",
 	ProviderOpenCodeGo:  "https://opencode.ai/",
 }
@@ -156,14 +158,14 @@ func Presets() []ProviderPreset {
 			ChatCompatible:      true,
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
-				{ID: "anthropic", Label: "按量 - Anthropic 入口", BaseURL: "https://api.xiaomimimo.com/anthropic", Description: "Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "按量 - OpenAI 入口", BaseURL: "https://api.xiaomimimo.com/v1", Description: "Chat / Responses 通用入口"},
-				{ID: "token-cn", Label: "Token Plan - 中国", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Description: "中国区订阅套餐"},
-				{ID: "token-sgp", Label: "Token Plan - 新加坡", BaseURL: "https://token-plan-sgp.xiaomimimo.com/v1", Description: "新加坡区订阅套餐"},
-				{ID: "token-ams", Label: "Token Plan - 欧洲", BaseURL: "https://token-plan-ams.xiaomimimo.com/v1", Description: "欧洲区订阅套餐"},
-				{ID: "token-cn-anthropic", Label: "Token Plan - 中国 (Anthropic)", BaseURL: "https://token-plan-cn.xiaomimimo.com/anthropic", Description: "中国区订阅套餐 Anthropic 入口"},
-				{ID: "token-sgp-anthropic", Label: "Token Plan - 新加坡 (Anthropic)", BaseURL: "https://token-plan-sgp.xiaomimimo.com/anthropic", Description: "新加坡区订阅套餐 Anthropic 入口"},
-				{ID: "token-ams-anthropic", Label: "Token Plan - 欧洲 (Anthropic)", BaseURL: "https://token-plan-ams.xiaomimimo.com/anthropic", Description: "欧洲区订阅套餐 Anthropic 入口"},
+				{ID: "anthropic", Label: "按量 (Anthropic)", BaseURL: "https://api.xiaomimimo.com/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
+				{ID: "openai-chat", Label: "按量 (OpenAI)", BaseURL: "https://api.xiaomimimo.com/v1", Description: "Chat / Responses 通用入口"},
+				{ID: "token-cn", Label: "Token Plan - 中国 (OpenAI)", BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", Description: "中国区 Token Plan Chat / Responses 通用入口"},
+				{ID: "token-sgp", Label: "Token Plan - 新加坡 (OpenAI)", BaseURL: "https://token-plan-sgp.xiaomimimo.com/v1", Description: "新加坡区 Token Plan Chat / Responses 通用入口"},
+				{ID: "token-ams", Label: "Token Plan - 欧洲 (OpenAI)", BaseURL: "https://token-plan-ams.xiaomimimo.com/v1", Description: "欧洲区 Token Plan Chat / Responses 通用入口"},
+				{ID: "token-cn-anthropic", Label: "Token Plan - 中国 (Anthropic)", BaseURL: "https://token-plan-cn.xiaomimimo.com/anthropic", Description: "中国区 Token Plan Claude Messages 原生入口"},
+				{ID: "token-sgp-anthropic", Label: "Token Plan - 新加坡 (Anthropic)", BaseURL: "https://token-plan-sgp.xiaomimimo.com/anthropic", Description: "新加坡区 Token Plan Claude Messages 原生入口"},
+				{ID: "token-ams-anthropic", Label: "Token Plan - 欧洲 (Anthropic)", BaseURL: "https://token-plan-ams.xiaomimimo.com/anthropic", Description: "欧洲区 Token Plan Claude Messages 原生入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -183,7 +185,7 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://cp.compshare.cn", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://cp.compshare.cn/v1", Description: "OpenAI Chat / Responses 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://cp.compshare.cn/v1", Description: "Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -203,7 +205,7 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://runapi.co/v1", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://runapi.co/v1", Description: "OpenAI 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://runapi.co/v1", Description: "OpenAI Chat 兼容入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -223,7 +225,7 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://api.moonshot.cn/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://api.moonshot.cn/v1", Description: "Moonshot OpenAI 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://api.moonshot.cn/v1", Description: "Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -243,8 +245,8 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://open.bigmodel.cn/api/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "coding", Label: "OpenAI-compatible (Coding)", BaseURL: "https://open.bigmodel.cn/api/coding/paas/v4#", Description: "智谱 Coding 套餐入口"},
-				{ID: "openai-chat", Label: "OpenAI-compatible (通用)", BaseURL: "https://open.bigmodel.cn/api/paas/v4#", Description: "智谱通用 OpenAI 兼容入口"},
+				{ID: "coding", Label: "Coding Plan (OpenAI)", BaseURL: "https://open.bigmodel.cn/api/coding/paas/v4#", Description: "Coding Plan Chat / Responses 通用入口"},
+				{ID: "openai-chat", Label: "通用 (OpenAI)", BaseURL: "https://open.bigmodel.cn/api/paas/v4#", Description: "通用 Chat / Responses 入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -264,7 +266,7 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://api.minimaxi.com/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://api.minimax.chat/v1", Description: "MiniMax OpenAI 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://api.minimax.chat/v1", Description: "Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -283,12 +285,12 @@ func Presets() []ProviderPreset {
 			ChatCompatible:      true,
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
-				{ID: "anthropic", Label: "按量 - Anthropic 入口", BaseURL: "https://dashscope.aliyuncs.com/apps/anthropic", Description: "Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "按量 - OpenAI 入口", BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", Description: "Chat / Responses 通用入口"},
-				{ID: "coding-anthropic", Label: "Coding Plan (Anthropic)", BaseURL: "https://coding.dashscope.aliyuncs.com/apps/anthropic", Description: "订阅套餐 Messages 入口"},
-				{ID: "coding-openai-chat", Label: "Coding Plan (OpenAI)", BaseURL: "https://coding.dashscope.aliyuncs.com/v1", Description: "订阅套餐 OpenAI 兼容入口"},
-				{ID: "token-plan-anthropic", Label: "Token Plan (Anthropic)", BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic", Description: "Token Plan Messages 入口"},
-				{ID: "token-plan-openai-chat", Label: "Token Plan (OpenAI)", BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", Description: "Token Plan OpenAI 兼容入口"},
+				{ID: "anthropic", Label: "按量 (Anthropic)", BaseURL: "https://dashscope.aliyuncs.com/apps/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
+				{ID: "openai-chat", Label: "按量 (OpenAI)", BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", Description: "Chat / Responses 通用入口"},
+				{ID: "coding-anthropic", Label: "Coding Plan (Anthropic)", BaseURL: "https://coding.dashscope.aliyuncs.com/apps/anthropic", Description: "Coding Plan Claude Messages 原生入口"},
+				{ID: "coding-openai-chat", Label: "Coding Plan (OpenAI)", BaseURL: "https://coding.dashscope.aliyuncs.com/v1", Description: "Coding Plan Chat / Responses 通用入口"},
+				{ID: "token-plan-anthropic", Label: "Token Plan (Anthropic)", BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic", Description: "Token Plan Claude Messages 原生入口"},
+				{ID: "token-plan-openai-chat", Label: "Token Plan (OpenAI)", BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", Description: "Token Plan Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -308,7 +310,7 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://opencode.ai/zen/v1/messages", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://opencode.ai/zen/v1", Description: "OpenCode Zen OpenAI 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://opencode.ai/zen/v1", Description: "Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
@@ -328,7 +330,27 @@ func Presets() []ProviderPreset {
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
 				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://opencode.ai/zen/go/v1/messages", Description: "Claude Messages 原生入口", Recommended: true},
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://opencode.ai/zen/go/v1", Description: "OpenCode Go OpenAI 兼容入口"},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://opencode.ai/zen/go/v1", Description: "Chat / Responses 通用入口"},
+			},
+			Targets: []ChannelTarget{
+				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
+				{Type: TargetResponses, Label: "Codex Responses", Description: "OpenAI Responses 协议，供 Codex 使用"},
+				{Type: TargetChat, Label: "Chat 渠道透传", Description: "OpenAI Chat 协议，供 Chat 客户端使用"},
+			},
+			DefaultTarget: TargetMessages,
+		},
+		{
+			ID:                  ProviderTencentLkeap,
+			Order:               85,
+			Label:               "腾讯云 TokenHub",
+			Description:         "腾讯云大模型 TokenHub Token Plan 覆盖腾讯混元与国产主流模型，原生支持 Anthropic/OpenAI 双协议，适配 Claude Code、Codex、OpenCode、Cursor、Cline 等主流工具。",
+			DirectAgent:         false,
+			NativeMessages:      true,
+			ChatCompatible:      true,
+			ResponsesCompatible: true,
+			Plans: []ProviderPlan{
+				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://api.lkeap.cloud.tencent.com/plan/anthropic", Description: "Claude Messages 原生入口", Recommended: true},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://api.lkeap.cloud.tencent.com/plan/v3", Description: "Chat / Responses 通用入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
