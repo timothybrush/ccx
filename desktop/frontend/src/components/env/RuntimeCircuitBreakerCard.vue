@@ -23,15 +23,15 @@ const form = reactive({
   failureThreshold: 0.5,
   consecutiveFailuresThreshold: 3,
   streamFirstContentTimeoutMs: 30000,
-  streamInactivityTimeoutMs: 5000,
-  streamToolCallIdleTimeoutMs: 3000,
+  streamInactivityTimeoutMs: 20000,
+  streamToolCallIdleTimeoutMs: 30000,
 })
 
 const presets = [
-  { key: 'gentle', labelKey: 'env.runtimeCbPresetGentle' as const, windowSize: 20, failureThreshold: 0.70, consecutiveFailuresThreshold: 5, streamFirstContentTimeoutMs: 60000, streamInactivityTimeoutMs: 10000, streamToolCallIdleTimeoutMs: 5000 },
-  { key: 'balanced', labelKey: 'env.runtimeCbPresetBalanced' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 5000, streamToolCallIdleTimeoutMs: 3000 },
-  { key: 'aggressive', labelKey: 'env.runtimeCbPresetAggressive' as const, windowSize: 5, failureThreshold: 0.30, consecutiveFailuresThreshold: 2, streamFirstContentTimeoutMs: 10000, streamInactivityTimeoutMs: 3000, streamToolCallIdleTimeoutMs: 2000 },
-  { key: 'custom', labelKey: 'env.runtimeCbPresetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 5000, streamToolCallIdleTimeoutMs: 3000 },
+  { key: 'gentle', labelKey: 'env.runtimeCbPresetGentle' as const, windowSize: 20, failureThreshold: 0.70, consecutiveFailuresThreshold: 5, streamFirstContentTimeoutMs: 60000, streamInactivityTimeoutMs: 45000, streamToolCallIdleTimeoutMs: 45000 },
+  { key: 'balanced', labelKey: 'env.runtimeCbPresetBalanced' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 20000, streamToolCallIdleTimeoutMs: 30000 },
+  { key: 'aggressive', labelKey: 'env.runtimeCbPresetAggressive' as const, windowSize: 5, failureThreshold: 0.30, consecutiveFailuresThreshold: 2, streamFirstContentTimeoutMs: 15000, streamInactivityTimeoutMs: 10000, streamToolCallIdleTimeoutMs: 15000 },
+  { key: 'custom', labelKey: 'env.runtimeCbPresetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 20000, streamToolCallIdleTimeoutMs: 30000 },
 ]
 
 const matchPreset = () => {
@@ -115,8 +115,8 @@ const fetchConfig = async () => {
     form.failureThreshold = data.failureThreshold ?? 0.5
     form.consecutiveFailuresThreshold = data.consecutiveFailuresThreshold ?? 3
     form.streamFirstContentTimeoutMs = data.streamFirstContentTimeoutMs && data.streamFirstContentTimeoutMs >= 5000 ? data.streamFirstContentTimeoutMs : 30000
-    form.streamInactivityTimeoutMs = data.streamInactivityTimeoutMs && data.streamInactivityTimeoutMs >= 1000 ? data.streamInactivityTimeoutMs : 5000
-    form.streamToolCallIdleTimeoutMs = data.streamToolCallIdleTimeoutMs && data.streamToolCallIdleTimeoutMs >= 1000 ? data.streamToolCallIdleTimeoutMs : 3000
+    form.streamInactivityTimeoutMs = data.streamInactivityTimeoutMs && data.streamInactivityTimeoutMs >= 1000 ? data.streamInactivityTimeoutMs : 20000
+    form.streamToolCallIdleTimeoutMs = data.streamToolCallIdleTimeoutMs && data.streamToolCallIdleTimeoutMs >= 1000 ? data.streamToolCallIdleTimeoutMs : 30000
     matchPreset()
   } catch (e) {
     showMessage(t('env.runtimeCbLoadFailed', { error: e instanceof Error ? e.message : String(e) }), 'error')

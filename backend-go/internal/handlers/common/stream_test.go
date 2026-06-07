@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -432,6 +433,25 @@ func TestPreflightStreamEvents_ToolUseNotEmpty(t *testing.T) {
 	result := PreflightStreamEvents(eventChan, errChan, StreamPreflightTimeouts{})
 	if result.IsEmpty {
 		t.Errorf("tool_use response should NOT be detected as empty, got IsEmpty=true (buffered %d events)", len(result.BufferedEvents))
+	}
+}
+
+func TestStreamPreflightEmptyErrorIncludesDiagnostic(t *testing.T) {
+	err := streamPreflightEmptyError(&StreamPreflightResult{
+		Diagnostic: "malformed tool call: Write",
+	})
+
+	if !errors.Is(err, ErrEmptyStreamResponse) {
+		t.Fatalf("expected error to wrap ErrEmptyStreamResponse, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "malformed tool call: Write") {
+		t.Fatalf("expected diagnostic in error, got %q", err.Error())
+	}
+}
+
+func TestStreamPreflightEmptyErrorWithoutDiagnosticReturnsSentinel(t *testing.T) {
+	if err := streamPreflightEmptyError(&StreamPreflightResult{}); err != ErrEmptyStreamResponse {
+		t.Fatalf("expected sentinel error, got %v", err)
 	}
 }
 

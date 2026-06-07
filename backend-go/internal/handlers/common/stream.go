@@ -36,6 +36,13 @@ var ErrStreamStalled = errors.New("stream stalled after first content")
 // Header 已发送，不能安全拼接 failover；用于中止当前流并记录渠道故障
 var ErrStreamPostCommitStalled = errors.New("stream stalled after response committed")
 
+func streamPreflightEmptyError(preflight *StreamPreflightResult) error {
+	if preflight == nil || strings.TrimSpace(preflight.Diagnostic) == "" {
+		return ErrEmptyStreamResponse
+	}
+	return fmt.Errorf("%w: %s", ErrEmptyStreamResponse, preflight.Diagnostic)
+}
+
 // StreamPreflightTimeouts 流式预检测超时参数
 type StreamPreflightTimeouts struct {
 	FirstContentTimeoutMs int // 阶段A：首个有效内容等待超时（ms，范围 5000-300000）
@@ -1530,7 +1537,7 @@ func HandleStreamResponse(
 		if preflight.BlacklistReason != "" {
 			return nil, &ErrBlacklistKey{Reason: preflight.BlacklistReason, Message: preflight.BlacklistMessage}
 		}
-		return nil, ErrEmptyStreamResponse
+		return nil, streamPreflightEmptyError(preflight)
 	}
 
 	// 流中有拉黑错误但内容非空（如错误前有部分输出）：仍返回拉黑错误以触发 Key 拉黑

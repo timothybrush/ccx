@@ -127,9 +127,9 @@ const form = reactive({
   streamFirstContentTimeoutEnabled: false,
   streamFirstContentTimeoutMs: 30000,
   streamInactivityTimeoutEnabled: false,
-  streamInactivityTimeoutMs: 5000,
+  streamInactivityTimeoutMs: 20000,
   streamToolCallIdleTimeoutEnabled: false,
-  streamToolCallIdleTimeoutMs: 3000,
+  streamToolCallIdleTimeoutMs: 30000,
   routePrefix: '',
   insecureSkipVerify: false,
   apiKeysText: '',
@@ -177,9 +177,9 @@ function resetForm() {
   form.streamFirstContentTimeoutEnabled = false
   form.streamFirstContentTimeoutMs = 30000
   form.streamInactivityTimeoutEnabled = false
-  form.streamInactivityTimeoutMs = 5000
+  form.streamInactivityTimeoutMs = 20000
   form.streamToolCallIdleTimeoutEnabled = false
-  form.streamToolCallIdleTimeoutMs = 3000
+  form.streamToolCallIdleTimeoutMs = 30000
   form.routePrefix = ''
   form.insecureSkipVerify = false
   form.apiKeysText = ''
@@ -235,9 +235,9 @@ function populateFromChannel(ch: Channel) {
   form.streamFirstContentTimeoutEnabled = !!(ch.streamFirstContentTimeoutMs && ch.streamFirstContentTimeoutMs > 0)
   form.streamFirstContentTimeoutMs = ch.streamFirstContentTimeoutMs && ch.streamFirstContentTimeoutMs > 0 ? ch.streamFirstContentTimeoutMs : 30000
   form.streamInactivityTimeoutEnabled = !!(ch.streamInactivityTimeoutMs && ch.streamInactivityTimeoutMs > 0)
-  form.streamInactivityTimeoutMs = ch.streamInactivityTimeoutMs && ch.streamInactivityTimeoutMs > 0 ? ch.streamInactivityTimeoutMs : 5000
+  form.streamInactivityTimeoutMs = ch.streamInactivityTimeoutMs && ch.streamInactivityTimeoutMs > 0 ? ch.streamInactivityTimeoutMs : 20000
   form.streamToolCallIdleTimeoutEnabled = !!(ch.streamToolCallIdleTimeoutMs && ch.streamToolCallIdleTimeoutMs > 0)
-  form.streamToolCallIdleTimeoutMs = ch.streamToolCallIdleTimeoutMs && ch.streamToolCallIdleTimeoutMs > 0 ? ch.streamToolCallIdleTimeoutMs : 3000
+  form.streamToolCallIdleTimeoutMs = ch.streamToolCallIdleTimeoutMs && ch.streamToolCallIdleTimeoutMs > 0 ? ch.streamToolCallIdleTimeoutMs : 30000
   form.routePrefix = ch.routePrefix || ''
   form.insecureSkipVerify = ch.insecureSkipVerify ?? false
   existingApiKeys.value = [...(ch.apiKeys || [])]
