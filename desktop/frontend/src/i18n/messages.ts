@@ -706,6 +706,10 @@ export type MessageKey =
   | 'console.logs.error'
   | 'console.logs.entries'
   | 'console.logs.empty'
+  | 'console.fuzzyEnabled'
+  | 'console.fuzzyDisabled'
+  | 'console.fuzzyLoadFailed'
+  | 'console.cbSettings'
 
 export type Messages = Record<MessageKey, string>
 
@@ -1414,6 +1418,10 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.logs.error': 'Error',
     'console.logs.entries': 'entries',
     'console.logs.empty': 'No logs yet',
+    'console.fuzzyEnabled': 'Fuzzy mode enabled',
+    'console.fuzzyDisabled': 'Fuzzy mode disabled',
+    'console.fuzzyLoadFailed': 'Failed to load fuzzy mode status',
+    'console.cbSettings': 'Circuit Breaker Settings',
   },
   'zh-CN': {
     'common.gatewayLabel': 'CCX CORE',
@@ -2119,5 +2127,9 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.logs.error': '错误',
     'console.logs.entries': '条',
     'console.logs.empty': '暂无日志',
+    'console.fuzzyEnabled': 'Fuzzy 模式已开启',
+    'console.fuzzyDisabled': 'Fuzzy 模式已关闭',
+    'console.fuzzyLoadFailed': '加载 Fuzzy 模式状态失败',
+    'console.cbSettings': '熔断器配置',
   },
 }

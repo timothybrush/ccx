@@ -1,0 +1,449 @@
+<script setup lang="ts">
+import { reactive, ref, watch } from 'vue'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Alert } from '@/components/ui/alert'
+import { X, Save, RefreshCw, Zap } from 'lucide-vue-next'
+import { useStatus } from '@/composables/useStatus'
+import { useLanguage } from '@/composables/useLanguage'
+import { GetAdminAccessKey } from '@bindings/github.com/BenedictKing/ccx/desktop/desktopservice'
+
+interface Props {
+  open: boolean
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<{ (e: 'close'): void }>()
+
+const { status } = useStatus()
+const { t } = useLanguage()
+
+const loading = ref(false)
+const saving = ref(false)
+const error = ref('')
+const success = ref('')
+
+const activePreset = ref('balanced')
+const form = reactive({
+  windowSize: 10,
+  failureThreshold: 0.5,
+  consecutiveFailuresThreshold: 3,
+  streamFirstContentTimeoutMs: 30000,
+  streamInactivityTimeoutMs: 20000,
+  streamToolCallIdleTimeoutMs: 120000,
+})
+
+// 工具调用 idle 预设按低速 5 TPS 粗估：60/120/300s 分别预留约 300/600/1500 token 的参数生成窗口。
+const presets = [
+  { key: 'gentle', labelKey: 'env.runtimeCbPresetGentle' as const, windowSize: 20, failureThreshold: 0.70, consecutiveFailuresThreshold: 5, streamFirstContentTimeoutMs: 90000, streamInactivityTimeoutMs: 90000, streamToolCallIdleTimeoutMs: 300000 },
+  { key: 'balanced', labelKey: 'env.runtimeCbPresetBalanced' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 60000, streamInactivityTimeoutMs: 60000, streamToolCallIdleTimeoutMs: 180000 },
+  { key: 'aggressive', labelKey: 'env.runtimeCbPresetAggressive' as const, windowSize: 5, failureThreshold: 0.30, consecutiveFailuresThreshold: 2, streamFirstContentTimeoutMs: 30000, streamInactivityTimeoutMs: 30000, streamToolCallIdleTimeoutMs: 60000 },
+  { key: 'custom', labelKey: 'env.runtimeCbPresetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, streamFirstContentTimeoutMs: 60000, streamInactivityTimeoutMs: 60000, streamToolCallIdleTimeoutMs: 180000 },
+]
+
+// 历史图片轮次限制
+const historicalImageLimit = ref(0)
+
+const matchPreset = () => {
+  for (const p of presets) {
+    if (p.key === 'custom') continue
+    if (form.windowSize === p.windowSize && form.failureThreshold === p.failureThreshold && form.consecutiveFailuresThreshold === p.consecutiveFailuresThreshold && form.streamFirstContentTimeoutMs === p.streamFirstContentTimeoutMs && form.streamInactivityTimeoutMs === p.streamInactivityTimeoutMs && form.streamToolCallIdleTimeoutMs === p.streamToolCallIdleTimeoutMs) {
+      activePreset.value = p.key
+      return
+    }
+  }
+  activePreset.value = 'custom'
+}
+
+const applyPreset = (preset: typeof presets[number]) => {
+  if (preset.key === 'custom') return
+  form.windowSize = preset.windowSize
+  form.failureThreshold = preset.failureThreshold
+  form.consecutiveFailuresThreshold = preset.consecutiveFailuresThreshold
+  form.streamFirstContentTimeoutMs = preset.streamFirstContentTimeoutMs
+  form.streamInactivityTimeoutMs = preset.streamInactivityTimeoutMs
+  form.streamToolCallIdleTimeoutMs = preset.streamToolCallIdleTimeoutMs
+  activePreset.value = preset.key
+}
+
+const onSliderChange = (field: string, event: Event) => {
+  const val = Number((event.target as HTMLInputElement).value)
+  if (field === 'failureThreshold') {
+    form.failureThreshold = Math.round(val * 100) / 100
+  } else if (field === 'windowSize') {
+    form.windowSize = val
+  } else if (field === 'consecutiveFailuresThreshold') {
+    form.consecutiveFailuresThreshold = val
+  } else if (field === 'streamFirstContentTimeoutMs') {
+    form.streamFirstContentTimeoutMs = val
+  } else if (field === 'streamInactivityTimeoutMs') {
+    form.streamInactivityTimeoutMs = val
+  } else if (field === 'streamToolCallIdleTimeoutMs') {
+    form.streamToolCallIdleTimeoutMs = val
+  }
+  matchPreset()
+}
+
+const clearMessages = () => {
+  error.value = ''
+  success.value = ''
+}
+
+const buildApiUrl = async (path: string): Promise<string | null> => {
+  if (!status.value.url) return null
+  return `${status.value.url}${path}`
+}
+
+const fetchConfig = async () => {
+  const url = await buildApiUrl('/api/settings/circuit-breaker')
+  if (!url) return
+
+  loading.value = true
+  clearMessages()
+  try {
+    const adminKey = await GetAdminAccessKey()
+    const resp = await fetch(url, { headers: { 'x-api-key': adminKey } })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json()
+    form.windowSize = data.windowSize ?? 10
+    form.failureThreshold = data.failureThreshold ?? 0.5
+    form.consecutiveFailuresThreshold = data.consecutiveFailuresThreshold ?? 3
+    form.streamFirstContentTimeoutMs = data.streamFirstContentTimeoutMs && data.streamFirstContentTimeoutMs >= 5000 ? data.streamFirstContentTimeoutMs : 60000
+    form.streamInactivityTimeoutMs = data.streamInactivityTimeoutMs && data.streamInactivityTimeoutMs >= 1000 ? data.streamInactivityTimeoutMs : 60000
+    form.streamToolCallIdleTimeoutMs = data.streamToolCallIdleTimeoutMs && data.streamToolCallIdleTimeoutMs >= 30000 ? data.streamToolCallIdleTimeoutMs : 180000
+    matchPreset()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchHistoricalImageLimit = async () => {
+  const url = await buildApiUrl('/api/settings/historical-image-turn-limit')
+  if (!url) return
+  try {
+    const adminKey = await GetAdminAccessKey()
+    const resp = await fetch(url, { headers: { 'x-api-key': adminKey } })
+    if (resp.ok) {
+      const data = await resp.json()
+      historicalImageLimit.value = data.historicalImageTurnLimit ?? 0
+    }
+  } catch {
+    // 非关键功能，静默忽略
+  }
+}
+
+const saveConfig = async () => {
+  const cbUrl = await buildApiUrl('/api/settings/circuit-breaker')
+  const imgUrl = await buildApiUrl('/api/settings/historical-image-turn-limit')
+  if (!cbUrl) {
+    error.value = t('env.runtimeCbNoBackend')
+    return
+  }
+
+  saving.value = true
+  clearMessages()
+  try {
+    const adminKey = await GetAdminAccessKey()
+    const promises: Promise<Response>[] = [
+      fetch(cbUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
+        body: JSON.stringify({
+          windowSize: form.windowSize,
+          failureThreshold: form.failureThreshold,
+          consecutiveFailuresThreshold: form.consecutiveFailuresThreshold,
+          streamFirstContentTimeoutMs: form.streamFirstContentTimeoutMs,
+          streamInactivityTimeoutMs: form.streamInactivityTimeoutMs,
+          streamToolCallIdleTimeoutMs: form.streamToolCallIdleTimeoutMs,
+        }),
+      }),
+    ]
+    if (imgUrl) {
+      promises.push(
+        fetch(imgUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
+          body: JSON.stringify({ limit: historicalImageLimit.value }),
+        }),
+      )
+    }
+    const results = await Promise.all(promises)
+    for (const resp of results) {
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${resp.status}`)
+      }
+    }
+    success.value = t('env.runtimeCbSaved')
+    setTimeout(() => { success.value = '' }, 3000)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    saving.value = false
+  }
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close')
+}
+
+// 弹窗打开时加载配置
+const loadOnOpen = async () => {
+  if (props.open && status.value.running) {
+    await fetchConfig()
+    await fetchHistoricalImageLimit()
+  }
+}
+
+// 监听 open 变化
+watch(() => props.open, (isOpen) => {
+  if (isOpen) loadOnOpen()
+}, { immediate: true })
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="fade">
+      <div
+        v-if="open"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        @keydown="onKeyDown"
+      >
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="emit('close')" />
+
+        <div class="relative z-10 flex max-h-[85vh] w-[560px] max-w-[90vw] flex-col rounded-2xl border border-border bg-card shadow-2xl">
+          <!-- Header -->
+          <div class="flex shrink-0 items-center justify-between border-b border-border p-4">
+            <div class="flex items-center gap-2">
+              <Zap class="h-4 w-4 text-primary" />
+              <h3 class="text-sm font-semibold">{{ t('env.runtimeCbTitle') }}</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button variant="ghost" size="icon-sm" :disabled="loading" @click="fetchConfig()">
+                <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" />
+              </Button>
+              <Button variant="ghost" size="icon-sm" @click="emit('close')">
+                <X class="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <!-- Body -->
+          <ScrollArea class="flex-1 min-h-0">
+            <div class="p-4 space-y-5">
+              <Alert v-if="error" variant="destructive">
+                <p class="text-xs">{{ error }}</p>
+              </Alert>
+              <Alert v-if="success" variant="default">
+                <p class="text-xs text-green-600">{{ success }}</p>
+              </Alert>
+
+              <!-- 基础参数：三列 -->
+              <div class="flex gap-2">
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbWindowSize') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ form.windowSize }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.windowSize"
+                    :min="3"
+                    :max="100"
+                    step="1"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('windowSize', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>3</span><span>100</span></div>
+                </div>
+
+                <div class="w-px bg-border self-stretch" />
+
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbFailureThreshold') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ form.failureThreshold.toFixed(2) }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.failureThreshold"
+                    :min="0.01"
+                    :max="1"
+                    step="0.01"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('failureThreshold', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>0.01</span><span>1.00</span></div>
+                </div>
+
+                <div class="w-px bg-border self-stretch" />
+
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbConsecutiveFailures') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ form.consecutiveFailuresThreshold }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.consecutiveFailuresThreshold"
+                    :min="1"
+                    :max="100"
+                    step="1"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('consecutiveFailuresThreshold', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>1</span><span>100</span></div>
+                </div>
+              </div>
+
+              <!-- 流式超时：三列 -->
+              <div class="flex gap-2">
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbStreamFirstContentTimeout') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ (form.streamFirstContentTimeoutMs / 1000) + 's' }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.streamFirstContentTimeoutMs"
+                    :min="5000"
+                    :max="300000"
+                    step="1000"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('streamFirstContentTimeoutMs', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>5s</span><span>300s</span></div>
+                </div>
+
+                <div class="w-px bg-border self-stretch" />
+
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbStreamInactivityTimeout') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ (form.streamInactivityTimeoutMs / 1000) + 's' }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.streamInactivityTimeoutMs"
+                    :min="1000"
+                    :max="180000"
+                    step="1000"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('streamInactivityTimeoutMs', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>1s</span><span>180s</span></div>
+                </div>
+
+                <div class="w-px bg-border self-stretch" />
+
+                <div class="flex-1 px-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-muted-foreground">{{ t('env.runtimeCbStreamToolCallIdleTimeout') }}</span>
+                    <span class="text-[11px] font-mono font-medium">{{ (form.streamToolCallIdleTimeoutMs / 1000) + 's' }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    :value="form.streamToolCallIdleTimeoutMs"
+                    :min="30000"
+                    :max="300000"
+                    step="1000"
+                    class="cb-slider w-full"
+                    @input="onSliderChange('streamToolCallIdleTimeoutMs', $event)"
+                  />
+                  <div class="flex justify-between text-[10px] text-muted-foreground"><span>30s</span><span>300s</span></div>
+                </div>
+              </div>
+
+              <!-- 预设按钮 -->
+              <div class="flex gap-2">
+                <Button
+                  v-for="p in presets"
+                  :key="p.key"
+                  size="sm"
+                  :variant="activePreset === p.key ? 'default' : 'outline'"
+                  class="text-xs"
+                  @click="applyPreset(p)"
+                >
+                  {{ t(p.labelKey) }}
+                </Button>
+              </div>
+
+              <!-- 历史图片轮次限制 -->
+              <div class="border-t border-border pt-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-xs font-medium">{{ t('env.historicalImageTurnLimitTitle') }}</p>
+                    <p class="text-[11px] text-muted-foreground mt-0.5">{{ t('env.historicalImageTurnLimitHint') }}</p>
+                  </div>
+                  <input
+                    v-model.number="historicalImageLimit"
+                    type="number"
+                    min="0"
+                    class="w-16 h-7 rounded border border-input bg-background px-2 text-xs text-center font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <!-- Footer -->
+          <div class="flex shrink-0 items-center justify-end gap-2 border-t border-border p-3">
+            <Button variant="outline" size="sm" class="text-xs" @click="emit('close')">
+              {{ t('common.cancel') }}
+            </Button>
+            <Button size="sm" :disabled="saving" class="text-xs" @click="saveConfig">
+              <Save class="h-3 w-3 mr-1" :class="{ 'animate-spin': saving }" />
+              {{ t('env.save') }}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped>
+.cb-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: 3px;
+  background: hsl(var(--muted));
+  outline: none;
+  cursor: pointer;
+}
+.cb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.cb-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.cb-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Search, Layers, Archive, Loader2 } from 'lucide-vue-next'
+import { Plus, Search, Layers, Archive, Loader2, ShieldCheck, ShieldOff, Zap } from 'lucide-vue-next'
 import { useConsoleChannels } from '@/composables/useConsoleChannels'
+import { useAdminApi } from '@/composables/useAdminApi'
 import { useLanguage } from '@/composables/useLanguage'
 import ChannelCard from '@/components/console/ChannelCard.vue'
 import ChannelEditDialog from '@/components/console/ChannelEditDialog.vue'
 import ChannelLogsDialog from '@/components/console/ChannelLogsDialog.vue'
 import CapabilityTestDialog from '@/components/console/CapabilityTestDialog.vue'
+import CircuitBreakerDialog from '@/components/console/CircuitBreakerDialog.vue'
 import type { ManagedChannelType } from '@/utils/channel-type-api'
 import type { Channel, ChannelMetrics, ChannelRecentActivity } from '@/services/admin-api'
 
@@ -88,6 +90,40 @@ const logsChannel = ref<Channel | null>(null)
 const capabilityChannel = ref<Channel | null>(null)
 const showCapabilityDialog = ref(false)
 const draggedIndex = ref<number | null>(null)
+
+// Fuzzy 模式
+const fuzzyEnabled = ref(false)
+const fuzzyLoading = ref(false)
+const fuzzyLoadError = ref(false)
+const showCbDialog = ref(false)
+
+async function loadFuzzyMode() {
+  fuzzyLoadError.value = false
+  try {
+    const adminApi = useAdminApi()
+    const data = await adminApi.get<{ fuzzyModeEnabled: boolean }>('/settings/fuzzy-mode')
+    fuzzyEnabled.value = data.fuzzyModeEnabled
+  } catch {
+    fuzzyLoadError.value = true
+  }
+}
+
+async function toggleFuzzyMode() {
+  if (fuzzyLoadError.value) {
+    await loadFuzzyMode()
+    return
+  }
+  fuzzyLoading.value = true
+  try {
+    const adminApi = useAdminApi()
+    await adminApi.put('/settings/fuzzy-mode', { enabled: !fuzzyEnabled.value })
+    fuzzyEnabled.value = !fuzzyEnabled.value
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    fuzzyLoading.value = false
+  }
+}
 
 function clearActionError() {
   actionError.value = ''
@@ -299,6 +335,7 @@ function onDragEnd() {
 
 onMounted(() => {
   activeTab.value = props.type
+  loadFuzzyMode()
 })
 </script>
 
@@ -327,6 +364,25 @@ onMounted(() => {
         <Button size="sm" @click="handleAdd">
           <Plus class="h-3.5 w-3.5" />
           {{ tf('console.addChannel', '添加频道') }}
+        </Button>
+        <div class="flex-1" />
+        <Button
+          size="sm"
+          variant="outline"
+          class="h-7 text-xs"
+          :class="{ 'border-amber-500/40 text-amber-600 dark:text-amber-400': fuzzyEnabled }"
+          :disabled="fuzzyLoading"
+          :title="fuzzyLoadError ? t('console.fuzzyLoadFailed') : (fuzzyEnabled ? t('console.fuzzyEnabled') : t('console.fuzzyDisabled'))"
+          @click="toggleFuzzyMode"
+        >
+          <ShieldCheck v-if="fuzzyEnabled" class="h-3 w-3 mr-1" />
+          <ShieldOff v-else class="h-3 w-3 mr-1" />
+          Fuzzy
+          <Loader2 v-if="fuzzyLoading" class="h-3 w-3 ml-1 animate-spin" />
+        </Button>
+        <Button size="sm" variant="outline" class="h-7 text-xs" @click="showCbDialog = true">
+          <Zap class="h-3 w-3 mr-1" />
+          CB
         </Button>
       </div>
 
@@ -477,6 +533,11 @@ onMounted(() => {
       :channel-id="capabilityChannel.index"
       :channel-name="capabilityChannel.name ?? ''"
       @close="closeCapabilityDialog"
+    />
+
+    <CircuitBreakerDialog
+      :open="showCbDialog"
+      @close="showCbDialog = false"
     />
   </div>
 </template>
