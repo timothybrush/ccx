@@ -90,6 +90,8 @@ const claudeProviderKeys = ref<Record<AgentProvider, string>>({
   glm: '',
   minimax: '',
   dashscope: '',
+  openrouter: '',
+  modelscope: '',
   'opencode-zen': '',
   'opencode-go': '',
   openai: '',
