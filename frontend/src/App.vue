@@ -358,7 +358,7 @@
                   @click="openCircuitBreakerDialog"
                 >
                   <v-icon start size="20">mdi-tune</v-icon>
-                  CB
+                  TB
                 </v-btn>
               </template>
               <span>{{ t('tooltip.circuitBreakerSettings') }}</span>

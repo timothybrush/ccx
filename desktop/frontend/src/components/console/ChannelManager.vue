@@ -388,7 +388,7 @@ watch(() => status.value.running, (running) => {
         </Button>
         <Button size="sm" variant="outline" class="h-7 text-xs" @click="showCbDialog = true">
           <Zap class="h-3 w-3 mr-1" />
-          CB
+          TB
         </Button>
       </div>
 
