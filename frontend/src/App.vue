@@ -974,7 +974,7 @@ const isCapabilityChannelKind = (tab: string): tab is CapabilityChannelKind => {
 const capabilityPlaceholderModels: Record<string, string[]> = {
   // ⚠️ 修改此处时必须同步修改后端 backend-go/internal/handlers/capability_probe_models.go
   // 用于开始接口返回前的首屏占位
-  messages: ['claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'],
+  messages: ['claude-fable-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'],
   chat: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'codex-auto-review'],
   responses: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'codex-auto-review'],
   gemini: ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite'],

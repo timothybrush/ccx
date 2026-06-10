@@ -1728,6 +1728,7 @@ const allSourceModelOptions = computed(() => {
   } else {
     // Messages API (Claude) 常用模型别名
     return [
+      { title: 'fable', value: 'fable' },
       { title: 'opus', value: 'opus' },
       { title: 'sonnet', value: 'sonnet' },
       { title: 'haiku', value: 'haiku' }
@@ -1803,7 +1804,7 @@ const supportsChatRoleNormalization = computed(() => {
 })
 
 const showModelMappingPresets = computed(() => {
-  // gpt-5.x 预设只配置 opus/sonnet/haiku 重定向，限定在 Messages 入口展示。
+  // gpt-5.x 预设只配置 fable/opus/sonnet/haiku 重定向，限定在 Messages 入口展示。
   return props.channelType === 'messages' && (form.serviceType === 'openai' || form.serviceType === 'responses')
 })
 
@@ -1823,11 +1824,13 @@ const modelMappingPresets: Record<
 > = {
   'gpt-5.5': {
     modelMapping: {
+      fable: 'gpt-5.5',
       opus: 'gpt-5.5',
       sonnet: 'gpt-5.4',
       haiku: 'gpt-5.4-mini'
     },
     reasoningMapping: {
+      fable: 'xhigh',
       opus: 'xhigh',
       sonnet: 'xhigh',
       haiku: 'high'
@@ -1837,11 +1840,13 @@ const modelMappingPresets: Record<
   },
   'gpt-5.4': {
     modelMapping: {
+      fable: 'gpt-5.4',
       opus: 'gpt-5.4',
       sonnet: 'gpt-5.4',
       haiku: 'gpt-5.4-mini'
     },
     reasoningMapping: {
+      fable: 'xhigh',
       opus: 'xhigh',
       sonnet: 'xhigh',
       haiku: 'high'
@@ -1864,7 +1869,7 @@ const applyModelMappingPreset = (preset: keyof typeof modelMappingPresets) => {
   }
 }
 
-// opus/sonnet/haiku 模型别名的一键预设（MiMo / DeepSeek）
+// fable/opus/sonnet/haiku 模型别名的一键预设（MiMo / DeepSeek）
 const showClaudeChannelPresets = computed(() => {
   return form.serviceType === 'claude'
     && (props.channelType === 'messages' || props.channelType === 'chat' || props.channelType === 'responses')
@@ -1894,6 +1899,7 @@ const claudeChannelPresets: Record<
     noVisionModels: ['mimo-v2.5-pro'],
     visionFallbackModel: 'mimo-v2.5',
     modelMapping: {
+      fable: 'mimo-v2.5-pro',
       haiku: 'mimo-v2.5-pro',
       opus: 'mimo-v2.5-pro',
       sonnet: 'mimo-v2.5-pro'
@@ -1909,6 +1915,7 @@ const claudeChannelPresets: Record<
     noVisionModels: [],
     visionFallbackModel: '',
     modelMapping: {
+      fable: 'deepseek-v4-pro',
       haiku: 'deepseek-v4-flash',
       opus: 'deepseek-v4-pro',
       sonnet: 'deepseek-v4-pro'
@@ -2008,7 +2015,8 @@ const applyCodexResponsesChannelPreset = (preset: keyof typeof codexResponsesCha
 // 规则顺序：先新后旧、先精确后宽松；同家族新版本在前，带 codex/pro/max 等精确后缀优先于通用名
 // 数据基线：2026-05 各家官方在售模型
 const modelPriorityPatterns: RegExp[] = [
-  // Anthropic Claude（4.8 旗舰 / 4.7 / 4.6 Sonnet / 4.5 Haiku）
+  // Anthropic Claude（Fable 5 / 4.8 旗舰 / 4.7 / 4.6 Sonnet / 4.5 Haiku）
+  /fable-5/i,
   /opus-4-8/i,
   /opus-4-7/i,
   /sonnet-4-7/i,

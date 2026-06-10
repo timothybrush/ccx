@@ -65,7 +65,7 @@ func buildMessagesProbeBody(probeModel string) []byte {
 		},
 	}
 
-	if probeModel == capabilityProbeModelClaudeOpus48 {
+	if probeModel == capabilityProbeModelClaudeOpus48 || probeModel == capabilityProbeModelClaudeFable5 {
 		body["messages"] = []map[string]string{
 			{"role": "user", "content": "Confirm you are ready."},
 			{"role": "assistant", "content": "Ready."},

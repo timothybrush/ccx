@@ -60,7 +60,7 @@ func TestGetCapabilityProbeModel(t *testing.T) {
 		want     string
 		wantErr  bool
 	}{
-		{protocol: "messages", want: "claude-opus-4-8"},
+		{protocol: "messages", want: "claude-fable-5"},
 		{protocol: "chat", want: "gpt-5.5"},
 		{protocol: "gemini", want: "gemini-3.5-flash"},
 		{protocol: "responses", want: "gpt-5.5"},
@@ -99,7 +99,7 @@ func TestBuildTestRequest_UsesCentralizedProbeModels(t *testing.T) {
 		{
 			protocol:      "messages",
 			expectedURL:   "https://api.example.com/v1/messages",
-			expectedModel: "claude-opus-4-8",
+			expectedModel: "claude-fable-5",
 		},
 		{
 			protocol:      "chat",

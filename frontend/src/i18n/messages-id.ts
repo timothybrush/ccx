@@ -232,7 +232,7 @@ export const idMessages: Record<MessageKey, string> = {
     'addChannel.stripEmptyTextBlocksLabel': 'Hapus blok text kosong',
     'addChannel.stripEmptyTextBlocksHint': 'Hapus blok content text kosong murni sebelum diteruskan, untuk upstream protokol Claude yang ketat menolak placeholder tool-use dari Claude Code.',
     'addChannel.normalizeSystemRoleToTopLevelLabel': 'Normalisasi role system ke top-level',
-    'addChannel.normalizeSystemRoleToTopLevelHint': 'Untuk Opus 4.8 / klien baru yang mengirim system sebagai role pesan: ekstrak kembali ke field system top-level sebelum diteruskan, untuk upstream Claude lama yang hanya menerima role user/assistant.',
+    'addChannel.normalizeSystemRoleToTopLevelHint': 'Untuk Opus 4.8 / Fable 5 / klien baru yang mengirim system sebagai role pesan: ekstrak kembali ke field system top-level sebelum diteruskan, untuk upstream Claude lama yang hanya menerima role user/assistant.',
     'addChannel.normalizeNonstandardChatRolesLabel': 'Normalisasi role chat non-standar',
     'addChannel.normalizeNonstandardChatRolesHint': 'Konversi role non-standar seperti developer menjadi user sebelum dikirim ke upstream. Disarankan untuk model domestik Tiongkok yang tidak mendukung role non-standar.',
     'addChannel.stripCodexClientToolsLabel': 'Hapus tool klien Codex',

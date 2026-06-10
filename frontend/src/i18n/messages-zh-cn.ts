@@ -232,7 +232,7 @@ export const zhCNMessages: Record<MessageKey, string> = {
     'addChannel.stripEmptyTextBlocksLabel': '移除空 Text Block',
     'addChannel.stripEmptyTextBlocksHint': '转发前移除裸空 text content block，兼容严格拒绝 Claude Code tool_use 占位块的 Claude 协议上游',
     'addChannel.normalizeSystemRoleToTopLevelLabel': '抽取 system 角色到顶层',
-    'addChannel.normalizeSystemRoleToTopLevelHint': '针对 Opus 4.8 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游',
+    'addChannel.normalizeSystemRoleToTopLevelHint': '针对 Opus 4.8 / Fable 5 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游',
     'addChannel.normalizeNonstandardChatRolesLabel': '规范化非常见 Chat role',
     'addChannel.normalizeNonstandardChatRolesHint': '将 developer 等非标准 role 统一转为 user 后转发给上游。国内模型通常不支持非标准 role，建议开启。',
     'addChannel.stripCodexClientToolsLabel': '剥离 Codex 客户端工具',

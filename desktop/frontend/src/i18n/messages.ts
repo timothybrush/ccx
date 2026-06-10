@@ -512,6 +512,7 @@ export type MessageKey =
   | 'console.mode.multi'
   | 'console.mode.single'
   | 'console.pool.active'
+  | 'console.pool.current'
   | 'console.pool.inactive'
   | 'console.channelStatus.active'
   | 'console.channelStatus.suspended'
@@ -1246,6 +1247,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.mode.multi': 'Multi-channel',
     'console.mode.single': 'Single-channel',
     'console.pool.active': 'Failover Sequence',
+    'console.pool.current': 'Current',
     'console.pool.inactive': 'Standby Pool',
     'console.channelStatus.active': 'Active',
     'console.channelStatus.suspended': 'Suspended',
@@ -1362,7 +1364,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.form.codexNativeToolsHint': 'In passthrough mode, convert Codex native tools (apply_patch, namespace, etc.) into OpenAI function format so the upstream model can call them.',
     'console.form.codexCompatHint': 'Enable Codex CLI compatibility: Responses passthrough upstreams strip client-only tools, while Chat/Claude/Gemini upstreams convert them into function proxy tools.',
     'console.form.stripEmptyBlocksHint': 'Strip bare empty text content blocks before forwarding, compatible with Claude-protocol upstreams that strictly reject Claude Code tool_use placeholder blocks.',
-    'console.form.normalizeSystemHint': 'For new clients such as Opus 4.8 that send system as a message role: pull it back into the top-level system field before forwarding, compatible with older Claude upstreams that only support user/assistant roles.',
+    'console.form.normalizeSystemHint': 'For new clients such as Opus 4.8 / Fable 5 that send system as a message role: pull it back into the top-level system field before forwarding, compatible with older Claude upstreams that only support user/assistant roles.',
     'console.form.normalizeUserIdHint': 'Automatically convert JSON-object user_id into a flat string to ensure upstream compatibility.',
     'console.form.stripBillingHeaderHint': 'Remove cch= billing parameters from system text blocks before forwarding, only for the current Messages channel.',
     'console.form.normalizeChatRolesHint': 'Convert non-standard roles such as developer into user before forwarding upstream. Domestic models usually do not support non-standard roles, so enabling this is recommended.',
@@ -1977,6 +1979,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.mode.multi': '多渠道',
     'console.mode.single': '单渠道',
     'console.pool.active': '故障转移序列',
+    'console.pool.current': '当前',
     'console.pool.inactive': '备用池',
     'console.channelStatus.active': '活跃',
     'console.channelStatus.suspended': '暂停',
@@ -2093,7 +2096,7 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.form.codexNativeToolsHint': '透传模式下将 Codex 原生工具（apply_patch、namespace 等）转换为 OpenAI function 格式，使上游模型可调用。',
     'console.form.codexCompatHint': '启用 Codex CLI 兼容：Responses 透传上游会剥离客户端专属工具，Chat/Claude/Gemini 上游会转换为 function 代理工具。',
     'console.form.stripEmptyBlocksHint': '转发前移除裸空 text content block，兼容严格拒绝 Claude Code tool_use 占位块的 Claude 协议上游',
-    'console.form.normalizeSystemHint': '针对 Opus 4.8 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游',
+    'console.form.normalizeSystemHint': '针对 Opus 4.8 / Fable 5 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游',
     'console.form.normalizeUserIdHint': '自动将 JSON 对象格式的 user_id 转换为扁平字符串，确保上游兼容性。',
     'console.form.stripBillingHeaderHint': '转发前从 system 文本块中移除 cch= 计费参数，仅对当前 Messages 渠道生效。',
     'console.form.normalizeChatRolesHint': '将 developer 等非标准 role 统一转为 user 后转发给上游。国内模型通常不支持非标准 role，建议开启。',

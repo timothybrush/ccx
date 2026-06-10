@@ -9,8 +9,9 @@ import (
 // 支持多个候选模型，用逗号分隔，按优先级从高到低排列
 // 测试时会按顺序分批启动，并汇总所有候选模型的结果
 const (
+	capabilityProbeModelClaudeFable5 = "claude-fable-5"
 	capabilityProbeModelClaudeOpus48 = "claude-opus-4-8"
-	capabilityProbeModelMessages     = capabilityProbeModelClaudeOpus48 + ",claude-opus-4-7,claude-opus-4-6,claude-sonnet-4-6,claude-sonnet-4-5-20250929,claude-haiku-4-5-20251001"
+	capabilityProbeModelMessages     = capabilityProbeModelClaudeFable5 + "," + capabilityProbeModelClaudeOpus48 + ",claude-opus-4-7,claude-opus-4-6,claude-sonnet-4-6,claude-sonnet-4-5-20250929,claude-haiku-4-5-20251001"
 	capabilityProbeModelChat         = "gpt-5.5,gpt-5.4,gpt-5.4-mini,codex-auto-review"
 	capabilityProbeModelGemini       = "gemini-3.5-flash,gemini-3.1-pro-preview,gemini-3-pro-preview,gemini-3-flash-preview,gemini-3.1-flash-lite"
 	capabilityProbeModelResponses    = "gpt-5.5,gpt-5.4,gpt-5.4-mini,codex-auto-review"

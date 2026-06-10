@@ -609,6 +609,7 @@ type ModelMappingPresetEntry = { source: string; target: string; reasoning?: Mod
 const modelMappingPresets: Record<string, { mapping: ModelMappingPresetEntry[]; fastMode?: boolean; textVerbosity?: string }> = {
   'gpt-5.5': {
     mapping: [
+      { source: 'fable', target: 'gpt-5.5', reasoning: 'xhigh' },
       { source: 'opus', target: 'gpt-5.5', reasoning: 'xhigh' },
       { source: 'sonnet', target: 'gpt-5.4', reasoning: 'xhigh' },
       { source: 'haiku', target: 'gpt-5.4-mini', reasoning: 'high' },
@@ -618,6 +619,7 @@ const modelMappingPresets: Record<string, { mapping: ModelMappingPresetEntry[]; 
   },
   'gpt-5.4': {
     mapping: [
+      { source: 'fable', target: 'gpt-5.4', reasoning: 'xhigh' },
       { source: 'opus', target: 'gpt-5.4', reasoning: 'xhigh' },
       { source: 'sonnet', target: 'gpt-5.4', reasoning: 'xhigh' },
       { source: 'haiku', target: 'gpt-5.4-mini', reasoning: 'high' },
@@ -640,6 +642,7 @@ const claudeChannelPresets: Record<string, {
 }> = {
   mimo: {
     mapping: [
+      { source: 'fable', target: 'mimo-v2.5-pro' },
       { source: 'opus', target: 'mimo-v2.5-pro' },
       { source: 'sonnet', target: 'mimo-v2.5-pro' },
       { source: 'haiku', target: 'mimo-v2.5-pro' },
@@ -654,6 +657,7 @@ const claudeChannelPresets: Record<string, {
   },
   deepseek: {
     mapping: [
+      { source: 'fable', target: 'deepseek-v4-pro' },
       { source: 'opus', target: 'deepseek-v4-pro' },
       { source: 'sonnet', target: 'deepseek-v4-pro' },
       { source: 'haiku', target: 'deepseek-v4-flash' },
@@ -916,7 +920,7 @@ const sourceModelOptions = computed(() => {
     return ['codex', 'codex-auto-review', 'gpt-5', 'gpt', 'mini', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini']
   }
   // messages (Claude)
-  return ['opus', 'sonnet', 'haiku']
+  return ['fable', 'opus', 'sonnet', 'haiku']
 })
 
 // ── Target 模型预置列表（未拉取真实模型前的候选 fallback） ──
@@ -1611,7 +1615,7 @@ function buildCurrentPayload() {
                           <Switch v-model="form.normalizeSystemRoleToTopLevel" class="shrink-0" />
                           <div class="min-w-0 space-y-0.5">
                             <Label class="text-xs">{{ tf('console.form.normalizeSystem', '规范化系统角色') }}</Label>
-                            <p class="text-[10px] leading-4 text-muted-foreground">{{ tf('console.form.normalizeSystemHint', '针对 Opus 4.8 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游') }}</p>
+                            <p class="text-[10px] leading-4 text-muted-foreground">{{ tf('console.form.normalizeSystemHint', '针对 Opus 4.8 / Fable 5 等新客户端将 system 作为消息 role 发送的情况：转发前抽回顶层 system 字段，兼容仅支持 user/assistant role 的旧 Claude 上游') }}</p>
                           </div>
                         </div>
                         <div v-if="['messages','responses'].includes(channelType)" class="flex flex-row-reverse items-center justify-between gap-3">

@@ -232,7 +232,7 @@ export const enMessages: Record<MessageKey, string> = {
     'addChannel.stripEmptyTextBlocksLabel': 'Strip empty text blocks',
     'addChannel.stripEmptyTextBlocksHint': 'Remove bare empty text content blocks before forwarding, for Claude-protocol upstreams that strictly reject Claude Code tool-use placeholders.',
     'addChannel.normalizeSystemRoleToTopLevelLabel': 'Normalize system role to top-level',
-    'addChannel.normalizeSystemRoleToTopLevelHint': 'For Opus 4.8 / similar new clients that emit system as a message role: extract them back to the top-level system field before forwarding, for legacy Claude upstreams that only accept user/assistant roles.',
+    'addChannel.normalizeSystemRoleToTopLevelHint': 'For Opus 4.8 / Fable 5 / similar new clients that emit system as a message role: extract them back to the top-level system field before forwarding, for legacy Claude upstreams that only accept user/assistant roles.',
     'addChannel.normalizeNonstandardChatRolesLabel': 'Normalize non-standard chat roles',
     'addChannel.normalizeNonstandardChatRolesHint': 'Converts non-standard roles like developer to user before forwarding upstream. Recommended for domestic Chinese models that lack non-standard role support.',
     'addChannel.stripCodexClientToolsLabel': 'Strip Codex client tools',
