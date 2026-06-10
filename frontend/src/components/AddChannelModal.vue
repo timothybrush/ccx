@@ -1342,6 +1342,7 @@
           @click="handleSubmit"
         >
           {{ isEditing ? t('addChannel.updateChannel') : t('addChannel.createChannel') }}
+          <span class="ml-1.5 text-xs opacity-60">{{ isMac ? '⌘Enter' : 'Ctrl+Enter' }}</span>
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -2374,6 +2375,7 @@ const rules = {
 // 计算属性
 const dialogMode = ref<'create' | 'edit'>('create')
 const isEditing = computed(() => dialogMode.value === 'edit')
+const isMac = computed(() => typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform))
 const hasDisabledKeysAvailable = computed(() => visibleDisabledKeys.value.length > 0)
 const hasConfigurableKeys = computed(() => form.apiKeys.length > 0 || (isEditing.value && hasDisabledKeysAvailable.value))
 
