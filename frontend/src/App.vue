@@ -589,6 +589,7 @@
           <v-spacer />
           <v-btn variant="flat" class="cb-dialog-btn" @click="circuitBreakerDialogOpen = false">
             {{ t('app.actions.cancel') }}
+            <span class="ml-1.5 text-xs opacity-60">Esc</span>
           </v-btn>
           <v-btn color="primary" variant="flat" class="cb-dialog-btn cb-dialog-btn-primary" :loading="cbSaving" @click="saveCircuitBreaker">
             {{ t('app.actions.confirm') }}

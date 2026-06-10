@@ -1322,7 +1322,7 @@
 
       <v-card-actions class="pa-6 pt-0">
         <v-spacer />
-        <v-btn variant="text" @click="handleCancel"> {{ t('app.actions.cancel') }} </v-btn>
+        <v-btn variant="text" @click="handleCancel"> {{ t('app.actions.cancel') }} <span class="ml-1.5 text-xs opacity-60">Esc</span></v-btn>
         <v-btn
           v-if="!isEditing"
           color="primary"
