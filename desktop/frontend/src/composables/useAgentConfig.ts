@@ -227,8 +227,6 @@ const openCodeTargetBaseUrl = () => {
       return 'https://opencode.ai/zen/v1'
     case 'opencode-go':
       return 'https://opencode.ai/zen/go/v1'
-    case 'xfyun':
-      return 'https://maas-api.cn-huabei-1.xf-yun.com/v2'
     default:
       return ''
   }

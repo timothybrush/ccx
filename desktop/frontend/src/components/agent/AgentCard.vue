@@ -328,7 +328,6 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             <option value="minimax">{{ t('agent.provider.minimaxDirect') }}</option>
             <option value="openrouter">{{ t('agent.provider.openrouterDirect') }}</option>
             <option value="modelscope">{{ t('agent.provider.modelscopeDirect') }}</option>
-            <option value="xfyun">{{ t('agent.provider.xfyunDirect') }}</option>
             <option value="opencode-zen">{{ t('agent.provider.opencodeZenDirect') }}</option>
             <option value="opencode-go">{{ t('agent.provider.opencodeGoDirect') }}</option>
           </select>

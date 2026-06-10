@@ -910,7 +910,7 @@ func codexThirdPartyQuickBaseURL(baseURL string) (string, bool) {
 		return ProviderOpenCodeGo, true
 	case strings.Contains(baseURL, "opencode.ai/zen"):
 		return ProviderOpenCodeZen, true
-	case strings.Contains(baseURL, "maas-api.cn-huabei-1.xf-yun.com") || strings.Contains(baseURL, "xfyun.com"):
+	case strings.Contains(baseURL, "xf-yun.com"):
 		return ProviderXFyun, true
 	default:
 		return "", false
@@ -1567,7 +1567,7 @@ func detectClaudeProvider(baseURL string) string {
 		return ProviderOpenCodeGo
 	case strings.Contains(value, "opencode.ai/zen"):
 		return ProviderOpenCodeZen
-	case strings.Contains(value, "maas-api.cn-huabei-1.xf-yun.com") || strings.Contains(value, "xfyun.com"):
+	case strings.Contains(value, "xf-yun.com"):
 		return ProviderXFyun
 	default:
 		return ProviderCustom
@@ -2514,8 +2514,6 @@ func normalizeOpenCodeProvider(provider string) string {
 		return ProviderOpenCodeZen
 	case ProviderOpenCodeGo:
 		return ProviderOpenCodeGo
-	case ProviderXFyun:
-		return ProviderXFyun
 	default:
 		return provider
 	}
@@ -2523,7 +2521,7 @@ func normalizeOpenCodeProvider(provider string) string {
 
 func isOpenCodeDirectProvider(provider string) bool {
 	switch provider {
-	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderOpenCodeZen, ProviderOpenCodeGo, ProviderXFyun:
+	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderOpenCodeZen, ProviderOpenCodeGo:
 		return true
 	default:
 		return false
@@ -2552,8 +2550,6 @@ func openCodeDirectBaseURL(provider string) (string, bool) {
 		return openCodeZenBaseURL, true
 	case ProviderOpenCodeGo:
 		return openCodeGoBaseURL, true
-	case ProviderXFyun:
-		return xfyunCodexBaseURL, true
 	default:
 		return "", false
 	}
@@ -2581,8 +2577,6 @@ func openCodeDirectLabel(provider string) string {
 		return "OpenCode Zen"
 	case ProviderOpenCodeGo:
 		return "OpenCode Go"
-	case ProviderXFyun:
-		return "讯飞星辰"
 	default:
 		return provider
 	}
