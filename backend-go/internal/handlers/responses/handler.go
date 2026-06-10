@@ -410,6 +410,12 @@ func handleSuccess(
 		}
 	}
 
+	// 改写 response.completed 事件中的 model 字段（仅非流式）
+	// 流式路径在 processLine 中处理
+	if envCfg.RewriteResponseModel && originalReq != nil && originalReq.Model != "" {
+		responsesResp.Model = originalReq.Model
+	}
+
 	utils.ForwardResponseHeaders(resp.Header, c.Writer)
 	c.JSON(200, responsesResp)
 
@@ -1025,6 +1031,10 @@ func handleStreamSuccess(
 					// 需要修补虚假值
 					eventToSend = patchResponsesCompletedEventUsageWithLogTag(event, originalRequestJSON, outputTextBuffer.String(), &collectedUsage, envCfg, common.RequestLogTag(c))
 				}
+				// 改写 model 字段（仅 passthrough 场景，转换器已处理好转换场景）
+				if envCfg.RewriteResponseModel && !needConvert && originalReq != nil && originalReq.Model != "" {
+					eventToSend = patchResponsesCompletedEventModel(eventToSend, originalReq.Model, common.RequestLogTag(c))
+				}
 			}
 
 			// 转发给客户端
@@ -1212,6 +1222,10 @@ streamEnd:
 					)
 				} else if needTokenPatch {
 					eventToSend = patchResponsesCompletedEventUsageWithLogTag(event, originalRequestJSON, outputTextBuffer.String(), &collectedUsage, envCfg, common.RequestLogTag(c))
+				}
+				// 改写 model 字段（仅 passthrough 场景，转换器已处理好转换场景）
+				if envCfg.RewriteResponseModel && !needConvert && originalReq != nil && originalReq.Model != "" {
+					eventToSend = patchResponsesCompletedEventModel(eventToSend, originalReq.Model, common.RequestLogTag(c))
 				}
 			}
 			if _, err := c.Writer.Write([]byte(eventToSend)); err == nil && flusher != nil {
@@ -1810,6 +1824,54 @@ func patchResponsesCompletedEventUsageWithLogTag(event string, requestBody []byt
 			result.WriteString(line)
 			result.WriteString("\n")
 		}
+	}
+
+	return result.String()
+}
+
+// patchResponsesCompletedEventModel 改写 response.completed 事件中的 response.model 字段
+// 当 REWRITE_RESPONSE_MODEL 启用且上游为 Responses 直通（needConvert==false）时使用
+func patchResponsesCompletedEventModel(event string, requestModel string, logTag string) string {
+	var result strings.Builder
+	lines := strings.Split(event, "\n")
+
+	for _, line := range lines {
+		var jsonStr string
+		if strings.HasPrefix(line, "data:") {
+			jsonStr = strings.TrimPrefix(line, "data:")
+			jsonStr = strings.TrimPrefix(jsonStr, " ")
+		} else {
+			result.WriteString(line)
+			result.WriteString("\n")
+			continue
+		}
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+			result.WriteString(line)
+			result.WriteString("\n")
+			continue
+		}
+
+		if data["type"] == "response.completed" {
+			if response, ok := data["response"].(map[string]interface{}); ok {
+				if responseModel, _ := response["model"].(string); responseModel != "" && requestModel != "" && responseModel != requestModel {
+					response["model"] = requestModel
+					common.LogWithTag(logTag, "[Responses-Stream-Patch] 改写 response.model: %s -> %s", responseModel, requestModel)
+					patchedJSON, err := json.Marshal(data)
+					if err != nil {
+						result.WriteString(line)
+						result.WriteString("\n")
+						continue
+					}
+					result.WriteString("data: ")
+					result.Write(patchedJSON)
+					result.WriteString("\n")
+					continue
+				}
+			}
+		}
+		result.WriteString(line)
+		result.WriteString("\n")
 	}
 
 	return result.String()
