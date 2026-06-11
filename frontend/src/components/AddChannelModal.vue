@@ -1340,7 +1340,7 @@
 
       <v-card-actions class="pa-6 pt-0">
         <v-spacer />
-        <v-btn variant="text" @click="handleCancel">{{ t('app.actions.cancel') }}<span class="shortcut-hint ml-2.5 text-xs opacity-50">Esc</span></v-btn>
+        <v-btn variant="text" @click="handleCancel">{{ t('app.actions.cancel') }}<span class="shortcut-hint ml-4 text-xs opacity-50">Esc</span></v-btn>
         <v-btn
           v-if="!isEditing"
           color="primary"
@@ -1349,7 +1349,7 @@
           prepend-icon="mdi-check"
           @click="handleQuickSubmit"
         >
-          {{ t('addChannel.createChannel') }}<span class="shortcut-hint ml-2.5 text-xs opacity-50">{{ isMac ? '⌘Enter' : 'Ctrl+Enter' }}</span>
+          {{ t('addChannel.createChannel') }}<span class="shortcut-hint ml-4 text-xs opacity-50">{{ isMac ? '⌘Enter' : 'Ctrl+Enter' }}</span>
         </v-btn>
         <v-btn
           v-else
@@ -1359,7 +1359,7 @@
           prepend-icon="mdi-check"
           @click="handleSubmit"
         >
-          {{ isEditing ? t('addChannel.updateChannel') : t('addChannel.createChannel') }}<span class="shortcut-hint ml-2.5 text-xs opacity-50">{{ isMac ? '⌘Enter' : 'Ctrl+Enter' }}</span>
+          {{ isEditing ? t('addChannel.updateChannel') : t('addChannel.createChannel') }}<span class="shortcut-hint ml-4 text-xs opacity-50">{{ isMac ? '⌘Enter' : 'Ctrl+Enter' }}</span>
         </v-btn>
       </v-card-actions>
     </v-card>

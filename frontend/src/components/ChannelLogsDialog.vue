@@ -3,7 +3,7 @@
     <v-card>
       <v-card-title class="d-flex align-center justify-space-between">
         <span class="dialog-title">{{ t('channelLogs.title', { channel: channelName }) }}</span>
-        <v-tooltip :text="t('app.actions.close') + ' (Esc)'">
+        <v-tooltip :text="t('app.actions.close') + ' (Esc)'" content-class="ccx-tooltip">
           <template #activator="{ props: tooltipProps }">
             <v-btn icon size="small" variant="text" v-bind="tooltipProps" @click="$emit('update:modelValue', false)">
               <v-icon>mdi-close</v-icon>
