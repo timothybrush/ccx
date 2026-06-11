@@ -342,8 +342,8 @@ watch(shouldRefresh, running => {
       </div>
 
       <Select v-model="overrideDuration">
-        <SelectTrigger class="h-9 w-[140px] shrink-0">
-          <SelectValue :placeholder="tf('cockpit.overrideDuration', 'Override 有效期')" />
+        <SelectTrigger class="h-9 w-[160px] shrink-0">
+          <SelectValue :placeholder="tf('cockpit.overrideDuration', '空闲自动恢复')" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem v-for="opt in durationOptions" :key="opt.value" :value="opt.value">

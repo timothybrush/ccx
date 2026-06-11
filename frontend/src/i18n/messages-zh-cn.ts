@@ -21,7 +21,7 @@ export const zhCNMessages: Record<MessageKey, string> = {
     'cockpit.overrideActive': '正在使用自定义渠道顺序，{time} 后自动恢复默认调度',
     'cockpit.overrideActivePerpetual': '正在使用自定义渠道顺序（手动恢复前不会自动过期）',
     'cockpit.restoreDefault': '恢复默认顺序',
-    'cockpit.overrideDuration': 'Override 有效期',
+    'cockpit.overrideDuration': '空闲自动恢复',
     'cockpit.durationDefault': '30 min（默认）',
     'cockpit.durationNever': '永不恢复',
     'cockpit.empty': '暂无活跃会话。请求经过网关后，会话会出现在驾驶舱雷达上。',
