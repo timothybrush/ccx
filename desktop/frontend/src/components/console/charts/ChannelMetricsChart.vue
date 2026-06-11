@@ -30,7 +30,7 @@
 
       <!-- Success rate line chart -->
       <div>
-        <div class="text-xs text-muted-foreground font-medium mb-1">成功率</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.successRate') }}</div>
         <VueApexCharts
           type="line"
           height="120"
@@ -47,8 +47,10 @@ import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useTheme } from '@/composables/useTheme'
+import { useI18n } from '@/i18n'
 import type { HistoryDataPoint } from '@/services/admin-api'
 
+const { t } = useI18n()
 const props = withDefaults(
   defineProps<{
     data: HistoryDataPoint[]
@@ -89,6 +91,7 @@ const baseChartOptions = computed<ApexOptions>(() => ({
     zoom: { enabled: false },
     background: 'transparent',
     fontFamily: 'inherit',
+    defaultLocale: 'en',
     sparkline: { enabled: false },
   },
   theme: { mode: isDark.value ? 'dark' : 'light' },
@@ -162,7 +165,7 @@ const successRateSeries = computed(() => {
   if (!props.data?.length) return []
   return [
     {
-      name: '成功率',
+      name: t('chart.successRate'),
       data: props.data
         .filter(dp => dp.requestCount > 0)
         .map(dp => ({

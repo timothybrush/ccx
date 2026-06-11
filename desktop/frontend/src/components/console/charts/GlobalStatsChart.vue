@@ -3,11 +3,11 @@
     <!-- Summary cards -->
     <div v-if="summary" class="flex flex-wrap gap-2 mb-3">
       <div class="flex-1 min-w-[80px] p-2 rounded-lg text-center bg-secondary/30 dark:bg-secondary/20">
-        <div class="text-xs text-muted-foreground font-medium mb-1">总请求数</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.totalRequests') }}</div>
         <div class="text-sm font-semibold">{{ formatNumber(summary.totalRequests) }}</div>
       </div>
       <div class="flex-1 min-w-[80px] p-2 rounded-lg text-center bg-secondary/30 dark:bg-secondary/20">
-        <div class="text-xs text-muted-foreground font-medium mb-1">成功率</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.successRate') }}</div>
         <div
           class="text-sm font-semibold"
           :class="{
@@ -20,18 +20,18 @@
         </div>
       </div>
       <div class="flex-1 min-w-[80px] p-2 rounded-lg text-center bg-secondary/30 dark:bg-secondary/20">
-        <div class="text-xs text-muted-foreground font-medium mb-1">输入 Token</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.inputTokens') }}</div>
         <div class="text-sm font-semibold">{{ formatNumber(summary.totalInputTokens) }}</div>
       </div>
       <div class="flex-1 min-w-[80px] p-2 rounded-lg text-center bg-secondary/30 dark:bg-secondary/20">
-        <div class="text-xs text-muted-foreground font-medium mb-1">输出 Token</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.outputTokens') }}</div>
         <div class="text-sm font-semibold">{{ formatNumber(summary.totalOutputTokens) }}</div>
       </div>
       <div
         v-if="summary.totalCacheReadTokens > 0 || summary.totalCacheCreationTokens > 0"
         class="flex-1 min-w-[80px] p-2 rounded-lg text-center bg-secondary/30 dark:bg-secondary/20"
       >
-        <div class="text-xs text-muted-foreground font-medium mb-1">Cache R/W</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.cacheRw') }}</div>
         <div class="text-sm font-semibold">
           {{ formatNumber(summary.totalCacheReadTokens) }} / {{ formatNumber(summary.totalCacheCreationTokens) }}
         </div>
@@ -45,7 +45,7 @@
       :style="{ height: chartHeight + 'px' }"
     >
       <div class="text-2xl mb-2 opacity-40">&#x1F4C8;</div>
-      <div class="text-xs">暂无请求数据</div>
+      <div class="text-xs">{{ t('chart.noData') }}</div>
     </div>
 
     <!-- Chart -->
@@ -66,8 +66,10 @@ import { computed, ref } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useTheme } from '@/composables/useTheme'
+import { useI18n } from '@/i18n'
 import type { GlobalHistoryDataPoint, GlobalStatsSummary, ModelHistoryDataPoint } from '@/services/admin-api'
 
+const { t } = useI18n()
 const props = withDefaults(
   defineProps<{
     data: GlobalHistoryDataPoint[]
@@ -197,6 +199,7 @@ const chartOptions = computed<ApexOptions>(() => {
       zoom: { enabled: false },
       background: 'transparent',
       fontFamily: 'inherit',
+      defaultLocale: 'en',
       stacked: isMultiModel,
       animations: { enabled: true, speed: 400 },
     },

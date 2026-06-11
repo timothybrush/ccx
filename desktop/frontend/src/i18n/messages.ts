@@ -750,6 +750,12 @@ export type MessageKey =
   | 'console.fuzzyDisabled'
   | 'console.fuzzyLoadFailed'
   | 'console.cbSettings'
+  | 'chart.totalRequests'
+  | 'chart.successRate'
+  | 'chart.inputTokens'
+  | 'chart.outputTokens'
+  | 'chart.cacheRw'
+  | 'chart.noData'
 
 export type Messages = Record<MessageKey, string>
 
@@ -1502,6 +1508,12 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.fuzzyDisabled': 'Fuzzy mode disabled',
     'console.fuzzyLoadFailed': 'Failed to load fuzzy mode status',
     'console.cbSettings': 'Tuning Bench',
+    'chart.totalRequests': 'Total requests',
+    'chart.successRate': 'Availability',
+    'chart.inputTokens': 'Input tokens',
+    'chart.outputTokens': 'Output tokens',
+    'chart.cacheRw': 'Cache R/W',
+    'chart.noData': 'No request data',
   },
   'zh-CN': {
     'common.gatewayLabel': 'CCX CORE',
@@ -2251,5 +2263,11 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.fuzzyDisabled': 'Fuzzy 模式已关闭',
     'console.fuzzyLoadFailed': '加载 Fuzzy 模式状态失败',
     'console.cbSettings': '调校台',
+    'chart.totalRequests': '总请求数',
+    'chart.successRate': '成功率',
+    'chart.inputTokens': '输入 Token',
+    'chart.outputTokens': '输出 Token',
+    'chart.cacheRw': 'Cache R/W',
+    'chart.noData': '暂无请求数据',
   },
 }
