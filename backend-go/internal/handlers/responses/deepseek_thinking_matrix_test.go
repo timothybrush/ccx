@@ -182,7 +182,7 @@ func TestResponsesHandler_DeepSeekChatAndMessagesStreamThinkingMatrix(t *testing
 				`data: {"type":"content_block_stop","index":0}`,
 				``,
 				`event: message_delta`,
-				`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
+				`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
 				``,
 				`event: message_stop`,
 				`data: {"type":"message_stop"}`,

@@ -806,11 +806,11 @@ func TestHasClaudeSemanticContent_ToolStopReason(t *testing.T) {
 	}{
 		{
 			name:  "tool_use stop reason",
-			event: `data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}` + "\n\n",
+			event: `data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null,"stop_details":null}}` + "\n\n",
 		},
 		{
 			name:  "server_tool_use stop reason",
-			event: `data: {"type":"message_delta","delta":{"stop_reason":"server_tool_use"}}` + "\n\n",
+			event: `data: {"type":"message_delta","delta":{"stop_reason":"server_tool_use","stop_sequence":null,"stop_details":null}}` + "\n\n",
 		},
 	}
 

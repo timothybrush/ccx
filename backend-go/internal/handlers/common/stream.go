@@ -748,7 +748,7 @@ func buildTruncationEndEvents(ctx *StreamContext) []string {
 		outputTokens = utils.EstimateTokens(ctx.OutputTextBuffer.String())
 	}
 
-	messageDelta := fmt.Sprintf("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":%d}}\n\n", outputTokens)
+	messageDelta := fmt.Sprintf("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null},\"usage\":{\"output_tokens\":%d}}\n\n", outputTokens)
 	messageStop := "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
 
 	return []string{messageDelta, messageStop}
@@ -2368,6 +2368,11 @@ func BuildUsageEvent(requestBody []byte, outputText string) string {
 
 	event := map[string]interface{}{
 		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":  "end_turn",
+			"stop_sequence": nil,
+			"stop_details":  nil,
+		},
 		"usage": map[string]int{
 			"input_tokens":  inputTokens,
 			"output_tokens": outputTokens,

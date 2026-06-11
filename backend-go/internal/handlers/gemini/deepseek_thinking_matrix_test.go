@@ -142,7 +142,7 @@ func TestGeminiHandler_DeepSeekChatAndMessagesStreamThinkingMatrix(t *testing.T)
 				`data: {"type":"content_block_stop","index":0}`,
 				``,
 				`event: message_delta`,
-				`data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
+				`data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
 				``,
 				`event: message_stop`,
 				`data: {"type":"message_stop"}`,

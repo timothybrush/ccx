@@ -15,7 +15,7 @@ func TestConvertClaudeMessagesToResponses_StreamThinkingToReasoning(t *testing.T
 		`data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}`,
 		`data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"messages text"}}`,
 		`data: {"type":"content_block_stop","index":1}`,
-		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
 		`data: {"type":"message_stop"}`,
 	}
 
@@ -47,7 +47,7 @@ func TestConvertClaudeMessagesToResponses_StreamToolUseToFunctionCall(t *testing
 		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"file_path\""}}`,
 		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":":\"/tmp/a\"}"}}`,
 		`data: {"type":"content_block_stop","index":0}`,
-		`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":1,"output_tokens":2}}`,
 		`data: {"type":"message_stop"}`,
 	}
 
