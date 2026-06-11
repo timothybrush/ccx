@@ -692,8 +692,9 @@ func (p *GeminiProvider) HandleStreamResponse(body io.ReadCloser) (<-chan string
 			}
 			deltaEvent := map[string]interface{}{
 				"type": "message_delta",
-				"delta": map[string]string{
-					"stop_reason": stopReason,
+				"delta": map[string]interface{}{
+					"stop_reason":  stopReason,
+					"stop_details": nil,
 				},
 				"usage": map[string]int{
 					"input_tokens":  latestInputTokens,

@@ -920,7 +920,11 @@ func (p *ResponsesProvider) HandleStreamResponse(body io.ReadCloser) (<-chan str
 					usagePayload["cache_ttl"] = latestCacheTTL
 				}
 				emitJSON("message_delta", map[string]interface{}{
-					"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
+					"delta": map[string]interface{}{
+						"stop_reason":  stopReason,
+						"stop_sequence": nil,
+						"stop_details":  nil,
+					},
 					"usage": usagePayload,
 				})
 				emitJSON("message_stop", map[string]interface{}{})
