@@ -66,7 +66,8 @@ $assetsDir = Join-Path $packageDir "Assets"
 $desktopExe = Join-Path $binDir "ccx-desktop.exe"
 $backendExe = Join-Path $binDir "ccx-go.exe"
 $templatePath = Join-Path $RootDir "build/windows/msix/app_manifest.xml"
-$sourceIcon = Join-Path $RootDir "build/appicon.png"
+$sourceIcon = Join-Path $RootDir "build/appicon-windows.png"
+$staticAssetsDir = Join-Path $RootDir "build/windows"
 if ([string]::IsNullOrWhiteSpace($OutPath)) {
     $OutPath = Join-Path $binDir "ccx-desktop-$Arch.msix"
 }
@@ -81,16 +82,48 @@ New-Item -ItemType Directory -Path $packageDir, $assetsDir | Out-Null
 Copy-Item $desktopExe (Join-Path $packageDir "ccx-desktop.exe")
 Copy-Item $backendExe (Join-Path $packageDir "ccx-go.exe")
 
-Add-Type -AssemblyName System.Drawing
-$icon = [System.Drawing.Image]::FromFile($sourceIcon)
-try {
-    New-Logo $icon (Join-Path $assetsDir "StoreLogo.png") 50 50
-    New-Logo $icon (Join-Path $assetsDir "Square44x44Logo.png") 44 44
-    New-Logo $icon (Join-Path $assetsDir "Square150x150Logo.png") 150 150
-    New-Logo $icon (Join-Path $assetsDir "Wide310x150Logo.png") 310 150
-    New-Logo $icon (Join-Path $assetsDir "SplashScreen.png") 620 300
-} finally {
-    $icon.Dispose()
+# Copy static tile assets if available, otherwise generate from source icon
+$staticTileAssets = @(
+    "StoreLogo.png",
+    "Square30x30Logo.png",
+    "Square44x44Logo.png",
+    "Square71x71Logo.png",
+    "Square89x89Logo.png",
+    "Square107x107Logo.png",
+    "Square142x142Logo.png",
+    "Square150x150Logo.png",
+    "Square284x284Logo.png",
+    "Square310x310Logo.png",
+    "Wide310x150Logo.png",
+    "SplashScreen.png"
+)
+
+$useStaticAssets = $true
+foreach ($assetName in $staticTileAssets) {
+    $srcPath = Join-Path $staticAssetsDir $assetName
+    if (!(Test-Path $srcPath)) {
+        $useStaticAssets = $false
+        break
+    }
+}
+
+if ($useStaticAssets) {
+    foreach ($assetName in $staticTileAssets) {
+        $srcPath = Join-Path $staticAssetsDir $assetName
+        Copy-Item $srcPath (Join-Path $assetsDir $assetName)
+    }
+} else {
+    Add-Type -AssemblyName System.Drawing
+    $icon = [System.Drawing.Image]::FromFile($sourceIcon)
+    try {
+        New-Logo $icon (Join-Path $assetsDir "StoreLogo.png") 50 50
+        New-Logo $icon (Join-Path $assetsDir "Square44x44Logo.png") 44 44
+        New-Logo $icon (Join-Path $assetsDir "Square150x150Logo.png") 150 150
+        New-Logo $icon (Join-Path $assetsDir "Wide310x150Logo.png") 310 150
+        New-Logo $icon (Join-Path $assetsDir "SplashScreen.png") 620 300
+    } finally {
+        $icon.Dispose()
+    }
 }
 
 $manifest = Get-Content $templatePath -Raw

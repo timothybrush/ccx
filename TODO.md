@@ -46,6 +46,6 @@ OpenRouter `:free` 变体模型被路由到受限 provider 池，这些 provider
 
 火山引擎（Volcano/Ark）的 coding plan 渠道一直有问题：模型列表不正确，存在 bug。需要排查火山 coding plan 渠道的模型映射、预设配置与上游 API 的对齐情况。
 
-## [ ] 磁铁图标背景不透明 + 黄色光圈
+## [x] 磁铁图标背景不透明 + 黄色光圈
 
 最新版桌面 App 磁铁图标背景仍然不透明。商店要求的磁铁造型图标本身没问题，但有一个黄色光圈（ring）需要保留，而图标整体背景应改为透明，避免在深色/浅色系统托盘或任务栏上出现突兀的色块。需要修正 `desktop/design/icons/appicon-selected.svg` 及生成的 PNG/ICO/ICNS 资源。
