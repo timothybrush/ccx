@@ -28,6 +28,7 @@ export interface ChannelFormLike {
   streamInactivityTimeoutMs?: string | number | null
   streamToolCallIdleTimeoutMs?: string | number | null
   rateLimitRpm?: string | number | null
+  rateLimitWindowMinutes?: string | number | null
   rateLimitBurst?: string | number | null
   rateLimitMaxConcurrent?: string | number | null
   rateLimitAutoFromHeaders?: boolean
@@ -136,6 +137,11 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
   const rateLimitRpm = Number(form.rateLimitRpm)
   if (Number.isInteger(rateLimitRpm) && rateLimitRpm > 0) {
     channelData.rateLimitRpm = rateLimitRpm
+  }
+
+  const rateLimitWindowMinutes = Number(form.rateLimitWindowMinutes)
+  if (Number.isInteger(rateLimitWindowMinutes) && rateLimitWindowMinutes > 0) {
+    channelData.rateLimitWindowMinutes = rateLimitWindowMinutes
   }
 
   const rateLimitBurst = Number(form.rateLimitBurst)
