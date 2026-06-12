@@ -444,7 +444,6 @@ function buildSubmitPayload() {
   if (isEditMode.value && props.channel?.rateLimitRpm && !payload.rateLimitRpm) {
     payload.rateLimitRpm = 0
   }
-  }
   if (isEditMode.value && props.channel?.rateLimitMaxConcurrent && !payload.rateLimitMaxConcurrent) {
     payload.rateLimitMaxConcurrent = 0
   }

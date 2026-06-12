@@ -74,6 +74,40 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
   <SetupLoading v-if="!setupChecked" />
   <SetupView v-else-if="!setupComplete" />
   <div v-else class="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans">
+    <!-- 全局 SVG Gradient 定义（活动图表共享） -->
+    <svg aria-hidden="true" width="0" height="0" class="absolute">
+      <defs>
+        <linearGradient id="ccx-act-g0" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(34, 197, 94)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(34, 197, 94)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g1" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(132, 204, 22)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(132, 204, 22)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g2" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(250, 204, 21)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(250, 204, 21)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g3" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(251, 146, 60)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(251, 146, 60)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g4" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(249, 115, 22)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(249, 115, 22)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g5" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(239, 68, 68)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(239, 68, 68)" stop-opacity="0.3" />
+        </linearGradient>
+        <linearGradient id="ccx-act-g6" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(220, 38, 38)" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="rgb(220, 38, 38)" stop-opacity="0.3" />
+        </linearGradient>
+      </defs>
+    </svg>
+
     <!-- 常驻左侧高级磨砂侧边栏 -->
     <Sidebar v-model="activeTab" />
 

@@ -38,6 +38,7 @@ import {
   XCircle,
   Zap,
 } from 'lucide-vue-next'
+import ActivityChart from './ActivityChart.vue'
 
 const props = withDefaults(defineProps<{
   channel: Channel
@@ -201,20 +202,25 @@ async function copyChannelInfo() {
 <template>
   <div
     :class="[
-      'group grid grid-cols-[24px_minmax(150px,1fr)_88px_74px_86px] items-center gap-1 border px-2 py-2 transition-all duration-200 lg:grid-cols-[36px_minmax(170px,1fr)_110px_82px_74px_128px] lg:gap-1.5 xl:grid-cols-[42px_minmax(220px,1fr)_120px_96px_88px_150px] xl:gap-3 xl:px-3 xl:py-2.5',
+      'group relative grid grid-cols-[24px_minmax(150px,1fr)_88px_74px_86px] items-center gap-1 border px-2 py-2 transition-all duration-200 lg:grid-cols-[36px_minmax(170px,1fr)_110px_82px_74px_128px] lg:gap-1.5 xl:grid-cols-[42px_minmax(220px,1fr)_120px_96px_88px_150px] xl:gap-3 xl:px-3 xl:py-2.5',
       'bg-card/75 hover:bg-card dark:bg-card/55 dark:hover:bg-card/80',
+      'overflow-hidden',
       inactive ? 'border-dashed border-border/80 opacity-80' : 'border-border',
       circuitDisplay ? 'ring-1 ring-rose-500/20' : '',
     ]"
   >
-    <div class="flex items-center gap-2 text-muted-foreground">
+    <!-- SVG activity chart background -->
+    <ActivityChart :activity="activity" class="opacity-20 dark:opacity-25" />
+
+    <!-- Content overlay (relative z-index to appear above chart) -->
+    <div class="relative z-10 flex items-center gap-2 text-muted-foreground">
       <GripVertical class="hidden h-4 w-4 cursor-grab opacity-60 group-hover:opacity-100 lg:block" />
       <span class="min-w-5 text-right font-mono text-[11px] font-bold text-foreground/70">
         {{ priority || '—' }}
       </span>
     </div>
 
-    <div class="min-w-0 space-y-1">
+    <div class="relative z-10 min-w-0 space-y-1">
       <div class="flex min-w-0 items-center gap-2">
         <span
           class="h-2 w-2 shrink-0 rounded-full shadow-[0_0_8px_currentColor]"
@@ -272,22 +278,22 @@ async function copyChannelInfo() {
       </div>
     </div>
 
-    <div class="inline-flex items-center justify-center gap-1.5 border px-2 py-1 text-[11px] font-semibold" :class="statusConfig.class">
+    <div class="relative z-10 inline-flex items-center justify-center gap-1.5 border px-2 py-1 text-[11px] font-semibold" :class="statusConfig.class">
       <component :is="statusConfig.icon" class="h-3.5 w-3.5" />
       {{ statusConfig.label }}
     </div>
 
-    <div class="space-y-0.5 text-right font-mono">
+    <div class="relative z-10 space-y-0.5 text-right font-mono">
       <div class="text-[11px] font-bold text-foreground xl:text-xs">{{ rpmDisplay }} / {{ tpmDisplay }}</div>
       <div class="text-[10px] text-muted-foreground">RPM / TPM</div>
     </div>
 
-    <div class="hidden space-y-0.5 text-right font-mono lg:block">
+    <div class="relative z-10 hidden space-y-0.5 text-right font-mono lg:block">
       <div class="text-[11px] font-bold text-foreground xl:text-xs">{{ requestDisplay }}</div>
       <div class="text-[10px] text-muted-foreground">{{ successRateDisplay }}</div>
     </div>
 
-    <div class="flex items-center justify-end gap-1">
+    <div class="relative z-10 flex items-center justify-end gap-1">
       <Button v-if="isDisabled" variant="outline" size="sm" class="px-2 text-xs lg:px-2 xl:px-3" @click="emit('enable')">
         <Play class="h-3.5 w-3.5" />
         <span class="hidden lg:inline">{{ tf('console.actions.enable', 'Enable') }}</span>
