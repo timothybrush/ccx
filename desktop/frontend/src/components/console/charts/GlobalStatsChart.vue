@@ -144,7 +144,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useTheme } from '@/composables/useTheme'
@@ -186,7 +186,6 @@ const savePreference = (apiType: string, key: string, value: string) => {
 }
 
 const { theme } = useTheme()
-const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
 
 const isDark = computed(() => {
   if (theme.value === 'dark') return true

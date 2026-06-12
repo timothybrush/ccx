@@ -121,7 +121,6 @@ const loadPref = (apiType: string) => ({
 })
 
 const { theme } = useTheme()
-const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
 
 const isDark = computed(() => {
   if (theme.value === 'dark') return true
