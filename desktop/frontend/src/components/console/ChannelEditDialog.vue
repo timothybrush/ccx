@@ -1030,12 +1030,7 @@ async function fetchTargetModels() {
   fetchingModels.value = true
   fetchedModelsError.value = ''
   try {
-    const saved = await persistCurrentDraft()
-    if (!saved) {
-      fetchedModelsError.value = error.value
-      return
-    }
-
+    // 直接调用 API，不依赖于 persistCurrentDraft（避免表单验证失败导致无法获取模型）
     const typeApi = getChannelTypeApi(props.channelType as ManagedChannelType)
     const keys = getSubmitApiKeys()
     const resp = await typeApi.getChannelModels(props.channel.index, {
