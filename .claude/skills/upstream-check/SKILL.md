@@ -29,13 +29,26 @@ bash .claude/skills/upstream-check/scripts/upstream-check.sh
 cat .claude/skills/upstream-check/scripts/upstream-state.json
 ```
 
-### 3. 分析结果
+### 3. AI 判断协议变更
 
-根据脚本输出的 JSON 判断：
+**重要**：脚本的关键词匹配（`matched_keywords`）仅作为初步筛选，存在误报风险（如 "system clipboard" 误报为 `system` 协议变更）。
 
-- **`claude_code.up_to_date`** / **`codex.up_to_date`**：版本是否相同
-- **`claude_code.protocol_changes`** / **`codex.protocol_changes`**：是否有协议/工具/用法相关变更
-- **`matched_keywords`**：具体匹配了哪些关键字
+必须通过 AI 二次判断：
+
+1. 读取脚本输出的 `release_body_snippet`（前 800 字符）
+2. 如果 `matched_keywords` 非空，分析每个关键词的上下文：
+   - 是否涉及**协议格式变更**（如消息结构、字段定义、请求/响应格式）
+   - 是否涉及**新工具/能力引入**（如新的 API 端点、工具类型、功能模块）
+   - 是否涉及**核心用法变化**（如参数行为调整、默认值改变、废弃警告）
+3. 排除以下情况的误报：
+   - Bug 修复中的偶然关键词（如 "system clipboard"、"session's model"）
+   - UI/UX 改进（如 "environment variables" 在设置说明中）
+   - 性能优化、日志调整、错误提示改进
+4. 输出最终判断：`真实协议变更` 或 `误报（仅 bug 修复/体验改进）`
+
+**判断标准**：
+- ✅ **真实变更**：影响 CCX 代理层协议转换、请求构造、响应解析的变更
+- ❌ **误报**：仅影响 Claude Code/Codex 客户端内部行为，不影响 API 协议的变更
 
 ### 4. 升级建议逻辑
 
@@ -48,7 +61,7 @@ cat .claude/skills/upstream-check/scripts/upstream-state.json
 
 ### 5. 更新 TODO.md
 
-**仅当 `protocol_changes: true` 且远程 tag 不在 `seen_tags` 中时**，追加 TODO 条目。
+**仅当 AI 判断为"真实协议变更"且远程 tag 不在 `seen_tags` 中时**，追加 TODO 条目。
 
 **去重检查（必须）**：
 
@@ -119,8 +132,8 @@ cat .claude/skills/upstream-check/scripts/upstream-state.json
 ```
 
 **重要**：协议/工具变更字段的逻辑：
-- **仅当 `up_to_date: false` 且 `protocol_changes: true` 时**，显示"发现变更 - [关键词]"
-- **其他情况（版本一致或无关键词匹配）**，显示"无"
+- **仅当 `up_to_date: false` 且 AI 判断为"真实协议变更"时**，显示"发现变更 - [变更要点简述]"
+- **其他情况（版本一致、无关键词匹配或 AI 判断为误报）**，显示"无"
 
 ### 8. 输出功能与体验变更报告
 
@@ -139,4 +152,5 @@ cat .claude/skills/upstream-check/scripts/upstream-state.json
 - 脚本只输出 JSON 到 stdout，不写磁盘
 - 状态持久化由 skill 负责
 - 脚本网络失败时（exit 1），不更新状态，仅输出错误
-- `matched_keywords` 包含协议兼容性、新工具/能力、用法变化三类关键字
+- `matched_keywords` 仅作为初步筛选，最终是否为协议变更由 AI 判断
+- AI 判断时需排除 bug 修复、UI 改进中的偶然关键词匹配（如 "system clipboard"、"session's model"）
