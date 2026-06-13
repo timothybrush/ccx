@@ -142,9 +142,13 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
               :model-value="row.target"
               class="h-8 w-full rounded-lg border border-border/70 bg-background px-2.5 font-mono text-xs outline-none transition-all focus:border-primary/60 focus:ring-2 focus:ring-primary/10"
               placeholder="target-model"
+              :list="`target-datalist-row-${index}`"
               @update:model-value="(val) => emit('updateMappingRow', row.id, 'target', val as string)"
               @focus="emit('handleTargetFocus'); emit('showTargetDropdown', `row-${index}`, row.target)"
             />
+            <datalist :id="`target-datalist-row-${index}`">
+              <option v-for="model in targetModelDatalist" :key="model" :value="model">{{ model }}</option>
+            </datalist>
           </div>
 
           <!-- VERBOSITY (Reasoning) -->
@@ -216,8 +220,13 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
             :model-value="newModelMapping.target"
             class="h-9 w-full rounded-lg border border-primary/20 bg-background px-3 font-mono text-xs outline-none focus:border-primary/50"
             placeholder="target-model"
+            list="target-datalist-new"
             @update:model-value="(val) => emit('update:newModelMapping', { target: val as string })"
+            @focus="emit('showTargetDropdown', 'new', newModelMapping.target)"
           />
+          <datalist id="target-datalist-new">
+            <option v-for="model in targetModelDatalist" :key="model" :value="model">{{ model }}</option>
+          </datalist>
         </div>
         <div class="space-y-1">
           <span class="text-[8px] font-bold tracking-wider text-muted-foreground/60 block pl-1">VERBOSITY</span>
