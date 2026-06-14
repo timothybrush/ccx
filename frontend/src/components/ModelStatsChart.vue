@@ -194,7 +194,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     y: {
       formatter: (val: number) => selectedView.value === 'requests'
         ? `${Math.round(val)} ${t('chart.requestUnit')}`
-        : formatNumber(val)
+        : `${formatNumber(val)} ${t('chart.tokenUnit')}`
     }
   },
   legend: {

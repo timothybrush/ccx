@@ -585,7 +585,7 @@ const formatTooltipValue = (val: number, mode: ViewMode): string => {
       return `${Math.round(val)} ${t('chart.requestUnit')}`
     case 'tokens':
     case 'cache':
-      return formatNumber(Math.abs(val))
+      return `${formatNumber(Math.abs(val))} ${t('chart.tokenUnit')}`
     default:
       return val.toString()
   }

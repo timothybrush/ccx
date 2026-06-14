@@ -410,7 +410,7 @@ const chartOptions = computed<ApexOptions>(() => {
       y: {
         formatter: (val: number) => mode === 'traffic'
           ? `${Math.round(val)} ${t('chart.requestUnit')}`
-          : formatNumber(val)
+          : `${formatNumber(val)} ${t('chart.tokenUnit')}`
       },
       custom: mode === 'traffic' ? buildTrafficTooltip : undefined
     },

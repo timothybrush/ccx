@@ -447,6 +447,7 @@
   "chart.input": "input",
   "chart.output": "output",
   "chart.requestUnit": "request",
+  "chart.tokenUnit": "token",
   "chart.issueCount": "masalah",
   "chart.total": "Total",
   "chart.collapse": "Ciutkan",

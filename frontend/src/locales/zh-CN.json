@@ -447,6 +447,7 @@
   "chart.input": "输入",
   "chart.output": "输出",
   "chart.requestUnit": "请求",
+  "chart.tokenUnit": "tokens",
   "chart.issueCount": "异常",
   "chart.total": "合计",
   "chart.collapse": "收起",
