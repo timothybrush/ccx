@@ -10,7 +10,6 @@ interface FormData {
   fastMode: boolean
   textVerbosity: 'low' | 'medium' | 'high' | ''
   supportedModelsText: string
-  noVisionModelsText: string
   visionFallbackModel: string
   noVision: boolean
   historicalImageTurnLimit: number
