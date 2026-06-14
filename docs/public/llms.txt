@@ -1,0 +1,44 @@
+# CCX
+
+> CCX is a high-performance multi-upstream AI API proxy and protocol translation gateway supporting Claude, OpenAI Chat, OpenAI Images, Codex Responses, and Gemini.
+
+CCX provides unified proxy entry, built-in web admin, channel orchestration, failover, multi-key management, and model routing. Built with Go 1.25 + Gin backend and Vue 3 frontend.
+
+## Getting Started
+
+- [Quick Start](https://benedictking.github.io/ccx/en/guide/getting-started): Install, configure, and run CCX for the first time
+- [CCX Desktop](https://benedictking.github.io/ccx/en/guide/desktop/): Desktop app with GUI for macOS, Windows, and Linux
+- [Deployment](https://benedictking.github.io/ccx/en/guide/deployment): Production deployment guide
+- [Environment Variables](https://benedictking.github.io/ccx/en/guide/environment): All environment variables and defaults
+
+## Client Setup
+
+- [Client Overview](https://benedictking.github.io/ccx/en/guide/clients/): Supported clients and integration overview
+- [Claude Code](https://benedictking.github.io/ccx/en/guide/clients/claude-code): Configure Claude Code to use CCX as proxy
+- [Codex CLI / Codex App](https://benedictking.github.io/ccx/en/guide/clients/codex): Configure Codex to use CCX
+- [OpenCode](https://benedictking.github.io/ccx/en/guide/clients/opencode): Configure OpenCode to use CCX
+
+## Provider Setup
+
+- [Provider Overview](https://benedictking.github.io/ccx/en/providers/): Overview of supported upstream providers
+- [DeepSeek](https://benedictking.github.io/ccx/en/providers/deepseek): DeepSeek provider configuration
+- [GLM (Zhipu AI)](https://benedictking.github.io/ccx/en/providers/glm): GLM provider configuration
+- [MiniMax](https://benedictking.github.io/ccx/en/providers/minimax): MiniMax provider configuration
+- [Kimi (Moonshot)](https://benedictking.github.io/ccx/en/providers/kimi): Kimi provider configuration
+- [OpenAI GPT](https://benedictking.github.io/ccx/en/providers/openai): OpenAI GPT provider configuration
+- [Xiaomi MiMo](https://benedictking.github.io/ccx/en/providers/mimo): MiMo provider configuration
+- [Claude](https://benedictking.github.io/ccx/en/providers/claude): Claude provider configuration
+- [Gemini](https://benedictking.github.io/ccx/en/providers/gemini): Gemini provider configuration
+
+## Advanced
+
+- [Architecture](https://benedictking.github.io/ccx/en/guide/architecture): System architecture and design patterns
+- [Development](https://benedictking.github.io/ccx/en/guide/development): Development setup and workflow
+- [Release](https://benedictking.github.io/ccx/en/guide/release): Release process and versioning
+
+## Optional
+
+- [Contributing](https://benedictking.github.io/ccx/en/guide/contributing): How to contribute to the project
+- [Privacy Policy](https://benedictking.github.io/ccx/en/guide/privacy): Data handling and privacy information
+- [Verification](https://benedictking.github.io/ccx/en/guide/verification): Build verification and artifact checksums
+- [Desktop Troubleshooting](https://benedictking.github.io/ccx/en/guide/desktop/troubleshooting): Common issues and solutions for CCX Desktop

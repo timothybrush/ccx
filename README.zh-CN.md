@@ -78,15 +78,19 @@ CCX 对外提供一个统一后端入口：
 
 ### 方式零：CCX Desktop
 
-如果你希望在桌面端快速上手，可优先使用 [CCX Desktop](docs/guide/desktop)：
+CCX Desktop 提供原生桌面体验，通过 GUI 管理渠道、密钥和客户端配置。
 
-1. 下载并安装对应平台的桌面应用。
-2. 打开应用并按向导配置 `PROXY_ACCESS_KEY`。
-3. 启动服务、添加渠道、写入客户端配置后即可开始使用。
+| 平台 | 安装方式 | 说明 |
+|------|---------|------|
+| **Windows** | 在 [Microsoft Store](https://apps.microsoft.com/detail/ccx-desktop) 搜索 **CCX Desktop** | 推荐方式。自动更新，无需手动签名。也可从 [GitHub Releases](https://github.com/BenedictKing/ccx/releases/latest) 下载 `setup.exe`。 |
+| **macOS** | `brew tap BenedictKing/ccx && brew install --cask ccx-desktop` | 或从 [GitHub Releases](https://github.com/BenedictKing/ccx/releases/latest) 下载 `.dmg`（支持 arm64/amd64）。 |
+| **Linux** | 从 [GitHub Releases](https://github.com/BenedictKing/ccx/releases/latest) 下载 `.AppImage` | 设置可执行权限后运行。 |
+
+详细安装和配置说明请参考 [CCX Desktop 用户教程](docs/guide/desktop)。
 
 ### 方式一：直接运行二进制
 
-1. 从 [Releases](https://github.com/BenedictKing/ccx/releases/latest) 下载最新可执行文件；Windows 用户推荐在 Microsoft Store 中搜索 **CCX Desktop** 安装，Store 负责签名与更新；macOS 用户也可使用 `brew tap BenedictKing/ccx && brew install --cask ccx-desktop` 安装
+1. 从 [Releases](https://github.com/BenedictKing/ccx/releases/latest) 下载最新可执行文件。
 2. 在可执行文件同目录创建 `.env`：
 
 ```bash

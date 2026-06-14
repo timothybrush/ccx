@@ -1,128 +1,114 @@
-# 贡献指南
+# Contributing Guide
 
-本文档为项目贡献者提供了一套标准化的指导，以确保代码库的一致性和高质量。
+This document provides standardized guidance for project contributors to ensure consistency and high quality across the codebase.
 
-## 如何贡献
+## How to Contribute
 
-欢迎通过提交 Issue 和 Pull Request 为本项目贡献力量！
+We welcome contributions via Issues and Pull Requests!
 
-1.  Fork 本项目。
-2.  创建特性分支 (`git checkout -b feature/AmazingFeature`)。
-3.  提交改动 (`git commit -m 'feat: Add some AmazingFeature'`)。
-4.  推送到分支 (`git push origin feature/AmazingFeature`)。
-5.  开启 Pull Request。
+1. Fork this repository.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'feat: add some amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
 
-## 版本规范
+## Versioning
 
-项目遵循 **语义化版本 2.0.0 (Semantic Versioning)** 规范。版本格式为 `主版本号.次版本号.修订号` (MAJOR.MINOR.PATCH)，版本号递增规则如下：
+This project follows **Semantic Versioning 2.0.0**. The version format is `MAJOR.MINOR.PATCH`:
 
--   **主版本号 (MAJOR)**: 当你做了不兼容的 API 修改。
--   **次版本号 (MINOR)**: 当你做了向下兼容的功能性新增。
--   **修订号 (PATCH)**: 当你做了向下兼容的问题修正。
+- **MAJOR**: Incompatible API changes.
+- **MINOR**: Backwards-compatible new functionality.
+- **PATCH**: Backwards-compatible bug fixes.
 
-## 发布流程
+## Release Process
 
-本节为项目维护者提供了版本发布流程概述。贡献者通常不需要直接执行这些步骤。
+This section is for project maintainers. Contributors typically do not need to follow these steps directly.
 
-1.  **准备工作**:
-    *   确保本地 `main` 分支是最新的。
-    *   确认所有计划内的功能和修复已合并。
-    *   运行测试和构建验证：`cd backend-go && make test && cd .. && make build`
-2.  **更新日志**: 更新 `CHANGELOG.md`，新增版本标题，并分类记录变更内容。
-3.  **更新版本号**: 更新根目录 `VERSION` 文件。
-4.  **提交**: 提交 `CHANGELOG.md` 和 `VERSION` 的修改，提交信息格式为 `chore(release): prepare for vX.Y.Z`。
-5.  **创建标签**: 为此次提交创建附注标签 `git tag -a vX.Y.Z -m "Release vX.Y.Z"` 并推送到远程。
-6.  **GitHub Release**: 在 GitHub 上创建 Release，将 `CHANGELOG.md` 中的对应版本内容复制到发布说明中。
+1. **Prepare**:
+    * Ensure local `main` branch is up to date.
+    * Confirm all planned features and fixes have been merged.
+    * Run tests and build: `cd backend-go && make test && cd .. && make build`
+2. **Changelog**: Update `CHANGELOG.md` with a new version heading and categorized changes.
+3. **Version**: Update the root `VERSION` file.
+4. **Commit**: Commit `CHANGELOG.md` and `VERSION` changes with the message `chore(release): prepare for vX.Y.Z`.
+5. **Tag**: Create an annotated tag `git tag -a vX.Y.Z -m "Release vX.Y.Z"` and push to remote.
+6. **GitHub Release**: Create a Release on GitHub, copying the corresponding `CHANGELOG.md` section into the release notes.
 
-## 编码规范
+## Coding Standards
 
-### 设计原则
+### Design Principles
 
-项目严格遵循以下软件工程原则：
+The project strictly follows these software engineering principles:
 
-1.  **KISS 原则 (Keep It Simple, Stupid)**: 追求代码和设计的极致简洁，优先选择最直观的解决方案。
-2.  **DRY 原则 (Don't Repeat Yourself)**: 消除重复代码，提取共享函数，统一相似功能的实现方式。
-3.  **YAGNI 原则 (You Aren't Gonna Need It)**: 仅实现当前明确所需的功能，删除未使用的代码和依赖，避免过度设计。
-4.  **函数式编程优先**: 优先使用 `map`、`reduce`、`filter` 等函数式方法和不可变数据操作。
+1. **KISS (Keep It Simple, Stupid)**: Pursue simplicity in code and design. Prefer the most straightforward solution.
+2. **DRY (Don't Repeat Yourself)**: Eliminate duplicate code, extract shared functions, and unify similar implementations.
+3. **YAGNI (You Aren't Gonna Need It)**: Only implement features that are currently needed. Remove unused code and dependencies.
+4. **Functional-first**: Prefer `map`, `reduce`, `filter`, and immutable data operations where applicable.
 
-### 代码质量标准
+### Code Quality
 
-**Go 后端 (backend-go/)**:
--   使用 `go fmt` 格式化代码
--   使用 `golangci-lint` 进行代码检查
--   日志使用 `[Component-Action]` 标签格式，禁止 emoji
--   实现优雅的错误处理和日志记录
+**Go Backend (`backend-go/`)**:
+- Format with `go fmt`
+- Lint with `golangci-lint`
+- Use `[Component-Action]` log format; no emoji in logs
+- Implement proper error handling and logging
 
-**Vue 前端 (frontend/)**:
--   使用 TypeScript 严格模式，避免 `any` 类型
--   所有函数都有明确的类型声明
--   遵循 Prettier 格式化（2空格、单引号、无分号、宽度120、LF EOL）
+**Vue Frontend (`frontend/`)**:
+- Use strict TypeScript; avoid `any` types
+- All functions must have explicit type declarations
+- Follow Prettier config (2-space indent, single quotes, no semicolons, 120-char width, LF EOL)
 
-### 文件命名规范
+### File Naming
 
-**Go 后端**:
--   **文件名**: `snake_case` (例: `channel_scheduler.go`)
--   **类型/接口名**: `PascalCase` (例: `Provider`)
--   **函数名**: `PascalCase` 导出 / `camelCase` 私有
--   **常量名**: `PascalCase` 或 `SCREAMING_SNAKE_CASE`
+**Go Backend**:
+- **Files**: `snake_case` (e.g., `channel_scheduler.go`)
+- **Types/Interfaces**: `PascalCase` (e.g., `Provider`)
+- **Functions**: `PascalCase` (exported) / `camelCase` (private)
+- **Constants**: `PascalCase` or `SCREAMING_SNAKE_CASE`
 
-**Vue 前端**:
--   **文件名**: `kebab-case` (例: `api-service.ts`)
--   **Vue 组件名**: `PascalCase` (例: `ChannelCard.vue`)
--   **类型/接口名**: `PascalCase`
--   **函数名**: `camelCase` (例: `getNextApiKey`)
--   **常量名**: `SCREAMING_SNAKE_CASE` (例: `DEFAULT_CONFIG`)
+**Vue Frontend**:
+- **Files**: `kebab-case` (e.g., `api-service.ts`)
+- **Vue Components**: `PascalCase` (e.g., `ChannelCard.vue`)
+- **Types/Interfaces**: `PascalCase`
+- **Functions**: `camelCase` (e.g., `getNextApiKey`)
+- **Constants**: `SCREAMING_SNAKE_CASE` (e.g., `DEFAULT_CONFIG`)
 
-### TypeScript 规范（前端）
+## Testing
 
--   使用严格的 TypeScript 配置
--   所有函数和变量都有明确的类型声明
--   使用接口定义数据结构
--   避免使用 `any` 类型
+### Development Testing
 
-### Go 规范（后端）
+Before submitting code, ensure:
 
--   使用 `go fmt` 格式化，`golangci-lint` 检查
--   错误必须显式处理，不可忽略
--   使用接口定义抽象，便于测试和扩展
--   日志使用 `[Component-Action]` 标签格式
+**Go Backend**:
+- Run tests: `cd backend-go && make test`
+- Run linter: `cd backend-go && make lint`
+- Format code: `cd backend-go && make fmt`
 
-## 测试指南
+**Vue Frontend**:
+- Run build verification: `cd frontend && bun run build`
 
-### 开发测试
+**Integration**:
+- Smoke test via health check endpoint (`GET http://localhost:3000/health`)
+- For UI changes, include a brief test plan and screenshots/GIF in the Pull Request
 
-在提交代码前，请确保：
+### Commit & Pull Request Guidelines
 
-**Go 后端**:
--   运行测试：`cd backend-go && make test`
--   运行代码检查：`cd backend-go && make lint`
--   运行格式化：`cd backend-go && make fmt`
+- **Conventional Commits**: Use `conventional-commits` format, e.g., `feat:`, `fix:`, `refactor:`, `chore:`.
+    - Examples: `feat(frontend): add ESC to close modal`, `fix(backend): redact Authorization header`.
+- **PR Content**: Pull Requests must include:
+    - Purpose description
+    - Related Issue (if any)
+    - Detailed test steps
+    - Configuration / environment variable changes
+    - Screenshots/GIF for UI changes
 
-**Vue 前端**:
--   运行构建验证：`cd frontend && bun run build`
+## Security
 
-**集成验证**:
--   通过健康检查端点 (`GET http://localhost:3000/health`) 进行冒烟测试
--   对于 UI 变更，在 Pull Request 中包含简短的测试计划和截图/GIF
-
-### 提交与 Pull Request 指南
-
--   **Conventional Commits**: 提交信息遵循 `conventional-commits` 规范，例如 `feat:`, `fix:`, `refactor:`, `chore:`。
-    -   示例: `feat(frontend): add ESC to close modal`, `fix(backend): redact Authorization header`。
--   **PR 内容**: Pull Request 必须包含：
-    -   目的说明
-    -   关联的 Issue (如果有)
-    -   详细的测试步骤
-    -   配置/环境变量变更说明
-    -   UI 变更的截图/GIF
-
-## 安全与配置提示
-
--   **切勿提交敏感信息**: 永远不要将密钥或敏感配置提交到版本控制中。使用 `.env` 文件和 `backend-go/.config/config.json` 进行管理。
--   **访问密钥**: `PROXY_ACCESS_KEY` 是代理访问的必需密钥。避免在日志中记录完整的 API 密钥。
+- **Never commit secrets**: Do not commit keys or sensitive configuration to version control. Use `.env` files and `backend-go/.config/config.json`.
+- **Access keys**: `PROXY_ACCESS_KEY` is required for proxy access. Avoid logging full API keys.
 
 ## Agent-Specific Notes
 
--   保持代码差异最小化，与现有代码风格保持一致。
--   当行为发生变化时，及时更新相关文档。
--   除非必要，否则避免进行重命名或大规模重构。
+- Keep code diffs minimal and consistent with existing code style.
+- Update relevant documentation when behavior changes.
+- Avoid unnecessary renames or large-scale refactoring.
