@@ -29,27 +29,29 @@
       <!-- Row 2: Model + Channel chips (collapsed) -->
       <div v-if="!expanded" class="d-flex align-center ga-2 flex-wrap">
         <span class="text-body-2 font-weight-medium mr-2">{{ conversation.lastModel }}</span>
-        <v-chip
-          v-for="ch in visibleChannels"
-          :key="ch.index"
-          :title="getChannelTooltip(ch)"
-          :class="{
-            'current-channel-chip': ch.index === conversation.currentChannel && !hasOverride,
-            'next-channel-chip': ch.index === nextChannel,
-          }"
-          :color="ch.index === conversation.currentChannel ? 'primary' : ch.index === nextChannel ? (nextChannelCircuitOpen ? 'error' : 'success') : undefined"
-          :variant="ch.index === conversation.currentChannel ? 'flat' : ch.index === nextChannel ? 'flat' : 'outlined'"
-          size="x-small"
-          @click.stop="handleQuickOverride(ch)"
-        >
-          {{ ch.name }}
-          <template v-if="ch.index === conversation.currentChannel" #append>
-            <v-icon size="10">mdi-check</v-icon>
+        <v-tooltip v-for="ch in visibleChannels" :key="ch.index" :text="getChannelTooltip(ch)" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tip }">
+            <v-chip
+              v-bind="tip"
+              :class="{
+                'current-channel-chip': ch.index === conversation.currentChannel && !hasOverride,
+                'next-channel-chip': ch.index === nextChannel,
+              }"
+              :color="ch.index === conversation.currentChannel ? 'primary' : ch.index === nextChannel ? (nextChannelCircuitOpen ? 'error' : 'success') : undefined"
+              :variant="ch.index === conversation.currentChannel ? 'flat' : ch.index === nextChannel ? 'flat' : 'outlined'"
+              size="x-small"
+              @click.stop="handleQuickOverride(ch)"
+            >
+              {{ ch.name }}
+              <template v-if="ch.index === conversation.currentChannel" #append>
+                <v-icon size="10">mdi-check</v-icon>
+              </template>
+              <template v-else-if="ch.index === nextChannel" #append>
+                <span class="next-label">| {{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}</span>
+              </template>
+            </v-chip>
           </template>
-          <template v-else-if="ch.index === nextChannel" #append>
-            <span class="next-label">| {{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}</span>
-          </template>
-        </v-chip>
+        </v-tooltip>
         <v-chip v-if="hiddenCount > 0" size="x-small" variant="text" @click.stop="$emit('toggleExpand')">+{{ hiddenCount }}</v-chip>
       </div>
 

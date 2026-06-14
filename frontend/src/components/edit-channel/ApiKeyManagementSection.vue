@@ -381,7 +381,5 @@ const getDisabledKeyLabel = (reason: string) => {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
 }
 
-.key-tooltip {
-  font-size: 0.75rem;
-}
+
 </style>

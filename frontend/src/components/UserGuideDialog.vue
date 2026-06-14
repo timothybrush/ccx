@@ -14,7 +14,7 @@
         <span class="text-caption text-medium-emphasis mr-3 d-none d-sm-inline">
           {{ t('guide.stepIndicator', { current: step + 1, total: STEP_COUNT }) }}
         </span>
-        <v-tooltip :text="t('app.actions.close') + ' (Esc)'" content-class="ccx-tooltip">
+        <v-tooltip :text="t('app.actions.close') + ' (Esc)'" location="bottom" content-class="ccx-tooltip">
           <template #activator="{ props: tooltipProps }">
             <v-btn icon size="small" variant="text" v-bind="tooltipProps" @click="close">
               <v-icon size="20">mdi-close</v-icon>

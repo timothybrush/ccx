@@ -231,7 +231,7 @@
                     :model-value="true"
                     activator="parent"
                     location="top"
-                    :open-delay="200"
+                    :open-delay="150"
                     content-class="ccx-tooltip"
                   >
                     <div class="metrics-tooltip">

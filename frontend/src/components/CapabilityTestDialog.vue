@@ -12,7 +12,7 @@
           <v-icon color="success">mdi-test-tube</v-icon>
           <span class="dialog-title">{{ t('capability.title', { channel: channelName }) }}</span>
         </div>
-        <v-tooltip :text="t('app.actions.close') + ' (Esc)'" content-class="ccx-tooltip">
+        <v-tooltip :text="t('app.actions.close') + ' (Esc)'" location="bottom" content-class="ccx-tooltip">
           <template #activator="{ props: tooltipProps }">
             <v-btn icon variant="text" v-bind="tooltipProps" @click="$emit('update:modelValue', false)">
               <v-icon>mdi-close</v-icon>

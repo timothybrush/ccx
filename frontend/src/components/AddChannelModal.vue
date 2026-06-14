@@ -461,7 +461,7 @@
 
                           <!-- 操作按钮组 -->
                           <div class="action-group d-flex align-center ga-1 ml-3">
-                            <v-tooltip :text="row.noVision ? t('addChannel.visionDisabled') : t('addChannel.visionEnabled')" location="top" :open-delay="150">
+                            <v-tooltip :text="row.noVision ? t('addChannel.visionDisabled') : t('addChannel.visionEnabled')" location="top" :open-delay="150" content-class="key-tooltip">
                               <template #activator="{ props: tip }">
                                 <v-btn
                                   v-bind="tip"
@@ -3513,14 +3513,7 @@ onUnmounted(() => {
   }
 }
 
-:deep(.key-tooltip) {
-  color: rgba(var(--v-theme-on-surface), 0.92);
-  background-color: rgba(var(--v-theme-surface), 0.98);
-  border: 1px solid rgba(var(--v-theme-primary), 0.45);
-  font-weight: 600;
-  letter-spacing: 0;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
-}
+
 
 /* 快速添加模式样式 */
 .quick-input-textarea :deep(textarea) {
