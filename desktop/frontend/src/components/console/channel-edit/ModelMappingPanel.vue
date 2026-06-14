@@ -47,7 +47,7 @@ const emit = defineEmits<{
   'handleTargetFocus': []
 }>()
 
-const { tf } = useLanguage()
+const { t, tf } = useLanguage()
 
 const presetTags = ref(['gpt-5.5', 'gpt-5.4', 'MiMo', 'DeepSeek', 'MiniMax'])
 
@@ -68,7 +68,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
       <div class="space-y-0.5">
         <h4 class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
           <span class="h-2 w-2 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))] animate-pulse"></span>
-          {{ tf('console.form.modelRedirect', '模型重定向') }}
+          {{ t('channelEditor.mapping.redirect.title') }}
         </h4>
         <p class="text-[10px] text-muted-foreground">
           {{ tf('console.form.mappingHint', '拦截调用请求中的 Source 别名并定向投递至上游 Target 真实模型') }}

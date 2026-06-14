@@ -36,7 +36,7 @@ const emit = defineEmits<{
   (e: 'test-capability', channel: Channel): void
 }>()
 
-const { tf } = useLanguage()
+const { t, tf } = useLanguage()
 const { saveChannel, restoreApiKey } = useConsoleChannels()
 
 const isEditMode = computed(() => !!props.channel)
@@ -73,11 +73,11 @@ let scrollHandler: (() => void) | null = null
 
 // 导航 section 定义（使用 computed 保证语言切换后更新）
 const sections = computed(() => [
-  { id: 'basic', label: tf('console.form.sectionBasic', '基础配置') },
-  { id: 'redirect', label: tf('console.form.sectionRedirect', '模型重定向') },
-  { id: 'auth', label: tf('console.form.sectionAuth', '认证管理') },
-  { id: 'advanced', label: tf('console.form.sectionAdvanced', '高级选项') },
-  { id: 'headers', label: tf('console.form.sectionHeaders', '自定义参数') },
+  { id: 'basic', label: t('channelEditor.nav.basic') },
+  { id: 'redirect', label: t('channelEditor.nav.redirect') },
+  { id: 'auth', label: t('channelEditor.nav.auth') },
+  { id: 'advanced', label: t('channelEditor.nav.advanced') },
+  { id: 'headers', label: t('channelEditor.nav.custom') },
 ])
 
 function scrollToSection(id: string) {

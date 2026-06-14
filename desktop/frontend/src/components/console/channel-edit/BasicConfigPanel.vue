@@ -39,7 +39,7 @@ const emit = defineEmits<{
   'quickPaste': [text: string]
 }>()
 
-const { tf } = useLanguage()
+const { t, tf } = useLanguage()
 
 function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
   emit('update:form', { [key]: value } as Partial<FormData>)
@@ -95,11 +95,11 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     <div class="grid gap-4 lg:grid-cols-2">
       <!-- 基础信息 -->
       <section class="space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-xs">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-primary">{{ tf('console.form.basicInfoTitle', '基础信息') }}</h4>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-primary">{{ t('channelEditor.nav.basic') }}</h4>
         <div class="grid grid-cols-[2fr_1fr] gap-3">
           <div class="space-y-1.5">
             <Label class="text-xs font-semibold text-muted-foreground">
-              {{ tf('console.form.name', '名称') }} <span class="text-destructive">*</span>
+              {{ t('channelEditor.basic.name.label') }} <span class="text-destructive">*</span>
             </Label>
             <Input
               :model-value="form.name"
@@ -111,7 +111,7 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
           </div>
           <div class="space-y-1.5">
             <Label class="text-xs font-semibold text-muted-foreground">
-              {{ tf('console.form.serviceType', '服务类型') }} <span class="text-destructive">*</span>
+              {{ t('channelEditor.basic.serviceType.label') }} <span class="text-destructive">*</span>
             </Label>
             <Select :model-value="form.serviceType" @update:model-value="updateField('serviceType', $event as any)">
               <SelectTrigger class="h-9" :class="{ 'border-destructive': errors.serviceType }">
@@ -127,12 +127,12 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
           </div>
         </div>
         <div class="space-y-1.5">
-          <Label class="text-xs font-semibold text-muted-foreground">{{ tf('console.form.description', '描述') }}</Label>
+          <Label class="text-xs font-semibold text-muted-foreground">{{ t('channelEditor.basic.description.label') }}</Label>
           <Textarea
             :model-value="form.description"
             rows="2"
             class="min-h-[74px] resize-none"
-            :placeholder="tf('console.form.descriptionPlaceholder', '可选填，用于备注此节点供应商...')"
+            :placeholder="t('channelEditor.basic.description.placeholder')"
             @update:model-value="(val) => updateField('description', val as string)"
           />
         </div>
@@ -140,7 +140,7 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
 
       <!-- 连接终点 -->
       <section class="space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-xs">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-primary">{{ tf('console.form.connectionTitle', '连接终点') }}</h4>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-primary">{{ t('channelEditor.basic.baseUrl.label') }}</h4>
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <Label class="text-xs font-semibold text-muted-foreground">
@@ -164,7 +164,7 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
           <p v-if="errors.baseUrl" class="text-[10px] text-destructive">{{ errors.baseUrl }}</p>
         </div>
         <div class="space-y-1.5">
-          <Label class="text-xs font-semibold text-muted-foreground">{{ tf('console.form.website', '官方网站') }}</Label>
+          <Label class="text-xs font-semibold text-muted-foreground">{{ t('channelEditor.basic.website.label') }}</Label>
           <Input
             :model-value="form.website"
             class="h-9"

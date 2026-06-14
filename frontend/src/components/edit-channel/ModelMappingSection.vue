@@ -272,7 +272,7 @@
             <v-select
               v-if="supportsOpenAIAdvancedOptions"
               v-model="newMapping.reasoningEffort"
-              :label="t('addChannel.reasoningEffortLabel')"
+              :label="t('channelEditor.mapping.reasoningEffort.label')"
               :items="reasoningEffortOptions"
               variant="outlined"
               density="compact"

@@ -6,7 +6,7 @@
           <v-icon :color="hasConfigurableKeys ? 'primary' : 'error'">mdi-key</v-icon>
           <span class="section-title">{{ t('channelCard.apiKeyManagement') }} *</span>
           <v-chip v-if="!hasConfigurableKeys" size="x-small" color="error" variant="tonal">
-            {{ t('addChannel.apiKeyRequired') }}
+            {{ t('channelEditor.auth.apiKeyRequired') }}
           </v-chip>
         </div>
         <v-chip size="small" color="info" variant="tonal">
@@ -75,7 +75,7 @@
                     </v-tooltip>
                     <!-- 重复密钥标签 -->
                     <v-chip v-if="duplicateKeyIndex === index" size="x-small" color="error" variant="text">
-                      {{ t('addChannel.duplicateKey') }}
+                      {{ t('channelEditor.auth.duplicateKey') }}
                     </v-chip>
                   </div>
                 </div>
@@ -172,7 +172,7 @@
           <v-text-field
             v-model="newApiKey"
             :label="t('addChannel.addNewApiKey')"
-            :placeholder="t('addChannel.addNewApiKeyPlaceholder')"
+            :placeholder="t('channelEditor.auth.addNewApiKey.placeholder')"
             prepend-inner-icon="mdi-plus"
             variant="outlined"
             density="comfortable"
