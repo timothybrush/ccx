@@ -582,4 +582,9 @@ export const enMessages = {
     'guide.channelList.clickLogs': 'Click the log button on the right to view that channel’s logs.',
     'guide.channelList.clickResume': 'Click the resume button (shown only on tripped channels) to restore a circuit-broken channel right away.',
     'guide.channelList.drag': 'Drag the handle on the left to reorder priority and the failover sequence.',
+
+    'addChannel.runtimeTitle': 'Runtime',
+    'addChannel.compatibilityTitle': 'Compatibility',
+    'addChannel.transportTitle': 'Transport',
+    'addChannel.outline': 'Outline',
 }

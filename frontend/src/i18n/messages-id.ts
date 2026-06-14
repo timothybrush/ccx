@@ -582,4 +582,9 @@ export const idMessages = {
     'guide.channelList.clickLogs': 'Klik tombol log di sebelah kanan untuk melihat log channel tersebut.',
     'guide.channelList.clickResume': 'Klik tombol lanjutkan (hanya muncul pada channel yang terputus) untuk segera memulihkan channel yang terkena circuit breaker.',
     'guide.channelList.drag': 'Seret handle di sebelah kiri untuk mengatur ulang prioritas dan urutan failover.',
+
+    'addChannel.runtimeTitle': 'Runtime',
+    'addChannel.compatibilityTitle': 'Compatibility',
+    'addChannel.transportTitle': 'Transport',
+    'addChannel.outline': 'Garis Besar',
 }

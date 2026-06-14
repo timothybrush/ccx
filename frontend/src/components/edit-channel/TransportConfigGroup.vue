@@ -2,7 +2,7 @@
   <v-card variant="outlined" class="pa-4">
     <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-3">
       <v-icon size="small" color="primary" class="mr-1">mdi-network</v-icon>
-      Transport 代理路由网络
+      {{ t('addChannel.transportTitle') }}
     </div>
 
     <v-row dense>

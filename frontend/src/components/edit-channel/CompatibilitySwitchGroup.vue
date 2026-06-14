@@ -2,7 +2,7 @@
   <v-card variant="outlined" class="pa-4">
     <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-3">
       <v-icon size="small" color="primary" class="mr-1">mdi-format-align-justify</v-icon>
-      Compatibility 协议规范化
+      {{ t('addChannel.compatibilityTitle') }}
     </div>
 
     <div class="d-flex flex-column ga-3">

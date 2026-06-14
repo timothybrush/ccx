@@ -2,7 +2,7 @@
   <v-card variant="outlined" class="pa-4">
     <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-3">
       <v-icon size="small" color="primary" class="mr-1">mdi-cog-outline</v-icon>
-      Runtime 运行期策略
+      {{ t('addChannel.runtimeTitle') }}
     </div>
 
     <!-- 余额耗尽自动拉黑 -->

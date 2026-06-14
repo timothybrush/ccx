@@ -26,6 +26,7 @@
         <div class="content-row" style="height: 100%;">
           <!-- 左侧垂直导航 -->
           <AddChannelSidebarNav
+            :title="t('addChannel.outline')"
             :sections="sections"
             :active-section="activeSection"
             @navigate="scrollToSection"

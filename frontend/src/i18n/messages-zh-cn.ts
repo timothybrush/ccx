@@ -581,4 +581,9 @@ export const zhCNMessages = {
     'guide.channelList.clickLogs': '点击右侧的日志按钮，可查看该渠道的日志。',
     'guide.channelList.clickResume': '点击恢复按钮（仅熔断渠道显示），可立即恢复被熔断的渠道。',
     'guide.channelList.drag': '拖动左侧手柄，可调整渠道优先级与故障转移顺序。',
+
+    'addChannel.runtimeTitle': '运行期策略',
+    'addChannel.compatibilityTitle': '协议规范化',
+    'addChannel.transportTitle': '代理路由网络',
+    'addChannel.outline': '配置大纲',
 }

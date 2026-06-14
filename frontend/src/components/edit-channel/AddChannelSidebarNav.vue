@@ -29,7 +29,7 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
-  title: '配置大纲',
+  title: '',
   activeSection: '',
 })
 
