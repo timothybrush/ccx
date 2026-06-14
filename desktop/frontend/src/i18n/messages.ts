@@ -623,6 +623,34 @@ export type MessageKey =
   | 'console.form.transportTitle'
   | 'console.form.rateLimitTitle'
   | 'console.form.streamTimeoutTitle'
+  | 'console.form.fastModeHint'
+  | 'console.form.textVerbosityStyle'
+  | 'console.form.visionTitle'
+  | 'console.form.selectDefaultLabel'
+  | 'console.form.autoBlacklistBalanceLabel'
+  | 'console.form.autoBlacklistBalanceHint'
+  | 'console.form.rateLimitAutoLabel'
+  | 'console.form.rateLimitAutoHint'
+  | 'console.form.proxyUrlLabel'
+  | 'console.form.requestTimeoutLabel'
+  | 'console.form.routePrefixLabel'
+  | 'console.form.rpmLabel'
+  | 'console.form.rpmPlaceholder'
+  | 'console.form.windowLabel'
+  | 'console.form.windowPlaceholder'
+  | 'console.form.maxConcurrentLabel'
+  | 'console.form.maxConcurrentPlaceholder'
+  | 'console.form.presetGentle'
+  | 'console.form.presetBalanced'
+  | 'console.form.presetAggressive'
+  | 'console.form.firstByteWait'
+  | 'console.form.firstByteWaitHint'
+  | 'console.form.idleAfterFirstByte'
+  | 'console.form.idleAfterFirstByteHint'
+  | 'console.form.toolCallIdle'
+  | 'console.form.toolCallIdleHint'
+  | 'console.form.timeoutThreshold'
+  | 'console.form.supportedModelsLabel'
   | 'console.form.modelRedirect'
   | 'console.form.modelMappingExisting'
   | 'console.form.modelMappingAdd'
@@ -1399,6 +1427,34 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.form.transportTitle': 'Transport',
     'console.form.rateLimitTitle': 'Rate Limit',
     'console.form.streamTimeoutTitle': 'Stream Timeout',
+    'console.form.fastModeHint': 'Prefer low-latency lightweight edge routing',
+    'console.form.textVerbosityStyle': 'Text Verbosity Style',
+    'console.form.visionTitle': 'Vision',
+    'console.form.selectDefaultLabel': 'Default',
+    'console.form.autoBlacklistBalanceLabel': 'Auto blacklist abnormal balance keys',
+    'console.form.autoBlacklistBalanceHint': 'Automatically trip/disable keys with balance errors',
+    'console.form.rateLimitAutoLabel': 'Auto learn upstream rate limiting',
+    'console.form.rateLimitAutoHint': 'Parse Retry-After / x-ratelimit-* headers and adjust cooldown dynamically',
+    'console.form.proxyUrlLabel': 'Proxy URL',
+    'console.form.requestTimeoutLabel': 'Request timeout (ms)',
+    'console.form.routePrefixLabel': 'Route prefix',
+    'console.form.rpmLabel': 'Max requests per minute (RPM)',
+    'console.form.rpmPlaceholder': 'No limit',
+    'console.form.windowLabel': 'Sliding window (s)',
+    'console.form.windowPlaceholder': '60s',
+    'console.form.maxConcurrentLabel': 'Max concurrent streams',
+    'console.form.maxConcurrentPlaceholder': 'No limit',
+    'console.form.presetGentle': 'Gentle',
+    'console.form.presetBalanced': 'Balanced',
+    'console.form.presetAggressive': 'Aggressive',
+    'console.form.firstByteWait': 'First byte wait',
+    'console.form.firstByteWaitHint': 'Auto disconnect if no response',
+    'console.form.idleAfterFirstByte': 'Post-first-byte idle',
+    'console.form.idleAfterFirstByteHint': 'Mid-generation stall timeout',
+    'console.form.toolCallIdle': 'Tool call idle',
+    'console.form.toolCallIdleHint': 'FunctionCall delay timeout',
+    'console.form.timeoutThreshold': 'Timeout:',
+    'console.form.supportedModelsLabel': 'Supported models (whitelist, leave empty for no restriction)',
     'console.form.modelRedirect': 'Model redirect',
     'console.form.modelMappingExisting': 'Configured',
     'console.form.modelMappingAdd': 'Add redirect',
@@ -2167,6 +2223,34 @@ export const messages: Record<SupportedLocale, Messages> = {
     'console.form.transportTitle': '代理路由网络',
     'console.form.rateLimitTitle': '上游主动限速流量阀',
     'console.form.streamTimeoutTitle': '流式断流超时控制',
+    'console.form.fastModeHint': '优先选取低延迟的轻量边缘路由链路',
+    'console.form.textVerbosityStyle': '文本详细程度样式',
+    'console.form.visionTitle': '视觉控制',
+    'console.form.selectDefaultLabel': '默认',
+    'console.form.autoBlacklistBalanceLabel': '自动熔断/黑名单余额异常 Key',
+    'console.form.autoBlacklistBalanceHint': '自动禁用余额异常的 Key',
+    'console.form.rateLimitAutoLabel': '自动学习上游限速',
+    'console.form.rateLimitAutoHint': '解析 Retry-After / x-ratelimit-* 响应头动态调整 cooldown',
+    'console.form.proxyUrlLabel': '代理通道 URL',
+    'console.form.requestTimeoutLabel': '请求超时 (ms)',
+    'console.form.routePrefixLabel': '接口路由前缀',
+    'console.form.rpmLabel': '每分钟最大请求量 (RPM)',
+    'console.form.rpmPlaceholder': '不设限制',
+    'console.form.windowLabel': '检测窗口滑动时间 (s)',
+    'console.form.windowPlaceholder': '60 秒',
+    'console.form.maxConcurrentLabel': '全双工最大并发数限制',
+    'console.form.maxConcurrentPlaceholder': '不设限制',
+    'console.form.presetGentle': '温和',
+    'console.form.presetBalanced': '均衡',
+    'console.form.presetAggressive': '激进',
+    'console.form.firstByteWait': '首字等待',
+    'console.form.firstByteWaitHint': '未响应则自动断开',
+    'console.form.idleAfterFirstByte': '首字后断流',
+    'console.form.idleAfterFirstByteHint': '生成中途卡顿超时',
+    'console.form.toolCallIdle': '工具调用空闲',
+    'console.form.toolCallIdleHint': 'FunctionCall 延迟',
+    'console.form.timeoutThreshold': '超时阈值:',
+    'console.form.supportedModelsLabel': '限定可支持模型范围（白名单模式，留空表示不限制）',
     'console.form.modelRedirect': '模型重定向',
     'console.form.modelMappingExisting': '已配置',
     'console.form.modelMappingAdd': '添加新重定向',

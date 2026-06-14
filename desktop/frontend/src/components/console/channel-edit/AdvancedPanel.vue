@@ -104,13 +104,13 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
         <div class="flex items-center justify-between p-2 rounded-md hover:bg-accent/40 transition-colors">
           <div class="space-y-0.5">
             <Label class="text-xs font-semibold">{{ tf('console.form.fastMode', '快速模式') }}</Label>
-            <p class="text-[10px] text-muted-foreground">优先选取低延迟的轻量边缘路由链路</p>
+            <p class="text-[10px] text-muted-foreground">{{ tf('console.form.fastModeHint', '优先选取低延迟的轻量边缘路由链路') }}</p>
           </div>
           <Switch :model-value="form.fastMode" @update:model-value="updateField('fastMode', $event)" />
         </div>
 
         <div class="space-y-1 p-1">
-          <Label class="text-[10px] font-bold text-muted-foreground uppercase">Text Verbosity Style</Label>
+          <Label class="text-[10px] font-bold text-muted-foreground uppercase">{{ tf('console.form.textVerbosityStyle', 'Text Verbosity Style') }}</Label>
           <Select :model-value="toSelectValue(form.textVerbosity)" @update:model-value="(val) => updateField('textVerbosity', fromSelectValue(val as string) as any)">
             <SelectTrigger class="h-9 w-full">
               <SelectValue :placeholder="tf('console.form.selectDefault', '默认')" />
@@ -127,7 +127,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
       <!-- Vision 控制 -->
       <div v-if="['messages', 'chat'].includes(channelType)" class="p-4 rounded-xl border border-border/50 bg-background/40 space-y-3">
         <div class="text-[10px] font-bold uppercase tracking-wider text-primary/80 border-b border-border/30 pb-1">
-          Vision 视觉控制
+          {{ tf('console.form.visionTitle', '视觉控制') }}
         </div>
         <div class="space-y-3">
           <div class="flex flex-row-reverse items-center justify-between gap-3">
@@ -212,7 +212,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">默认</SelectItem>
+                <SelectItem value="default">{{ tf('console.form.selectDefaultLabel', '默认') }}</SelectItem>
                 <SelectItem value="reasoning_effort">reasoning_effort</SelectItem>
                 <SelectItem value="developer_message">developer_message</SelectItem>
               </SelectContent>
@@ -248,14 +248,14 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
         </div>
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <Label class="text-xs font-medium">自动熔断/黑名单余额异常 Key</Label>
+            <Label class="text-xs font-medium">{{ tf('console.form.autoBlacklistBalanceLabel', '自动熔断/黑名单余额异常 Key') }}</Label>
             <Switch :model-value="form.autoBlacklistBalance" @update:model-value="updateField('autoBlacklistBalance', $event)" />
           </div>
           <div class="flex items-center justify-between">
             <div class="space-y-0.5">
-              <Label class="text-xs font-medium">自动学习上游限速</Label>
+              <Label class="text-xs font-medium">{{ tf('console.form.rateLimitAutoLabel', '自动学习上游限速') }}</Label>
               <p class="text-[10px] leading-4 text-muted-foreground">
-                解析 Retry-After / x-ratelimit-* 响应头动态调整 cooldown
+                {{ tf('console.form.rateLimitAutoHint', '解析 Retry-After / x-ratelimit-* 响应头动态调整 cooldown') }}
               </p>
             </div>
             <Switch :model-value="form.rateLimitAutoFromHeaders" @update:model-value="updateField('rateLimitAutoFromHeaders', $event)" />
@@ -270,7 +270,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
         </div>
         <div class="grid grid-cols-3 gap-2">
           <div class="space-y-1">
-            <Label class="text-[9px] font-bold text-muted-foreground">代理通道 URL</Label>
+            <Label class="text-[9px] font-bold text-muted-foreground">{{ tf('console.form.proxyUrlLabel', '代理通道 URL') }}</Label>
             <Input
               :model-value="form.proxyUrl"
               class="h-8 w-full font-mono text-xs"
@@ -279,7 +279,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
             />
           </div>
           <div class="space-y-1">
-            <Label class="text-[9px] font-bold text-muted-foreground">请求超时 (ms)</Label>
+            <Label class="text-[9px] font-bold text-muted-foreground">{{ tf('console.form.requestTimeoutLabel', '请求超时 (ms)') }}</Label>
             <Input
               :model-value="form.requestTimeoutMs"
               type="number"
@@ -289,7 +289,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
             />
           </div>
           <div class="space-y-1">
-            <Label class="text-[9px] font-bold text-muted-foreground">接口路由前缀</Label>
+            <Label class="text-[9px] font-bold text-muted-foreground">{{ tf('console.form.routePrefixLabel', '接口路由前缀') }}</Label>
             <Input
               :model-value="form.routePrefix"
               class="h-8 w-full font-mono text-xs"
@@ -308,32 +308,32 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div class="space-y-1">
-            <Label class="text-[10px] font-medium text-muted-foreground/80">每分钟最大请求量 (RPM)</Label>
+            <Label class="text-[10px] font-medium text-muted-foreground/80">{{ tf('console.form.rpmLabel', '每分钟最大请求量 (RPM)') }}</Label>
             <Input
               :model-value="form.rateLimitRpm"
               type="number"
               class="h-9 text-xs"
-              placeholder="不设限制"
+              :placeholder="tf('console.form.rpmPlaceholder', '不设限制')"
               @update:model-value="updateField('rateLimitRpm', $event)"
             />
           </div>
           <div class="space-y-1">
-            <Label class="text-[10px] font-medium text-muted-foreground/80">检测窗口滑动时间 (s)</Label>
+            <Label class="text-[10px] font-medium text-muted-foreground/80">{{ tf('console.form.windowLabel', '检测窗口滑动时间 (s)') }}</Label>
             <Input
               :model-value="form.rateLimitWindowMinutes"
               type="number"
               class="h-9 text-xs"
-              placeholder="60 秒"
+              :placeholder="tf('console.form.windowPlaceholder', '60 秒')"
               @update:model-value="updateField('rateLimitWindowMinutes', $event)"
             />
           </div>
           <div class="space-y-1">
-            <Label class="text-[10px] font-medium text-muted-foreground/80">全双工最大并发数限制</Label>
+            <Label class="text-[10px] font-medium text-muted-foreground/80">{{ tf('console.form.maxConcurrentLabel', '全双工最大并发数限制') }}</Label>
             <Input
               :model-value="form.rateLimitMaxConcurrent"
               type="number"
               class="h-9 text-xs"
-              placeholder="不设限制"
+              :placeholder="tf('console.form.maxConcurrentPlaceholder', '不设限制')"
               @update:model-value="updateField('rateLimitMaxConcurrent', $event)"
             />
           </div>
@@ -351,7 +351,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
               class="h-6 px-2 text-[10px]"
               @click="applyStreamTimeoutPreset('gentle')"
             >
-              温和
+              {{ tf('console.form.presetGentle', '温和') }}
             </Button>
             <Button
               size="sm"
@@ -359,7 +359,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
               class="h-6 px-2 text-[10px]"
               @click="applyStreamTimeoutPreset('balanced')"
             >
-              均衡
+              {{ tf('console.form.presetBalanced', '均衡') }}
             </Button>
             <Button
               size="sm"
@@ -367,7 +367,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
               class="h-6 px-2 text-[10px]"
               @click="applyStreamTimeoutPreset('aggressive')"
             >
-              激进
+              {{ tf('console.form.presetAggressive', '激进') }}
             </Button>
           </div>
         </div>
@@ -376,8 +376,8 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
           <div class="border border-border/60 bg-background/60 p-3 rounded-xl space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <Label class="text-xs font-semibold block">首字等待</Label>
-                <span class="text-[9px] text-muted-foreground leading-none">未响应则自动断开</span>
+                <Label class="text-xs font-semibold block">{{ tf('console.form.firstByteWait', '首字等待') }}</Label>
+                <span class="text-[9px] text-muted-foreground leading-none">{{ tf('console.form.firstByteWaitHint', '未响应则自动断开') }}</span>
               </div>
               <Switch
                 :model-value="form.streamFirstContentTimeoutEnabled"
@@ -386,7 +386,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
             </div>
             <div class="space-y-1" :class="{ 'opacity-50 pointer-events-none': !form.streamFirstContentTimeoutEnabled }">
               <div class="flex items-center justify-between text-[10px] font-mono font-medium text-muted-foreground">
-                <span>超时阈值:</span>
+                <span>{{ tf('console.form.timeoutThreshold', '超时阈值:') }}</span>
                 <span class="text-primary font-bold">{{ (form.streamFirstContentTimeoutMs / 1000) }}s</span>
               </div>
               <input
@@ -406,8 +406,8 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
           <div class="border border-border/60 bg-background/60 p-3 rounded-xl space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <Label class="text-xs font-semibold block">首字后断流</Label>
-                <span class="text-[9px] text-muted-foreground leading-none">生成中途卡顿超时</span>
+                <Label class="text-xs font-semibold block">{{ tf('console.form.idleAfterFirstByte', '首字后断流') }}</Label>
+                <span class="text-[9px] text-muted-foreground leading-none">{{ tf('console.form.idleAfterFirstByteHint', '生成中途卡顿超时') }}</span>
               </div>
               <Switch
                 :model-value="form.streamInactivityTimeoutEnabled"
@@ -416,7 +416,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
             </div>
             <div class="space-y-1" :class="{ 'opacity-50 pointer-events-none': !form.streamInactivityTimeoutEnabled }">
               <div class="flex items-center justify-between text-[10px] font-mono font-medium text-muted-foreground">
-                <span>超时阈值:</span>
+                <span>{{ tf('console.form.timeoutThreshold', '超时阈值:') }}</span>
                 <span class="text-primary font-bold">{{ (form.streamInactivityTimeoutMs / 1000) }}s</span>
               </div>
               <input
@@ -436,8 +436,8 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
           <div class="border border-border/60 bg-background/60 p-3 rounded-xl space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <Label class="text-xs font-semibold block">工具调用空闲</Label>
-                <span class="text-[9px] text-muted-foreground leading-none">FunctionCall 延迟</span>
+                <Label class="text-xs font-semibold block">{{ tf('console.form.toolCallIdle', '工具调用空闲') }}</Label>
+                <span class="text-[9px] text-muted-foreground leading-none">{{ tf('console.form.toolCallIdleHint', 'FunctionCall 延迟') }}</span>
               </div>
               <Switch
                 :model-value="form.streamToolCallIdleTimeoutEnabled"
@@ -446,7 +446,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
             </div>
             <div class="space-y-1" :class="{ 'opacity-50 pointer-events-none': !form.streamToolCallIdleTimeoutEnabled }">
               <div class="flex items-center justify-between text-[10px] font-mono font-medium text-muted-foreground">
-                <span>超时阈值:</span>
+                <span>{{ tf('console.form.timeoutThreshold', '超时阈值:') }}</span>
                 <span class="text-primary font-bold">{{ (form.streamToolCallIdleTimeoutMs / 1000) }}s</span>
               </div>
               <input
@@ -467,7 +467,7 @@ function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive
       <!-- 限定可支持模型范围 -->
       <div class="space-y-2">
         <Label class="text-xs font-semibold text-muted-foreground">
-          限定可支持模型范围（白名单模式，留空表示不限制）
+          {{ tf('console.form.supportedModelsLabel', '限定可支持模型范围（白名单模式，留空表示不限制）') }}
         </Label>
         <Textarea
           :model-value="form.supportedModelsText"
