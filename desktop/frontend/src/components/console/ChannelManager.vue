@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Search, Layers, Archive, Loader2, ShieldCheck, ShieldOff, Zap } from 'lucide-vue-next'
+import { Plus, Search, Layers, Archive, Loader2, ShieldCheck, ShieldOff, Zap, ChevronDown, BarChart3 } from 'lucide-vue-next'
 import { useConsoleChannels } from '@/composables/useConsoleChannels'
 import { useAdminApi } from '@/composables/useAdminApi'
 import { useStatus } from '@/composables/useStatus'
@@ -103,6 +103,7 @@ const showCbDialog = ref(false)
 // 用量统计
 const globalStatsChartRef = ref<InstanceType<typeof GlobalStatsChart> | null>(null)
 const statsLoading = ref(false)
+const showGlobalStats = ref(false)
 
 // 渠道级 Key 趋势图
 const expandedChannelId = ref<number | null>(null)
@@ -497,12 +498,25 @@ watch(() => props.type, () => {
 
       <!-- 用量统计图表 -->
       <div class="mt-3 border border-border bg-background/60">
-        <GlobalStatsChart
-          ref="globalStatsChartRef"
-          :api-type="props.type"
-          compact
-          @refresh="loadGlobalStats"
-        />
+        <button
+          type="button"
+          class="flex w-full items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground"
+          @click="showGlobalStats = !showGlobalStats"
+        >
+          <div class="flex items-center gap-2">
+            <BarChart3 class="h-4 w-4" />
+            <span>{{ tf('chart.globalStats', 'Usage Stats') }}</span>
+          </div>
+          <ChevronDown class="h-4 w-4 transition-transform" :class="{ '-rotate-180': showGlobalStats }" />
+        </button>
+        <div v-if="showGlobalStats">
+          <GlobalStatsChart
+            ref="globalStatsChartRef"
+            :api-type="props.type"
+            compact
+            @refresh="loadGlobalStats"
+          />
+        </div>
       </div>
     </div>
 

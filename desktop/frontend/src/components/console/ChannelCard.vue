@@ -281,9 +281,26 @@ async function copyChannelInfo() {
       </div>
     </div>
 
-    <div class="relative z-10 inline-flex items-center justify-center gap-1.5 border px-2 py-1 text-[11px] font-semibold" :class="statusConfig.class">
-      <component :is="statusConfig.icon" class="h-3.5 w-3.5" />
-      {{ statusConfig.label }}
+    <!-- Expand/collapse toggle + Status badge -->
+    <div class="relative z-10 flex items-center justify-end gap-1">
+      <button
+        type="button"
+        class="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border bg-secondary/50 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        :title="expanded ? tf('chart.collapse', '收起') : tf('chart.expandChart', '展开图表')"
+        @click.stop="emit('toggle')"
+      >
+        <svg
+          class="w-3 h-3 transition-transform"
+          :class="{ 'rotate-180': expanded }"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <div class="inline-flex items-center justify-center gap-1.5 border px-2 py-1 text-[11px] font-semibold" :class="statusConfig.class">
+        <component :is="statusConfig.icon" class="h-3.5 w-3.5" />
+        {{ statusConfig.label }}
+      </div>
     </div>
 
     <div class="relative z-10 space-y-0.5 text-right font-mono">
@@ -380,21 +397,5 @@ async function copyChannelInfo() {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-
-    <!-- Expand/collapse toggle button -->
-    <button
-      type="button"
-      class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-20 flex h-5 w-8 items-center justify-center rounded-full border border-border bg-background shadow-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-      :title="expanded ? tf('chart.collapse', '收起') : tf('chart.expandChart', '展开图表')"
-      @click.stop="emit('toggle')"
-    >
-      <svg
-        class="w-3 h-3 transition-transform"
-        :class="{ 'rotate-180': expanded }"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-      </svg>
-    </button>
   </div>
 </template>
