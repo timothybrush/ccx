@@ -575,20 +575,21 @@
           <!-- 历史图片轮次限制 -->
           <v-divider class="my-3" />
           <div class="cb-hl-section">
-            <div class="cb-hl-header">
-              <v-icon size="18" class="mr-2">mdi-image-sync</v-icon>
-              <span class="cb-hl-title">{{ t('dialog.historicalImageTurnLimit.title') }}</span>
+            <div class="cb-hl-copy">
+              <div class="cb-hl-header">
+                <v-icon size="18" class="cb-hl-icon">mdi-image-sync</v-icon>
+                <span class="cb-hl-title">{{ t('dialog.historicalImageTurnLimit.title') }}</span>
+              </div>
+              <p class="cb-hl-hint">{{ t('dialog.historicalImageTurnLimit.hint') }}</p>
             </div>
             <v-text-field
               v-model.number="historicalImageForm.limit"
               :label="t('dialog.historicalImageTurnLimit.label')"
-              :hint="t('dialog.historicalImageTurnLimit.hint')"
               type="number"
               min="3"
               variant="outlined"
               density="compact"
-              persistent-hint
-              hide-details="auto"
+              hide-details
               class="cb-hl-input"
             />
           </div>
@@ -2545,18 +2546,52 @@ onUnmounted(() => {
 
 /* 历史图片轮次限制 */
 .cb-hl-section {
-  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.28);
+  border-radius: 12px;
+  background: rgba(var(--v-theme-surface-variant), 0.18);
 }
 .cb-hl-header {
   display: flex;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 4px;
   font-weight: 600;
   font-size: 0.875rem;
   color: rgb(var(--v-theme-on-surface));
 }
+.cb-hl-copy {
+  min-width: 0;
+  flex: 1;
+}
+.cb-hl-icon {
+  color: rgb(var(--v-theme-primary));
+}
+.cb-hl-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+}
 .cb-hl-input {
-  max-width: 320px;
+  width: 168px;
+  flex: 0 0 168px;
+}
+
+@media (max-width: 600px) {
+  .cb-hl-section {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cb-hl-input {
+    width: 100%;
+    flex-basis: auto;
+  }
 }
 
 /* 弹窗底部按钮 */
