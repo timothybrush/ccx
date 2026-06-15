@@ -57,6 +57,12 @@ const refreshError = ref('')
 let refreshLoopPromise: Promise<void> | null = null
 let refreshRequested = false
 
+function translate(key: string, fallback: string): string {
+  const i18n = (globalThis as any).__CCX_I18N__
+  const translated = i18n?.global?.t?.(key)
+  return translated && translated !== key ? translated : fallback
+}
+
 // ===== 计算属性 =====
 
 const currentChannelsData = computed(() => channelsByType.value[activeTab.value])
@@ -98,7 +104,7 @@ async function doRefresh(tab: ChannelType) {
     const msg = e instanceof Error ? e.message : String(e)
     // 网络层 TypeError 包装为友好提示
     refreshError.value = msg.includes('Failed to fetch')
-      ? '服务未运行或网络不可达，请检查后端是否已启动'
+      ? translate('adminApi.error.networkUnavailable', '服务未运行或网络不可达，请检查后端是否已启动')
       : msg
   }
 }
@@ -131,11 +137,11 @@ async function saveChannel(
   if (editingIndex !== null) {
     await typeApi.updateChannel(editingIndex, payload)
     await refreshChannels()
-    return { success: true, message: '频道已更新' }
+    return { success: true, messageKey: 'channelEditor.toast.updated' }
   }
   await typeApi.addChannel(payload)
   await refreshChannels()
-  return { success: true, message: '频道已添加' }
+  return { success: true, messageKey: 'channelEditor.toast.added' }
 }
 
 async function deleteChannel(channelId: number) {

@@ -64,7 +64,7 @@ const usableKeys = computed(() => {
   <section class="space-y-4 rounded-xl border bg-card/40 p-5 shadow-xs" :class="errors.apiKeys ? 'border-destructive/40' : 'border-border/60'">
     <div class="flex items-center justify-between border-b border-border/40 pb-2">
       <h4 class="text-xs font-bold uppercase tracking-wider text-primary">
-        {{ tf('channelEditor.nav.auth', '鉴权认证') }} *
+        {{ tf('channelEditor.nav.auth', '认证管理') }} *
       </h4>
       <span class="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full">
         {{ usableKeys.length }} {{ tf('channelCard.configuredKeys', '个有效活跃密钥') }}

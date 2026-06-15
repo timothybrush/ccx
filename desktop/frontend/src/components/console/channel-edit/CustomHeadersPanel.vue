@@ -29,7 +29,7 @@ const { tf } = useLanguage()
 <template>
   <section class="space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-xs">
     <h4 class="text-xs font-bold uppercase tracking-wider text-primary border-b border-border/40 pb-2">
-      {{ tf('channelEditor.nav.custom', '自定义请求标头 Headers（JSON 注入）') }}
+      {{ tf('channelEditor.nav.custom', '自定义参数') }}
     </h4>
 
     <!-- 已有 Headers 列表 -->
@@ -84,7 +84,7 @@ const { tf } = useLanguage()
         <Input
           :model-value="newHeader.value"
           class="h-9 flex-1 font-mono text-xs"
-          placeholder="标头携带对应的 Value 内容..."
+          :placeholder="tf('console.form.headerValuePlaceholder', '标头携带对应的 Value 内容...')"
           @update:model-value="(val) => emit('update:newHeader', { value: val as string })"
           @keydown.enter.prevent="emit('addHeaderRow')"
         />
@@ -105,9 +105,9 @@ const { tf } = useLanguage()
     <div class="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border border-border/30">
       <p class="font-semibold mb-1">{{ tf('console.form.headersNote', '说明') }}</p>
       <ul class="space-y-1 text-[11px] leading-relaxed">
-        <li>• 自定义 Headers 将在每个请求中注入到上游</li>
-        <li>• 支持覆盖默认 Headers（如 User-Agent、Authorization 等）</li>
-        <li>• 键名和值都支持模板变量（如果后端实现了变量替换）</li>
+        <li>• {{ tf('console.form.headersNoteInject', '自定义 Headers 将在每个请求中注入到上游') }}</li>
+        <li>• {{ tf('console.form.headersNoteOverride', '支持覆盖默认 Headers（如 User-Agent、Authorization 等）') }}</li>
+        <li>• {{ tf('console.form.headersNoteTemplate', '键名和值都支持模板变量（如果后端实现了变量替换）') }}</li>
       </ul>
     </div>
   </section>

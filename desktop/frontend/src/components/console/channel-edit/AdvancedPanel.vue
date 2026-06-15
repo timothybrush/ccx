@@ -134,10 +134,10 @@ function fromSelectValue(value: string): string {
       </div>
     </section>
 
-    <!-- 高级扩展选项 -->
+    <!-- 高级选项 -->
     <section class="space-y-6 rounded-xl border border-border/60 bg-card/40 p-4 shadow-xs">
       <h4 class="text-xs font-bold uppercase tracking-wider text-primary border-b border-border/40 pb-2">
-        {{ tf('console.form.advancedOptions', '高级扩展选项') }}
+        {{ tf('channelEditor.nav.advanced', '高级选项') }}
       </h4>
 
       <div class="space-y-2.5">

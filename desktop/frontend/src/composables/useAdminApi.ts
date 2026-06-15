@@ -22,6 +22,12 @@ export class AdminApiError extends Error {
 const loading = ref(false)
 const error = ref('')
 
+function translate(key: string, fallback: string): string {
+  const i18n = (globalThis as any).__CCX_I18N__
+  const translated = i18n?.global?.t?.(key)
+  return translated && translated !== key ? translated : fallback
+}
+
 function clearError() {
   error.value = ''
 }
@@ -45,7 +51,7 @@ async function request<T = unknown>(
 ): Promise<T> {
   const url = buildUrl(path)
   if (!url) {
-    throw new AdminApiError('服务未运行，无法发送请求', 0)
+    throw new AdminApiError(translate('adminApi.error.serviceNotRunning', '服务未运行，无法发送请求'), 0)
   }
 
   const adminKey = await getAdminKey()
@@ -69,7 +75,7 @@ async function request<T = unknown>(
     resp = await fetch(url, init)
   } catch (e) {
     throw new AdminApiError(
-      '服务未运行或网络不可达，请检查后端是否已启动',
+      translate('adminApi.error.networkUnavailable', '服务未运行或网络不可达，请检查后端是否已启动'),
       0,
       e,
     )
@@ -139,7 +145,7 @@ export function useAdminApi() {
     raw(method: string, path: string, body?: unknown): Promise<Response> {
       const url = buildUrl(path)
       if (!url) {
-        throw new AdminApiError('服务未运行，无法发送请求', 0)
+        throw new AdminApiError(translate('adminApi.error.serviceNotRunning', '服务未运行，无法发送请求'), 0)
       }
       return getAdminKey().then((adminKey) => {
         const headers: Record<string, string> = {

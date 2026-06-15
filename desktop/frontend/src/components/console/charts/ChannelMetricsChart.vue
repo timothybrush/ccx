@@ -12,14 +12,14 @@
       style="height: 150px"
     >
       <div class="text-2xl mb-2 opacity-40">&#x1F4C9;</div>
-      <div class="text-xs">暂无 {{ channelName }} 的指标数据</div>
+      <div class="text-xs">{{ t('chart.noChannelMetrics', { channel: channelName }) }}</div>
     </div>
 
     <!-- Charts -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Request count area chart -->
       <div>
-        <div class="text-xs text-muted-foreground font-medium mb-1">请求数</div>
+        <div class="text-xs text-muted-foreground font-medium mb-1">{{ t('chart.requests') }}</div>
         <VueApexCharts
           type="area"
           height="120"
@@ -152,7 +152,7 @@ const requestCountSeries = computed(() => {
   if (!props.data?.length) return []
   return [
     {
-      name: '请求数',
+      name: t('chart.requests'),
       data: props.data.map(dp => ({
         x: new Date(dp.timestamp).getTime(),
         y: dp.requestCount,
