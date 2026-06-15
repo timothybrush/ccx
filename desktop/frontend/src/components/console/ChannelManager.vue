@@ -87,7 +87,7 @@ const isInitialLoading = computed(() => !hasLoaded.value && !actionError.value)
 const actionLoading = ref(false)
 const actionError = ref('')
 const isRefreshing = ref(false)
-const showAddDialog = ref(false)
+const showChannelEditor = ref(false)
 const editingChannel = ref<Channel | null>(null)
 const logsChannel = ref<Channel | null>(null)
 const capabilityChannel = ref<Channel | null>(null)
@@ -334,21 +334,21 @@ async function handleMoveBottom(channelId: number) {
 
 function handleEdit(channel: Channel) {
   editingChannel.value = channel
-  showAddDialog.value = true
+  showChannelEditor.value = true
 }
 
 function handleAdd() {
   editingChannel.value = null
-  showAddDialog.value = true
+  showChannelEditor.value = true
 }
 
 function handleSaved() {
-  showAddDialog.value = false
+  showChannelEditor.value = false
   refreshCurrentChannels()
 }
 
 function handleEditTestCapability(channel: Channel) {
-  showAddDialog.value = false
+  showChannelEditor.value = false
   void refreshCurrentChannels()
   capabilityChannel.value = channel
   showCapabilityDialog.value = true
@@ -630,10 +630,10 @@ watch(() => props.type, () => {
     </div>
 
     <ChannelEditDialog
-      v-if="showAddDialog"
+      v-if="showChannelEditor"
       :channel="editingChannel"
       :channel-type="type"
-      @close="showAddDialog = false"
+      @close="showChannelEditor = false"
       @saved="handleSaved"
       @test-capability="handleEditTestCapability"
     />

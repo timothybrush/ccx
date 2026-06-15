@@ -1345,7 +1345,11 @@ void fromSelectValue
       >
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="emit('close')" />
 
-        <div ref="dialogRef" class="relative z-10 flex max-h-[90vh] w-[94vw] max-w-6xl flex-col overflow-hidden rounded-xl border border-border/80 bg-background shadow-2xl backdrop-blur-md">
+        <div
+          ref="dialogRef"
+          class="relative z-10 flex max-h-[90vh] w-[94vw] flex-col overflow-hidden rounded-xl border border-border/80 bg-background shadow-2xl backdrop-blur-md"
+          :class="isEditMode ? 'max-w-6xl' : 'max-w-3xl'"
+        >
           <ChannelEditorHeader
             :channel-type="channelType"
             :is-edit-mode="isEditMode"
@@ -1356,8 +1360,27 @@ void fromSelectValue
             @test-capability="handleTestCapability"
           />
 
-          <!-- 主内容区域：滚动定位导航 -->
-          <div class="min-h-0 flex-1 flex">
+          <!-- 创建模式：独立快速添加，不展示编辑器大纲和高级配置 -->
+          <div v-if="!isEditMode" class="min-h-0 flex-1 overflow-hidden">
+            <ScrollArea class="h-full">
+              <form class="p-6" @submit.prevent="handleSubmit">
+                <div v-if="error" class="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {{ error }}
+                </div>
+
+                <QuickCreatePanel
+                  :quick-input="quickInput"
+                  :detected-base-urls="detectedBaseUrls"
+                  :detected-api-keys="detectedApiKeys"
+                  @update:quick-input="quickInput = $event"
+                  @quick-paste="handleQuickPaste"
+                />
+              </form>
+            </ScrollArea>
+          </div>
+
+          <!-- 编辑模式：完整渠道编辑器 -->
+          <div v-else class="min-h-0 flex-1 flex">
             <!-- 左侧导航 -->
             <nav class="hidden md:flex w-[180px] shrink-0 flex-col items-stretch gap-1 rounded-none border-r border-border/50 bg-card/20 p-4">
               <div class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-3 mb-2">{{ tf('channelEditor.nav.outline', '配置大纲') }}</div>
@@ -1383,16 +1406,7 @@ void fromSelectValue
 
                     <!-- Section: 基础配置 -->
                     <section :ref="(el: any) => setSectionRef('basic', el)" data-section-id="basic" class="scroll-mt-4">
-                      <QuickCreatePanel
-                        v-if="!isEditMode"
-                        :quick-input="quickInput"
-                        :detected-base-urls="detectedBaseUrls"
-                        :detected-api-keys="detectedApiKeys"
-                        @update:quick-input="quickInput = $event"
-                        @quick-paste="handleQuickPaste"
-                      />
                       <BasicConfigPanel
-                        v-else
                         :form="form"
                         :errors="errors"
                         :service-type-options="serviceTypeOptions"

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowRight, Eye, EyeOff, Plus, RotateCcw, Trash2, Zap } from 'lucide-vue-next'
+import { ArrowRight, Eye, EyeOff, Plus, Trash2, Zap } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 
 type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -64,7 +64,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
 
 <template>
   <section class="space-y-4 rounded-xl border border-primary/20 bg-gradient-to-b from-primary/[0.02] to-transparent p-5 shadow-sm">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
+    <div class="border-b border-border/40 pb-3">
       <div class="space-y-0.5">
         <h4 class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
           <span class="h-2 w-2 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))] animate-pulse"></span>
@@ -74,16 +74,6 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
           {{ tf('channelEditor.mapping.hint', '拦截调用请求中的 Source 别名并定向投递至上游 Target 真实模型') }}
         </p>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        class="h-8 rounded-full border border-border/80 bg-background/60 px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 shadow-2xs"
-        @click="emit('syncUpstreamModels')"
-      >
-        <RotateCcw class="h-3.5 w-3.5 mr-1 text-primary" />
-        {{ tf('console.form.syncModels', '同步上游可用模型') }}
-      </Button>
     </div>
 
     <!-- 预设快速注入 -->
@@ -256,7 +246,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
             placeholder="target-model"
             list="target-datalist-new"
             @update:model-value="(val) => emit('update:newModelMapping', { target: val as string })"
-            @focus="emit('showTargetDropdown', 'new', newModelMapping.target)"
+            @focus="emit('handleTargetFocus'); emit('showTargetDropdown', 'new', newModelMapping.target)"
           />
           <datalist id="target-datalist-new">
             <option v-for="model in targetModelDatalist" :key="model" :value="model">{{ model }}</option>
