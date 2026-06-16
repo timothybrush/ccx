@@ -70,7 +70,8 @@ type UpstreamConfig struct {
 	// 渠道级代理
 	ProxyURL string `json:"proxyUrl,omitempty"` // HTTP/HTTPS/SOCKS5 代理地址
 	// 渠道级请求超时
-	RequestTimeoutMs int `json:"requestTimeoutMs,omitempty"` // 非流式上游请求超时时间（毫秒，0=继承全局 REQUEST_TIMEOUT）
+	RequestTimeoutMs        int `json:"requestTimeoutMs,omitempty"`        // 非流式上游请求超时时间（毫秒，0=继承全局 REQUEST_TIMEOUT）
+	ResponseHeaderTimeoutMs int `json:"responseHeaderTimeoutMs,omitempty"` // 等待上游 HTTP 响应头超时（毫秒，0=继承全局 RESPONSE_HEADER_TIMEOUT）
 	// 流式健康检测渠道覆盖（0=继承全局，-1=禁用，正数=覆盖全局）
 	StreamFirstContentTimeoutMs int `json:"streamFirstContentTimeoutMs,omitempty"` // HTTP 200 后首个有效内容等待超时
 	StreamInactivityTimeoutMs   int `json:"streamInactivityTimeoutMs,omitempty"`   // 首字后连续性确认窗口
@@ -162,11 +163,25 @@ func (u *UpstreamConfig) IsStripImageGenerationToolEnabled() bool {
 }
 
 // GetEffectiveRequestTimeoutMs 返回渠道生效的非流式上游请求超时时间（毫秒）。
-func (u *UpstreamConfig) GetEffectiveRequestTimeoutMs(fallback int) int {
+func (u *UpstreamConfig) GetEffectiveRequestTimeoutMs(fallbackMs int) int {
 	if u.RequestTimeoutMs > 0 {
+		if u.RequestTimeoutMs > MaxRequestTimeoutMs {
+			return MaxRequestTimeoutMs
+		}
 		return u.RequestTimeoutMs
 	}
-	return fallback
+	return fallbackMs
+}
+
+// GetEffectiveResponseHeaderTimeoutMs 返回渠道生效的等待上游响应头超时时间（毫秒）。
+func (u *UpstreamConfig) GetEffectiveResponseHeaderTimeoutMs(fallbackMs int) int {
+	if u.ResponseHeaderTimeoutMs > 0 {
+		if u.ResponseHeaderTimeoutMs > MaxResponseHeaderTimeoutMs {
+			return MaxResponseHeaderTimeoutMs
+		}
+		return u.ResponseHeaderTimeoutMs
+	}
+	return fallbackMs
 }
 
 // UpstreamUpdate 用于部分更新 UpstreamConfig
@@ -212,7 +227,8 @@ type UpstreamUpdate struct {
 	// 渠道级代理
 	ProxyURL *string `json:"proxyUrl"`
 	// 渠道级请求超时
-	RequestTimeoutMs *int `json:"requestTimeoutMs"`
+	RequestTimeoutMs        *int `json:"requestTimeoutMs"`
+	ResponseHeaderTimeoutMs *int `json:"responseHeaderTimeoutMs"`
 	// 流式健康检测渠道覆盖（0=继承全局，-1=禁用，正数=覆盖全局）
 	StreamFirstContentTimeoutMs *int `json:"streamFirstContentTimeoutMs"`
 	StreamInactivityTimeoutMs   *int `json:"streamInactivityTimeoutMs"`
@@ -242,6 +258,9 @@ type CircuitBreakerConfig struct {
 	WindowSize                   *int     `json:"windowSize,omitempty"`
 	FailureThreshold             *float64 `json:"failureThreshold,omitempty"`
 	ConsecutiveFailuresThreshold *int     `json:"consecutiveFailuresThreshold,omitempty"`
+	// 上游请求生命周期全局默认参数
+	RequestTimeoutMs        *int `json:"requestTimeoutMs,omitempty"`        // 非流式上游请求超时（ms，范围 1000-300000）
+	ResponseHeaderTimeoutMs *int `json:"responseHeaderTimeoutMs,omitempty"` // 等待上游 HTTP 响应头超时（ms，范围 1000-300000）
 	// 流式健康检测全局默认参数
 	StreamFirstContentTimeoutMs *int `json:"streamFirstContentTimeoutMs,omitempty"` // HTTP 200 后首个有效内容等待超时（ms，范围 5000-300000）
 	StreamInactivityTimeoutMs   *int `json:"streamInactivityTimeoutMs,omitempty"`   // 首字后连续性确认窗口（ms，范围 1000-180000）
@@ -778,6 +797,14 @@ func (cm *ConfigManager) SetCircuitBreakerConfig(update CircuitBreakerConfig) er
 			v = 100
 		}
 		cb.ConsecutiveFailuresThreshold = &v
+	}
+	if update.RequestTimeoutMs != nil {
+		v := clampInt(*update.RequestTimeoutMs, MinRequestTimeoutMs, MaxRequestTimeoutMs)
+		cb.RequestTimeoutMs = &v
+	}
+	if update.ResponseHeaderTimeoutMs != nil {
+		v := clampInt(*update.ResponseHeaderTimeoutMs, MinResponseHeaderTimeoutMs, MaxResponseHeaderTimeoutMs)
+		cb.ResponseHeaderTimeoutMs = &v
 	}
 	if update.StreamFirstContentTimeoutMs != nil {
 		v := *update.StreamFirstContentTimeoutMs

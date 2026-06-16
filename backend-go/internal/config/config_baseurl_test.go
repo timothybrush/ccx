@@ -604,6 +604,9 @@ func TestRequestTimeoutMsEffectiveAndUpdates(t *testing.T) {
 	if got := (&UpstreamConfig{RequestTimeoutMs: 15000}).GetEffectiveRequestTimeoutMs(300000); got != 15000 {
 		t.Fatalf("override effective timeout = %d, want 15000", got)
 	}
+	if got := (&UpstreamConfig{RequestTimeoutMs: MaxRequestTimeoutMs + 1000}).GetEffectiveRequestTimeoutMs(300000); got != MaxRequestTimeoutMs {
+		t.Fatalf("clamped effective timeout = %d, want %d", got, MaxRequestTimeoutMs)
+	}
 
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.json")
@@ -657,6 +660,79 @@ func TestRequestTimeoutMsEffectiveAndUpdates(t *testing.T) {
 			negative := -1
 			if err := tt.update(UpstreamUpdate{RequestTimeoutMs: &negative}); err == nil {
 				t.Fatal("negative requestTimeoutMs should be rejected")
+			}
+
+			tooLarge := MaxRequestTimeoutMs + 1000
+			if err := tt.update(UpstreamUpdate{RequestTimeoutMs: &tooLarge}); err == nil {
+				t.Fatal("too large requestTimeoutMs should be rejected")
+			}
+		})
+	}
+}
+
+func TestResponseHeaderTimeoutMsEffectiveAndUpdates(t *testing.T) {
+	if got := (&UpstreamConfig{}).GetEffectiveResponseHeaderTimeoutMs(60000); got != 60000 {
+		t.Fatalf("default effective response header timeout = %d, want 60000", got)
+	}
+	if got := (&UpstreamConfig{ResponseHeaderTimeoutMs: 150000}).GetEffectiveResponseHeaderTimeoutMs(60000); got != 150000 {
+		t.Fatalf("override effective response header timeout = %d, want 150000", got)
+	}
+	if got := (&UpstreamConfig{ResponseHeaderTimeoutMs: MaxResponseHeaderTimeoutMs + 1000}).GetEffectiveResponseHeaderTimeoutMs(60000); got != MaxResponseHeaderTimeoutMs {
+		t.Fatalf("clamped effective response header timeout = %d, want %d", got, MaxResponseHeaderTimeoutMs)
+	}
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	initialConfig := `{
+		"upstream": [{"name":"messages","baseUrl":"https://messages.example.com","apiKeys":["sk-m"],"serviceType":"claude"}],
+		"chatUpstream": [{"name":"chat","baseUrl":"https://chat.example.com","apiKeys":["sk-c"],"serviceType":"openai"}],
+		"responsesUpstream": [{"name":"responses","baseUrl":"https://responses.example.com","apiKeys":["sk-r"],"serviceType":"responses"}],
+		"geminiUpstream": [{"name":"gemini","baseUrl":"https://gemini.example.com","apiKeys":["sk-g"],"serviceType":"gemini"}],
+		"imagesUpstream": [{"name":"images","baseUrl":"https://images.example.com","apiKeys":["sk-i"],"serviceType":"openai"}]
+	}`
+	if err := os.WriteFile(configPath, []byte(initialConfig), 0644); err != nil {
+		t.Fatalf("写入初始配置失败: %v", err)
+	}
+
+	cm, err := NewConfigManager(configPath, "")
+	if err != nil {
+		t.Fatalf("初始化配置管理器失败: %v", err)
+	}
+	defer cm.Close()
+
+	timeout := 150000
+	tests := []struct {
+		name   string
+		update func(UpstreamUpdate) error
+		read   func(Config) int
+	}{
+		{name: "messages", update: func(u UpstreamUpdate) error { _, err := cm.UpdateUpstream(0, u); return err }, read: func(c Config) int { return c.Upstream[0].ResponseHeaderTimeoutMs }},
+		{name: "chat", update: func(u UpstreamUpdate) error { _, err := cm.UpdateChatUpstream(0, u); return err }, read: func(c Config) int { return c.ChatUpstream[0].ResponseHeaderTimeoutMs }},
+		{name: "responses", update: func(u UpstreamUpdate) error { _, err := cm.UpdateResponsesUpstream(0, u); return err }, read: func(c Config) int { return c.ResponsesUpstream[0].ResponseHeaderTimeoutMs }},
+		{name: "gemini", update: func(u UpstreamUpdate) error { _, err := cm.UpdateGeminiUpstream(0, u); return err }, read: func(c Config) int { return c.GeminiUpstream[0].ResponseHeaderTimeoutMs }},
+		{name: "images", update: func(u UpstreamUpdate) error { _, err := cm.UpdateImagesUpstream(0, u); return err }, read: func(c Config) int { return c.ImagesUpstream[0].ResponseHeaderTimeoutMs }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.update(UpstreamUpdate{ResponseHeaderTimeoutMs: &timeout}); err != nil {
+				t.Fatalf("设置 responseHeaderTimeoutMs 失败: %v", err)
+			}
+			if got := tt.read(cm.GetConfig()); got != timeout {
+				t.Fatalf("ResponseHeaderTimeoutMs = %d, want %d", got, timeout)
+			}
+
+			zero := 0
+			if err := tt.update(UpstreamUpdate{ResponseHeaderTimeoutMs: &zero}); err != nil {
+				t.Fatalf("清除 responseHeaderTimeoutMs 失败: %v", err)
+			}
+			if got := tt.read(cm.GetConfig()); got != 0 {
+				t.Fatalf("cleared ResponseHeaderTimeoutMs = %d, want 0", got)
+			}
+
+			negative := -1
+			if err := tt.update(UpstreamUpdate{ResponseHeaderTimeoutMs: &negative}); err == nil {
+				t.Fatal("negative responseHeaderTimeoutMs should be rejected")
 			}
 		})
 	}

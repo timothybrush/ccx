@@ -70,8 +70,11 @@ func (cm *ConfigManager) AddResponsesUpstream(upstream UpstreamConfig) error {
 	}
 
 	upstream.ServiceType = normalizeUpstreamServiceType(upstream.ServiceType, "responses")
-	if upstream.RequestTimeoutMs < 0 {
-		return fmt.Errorf("请求超时时间不能为负数")
+	if err := validateRequestTimeoutMs(upstream.RequestTimeoutMs); err != nil {
+		return err
+	}
+	if err := validateResponseHeaderTimeoutMs(upstream.ResponseHeaderTimeoutMs); err != nil {
+		return err
 	}
 	if upstream.RateLimitRPM < 0 || upstream.RateLimitBurst < 0 || upstream.RateLimitMaxConcurrent < 0 {
 		return fmt.Errorf("限速参数不能为负数")
@@ -256,10 +259,16 @@ func (cm *ConfigManager) UpdateResponsesUpstream(index int, updates UpstreamUpda
 		upstream.ProxyURL = *updates.ProxyURL
 	}
 	if updates.RequestTimeoutMs != nil {
-		if *updates.RequestTimeoutMs < 0 {
-			return false, fmt.Errorf("请求超时时间不能为负数")
+		if err := validateRequestTimeoutMs(*updates.RequestTimeoutMs); err != nil {
+			return false, err
 		}
 		upstream.RequestTimeoutMs = *updates.RequestTimeoutMs
+	}
+	if updates.ResponseHeaderTimeoutMs != nil {
+		if err := validateResponseHeaderTimeoutMs(*updates.ResponseHeaderTimeoutMs); err != nil {
+			return false, err
+		}
+		upstream.ResponseHeaderTimeoutMs = *updates.ResponseHeaderTimeoutMs
 	}
 	if updates.StreamFirstContentTimeoutMs != nil {
 		if err := validateStreamFirstContentTimeoutMs(*updates.StreamFirstContentTimeoutMs); err != nil {

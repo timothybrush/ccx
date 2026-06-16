@@ -71,7 +71,7 @@ func NewEnvConfig() *EnvConfig {
 		RewriteResponseModel: getEnv("REWRITE_RESPONSE_MODEL", "false") == "true",
 		ServerReadTimeout:    clampInt(getEnvAsInt("SERVER_READ_TIMEOUT", 60000), 10000, 300000),
 
-		RequestTimeout:     getEnvAsInt("REQUEST_TIMEOUT", 300000),
+		RequestTimeout:     clampInt(getEnvAsInt("REQUEST_TIMEOUT", 300000), MinRequestTimeoutMs, MaxRequestTimeoutMs),
 		MaxRequestBodySize: getEnvAsInt64("MAX_REQUEST_BODY_SIZE_MB", 50) * 1024 * 1024, // MB 转换为字节
 		EnableCORS:         getEnv("ENABLE_CORS", "false") == "true",
 		CORSOrigin:         getEnv("CORS_ORIGIN", "*"),
