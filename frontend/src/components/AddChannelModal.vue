@@ -90,11 +90,11 @@
                   <v-col cols="12" md="6">
                     <div class="d-flex flex-column ga-3">
                       <!-- 渠道名称预览 -->
-                      <div class="d-flex align-center ga-3">
+                      <div class="d-flex align-center ga-3 pa-3 bg-grey-lighten-4 rounded-lg">
                         <v-icon color="primary" size="20">mdi-tag</v-icon>
                         <div class="flex-grow-1">
-                          <div class="text-body-2 font-weight-medium">{{ t('addChannel.channelName') }}</div>
-                          <div class="text-caption text-primary font-weight-medium">
+                          <div class="text-caption text-medium-emphasis">{{ t('addChannel.channelName') }}</div>
+                          <div class="text-body-2 font-weight-bold text-primary">
                             {{ generatedChannelName }}
                           </div>
                         </div>
@@ -102,18 +102,24 @@
                       </div>
 
                       <!-- 上游类型选择器 -->
-                      <v-select
-                        v-model="quickServiceType"
-                        :items="headerServiceTypeItems"
-                        item-title="title"
-                        item-value="value"
-                        :label="t('channelEditor.basic.serviceType.label')"
-                        variant="outlined"
-                        density="compact"
-                        hide-details
-                        @update:model-value="quickServiceTypeTouched = true"
-                        @update:menu="onMenuUpdate"
-                      />
+                      <div class="d-flex align-center ga-3 pa-3 bg-grey-lighten-4 rounded-lg">
+                        <v-icon color="grey-darken-1" size="20">mdi-shape-outline</v-icon>
+                        <div class="flex-grow-1">
+                          <div class="text-caption text-medium-emphasis">{{ t('channelEditor.basic.serviceType.label') }}</div>
+                          <v-select
+                            v-model="quickServiceType"
+                            :items="headerServiceTypeItems"
+                            item-title="title"
+                            item-value="value"
+                            variant="plain"
+                            density="compact"
+                            hide-details
+                            class="upstream-select mt-n1"
+                            @update:model-value="quickServiceTypeTouched = true"
+                            @update:menu="onMenuUpdate"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </v-col>
 
@@ -1428,7 +1434,8 @@ import {
   resolveChannelWatcherAction,
   syncBaseUrlsFormState,
   filterValidSupportedModelPatterns,
-  parseSupportedModelInput
+  parseSupportedModelInput,
+  extractChannelNamePrefix
 } from '../utils/add-channel-modal-state'
 import { streamTimeoutPresets } from '../utils/streamTimeoutPresets'
 import { useI18n } from '../i18n'
@@ -1564,30 +1571,6 @@ const generateRandomString = (length: number): string => {
   return result
 }
 
-// 从 URL 提取二级域名
-const extractDomain = (url: string): string => {
-  try {
-    const hostname = new URL(url).hostname
-    // 移除 www. 前缀
-    const cleanHost = hostname.replace(/^www\./, '')
-    const parts = cleanHost.split('.')
-
-    // 处理特殊情况
-    if (parts.length <= 1) {
-      // localhost 等单段域名
-      return cleanHost
-    } else if (parts.length === 2) {
-      // example.com → example
-      return parts[0]
-    } else {
-      // api.openai.com → openai (取倒数第二段)
-      return parts[parts.length - 2]
-    }
-  } catch {
-    return 'channel'
-  }
-}
-
 // 随机后缀和生成的渠道名称
 const randomSuffix = ref(generateRandomString(6))
 
@@ -1595,8 +1578,8 @@ const generatedChannelName = computed(() => {
   if (!detectedBaseUrl.value) {
     return `channel-${randomSuffix.value}`
   }
-  const domain = extractDomain(detectedBaseUrl.value)
-  return `${domain}-${randomSuffix.value}`
+  const prefix = extractChannelNamePrefix(detectedBaseUrl.value)
+  return `${prefix}-${randomSuffix.value}`
 })
 
 // 预期请求 URL（模拟后端逻辑）
@@ -3618,6 +3601,19 @@ onUnmounted(() => {
   font-weight: 600;
   letter-spacing: 0;
   padding-inline: 12px;
+}
+
+.upstream-select :deep(.v-field__input) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  min-height: 28px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500;
+}
+
+.upstream-select :deep(.v-field__append-inner) {
+  padding-top: 0 !important;
+  align-items: center !important;
 }
 
 .header-capability-actions {
