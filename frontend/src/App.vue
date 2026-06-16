@@ -493,6 +493,47 @@
             </div>
           </div>
 
+          <!-- 上游请求生命周期超时 -->
+          <div class="cb-control-grid cb-control-grid--two">
+            <div class="cb-control">
+              <div class="cb-control-header">
+                <span class="cb-slider-label">{{ t('dialog.circuitBreaker.requestTimeout') }}</span>
+                <span class="cb-slider-value">{{ (cbForm.requestTimeoutMs / 1000) + 's' }}</span>
+              </div>
+              <input
+                type="range"
+                :value="cbForm.requestTimeoutMs"
+                :min="1000"
+                :max="300000"
+                step="1000"
+                class="cb-slider w-100"
+                @input="onSliderChange('requestTimeoutMs', $event)"
+              />
+              <div class="cb-slider-range">
+                <span>1s</span><span>300s</span>
+              </div>
+            </div>
+
+            <div class="cb-control">
+              <div class="cb-control-header">
+                <span class="cb-slider-label">{{ t('dialog.circuitBreaker.responseHeaderTimeout') }}</span>
+                <span class="cb-slider-value">{{ (cbForm.responseHeaderTimeoutMs / 1000) + 's' }}</span>
+              </div>
+              <input
+                type="range"
+                :value="cbForm.responseHeaderTimeoutMs"
+                :min="1000"
+                :max="300000"
+                step="1000"
+                class="cb-slider w-100"
+                @input="onSliderChange('responseHeaderTimeoutMs', $event)"
+              />
+              <div class="cb-slider-range">
+                <span>1s</span><span>300s</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 流式健康检测超时 -->
           <div class="cb-control-grid">
             <!-- 首字等待超时 -->
@@ -1774,6 +1815,8 @@ const cbForm = reactive({
   windowSize: 10,
   failureThreshold: 0.5,
   consecutiveFailuresThreshold: 3,
+  requestTimeoutMs: 300000,
+  responseHeaderTimeoutMs: 60000,
   streamFirstContentTimeoutMs: 30000,
   streamInactivityTimeoutMs: 20000,
   streamToolCallIdleTimeoutMs: 120000,
@@ -1817,6 +1860,10 @@ const onSliderChange = (field: string, event: Event) => {
     cbForm.windowSize = val
   } else if (field === 'consecutiveFailuresThreshold') {
     cbForm.consecutiveFailuresThreshold = val
+  } else if (field === 'requestTimeoutMs') {
+    cbForm.requestTimeoutMs = val
+  } else if (field === 'responseHeaderTimeoutMs') {
+    cbForm.responseHeaderTimeoutMs = val
   } else if (field === 'streamFirstContentTimeoutMs') {
     cbForm.streamFirstContentTimeoutMs = val
   } else if (field === 'streamInactivityTimeoutMs') {
@@ -1834,6 +1881,8 @@ const openCircuitBreakerDialog = async () => {
     cbForm.windowSize = params.windowSize
     cbForm.failureThreshold = params.failureThreshold
     cbForm.consecutiveFailuresThreshold = params.consecutiveFailuresThreshold
+    cbForm.requestTimeoutMs = params.requestTimeoutMs && params.requestTimeoutMs >= 1000 ? params.requestTimeoutMs : 300000
+    cbForm.responseHeaderTimeoutMs = params.responseHeaderTimeoutMs && params.responseHeaderTimeoutMs >= 1000 ? params.responseHeaderTimeoutMs : 60000
     cbForm.streamFirstContentTimeoutMs = params.streamFirstContentTimeoutMs && params.streamFirstContentTimeoutMs >= 5000 ? params.streamFirstContentTimeoutMs : 60000
     cbForm.streamInactivityTimeoutMs = params.streamInactivityTimeoutMs && params.streamInactivityTimeoutMs >= 1000 ? params.streamInactivityTimeoutMs : 60000
     cbForm.streamToolCallIdleTimeoutMs = params.streamToolCallIdleTimeoutMs && params.streamToolCallIdleTimeoutMs >= 30000 ? params.streamToolCallIdleTimeoutMs : 180000
@@ -1852,6 +1901,8 @@ const saveCircuitBreaker = async () => {
         windowSize: cbForm.windowSize,
         failureThreshold: cbForm.failureThreshold,
         consecutiveFailuresThreshold: cbForm.consecutiveFailuresThreshold,
+        requestTimeoutMs: cbForm.requestTimeoutMs,
+        responseHeaderTimeoutMs: cbForm.responseHeaderTimeoutMs,
         streamFirstContentTimeoutMs: cbForm.streamFirstContentTimeoutMs,
         streamInactivityTimeoutMs: cbForm.streamInactivityTimeoutMs,
         streamToolCallIdleTimeoutMs: cbForm.streamToolCallIdleTimeoutMs,
@@ -2368,6 +2419,10 @@ onUnmounted(() => {
   margin-bottom: 16px;
   border: 2px solid rgb(var(--v-theme-on-surface));
   background: rgb(var(--v-theme-surface));
+}
+
+.cb-control-grid--two {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .v-theme--dark .cb-control-grid {

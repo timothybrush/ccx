@@ -1209,7 +1209,28 @@
                 variant="outlined"
                 density="comfortable"
                 type="number"
-                min="1"
+                min="1000"
+                max="300000"
+                step="1000"
+              />
+            </v-col>
+
+            <!-- 响应头等待超时 -->
+            <v-col cols="12">
+              <v-text-field
+                v-model="form.responseHeaderTimeoutMs"
+                :label="t('addChannel.responseHeaderTimeoutMsLabel')"
+                :placeholder="t('addChannel.responseHeaderTimeoutMsPlaceholder')"
+                prepend-inner-icon="mdi-timer-outline"
+                :hint="t('addChannel.responseHeaderTimeoutMsHint')"
+                :rules="[rules.responseHeaderTimeoutMs]"
+                persistent-hint
+                clearable
+                variant="outlined"
+                density="comfortable"
+                type="number"
+                min="1000"
+                max="300000"
                 step="1000"
               />
             </v-col>
@@ -2258,6 +2279,7 @@ const form = reactive({
   customHeaders: {} as Record<string, string>,
   proxyUrl: '',
   requestTimeoutMs: null as string | number | null,
+  responseHeaderTimeoutMs: null as string | number | null,
   streamFirstContentTimeoutEnabled: false,
   streamFirstContentTimeoutMs: defaultStreamTimeouts.firstContentMs as number,
   streamInactivityTimeoutEnabled: false,
@@ -2496,7 +2518,12 @@ const rules = {
   requestTimeoutMs: (value: string | number | null) => {
     if (value === null || value === undefined || value === '') return true
     const timeout = Number(value)
-    return (Number.isInteger(timeout) && timeout > 0) || t('addChannel.requestTimeoutMsInvalid')
+    return (Number.isInteger(timeout) && timeout >= 1000 && timeout <= 300000) || t('addChannel.requestTimeoutMsInvalid')
+  },
+  responseHeaderTimeoutMs: (value: string | number | null) => {
+    if (value === null || value === undefined || value === '') return true
+    const timeout = Number(value)
+    return (Number.isInteger(timeout) && timeout >= 1000 && timeout <= 300000) || t('addChannel.responseHeaderTimeoutMsInvalid')
   }
 }
 
@@ -2626,6 +2653,7 @@ const normalizeComparablePayload = (payload: Partial<Channel>) => ({
   reasoningMapping: Object.fromEntries(Object.entries(payload.reasoningMapping || {}).sort(([a], [b]) => a.localeCompare(b))),
   reasoningParamStyle: payload.reasoningParamStyle || 'reasoning',
   requestTimeoutMs: payload.requestTimeoutMs || undefined,
+  responseHeaderTimeoutMs: payload.responseHeaderTimeoutMs || undefined,
   streamFirstContentTimeoutMs: payload.streamFirstContentTimeoutMs || undefined,
   streamInactivityTimeoutMs: payload.streamInactivityTimeoutMs || undefined,
   streamToolCallIdleTimeoutMs: payload.streamToolCallIdleTimeoutMs || undefined,
@@ -2657,6 +2685,9 @@ const buildSubmitPayload = () => {
   }
   if (isEditing.value && props.channel?.requestTimeoutMs && !payload.requestTimeoutMs) {
     payload.requestTimeoutMs = 0
+  }
+  if (isEditing.value && props.channel?.responseHeaderTimeoutMs && !payload.responseHeaderTimeoutMs) {
+    payload.responseHeaderTimeoutMs = 0
   }
   if (isEditing.value && props.channel?.rateLimitRpm && !payload.rateLimitRpm) {
     payload.rateLimitRpm = 0
@@ -2697,6 +2728,7 @@ const hasEditableDraftChanges = computed(() => {
     customHeaders: normalizeStringRecord(props.channel.customHeaders || {}),
     proxyUrl: props.channel.proxyUrl || '',
     requestTimeoutMs: props.channel.requestTimeoutMs || undefined,
+    responseHeaderTimeoutMs: props.channel.responseHeaderTimeoutMs || undefined,
     streamFirstContentTimeoutMs: props.channel.streamFirstContentTimeoutMs || undefined,
     streamInactivityTimeoutMs: props.channel.streamInactivityTimeoutMs || undefined,
     streamToolCallIdleTimeoutMs: props.channel.streamToolCallIdleTimeoutMs || undefined,
@@ -2793,6 +2825,7 @@ const resetForm = () => {
   form.customHeaders = {}
   form.proxyUrl = ''
   form.requestTimeoutMs = null
+  form.responseHeaderTimeoutMs = null
   form.streamFirstContentTimeoutEnabled = false
   form.streamFirstContentTimeoutMs = defaultStreamTimeouts.firstContentMs
   form.streamInactivityTimeoutEnabled = false
@@ -2884,6 +2917,7 @@ const loadChannelData = (channel: Channel) => {
   form.customHeaders = { ...(channel.customHeaders || {}) }
   form.proxyUrl = channel.proxyUrl || ''
   form.requestTimeoutMs = channel.requestTimeoutMs || null
+  form.responseHeaderTimeoutMs = channel.responseHeaderTimeoutMs || null
   form.streamFirstContentTimeoutEnabled = !!(channel.streamFirstContentTimeoutMs && channel.streamFirstContentTimeoutMs > 0)
   form.streamFirstContentTimeoutMs = channel.streamFirstContentTimeoutMs && channel.streamFirstContentTimeoutMs > 0 ? channel.streamFirstContentTimeoutMs : defaultStreamTimeouts.firstContentMs
   form.streamInactivityTimeoutEnabled = !!(channel.streamInactivityTimeoutMs && channel.streamInactivityTimeoutMs > 0)
@@ -3359,7 +3393,7 @@ const PAYLOAD_KEYS = [
   'name', 'serviceType', 'baseUrl', 'baseUrls', 'website', 'insecureSkipVerify',
   'lowQuality', 'injectDummyThoughtSignature', 'stripThoughtSignature', 'description',
   'apiKeys', 'modelMapping', 'reasoningMapping', 'reasoningParamStyle', 'textVerbosity',
-  'fastMode', 'customHeaders', 'proxyUrl', 'requestTimeoutMs', 'streamFirstContentTimeoutMs', 'streamInactivityTimeoutMs', 'streamToolCallIdleTimeoutMs', 'routePrefix', 'supportedModels',
+  'fastMode', 'customHeaders', 'proxyUrl', 'requestTimeoutMs', 'responseHeaderTimeoutMs', 'streamFirstContentTimeoutMs', 'streamInactivityTimeoutMs', 'streamToolCallIdleTimeoutMs', 'routePrefix', 'supportedModels',
   'rateLimitRpm', 'rateLimitWindowMinutes', 'rateLimitMaxConcurrent', 'rateLimitAutoFromHeaders',
   'autoBlacklistBalance', 'normalizeMetadataUserId', 'stripBillingHeader', 'passbackThinkingBlocks', 'stripEmptyTextBlocks', 'normalizeSystemRoleToTopLevel', 'codexNativeToolPassthrough',
   'codexToolCompat', 'normalizeNonstandardChatRoles', 'stripCodexClientTools', 'stripImageGenerationTool', 'convertImageUrlToB64Json'

@@ -25,6 +25,7 @@ describe('buildChannelPayload', () => {
       customHeaders: { 'x-test': '1' },
       proxyUrl: ' http://127.0.0.1:7890 ',
       requestTimeoutMs: 15000,
+      responseHeaderTimeoutMs: 90000,
       routePrefix: '',
       supportedModels: ['gpt-5'],
       autoBlacklistBalance: true,
@@ -52,6 +53,7 @@ describe('buildChannelPayload', () => {
     expect(result.fastMode).toBe(true)
     expect(result.proxyUrl).toBe('http://127.0.0.1:7890')
     expect(result.requestTimeoutMs).toBe(15000)
+    expect(result.responseHeaderTimeoutMs).toBe(90000)
     expect((result as any).historicalImageTurnLimit).toBe(3)
   })
 
@@ -562,6 +564,7 @@ describe('buildChannelPayload', () => {
       customHeaders: {},
       proxyUrl: '',
       requestTimeoutMs: null,
+      responseHeaderTimeoutMs: null,
       routePrefix: '',
       supportedModels: [],
       autoBlacklistBalance: true,
@@ -577,6 +580,49 @@ describe('buildChannelPayload', () => {
     })
 
     expect(result.requestTimeoutMs).toBeUndefined()
+    expect(result.responseHeaderTimeoutMs).toBeUndefined()
+  })
+
+  it('超出上限的请求生命周期超时不写入 payload', () => {
+    const result = buildChannelPayload({
+      name: 'invalid-timeout',
+      serviceType: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+      baseUrls: [],
+      website: '',
+      insecureSkipVerify: false,
+      lowQuality: false,
+      injectDummyThoughtSignature: false,
+      stripThoughtSignature: false,
+      passbackReasoningContent: false,
+      passbackThinkingBlocks: false,
+      description: '',
+      apiKeys: ['sk-1'],
+      modelMapping: {},
+      reasoningMapping: {},
+      reasoningParamStyle: 'reasoning',
+      textVerbosity: '',
+      fastMode: false,
+      customHeaders: {},
+      proxyUrl: '',
+      requestTimeoutMs: 301000,
+      responseHeaderTimeoutMs: 301000,
+      routePrefix: '',
+      supportedModels: [],
+      autoBlacklistBalance: true,
+      normalizeMetadataUserId: true,
+      stripEmptyTextBlocks: false,
+      normalizeSystemRoleToTopLevel: false,
+      codexNativeToolPassthrough: false,
+      codexToolCompat: true,
+      stripImageGenerationTool: false,
+      noVision: false,
+      noVisionModels: [],
+      visionFallbackModel: ''
+    })
+
+    expect(result.requestTimeoutMs).toBeUndefined()
+    expect(result.responseHeaderTimeoutMs).toBeUndefined()
   })
 
   it('应清洗 modelMapping 中的对象值为字符串', () => {

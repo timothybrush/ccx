@@ -68,6 +68,7 @@ export interface Channel {
   customHeaders?: Record<string, string>  // 自定义请求头
   proxyUrl?: string                        // HTTP/HTTPS/SOCKS5 代理 URL
   requestTimeoutMs?: number                // 非流式上游请求超时时间（毫秒，0/空=继承全局）
+  responseHeaderTimeoutMs?: number         // 等待上游 HTTP 响应头超时时间（毫秒，0/空=继承全局）
   streamFirstContentTimeoutMs?: number     // 流式首字等待超时（毫秒，0/空=继承全局）
   streamInactivityTimeoutMs?: number       // 流式首字后断流超时（毫秒，0/空=继承全局）
   streamToolCallIdleTimeoutMs?: number     // 工具调用空闲超时（毫秒，0/空=继承全局）

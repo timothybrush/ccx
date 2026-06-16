@@ -36,9 +36,30 @@
           variant="outlined"
           density="comfortable"
           type="number"
-          min="1"
+          min="1000"
+          max="300000"
           step="1000"
           @update:model-value="updateField('requestTimeoutMs', $event)"
+        />
+      </v-col>
+
+      <v-col cols="12">
+        <v-text-field
+          :model-value="form.responseHeaderTimeoutMs"
+          :label="t('channelEditor.transport.responseHeaderTimeout.label')"
+          :placeholder="t('channelEditor.transport.responseHeaderTimeout.placeholder')"
+          prepend-inner-icon="mdi-timer-outline"
+          :hint="t('channelEditor.transport.responseHeaderTimeout.hint')"
+          :rules="[rules.responseHeaderTimeoutMs]"
+          persistent-hint
+          clearable
+          variant="outlined"
+          density="comfortable"
+          type="number"
+          min="1000"
+          max="300000"
+          step="1000"
+          @update:model-value="updateField('responseHeaderTimeoutMs', $event)"
         />
       </v-col>
 
@@ -69,6 +90,7 @@ import { useI18n } from '../../i18n'
 interface FormData {
   proxyUrl: string
   requestTimeoutMs: string | number | null
+  responseHeaderTimeoutMs: string | number | null
   routePrefix?: string
 }
 

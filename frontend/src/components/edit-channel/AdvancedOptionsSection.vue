@@ -97,6 +97,7 @@ interface FormData {
   historicalImageTurnLimit?: number
   proxyUrl: string
   requestTimeoutMs: string | number | null
+  responseHeaderTimeoutMs: string | number | null
   rateLimitRpm: string | number | null
   rateLimitWindowMinutes: string | number | null
   rateLimitMaxConcurrent: string | number | null
