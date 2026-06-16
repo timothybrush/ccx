@@ -105,6 +105,7 @@
                       <div class="d-flex align-center ga-3 pa-3 rounded-lg upstream-type-card" :style="upstreamTypeCardStyle">
                         <v-icon :color="quickServiceTypeColor" size="20">{{ quickServiceTypeIcon }}</v-icon>
                         <div class="text-caption text-medium-emphasis flex-shrink-0">{{ t('channelEditor.basic.serviceType.label') }}</div>
+                        <v-spacer />
                         <v-select
                           v-model="quickServiceType"
                           :items="headerServiceTypeItems"
@@ -115,7 +116,8 @@
                           hide-details
                           :base-color="quickServiceTypeColor"
                           :color="quickServiceTypeColor"
-                          class="upstream-select mt-n1 flex-grow-1"
+                          :menu-props="{ contentClass: 'upstream-select-menu' }"
+                          class="upstream-select mt-n1"
                           @update:model-value="quickServiceTypeTouched = true"
                           @update:menu="onMenuUpdate"
                         />
@@ -1614,8 +1616,7 @@ const upstreamTypeCardStyle = computed(() => {
   }
   const rgb = rgbMap[quickServiceType.value] || '99, 102, 241'
   return {
-    background: `rgba(${rgb}, 0.1)`,
-    border: `1px solid rgba(${rgb}, 0.3)`
+    background: `rgba(${rgb}, 0.1)`
   }
 })
 
@@ -3674,30 +3675,42 @@ onUnmounted(() => {
   padding-inline: 12px;
 }
 
+.upstream-select {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+}
+
+.upstream-select :deep(.v-field) {
+  width: max-content;
+  max-width: 100%;
+}
+
 .upstream-select :deep(.v-field__input) {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   min-height: 28px !important;
+  width: auto;
   font-size: 0.875rem !important;
   font-weight: 600;
 }
 
-/* 选中文字右对齐并完整显示，避免「· 推荐」后缀被截断 */
-.upstream-select :deep(.v-select__selection) {
-  justify-content: flex-end;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
+/* 选中文字完整显示，避免「· 推荐」后缀被截断 */
 .upstream-select :deep(.v-select__selection-text) {
   overflow: visible;
   white-space: nowrap;
-  text-align: right;
 }
 
 .upstream-select :deep(.v-field__append-inner) {
   padding-top: 0 !important;
   align-items: center !important;
+}
+
+/* 下拉菜单紧凑贴合内容，不继承触发框宽度 */
+.upstream-select-menu {
+  min-width: unset !important;
+  width: auto !important;
+  max-width: 240px !important;
 }
 
 .header-capability-actions {
