@@ -10,6 +10,7 @@ declare module "@wailsio/runtime" {
         interface CustomEvents {
             "desktop:show-tab": string;
             "desktop:tray-error": string;
+            "desktop:window-visibility": boolean;
         }
     }
 }

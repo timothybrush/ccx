@@ -1,6 +1,7 @@
 import { onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import type { TabValue } from '@/types'
+import { setDesktopWindowVisible } from '@/composables/useDesktopActivity'
 
 export function useWailsEvents(
   activeTab: Ref<TabValue>,
@@ -9,6 +10,7 @@ export function useWailsEvents(
 ) {
   let unsubscribeTab: (() => void) | undefined
   let unsubscribeTrayError: (() => void) | undefined
+  let unsubscribeWindowVisibility: (() => void) | undefined
 
   onMounted(() => {
     unsubscribeTab = Events.On('desktop:show-tab', (event: { data: string }) => {
@@ -21,10 +23,14 @@ export function useWailsEvents(
       actionError.value = event.data
       void syncStatus()
     })
+    unsubscribeWindowVisibility = Events.On('desktop:window-visibility', (event: { data: boolean }) => {
+      setDesktopWindowVisible(event.data !== false)
+    })
   })
 
   onBeforeUnmount(() => {
     unsubscribeTab?.()
     unsubscribeTrayError?.()
+    unsubscribeWindowVisibility?.()
   })
 }

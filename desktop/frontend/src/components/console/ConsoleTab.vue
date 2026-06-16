@@ -32,7 +32,7 @@ const emit = defineEmits<{
 
 const { status } = useStatus()
 const { t, tf } = useLanguage()
-const { activeTab, refreshChannels, refreshError } = useConsoleChannels()
+const { activeTab, refreshError } = useConsoleChannels()
 
 // 子 Tab 定义
 const protocolTabs: { value: ManagedChannelType; label: string }[] = [
@@ -79,18 +79,12 @@ const openInBrowser = async () => {
 
 onMounted(() => {
   applySelection(props.selection)
-  if (status.value.running) {
-    refreshChannels()
-  }
 })
 
 watch(() => props.selection, (selection) => {
   applySelection(selection)
 })
 
-watch(() => status.value.running, (running) => {
-  if (running) refreshChannels()
-})
 </script>
 
 <template>

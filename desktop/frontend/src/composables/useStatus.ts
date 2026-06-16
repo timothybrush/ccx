@@ -1,4 +1,5 @@
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useDesktopActivity } from '@/composables/useDesktopActivity'
 import type { DesktopStatus } from '@/types'
 import {
   GetStatus,
@@ -26,6 +27,20 @@ const loading = ref(false)
 const actionError = ref('')
 const autostartEnabled = ref(false)
 let statusInterval: ReturnType<typeof setInterval> | undefined
+
+function stopStatusPolling() {
+  if (!statusInterval) return
+  clearInterval(statusInterval)
+  statusInterval = undefined
+}
+
+function startStatusPolling() {
+  if (statusInterval) return
+  statusInterval = setInterval(() => {
+    syncStatus()
+    syncAutostart()
+  }, 3000)
+}
 
 const syncStatus = async () => {
   try {
@@ -83,22 +98,26 @@ const refresh = async () => {
 }
 
 export function useStatus() {
+  const { windowVisible } = useDesktopActivity()
+
   onMounted(async () => {
     await syncStatus()
     await syncAutostart()
-    if (!statusInterval) {
-      statusInterval = setInterval(() => {
-        syncStatus()
-        syncAutostart()
-      }, 3000)
-    }
+    if (windowVisible.value) startStatusPolling()
   })
 
   onBeforeUnmount(() => {
-    if (statusInterval) {
-      clearInterval(statusInterval)
-      statusInterval = undefined
+    stopStatusPolling()
+  })
+
+  watch(windowVisible, async (visible) => {
+    if (!visible) {
+      stopStatusPolling()
+      return
     }
+    await syncStatus()
+    await syncAutostart()
+    startStatusPolling()
   })
 
   return {

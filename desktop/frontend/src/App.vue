@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { ref, watch, computed, onBeforeUnmount, onMounted } from 'vue'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import StatusTab from '@/components/status/StatusTab.vue'
 import AgentTab from '@/components/agent/AgentTab.vue'
@@ -14,6 +14,13 @@ import { useSetup } from '@/composables/useSetup'
 import { useLanguage } from '@/composables/useLanguage'
 import { useTheme } from '@/composables/useTheme'
 import {
+  setDesktopActiveTab,
+  setDesktopConsoleSelection,
+  useDesktopActivity,
+} from '@/composables/useDesktopActivity'
+import { useConsoleChannels } from '@/composables/useConsoleChannels'
+import { useConversations } from '@/composables/useConversations'
+import {
   channelSelectionPath,
   useConsoleSelection,
   type ConsoleSelection,
@@ -25,6 +32,20 @@ const { status, actionError, syncStatus } = useStatus()
 const { t, initializeLanguage } = useLanguage()
 const { init: initTheme } = useTheme()
 const { consoleSelection, setConsoleSelection } = useConsoleSelection()
+const { refreshChannels } = useConsoleChannels()
+const { fetchConversations } = useConversations()
+const {
+  windowVisible,
+  isConsoleChannelsActive,
+  isConsoleConversationsActive,
+} = useDesktopActivity()
+
+const CONSOLE_CHANNEL_REFRESH_INTERVAL_MS = 5000
+const CONVERSATION_REFRESH_INTERVAL_MS = 3000
+let channelRefreshTimer: ReturnType<typeof setInterval> | undefined
+let conversationRefreshTimer: ReturnType<typeof setInterval> | undefined
+let channelRefreshPromise: Promise<void> | null = null
+let conversationRefreshPromise: Promise<void> | null = null
 
 useWailsEvents(activeTab, actionError, syncStatus)
 
@@ -60,6 +81,49 @@ const handleConsoleSelectionUpdate = (selection: ConsoleSelection) => {
   setConsoleSelection(selection)
 }
 
+async function refreshVisibleChannels() {
+  if (!status.value.running || !isConsoleChannelsActive.value || channelRefreshPromise) return
+  channelRefreshPromise = refreshChannels()
+    .finally(() => {
+      channelRefreshPromise = null
+    })
+  return channelRefreshPromise
+}
+
+async function refreshVisibleConversations() {
+  if (!status.value.running || !isConsoleConversationsActive.value || conversationRefreshPromise) return
+  conversationRefreshPromise = fetchConversations()
+    .finally(() => {
+      conversationRefreshPromise = null
+    })
+  return conversationRefreshPromise
+}
+
+function updateDashboardPolling() {
+  if (channelRefreshTimer) {
+    clearInterval(channelRefreshTimer)
+    channelRefreshTimer = undefined
+  }
+  if (conversationRefreshTimer) {
+    clearInterval(conversationRefreshTimer)
+    conversationRefreshTimer = undefined
+  }
+
+  if (isConsoleChannelsActive.value && status.value.running) {
+    void refreshVisibleChannels()
+    channelRefreshTimer = setInterval(() => {
+      void refreshVisibleChannels()
+    }, CONSOLE_CHANNEL_REFRESH_INTERVAL_MS)
+  }
+
+  if (isConsoleConversationsActive.value && status.value.running) {
+    void refreshVisibleConversations()
+    conversationRefreshTimer = setInterval(() => {
+      void refreshVisibleConversations()
+    }, CONVERSATION_REFRESH_INTERVAL_MS)
+  }
+}
+
 // 选项卡标题映射
 const tabTitles = computed<Record<TabValue, string>>(() => ({
   status: t('tab.statusTitle'),
@@ -68,6 +132,25 @@ const tabTitles = computed<Record<TabValue, string>>(() => ({
   env: t('tab.envTitle'),
   dashboard: t('tab.dashboardTitle'),
 }))
+
+watch(activeTab, (tab) => {
+  setDesktopActiveTab(tab)
+}, { immediate: true })
+
+watch(consoleSelection, (selection) => {
+  setDesktopConsoleSelection(selection)
+}, { immediate: true })
+
+watch(
+  [() => status.value.running, windowVisible, activeTab, consoleSelection],
+  updateDashboardPolling,
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (channelRefreshTimer) clearInterval(channelRefreshTimer)
+  if (conversationRefreshTimer) clearInterval(conversationRefreshTimer)
+})
 </script>
 
 <template>

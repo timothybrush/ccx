@@ -1,7 +1,5 @@
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useIntervalFn } from '@vueuse/core'
+import { ref, computed } from 'vue'
 import { useAdminApi } from '@/composables/useAdminApi'
-import { useStatus } from '@/composables/useStatus'
 import { mergeChannelsWithLocalData } from '@/utils/channel-merge'
 import { getChannelTypeApi, type ManagedChannelType } from '@/utils/channel-type-api'
 import type {
@@ -239,53 +237,7 @@ async function moveApiKeyToBottom(channelId: number, key: string) {
   await refreshChannels()
 }
 
-// ===== 自动刷新 =====
-
-const AUTO_REFRESH_INTERVAL = 5000
-let autoRefreshRunning = false
-
 export function useConsoleChannels() {
-  const { status } = useStatus()
-
-  // 仅在服务运行时刷新（桌面 App Webview 始终在前台，无需可见性检查）
-  const shouldRefresh = computed(() => status.value.running)
-
-  const { pause, resume } = useIntervalFn(() => {
-    if (autoRefreshRunning && shouldRefresh.value) {
-      refreshChannels().catch(() => {})
-    }
-  }, AUTO_REFRESH_INTERVAL)
-
-  function startAutoRefresh() {
-    autoRefreshRunning = true
-    resume()
-    // 立即刷新一次
-    if (shouldRefresh.value) {
-      refreshChannels().catch(() => {})
-    }
-  }
-
-  function stopAutoRefresh() {
-    autoRefreshRunning = false
-    pause()
-  }
-
-  onMounted(() => {
-    if (status.value.running) {
-      startAutoRefresh()
-    }
-  })
-
-  onBeforeUnmount(() => {
-    stopAutoRefresh()
-  })
-
-  // 服务状态变化时自动启停刷新
-  watch(() => status.value.running, (running) => {
-    if (running) startAutoRefresh()
-    else stopAutoRefresh()
-  })
-
   return {
     // 状态
     activeTab,
@@ -320,8 +272,5 @@ export function useConsoleChannels() {
     moveApiKeyToTop,
     moveApiKeyToBottom,
 
-    // 刷新控制
-    startAutoRefresh,
-    stopAutoRefresh,
   }
 }

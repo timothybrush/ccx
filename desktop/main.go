@@ -37,6 +37,7 @@ var (
 func init() {
 	application.RegisterEvent[string]("desktop:show-tab")
 	application.RegisterEvent[string]("desktop:tray-error")
+	application.RegisterEvent[bool]("desktop:window-visibility")
 }
 
 func main() {
@@ -179,6 +180,7 @@ func run() error {
 	hideMainWindow := func() {
 		mainWindow.Hide()
 		setDockIconVisible(false)
+		app.Event.Emit("desktop:window-visibility", false)
 	}
 
 	var mainWindowCentered = hasPersistedState
@@ -192,6 +194,7 @@ func run() error {
 			mainWindow.UnMinimise()
 		}
 		mainWindow.Show()
+		app.Event.Emit("desktop:window-visibility", true)
 		if withFocus {
 			if runtime.GOOS == "windows" {
 				mainWindow.SetAlwaysOnTop(true)
@@ -213,9 +216,11 @@ func run() error {
 	})
 	mainWindow.RegisterHook(events.Common.WindowMinimise, func(e *application.WindowEvent) {
 		setDockIconVisible(false)
+		app.Event.Emit("desktop:window-visibility", false)
 	})
 	mainWindow.RegisterHook(events.Common.WindowUnMinimise, func(e *application.WindowEvent) {
 		setDockIconVisible(true)
+		app.Event.Emit("desktop:window-visibility", true)
 	})
 
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
