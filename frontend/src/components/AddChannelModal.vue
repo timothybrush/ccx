@@ -102,10 +102,9 @@
                       </div>
 
                       <!-- 上游类型选择器 -->
-                      <div class="d-flex align-center ga-3 pa-3 bg-grey-lighten-4 rounded-lg">
-                        <v-icon color="grey-darken-1" size="20">mdi-shape-outline</v-icon>
-                        <div class="text-caption text-medium-emphasis">{{ t('channelEditor.basic.serviceType.label') }}</div>
-                        <v-spacer />
+                      <div class="d-flex align-center ga-3 pa-3 rounded-lg upstream-type-card" :style="upstreamTypeCardStyle">
+                        <v-icon :color="quickServiceTypeColor" size="20">{{ quickServiceTypeIcon }}</v-icon>
+                        <div class="text-caption text-medium-emphasis flex-shrink-0">{{ t('channelEditor.basic.serviceType.label') }}</div>
                         <v-select
                           v-model="quickServiceType"
                           :items="headerServiceTypeItems"
@@ -114,8 +113,9 @@
                           variant="plain"
                           density="compact"
                           hide-details
-                          class="upstream-select mt-n1"
-                          style="width: 160px;"
+                          :base-color="quickServiceTypeColor"
+                          :color="quickServiceTypeColor"
+                          class="upstream-select mt-n1 flex-grow-1"
                           @update:model-value="quickServiceTypeTouched = true"
                           @update:menu="onMenuUpdate"
                         />
@@ -1580,6 +1580,43 @@ const isQuickFormValid = computed(() => {
 
 const quickServiceTypeLabel = computed(() => {
   return serviceTypeOptions.value.find(option => option.value === quickServiceType.value)?.title || getDefaultServiceType()
+})
+
+// 上游类型品牌图标 + 配色，与 ChannelCard 的服务类型视觉体系保持一致
+const quickServiceTypeIcon = computed(() => {
+  const iconMap: Record<string, string> = {
+    openai: 'mdi-robot',
+    claude: 'mdi-message-processing',
+    gemini: 'mdi-diamond-stone',
+    responses: 'mdi-rocket-launch'
+  }
+  return iconMap[quickServiceType.value] || 'mdi-api'
+})
+
+const quickServiceTypeColor = computed(() => {
+  const colorMap: Record<string, string> = {
+    openai: 'info',
+    claude: 'orange',
+    gemini: 'purple',
+    responses: 'success'
+  }
+  return colorMap[quickServiceType.value] || 'primary'
+})
+
+// 上游类型卡片品牌色调（底色 + 描边），与桌面端有色卡片风格对齐
+const upstreamTypeCardStyle = computed(() => {
+  // 与 quickServiceTypeColor 对应的 RGB 主色（Vuetify orange/purple 无主题变量，统一用色值）
+  const rgbMap: Record<string, string> = {
+    openai: '59, 130, 246',   // info  / blue-500
+    claude: '249, 115, 22',   // orange-500
+    gemini: '168, 85, 247',   // purple-500
+    responses: '34, 197, 94'  // success / green-500
+  }
+  const rgb = rgbMap[quickServiceType.value] || '99, 102, 241'
+  return {
+    background: `rgba(${rgb}, 0.1)`,
+    border: `1px solid rgba(${rgb}, 0.3)`
+  }
 })
 
 // 生成随机字符串
@@ -3642,7 +3679,20 @@ onUnmounted(() => {
   padding-bottom: 0 !important;
   min-height: 28px !important;
   font-size: 0.875rem !important;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+/* 选中文字右对齐并完整显示，避免「· 推荐」后缀被截断 */
+.upstream-select :deep(.v-select__selection) {
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.upstream-select :deep(.v-select__selection-text) {
+  overflow: visible;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .upstream-select :deep(.v-field__append-inner) {

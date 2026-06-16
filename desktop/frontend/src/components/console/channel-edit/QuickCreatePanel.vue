@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { computed, type FunctionalComponent } from 'vue'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { AlertCircle, CheckCircle2, Layers, Tag } from 'lucide-vue-next'
+import { AlertCircle, Bot, CheckCircle2, Gem, MessageSquare, Sparkles, Tag } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 
-defineProps<{
+const props = defineProps<{
   quickInput: string
   serviceType: string
   serviceTypeOptions: Array<{ label: string; value: string }>
@@ -22,6 +23,36 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useLanguage()
+
+// 上游类型品牌色 + 图标，与 ChannelCard 的服务类型视觉体系保持一致
+interface ServiceMeta {
+  icon: FunctionalComponent
+  iconClass: string
+  badgeClass: string
+}
+const serviceMetaMap: Record<string, ServiceMeta> = {
+  openai: {
+    icon: Bot,
+    iconClass: 'text-blue-500',
+    badgeClass: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300',
+  },
+  claude: {
+    icon: MessageSquare,
+    iconClass: 'text-orange-500',
+    badgeClass: 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-300',
+  },
+  gemini: {
+    icon: Gem,
+    iconClass: 'text-purple-500',
+    badgeClass: 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300',
+  },
+  responses: {
+    icon: Sparkles,
+    iconClass: 'text-emerald-500',
+    badgeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+  },
+}
+const serviceMeta = computed<ServiceMeta>(() => serviceMetaMap[props.serviceType] || serviceMetaMap.openai)
 </script>
 
 <template>
@@ -76,14 +107,14 @@ const { t } = useLanguage()
             </div>
 
             <!-- 上游类型选择器 -->
-            <div class="flex items-center gap-3 rounded-lg border-0 bg-muted/10 p-3">
-              <Layers class="h-4 w-4 shrink-0 text-muted-foreground" />
-              <div class="min-w-0 flex-1 text-[11px] text-muted-foreground">
+            <div class="flex items-center gap-3 rounded-lg border bg-muted/10 p-3" :class="serviceMeta.badgeClass">
+              <component :is="serviceMeta.icon" class="h-4 w-4 shrink-0" :class="serviceMeta.iconClass" />
+              <div class="shrink-0 text-[11px] text-muted-foreground">
                 {{ t('channelEditor.basic.serviceType.label') }}
               </div>
               <Select :model-value="serviceType" @update:model-value="(val) => emit('update:service-type', String(val))">
-                <SelectTrigger class="h-7 w-[160px] border-0 bg-transparent p-0 shadow-none focus:ring-0">
-                  <SelectValue :placeholder="t('channelEditor.basic.serviceType.placeholder')" class="text-xs font-medium" />
+                <SelectTrigger class="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus:ring-0">
+                  <SelectValue :placeholder="t('channelEditor.basic.serviceType.placeholder')" class="text-xs font-semibold" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in serviceTypeOptions" :key="opt.value" :value="opt.value">
