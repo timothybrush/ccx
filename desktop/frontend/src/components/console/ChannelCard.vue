@@ -206,7 +206,7 @@ async function copyChannelInfo() {
     ]"
   >
     <!-- SVG activity chart background -->
-    <ActivityChart :activity="activity" class="opacity-20 dark:opacity-25" />
+    <ActivityChart :activity="activity" class="opacity-40 dark:opacity-50" />
 
     <!-- Content overlay (relative z-index to appear above chart) -->
     <div class="relative z-10 flex items-center gap-2 text-muted-foreground">
