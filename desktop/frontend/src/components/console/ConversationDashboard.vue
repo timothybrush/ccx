@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type StyleValue } from 'vue'
-import { useIntervalFn } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance, type StyleValue } from 'vue'
 import { Alert } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -8,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { MessageSquare, Search } from 'lucide-vue-next'
 import { useAdminApi } from '@/composables/useAdminApi'
 import { useConversations } from '@/composables/useConversations'
+import { useDesktopActivity } from '@/composables/useDesktopActivity'
 import { useLanguage } from '@/composables/useLanguage'
 import { useStatus } from '@/composables/useStatus'
 import ConversationCard from './ConversationCard.vue'
@@ -26,6 +26,7 @@ const {
   setOverride,
   removeOverride,
 } = useConversations()
+const { isConsoleConversationsActive } = useDesktopActivity()
 
 const kindFilter = ref('')
 const searchQuery = ref('')
@@ -44,7 +45,8 @@ const MASONRY_MAX_COLUMNS = 3
 let masonryResizeObserver: ResizeObserver | undefined
 let masonryLayoutFrame = 0
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
-let refreshPromise: Promise<void> | null = null
+let clockTimer: ReturnType<typeof setInterval> | undefined
+let hasLoadedSettings = false
 const masonryItemElements = new Map<string, HTMLElement>()
 const masonryItemObservers = new Map<string, ResizeObserver>()
 
@@ -135,12 +137,20 @@ function getChannelsForKind(kind: string) {
 }
 
 async function refreshConversations() {
-  if (!shouldRefresh.value || refreshPromise) return refreshPromise
-  refreshPromise = fetchConversations()
-    .finally(() => {
-      refreshPromise = null
-    })
-  return refreshPromise
+  if (!shouldRefresh.value) return
+  await fetchConversations()
+}
+
+function updateClockTimer() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = undefined
+  }
+  if (!isConsoleConversationsActive.value) return
+  nowMs.value = Date.now()
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
 }
 
 function toggleExpand(id: string) {
@@ -261,24 +271,8 @@ function setMasonryItemRef(id: string, el: Element | ComponentPublicInstance | n
   scheduleMasonryLayout()
 }
 
-const { pause: pauseDataTick, resume: resumeDataTick } = useIntervalFn(() => {
-  refreshConversations().catch(() => {})
-}, 3000, { immediate: false })
-
-const { pause: pauseClockTick, resume: resumeClockTick } = useIntervalFn(() => {
-  nowMs.value = Date.now()
-}, 1000, { immediate: false })
-
-onMounted(() => {
-  resumeDataTick()
-  resumeClockTick()
-  loadSettings().catch(() => {})
-  refreshConversations().catch(() => {})
-})
-
 onBeforeUnmount(() => {
-  pauseDataTick()
-  pauseClockTick()
+  if (clockTimer) clearInterval(clockTimer)
   masonryResizeObserver?.disconnect()
   for (const observer of masonryItemObservers.values()) observer.disconnect()
   if (masonryLayoutFrame) window.cancelAnimationFrame(masonryLayoutFrame)
@@ -309,9 +303,16 @@ watch(visibleConversations, async () => {
 })
 
 watch(masonryColumnCount, () => scheduleMasonryLayout())
-watch(shouldRefresh, running => {
+watch([shouldRefresh, isConsoleConversationsActive], ([running, active]) => {
+  if (!active) return
+  if (!hasLoadedSettings) {
+    hasLoadedSettings = true
+    loadSettings().catch(() => {})
+  }
   if (running) refreshConversations().catch(() => {})
-})
+}, { immediate: true })
+
+watch(isConsoleConversationsActive, updateClockTimer, { immediate: true })
 
 // 监听 overrideDuration 变化并保存到后端（包括 -1 永不恢复）
 watch(overrideDuration, async (newDuration) => {
