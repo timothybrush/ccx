@@ -717,7 +717,7 @@ func (cm *ConfigManager) DeprioritizeAPIKey(apiKey string) error {
 // UpdateModelMapping 更新指定上游的单个模型映射
 // sourcePattern: 源模型匹配模式（如 "claude-opus-4"）
 // targetModel: 目标模型名称
-// reasoning: reasoning 级别（off/low/medium/high/xhigh）
+// reasoning: reasoning 级别（off/none/low/medium/high/xhigh/max）
 func (cm *ConfigManager) UpdateModelMapping(index int, sourcePattern, targetModel, reasoning string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -737,7 +737,7 @@ func (cm *ConfigManager) UpdateModelMapping(index int, sourcePattern, targetMode
 	}
 
 	// 验证 reasoning 值
-	if reasoning != "" && reasoning != "off" && reasoning != "low" && reasoning != "medium" && reasoning != "high" && reasoning != "xhigh" {
+	if !isValidReasoningEffort(reasoning) {
 		return fmt.Errorf("无效的 reasoning 级别: %s", reasoning)
 	}
 

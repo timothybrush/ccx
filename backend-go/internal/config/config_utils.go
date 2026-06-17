@@ -126,6 +126,15 @@ func ResolveReasoningEffort(model string, upstream *UpstreamConfig) string {
 	return ""
 }
 
+func isValidReasoningEffort(reasoning string) bool {
+	switch reasoning {
+	case "", "off", "none", "low", "medium", "high", "xhigh", "max":
+		return true
+	default:
+		return false
+	}
+}
+
 // ============== 渠道状态与优先级辅助函数 ==============
 
 // GetChannelStatus 获取渠道状态（带默认值处理）

@@ -646,7 +646,7 @@ func (cm *ConfigManager) UpdateResponsesModelMapping(index int, sourcePattern, t
 	}
 
 	// 验证 reasoning 值
-	if reasoning != "" && reasoning != "off" && reasoning != "low" && reasoning != "medium" && reasoning != "high" && reasoning != "xhigh" {
+	if !isValidReasoningEffort(reasoning) {
 		return fmt.Errorf("无效的 reasoning 级别: %s", reasoning)
 	}
 

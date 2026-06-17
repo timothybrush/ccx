@@ -655,7 +655,7 @@ func (cm *ConfigManager) UpdateImagesModelMapping(index int, sourcePattern, targ
 	}
 
 	// 验证 reasoning 值（Images 一般不使用 reasoning，但为了接口一致性保留）
-	if reasoning != "" && reasoning != "off" && reasoning != "low" && reasoning != "medium" && reasoning != "high" && reasoning != "xhigh" {
+	if !isValidReasoningEffort(reasoning) {
 		return fmt.Errorf("无效的 reasoning 级别: %s", reasoning)
 	}
 

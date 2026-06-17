@@ -197,3 +197,18 @@ func TestResolveReasoningEffort(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidReasoningEffort(t *testing.T) {
+	valid := []string{"", "off", "none", "low", "medium", "high", "xhigh", "max"}
+	for _, effort := range valid {
+		t.Run("valid_"+effort, func(t *testing.T) {
+			if !isValidReasoningEffort(effort) {
+				t.Fatalf("isValidReasoningEffort(%q) = false, want true", effort)
+			}
+		})
+	}
+
+	if isValidReasoningEffort("ultra") {
+		t.Fatalf("isValidReasoningEffort(%q) = true, want false", "ultra")
+	}
+}
