@@ -1,3 +1,61 @@
+## [v2.9.0] - 2026-06-17
+
+### 新增
+
+- **运行时超时热更新与 responseHeaderTimeout 渠道字段** - 新增 `responseHeaderTimeoutMs` 渠道字段，支持全局运行时超时热更新，httpclient 支持显式 responseHeaderTimeout
+- **熔断器/调校台新增超时滑块** - 桌面端和前端熔断器、调校台新增 `requestTimeoutMs` 与 `responseHeaderTimeoutMs` 运行时滑块
+- **CompactModel 配置支持** - Responses 渠道新增 `compactModel` 配置字段，支持压缩模型自动选择
+- **内联模型映射编辑器** - 所有渠道类型支持内联编辑模型映射，无需弹窗
+- **主动限速滑动窗口算法** - 令牌桶改为滑动窗口算法，支持可配置的窗口时长，自动学习上游限速默认开启
+- **b64_json 图片响应自动转换** - 支持 `b64_json` 请求的 URL 响应自动转换
+- **向下游下发可读的空响应错误文案** - 流式响应场景向客户端下发可读错误信息而非空流
+- **桌面端 App 级 polling 调度层** - ConversationDashboard 轮询迁移至 App 级调度，支持 window visibility 事件控制
+- **桌面端图表功能对齐 Web 端** - 桌面端控制面板使用统计图表与 Web 端完全对齐
+- **渠道活动图表背景** - ChannelCard 新增活动图表背景可视化
+- **渠道快速创建卡片上游类型品牌色与图标** - 快速创建渠道卡片的上游类型展示品牌色和对应图标
+- **渠道编辑器输出冗长度配置** - 渠道编辑器新增输出冗长度配置选项
+- **驾驶舱空闲自动恢复时间持久化配置** - 支持通过环境变量和前端选择器持久化配置 override 有效期
+- **Kimi Coding Plan 模型重定向与智能排序** - Kimi 渠道实现 Coding Plan 模型重定向与智能模型排序
+- **桌面端模型重定向区域 premium UI 重构** - 目标模型输入改为自定义下拉菜单，支持下拉建议
+- **快速模式与历史图片轮次限制配置** - Web 端补全快速模式与历史图片轮次限制配置
+- **流式断流超时预设快捷按钮** - 桌面端新增流式断流超时预设快捷按钮
+- **Esc 快捷键提示** - Web 和桌面端为对话框关闭按钮添加 Esc 快捷键提示
+- **Compatibility 分组高级开关补全** - Web 端和桌面端补全 Compatibility 分组所有缺失的高级开关
+- **桌面端 i18n 全面国际化** - 迁移到 vue-i18n + 外部 JSON 语言文件，桌面端渠道编辑、控制台、图表等全面 i18n 化
+- **文档: Geo SEO, llms.txt, README 桌面安装说明** - 新增 Geo SEO、llms.txt，改进贡献指南和 README 桌面安装说明
+
+### 修复
+
+- **临时限流不触发 Key 黑名单** - 临时限流场景不再误将 Key 加入黑名单
+- **REQUEST_TIMEOUT 默认值从 300s 调整为 120s** - 调整默认请求超时为更合理的 120 秒
+- **保留 web_search 工具以兼容 Codex v0.139.0+** - Responses 场景保留 web_search 工具兼容新版 Codex
+- **修复 UpstreamUpdate JSON 标签拼写错误** - 修正配置结构体 JSON tag 拼写
+- **图表系列修复** - 修复 KeyTrendChart yaxis 绑定、series 复用、forceNiceScale、失败率柱透明度等多项图表问题
+- **模型映射编辑修复** - 修复 modelMapping 对象值保存失败、combobox 值规范化、目标模型输入框抖动等问题
+- **限速配置修复** - 修复 0 值显示为空、窗口时长清空后无法保存、rateLimitWindowMinutes 字段遗漏等
+- **桌面端控制台组件修复** - 修复组件缺失导入、滚动导航、Esc 键 window 全局监听等
+- **i18n 修复** - 修复英文模式下统计图表中文、id.json 时长单位错误、useI18n setup 上下文时序等
+- **resumeChannel 后自动调用 setStatus('active')** - 恢复渠道后正确更新状态
+- **REQUEST_TIMEOUT/RESPONSE_HEADER_TIMEOUT 降级为启动兜底** - 超时配置运行时以调校台为准，环境变量仅作启动兜底
+
+### 重构
+
+- **渠道编辑器全面重构** - 左侧导航+右侧面板布局，拆分快速添加与编辑弹窗，统一内容顺序对齐 WebUI
+- **高级选项分组重构** - 创建 Runtime 运行期策略分组，统一布局结构，主动限速拆分为独立 RateLimitGroup
+- **模型映射区域深度重构** - 行内可编辑、视觉回退模型行内开关驱动，优化布局与样式
+- **快速添加面板重构** - 紧凑两栏布局、卡片式分块布局、上游类型选择器标题行后缀推荐项
+- **渠道卡片状态展示重构** - 统一交互逻辑、展开按钮与统计图表折叠优化
+- **熔断器/调校台滑块设计重构** - 参考 Web 端样式，增强可见性和对比度
+- **桌面端渠道编辑创建流程重构** - 统一使用 t 多语言函数，对齐内容顺序与 WebUI
+- **vue-i18n 迁移** - 从自定义 i18n 迁移到 vue-i18n + 外部 JSON 语言文件，统一两端 key 命名空间
+- **ChannelManager/ChannelTab 惰性加载** - 非活跃页跳过刷新，提升性能
+- **CircuitBreakerDialog 布局重构** - header/footer 固定，body 独立滚动
+
+### 文档
+
+- **新增 RESPONSE_HEADER_TIMEOUT 与运行时超时配置说明**
+- **更新 compactModel 说明，明确 Responses 渠道 failover 机制**
+
 ## [v2.8.28] - 2026-06-11
 
 ### 新增
