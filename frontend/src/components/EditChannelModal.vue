@@ -211,7 +211,7 @@ import { useDialogStore } from '../stores/dialog'
 import { buildExpectedRequestUrls } from '../utils/expectedRequestUrls'
 import { supportsAdvancedChannelOptions, supportsReasoningMapping } from '../utils/channelAdvancedOptions'
 import { buildExpectedRequestUrl } from '../utils/baseUrlSemantics'
-import { buildChannelPayload } from '../utils/channelPayload'
+import { buildChannelPayload, normalizeSelectableString } from '../utils/channelPayload'
 import { maskApiKey } from '../utils/apiKeyMask'
 import {
   resolveChannelWatcherAction,
