@@ -68,25 +68,37 @@
                 <span v-if="log.originalModel" class="text-medium-emphasis log-meta">{{ log.originalModel }} →</span>
                 <span class="font-weight-medium log-model">{{ log.model }}</span>
                 <v-chip
-                  v-if="log.originalReasoningEffort"
+                  v-if="singleReasoningEffort(log)"
                   size="small"
-                  :color="reasoningEffortColor(log.originalReasoningEffort)"
+                  :color="reasoningEffortColor(singleReasoningEffort(log))"
                   variant="tonal"
                   class="log-reasoning-chip"
-                  :title="log.originalReasoningEffort"
+                  :title="singleReasoningEffort(log)"
                 >
-                  {{ t('channelLogs.reasoning.original') }} {{ formatReasoningEffort(log.originalReasoningEffort) }}
+                  {{ formatReasoningEffort(singleReasoningEffort(log)) }}
                 </v-chip>
-                <v-chip
-                  v-if="log.actualReasoningEffort"
-                  size="small"
-                  :color="reasoningEffortColor(log.actualReasoningEffort)"
-                  variant="flat"
-                  class="log-reasoning-chip"
-                  :title="log.actualReasoningEffort"
-                >
-                  {{ t('channelLogs.reasoning.actual') }} {{ formatReasoningEffort(log.actualReasoningEffort) }}
-                </v-chip>
+                <template v-else>
+                  <v-chip
+                    v-if="log.originalReasoningEffort"
+                    size="small"
+                    :color="reasoningEffortColor(log.originalReasoningEffort)"
+                    variant="tonal"
+                    class="log-reasoning-chip"
+                    :title="log.originalReasoningEffort"
+                  >
+                    {{ t('channelLogs.reasoning.original') }} {{ formatReasoningEffort(log.originalReasoningEffort) }}
+                  </v-chip>
+                  <v-chip
+                    v-if="log.actualReasoningEffort"
+                    size="small"
+                    :color="reasoningEffortColor(log.actualReasoningEffort)"
+                    variant="flat"
+                    class="log-reasoning-chip"
+                    :title="log.actualReasoningEffort"
+                  >
+                    {{ t('channelLogs.reasoning.actual') }} {{ formatReasoningEffort(log.actualReasoningEffort) }}
+                  </v-chip>
+                </template>
                 <code class="text-caption bg-surface pa-1 rounded log-inline-code log-key-mask">{{ log.keyMask }}</code>
                 <code v-if="log.baseUrl" class="text-caption bg-surface pa-1 rounded log-inline-code log-base-url" :title="log.baseUrl">{{ log.baseUrl }}</code>
                 <v-chip v-if="log.isRetry" size="small" color="warning" variant="tonal">{{ t('channelLogs.retry') }}</v-chip>
@@ -221,6 +233,16 @@ const formatDurationSeconds = (durationMs: number): string => {
 const formatReasoningEffort = (effort: string): string => {
   const value = effort.trim()
   return value.length > 24 ? `${value.slice(0, 21)}...` : value
+}
+
+const normalizedReasoningEffort = (effort?: string): string => effort?.trim() || ''
+
+const singleReasoningEffort = (log: ChannelLogEntry): string => {
+  const original = normalizedReasoningEffort(log.originalReasoningEffort)
+  const actual = normalizedReasoningEffort(log.actualReasoningEffort)
+  if (!original) return actual
+  if (!actual) return original
+  return original.toLowerCase() === actual.toLowerCase() ? actual : ''
 }
 
 const reasoningEffortColor = (effort: string): string => {
