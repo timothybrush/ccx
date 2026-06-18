@@ -126,7 +126,7 @@ type ChannelPayload struct {
 var providerConsoleURLs = map[string]string{
 	ProviderDeepSeek:     "https://platform.deepseek.com/usage",
 	ProviderMiMo:         "https://platform.xiaomimimo.com/console/balance",
-	ProviderCompshare:    "https://console.compshare.cn/light-gpu/model-manage",
+	ProviderCompshare:    "https://console.compshare.cn/light-gpu/model-subscription",
 	ProviderRunAPI:       "https://runapi.co/console",
 	ProviderKimi:         "https://platform.moonshot.cn/console/account",
 	ProviderGLM:          "https://open.bigmodel.cn/coding-plan/personal/overview",
@@ -685,14 +685,22 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 		},
 		ProviderCompshare: {
 			ModelMapping: map[string]string{
-				"fable":  "glm-5.1",
+				"fable":  "glm-5.2",
 				"haiku":  "deepseek-v4-flash",
-				"opus":   "glm-5.1",
-				"sonnet": "glm-5.1",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
+			},
+			ReasoningMapping: map[string]string{
+				"MiniMax-M2.7": "xhigh",
+				"fable":        "max",
+				"haiku":        "high",
+				"opus":         "max",
+				"sonnet":       "max",
 			},
 			ReasoningParamStyle:      "reasoning",
 			PassbackReasoningContent: true,
-			NoVisionModels:           []string{"deepseek-v4-flash"},
+			PassbackThinkingBlocks:   true,
+			NoVisionModels:           []string{"glm-5.2", "deepseek-v4-flash"},
 			VisionFallbackModel:      "MiniMax-M2.7",
 		},
 		ProviderRunAPI: {},
@@ -797,7 +805,7 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 		},
 		ProviderCompshare: {
 			ReasoningParamStyle: "reasoning",
-			NoVisionModels:      []string{"deepseek-v4-flash"},
+			NoVisionModels:      []string{"glm-5.2", "deepseek-v4-flash"},
 			VisionFallbackModel: "MiniMax-M2.7",
 		},
 		ProviderRunAPI:     {},
@@ -843,15 +851,20 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 		ProviderCompshare: {
 			ModelMapping: map[string]string{
 				"codex": "deepseek-v4-flash",
-				"gpt":   "glm-5.1",
+				"gpt":   "glm-5.2",
 				"mini":  "deepseek-v4-flash",
+			},
+			ReasoningMapping: map[string]string{
+				"MiniMax-M2.7": "xhigh",
+				"gpt":          "max",
+				"mini":         "high",
 			},
 			ReasoningParamStyle:           "reasoning",
 			CodexToolCompat:               boolRef(false),
 			StripCodexClientTools:         boolRef(false),
 			CodexNativeToolPassthrough:    true,
 			NormalizeNonstandardChatRoles: true,
-			NoVisionModels:                []string{"deepseek-v4-flash"},
+			NoVisionModels:                []string{"glm-5.2", "deepseek-v4-flash"},
 			VisionFallbackModel:           "MiniMax-M2.7",
 		},
 		ProviderRunAPI: {

@@ -120,12 +120,12 @@ func TestBuildPayload(t *testing.T) {
 			wantVision:   false,
 			wantPassback: true,
 			wantModelMap: map[string]string{
-				"fable":  "glm-5.1",
+				"fable":  "glm-5.2",
 				"haiku":  "deepseek-v4-flash",
-				"opus":   "glm-5.1",
-				"sonnet": "glm-5.1",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
 			},
-			wantNoVisionModels: []string{"deepseek-v4-flash"},
+			wantNoVisionModels: []string{"glm-5.2", "deepseek-v4-flash"},
 			wantFallback:       "MiniMax-M2.7",
 		},
 		{
@@ -135,7 +135,7 @@ func TestBuildPayload(t *testing.T) {
 			wantService:        "openai",
 			wantNormalize:      true,
 			wantVision:         false,
-			wantNoVisionModels: []string{"deepseek-v4-flash"},
+			wantNoVisionModels: []string{"glm-5.2", "deepseek-v4-flash"},
 			wantFallback:       "MiniMax-M2.7",
 		},
 		{
@@ -148,10 +148,10 @@ func TestBuildPayload(t *testing.T) {
 			wantNormalize:  true,
 			wantModelMap: map[string]string{
 				"codex": "deepseek-v4-flash",
-				"gpt":   "glm-5.1",
+				"gpt":   "glm-5.2",
 				"mini":  "deepseek-v4-flash",
 			},
-			wantNoVisionModels: []string{"deepseek-v4-flash"},
+			wantNoVisionModels: []string{"glm-5.2", "deepseek-v4-flash"},
 			wantFallback:       "MiniMax-M2.7",
 		},
 		{
@@ -656,7 +656,7 @@ func TestBuildPayloadSetsProviderConsoleWebsite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPayload() error = %v", err)
 	}
-	want := "https://console.compshare.cn/light-gpu/model-manage"
+	want := "https://console.compshare.cn/light-gpu/model-subscription"
 	if got.Website != want {
 		t.Fatalf("Website = %q, want %q", got.Website, want)
 	}

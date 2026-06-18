@@ -3,7 +3,7 @@ import { Browser } from '@wailsio/runtime'
 export const providerConsoleLinks: Record<string, string> = {
   deepseek: 'https://platform.deepseek.com/usage',
   mimo: 'https://platform.xiaomimimo.com/console/balance',
-  compshare: 'https://console.compshare.cn/light-gpu/model-manage',
+  compshare: 'https://console.compshare.cn/light-gpu/model-subscription',
   runapi: 'https://runapi.co/console',
   'tencent-lkeap': 'https://console.cloud.tencent.com/lkeap/token-plan',
   kimi: 'https://platform.moonshot.cn/console/account',
