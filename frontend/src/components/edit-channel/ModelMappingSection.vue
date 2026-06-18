@@ -330,6 +330,8 @@ interface NewMapping {
   reasoningEffort?: string
 }
 
+type SelectableString = string | { title?: string; value?: unknown } | null | undefined
+
 interface Props {
   mappingRows: MappingRow[]
   sourceModelOptions: Array<{ title: string; value: string }>
@@ -406,16 +408,17 @@ const toggleVision = (index: number) => {
   emit('update:mappingRows', setNoVisionForTarget(updated, updated[index].target, newNoVision))
 }
 
-const updateTarget = (index: number, value: unknown) => {
+const updateTarget = (index: number, value: SelectableString) => {
   const updated = normalizeMappingRows(props.mappingRows)
   const target = normalizeSelectableString(value).trim()
   const existingNoVision = findNoVisionForTarget(updated, target)
+  const noVision = existingNoVision ?? !!updated[index].noVision
   updated[index] = {
     ...updated[index],
     target,
-    noVision: existingNoVision ?? updated[index].noVision,
+    noVision,
   }
-  emit('update:mappingRows', setNoVisionForTarget(updated, target, updated[index].noVision))
+  emit('update:mappingRows', setNoVisionForTarget(updated, target, noVision))
 }
 
 const normalizeMappingRows = (rows: MappingRow[]): MappingRow[] => rows.map(row => ({
@@ -424,15 +427,15 @@ const normalizeMappingRows = (rows: MappingRow[]): MappingRow[] => rows.map(row 
   target: normalizeSelectableString(row.target),
 }))
 
-const normalizeTargetKey = (target: unknown) => normalizeSelectableString(target).trim()
+const normalizeTargetKey = (target: SelectableString) => normalizeSelectableString(target).trim()
 
-const findNoVisionForTarget = (rows: MappingRow[], target: unknown): boolean | undefined => {
+const findNoVisionForTarget = (rows: MappingRow[], target: SelectableString): boolean | undefined => {
   const targetKey = normalizeTargetKey(target)
   const matched = rows.find(row => normalizeTargetKey(row.target) === targetKey)
   return matched?.noVision
 }
 
-const setNoVisionForTarget = (rows: MappingRow[], target: unknown, noVision: boolean): MappingRow[] => {
+const setNoVisionForTarget = (rows: MappingRow[], target: SelectableString, noVision: boolean): MappingRow[] => {
   const targetKey = normalizeTargetKey(target)
   if (!targetKey) return rows
   return rows.map(row => (

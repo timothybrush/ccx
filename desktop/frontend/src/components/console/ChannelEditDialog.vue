@@ -792,12 +792,13 @@ function modelMappingFromChannel(ch: Channel) {
 
 function addModelMappingRow() {
   if (!newModelMapping.source.trim() || !newModelMapping.target.trim() || sourceMappingError.value) return
+  const target = newModelMapping.target.trim()
   modelMappingRows.value.push({
     id: ++rowId,
     source: newModelMapping.source.trim(),
-    target: newModelMapping.target.trim(),
+    target,
     reasoning: newModelMapping.reasoning || '',
-    noVision: newModelMapping.noVision,
+    noVision: findNoVisionForTarget(target) ?? newModelMapping.noVision,
   })
   newModelMapping.source = ''
   newModelMapping.target = ''
@@ -1426,6 +1427,26 @@ function getNoVisionModelsFromRows(): string[] {
   )]
 }
 
+function normalizeTargetKey(target: string): string {
+  return target.trim()
+}
+
+function findNoVisionForTarget(target: string): boolean | undefined {
+  const targetKey = normalizeTargetKey(target)
+  const matched = modelMappingRows.value.find(row => normalizeTargetKey(row.target) === targetKey)
+  return matched?.noVision
+}
+
+function setNoVisionForTarget(target: string, noVision: boolean) {
+  const targetKey = normalizeTargetKey(target)
+  if (!targetKey) return
+  modelMappingRows.value.forEach(row => {
+    if (normalizeTargetKey(row.target) === targetKey) {
+      row.noVision = noVision
+    }
+  })
+}
+
 function applyPreset(presetName: string) {
   if (presetName === 'gpt-5.5' || presetName === 'gpt-5.4') {
     applyModelMappingPreset(presetName)
@@ -1445,8 +1466,20 @@ function syncUpstreamModels() {
 
 function updateMappingRow(id: number, field: keyof ModelMappingRow, value: any) {
   const row = modelMappingRows.value.find(r => r.id === id)
-  if (row) {
-    (row as any)[field] = value
+  if (!row) return
+
+  // noVision 按 target 模型名聚合（后端 noVisionModels 是 string[]），
+  // 切换一行时需同步所有相同 target 的行，保持视觉状态一致
+  if (field === 'noVision') {
+    setNoVisionForTarget(row.target, value)
+  } else if (field === 'target') {
+    const target = String(value).trim()
+    const existingNoVision = findNoVisionForTarget(target)
+    row.target = target
+    row.noVision = existingNoVision ?? row.noVision
+    setNoVisionForTarget(target, row.noVision)
+  } else {
+    ;(row as any)[field] = value
   }
 }
 
