@@ -923,16 +923,18 @@ func TestMigrateCodexSessions_RepairsSQLiteVisibilityFields(t *testing.T) {
 		preview TEXT NOT NULL DEFAULT '',
 		first_user_message TEXT NOT NULL DEFAULT '',
 		has_user_event INTEGER NOT NULL DEFAULT 0,
-		thread_source TEXT
+		thread_source TEXT,
+		source TEXT
 	)`)
 	if err != nil {
 		t.Fatalf("create threads failed: %v", err)
 	}
-	_, err = db.Exec(`INSERT INTO threads (id, model_provider, preview, first_user_message, has_user_event, thread_source) VALUES
-		('hidden-old-provider', 'openai', '', 'hello', 0, NULL),
-		('hidden-current-provider', 'ccx', '', 'already current', 0, NULL),
-		('visible-current-provider', 'ccx', 'visible', 'visible', 1, 'user'),
-		('provider-only', 'openai', 'existing preview', '', 0, NULL)`)
+	_, err = db.Exec(`INSERT INTO threads (id, model_provider, preview, first_user_message, has_user_event, thread_source, source) VALUES
+		('hidden-old-provider', 'openai', '', 'hello', 0, NULL, 'user'),
+		('hidden-current-provider', 'ccx', '', 'already current', 0, NULL, 'user'),
+		('visible-current-provider', 'ccx', 'visible', 'visible', 1, 'user', 'user'),
+		('provider-only', 'openai', 'existing preview', '', 0, NULL, 'user'),
+		('exec-thread', 'openai', '', 'background', 0, NULL, 'exec')`)
 	if err != nil {
 		t.Fatalf("insert threads failed: %v", err)
 	}
@@ -942,7 +944,7 @@ func TestMigrateCodexSessions_RepairsSQLiteVisibilityFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateCodexSessions failed: %v", err)
 	}
-	if result.SQLiteSkipped || result.SQLiteRowsUpdated != 3 {
+	if result.SQLiteSkipped || result.SQLiteRowsUpdated != 4 {
 		t.Fatalf("unexpected sqlite result: %+v", result)
 	}
 
@@ -952,6 +954,8 @@ func TestMigrateCodexSessions_RepairsSQLiteVisibilityFields(t *testing.T) {
 	assertThreadVisibilityRow(t, db, "hidden-current-provider", ProviderCCX, "already current", 1, "user")
 	assertThreadVisibilityRow(t, db, "visible-current-provider", ProviderCCX, "visible", 1, "user")
 	assertThreadVisibilityRow(t, db, "provider-only", ProviderCCX, "existing preview", 0, "")
+	// exec 后台线程虽带 first_user_message，但 source=exec 被排除，preview/has_user_event/thread_source 均不回填
+	assertThreadVisibilityRow(t, db, "exec-thread", ProviderCCX, "", 0, "")
 }
 
 func TestResolveCodexSessionModelProvider(t *testing.T) {

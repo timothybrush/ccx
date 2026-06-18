@@ -123,6 +123,7 @@ type codexThreadsColumns struct {
 	firstUserMessage bool
 	hasUserEvent     bool
 	threadSource     bool
+	source           bool
 }
 
 type ClaudeProxyState struct {
@@ -1271,6 +1272,7 @@ func readCodexThreadsColumns(db *sql.DB) (codexThreadsColumns, error) {
 		firstUserMessage: names["first_user_message"],
 		hasUserEvent:     names["has_user_event"],
 		threadSource:     names["thread_source"],
+		source:           names["source"],
 	}, nil
 }
 
@@ -1278,22 +1280,26 @@ func buildCodexThreadsMigrationSQL(columns codexThreadsColumns) (string, bool) {
 	assignments := make([]string, 0, 4)
 	predicates := make([]string, 0, 4)
 	usesProvider := false
+	userThreadPredicate := `COALESCE(first_user_message, '') <> ''`
+	if columns.source {
+		userThreadPredicate = `COALESCE(first_user_message, '') <> '' AND (COALESCE(source, '') = '' OR source = 'user')`
+	}
 	if columns.modelProvider {
 		assignments = append(assignments, `model_provider = ?1`)
 		predicates = append(predicates, `model_provider IS NULL OR model_provider <> ?1`)
 		usesProvider = true
 	}
 	if columns.preview && columns.firstUserMessage {
-		assignments = append(assignments, `preview = CASE WHEN COALESCE(preview, '') = '' AND COALESCE(first_user_message, '') <> '' THEN first_user_message ELSE preview END`)
-		predicates = append(predicates, `COALESCE(preview, '') = '' AND COALESCE(first_user_message, '') <> ''`)
+		assignments = append(assignments, fmt.Sprintf(`preview = CASE WHEN COALESCE(preview, '') = '' AND %s THEN first_user_message ELSE preview END`, userThreadPredicate))
+		predicates = append(predicates, fmt.Sprintf(`COALESCE(preview, '') = '' AND %s`, userThreadPredicate))
 	}
 	if columns.hasUserEvent && columns.firstUserMessage {
-		assignments = append(assignments, `has_user_event = CASE WHEN COALESCE(first_user_message, '') <> '' THEN 1 ELSE has_user_event END`)
-		predicates = append(predicates, `COALESCE(first_user_message, '') <> '' AND COALESCE(has_user_event, 0) <> 1`)
+		assignments = append(assignments, fmt.Sprintf(`has_user_event = CASE WHEN %s THEN 1 ELSE has_user_event END`, userThreadPredicate))
+		predicates = append(predicates, fmt.Sprintf(`%s AND COALESCE(has_user_event, 0) <> 1`, userThreadPredicate))
 	}
 	if columns.threadSource && columns.firstUserMessage {
-		assignments = append(assignments, `thread_source = CASE WHEN COALESCE(thread_source, '') = '' AND COALESCE(first_user_message, '') <> '' THEN 'user' ELSE thread_source END`)
-		predicates = append(predicates, `COALESCE(thread_source, '') = '' AND COALESCE(first_user_message, '') <> ''`)
+		assignments = append(assignments, fmt.Sprintf(`thread_source = CASE WHEN COALESCE(thread_source, '') = '' AND %s THEN 'user' ELSE thread_source END`, userThreadPredicate))
+		predicates = append(predicates, fmt.Sprintf(`COALESCE(thread_source, '') = '' AND %s`, userThreadPredicate))
 	}
 	if len(assignments) == 0 || len(predicates) == 0 {
 		return "", false
