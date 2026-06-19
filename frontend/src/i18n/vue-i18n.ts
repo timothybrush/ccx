@@ -14,6 +14,6 @@ const i18n = createI18n({
 })
 
 // 挂载到 globalThis 供非组件上下文的 translate() 使用
-;(globalThis as any).__CCX_I18N__ = i18n
+globalThis.__CCX_I18N__ = i18n
 
 export default i18n

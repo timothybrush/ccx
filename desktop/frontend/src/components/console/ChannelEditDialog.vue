@@ -141,14 +141,17 @@ const modelMappingRows = ref<ModelMappingRow[]>([])
 const modelCapabilityRows = ref<ModelCapabilityRow[]>([])
 const mappedTargetModels = computed(() => {
   const seen = new Set<string>()
-  return modelMappingRows.value
-    .map(row => row.target.trim())
-    .filter(model => {
-      const key = model.toLowerCase()
-      if (!model || seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+  const models = [
+    ...modelMappingRows.value.map(row => row.target.trim()),
+    form.visionFallbackModel.trim(),
+  ]
+
+  return models.filter(model => {
+    const key = model.toLowerCase()
+    if (!model || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 })
 const newModelMapping = reactive<ModelMappingRow>({ id: 0, source: '', target: '', reasoning: '', noVision: false })
 const headerRows = ref<HeaderRow[]>([])

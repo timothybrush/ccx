@@ -105,13 +105,10 @@ import { useDisplay } from 'vuetify'
 import { api, type ConversationInfo, type SequenceOverrideInfo, type ChannelSequenceEntry } from '@/services/api'
 import { useGlobalTick } from '@/composables/useGlobalTick'
 import { useI18n } from '@/i18n'
-import { useSystemStore } from '@/stores/system'
 import ConversationCard from './ConversationCard.vue'
 
 const { t } = useI18n()
 const { xs } = useDisplay()
-const systemStore = useSystemStore() as any
-
 const emit = defineEmits<{
   success: [message: string]
   error: [message: string]

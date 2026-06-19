@@ -377,5 +377,4 @@ const getDisabledKeyLabel = (reason: string) => {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
 }
 
-
 </style>

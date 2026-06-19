@@ -98,7 +98,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from '../../i18n'
 
 interface FormData {
@@ -115,10 +114,14 @@ interface Props {
   baseUrlHasError: boolean
   serviceTypeOptions: Array<{ title: string; value: string }>
   errors: Record<string, string>
-  rules: Record<string, (v: any) => boolean | string>
+  rules: {
+    required: (_value: string) => boolean | string
+    baseUrls: (_value: string) => boolean | string
+    urlOptional: (_value: string) => boolean | string
+  }
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 const emit = defineEmits<{
   'update:form': [Partial<FormData>]
@@ -128,7 +131,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const updateField = (field: keyof FormData, value: any) => {
+const updateField = (field: keyof FormData, value: unknown) => {
   emit('update:form', { [field]: value })
 }
 </script>

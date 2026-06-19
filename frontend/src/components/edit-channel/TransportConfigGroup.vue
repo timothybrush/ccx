@@ -63,7 +63,7 @@
         />
       </v-col>
 
-      <slot name="stream-timeout" />
+      <slot name="stream-timeout" ></slot>
 
       <!-- 路由前缀 -->
       <v-col cols="12">
@@ -96,7 +96,10 @@ interface FormData {
 
 interface Props {
   form: FormData
-  rules: Record<string, (value: any) => boolean | string>
+  rules: {
+    requestTimeoutMs: (_value: string | number | null) => boolean | string
+    responseHeaderTimeoutMs: (_value: string | number | null) => boolean | string
+  }
 }
 
 defineProps<Props>()

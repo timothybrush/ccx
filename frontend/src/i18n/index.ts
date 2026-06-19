@@ -5,9 +5,9 @@ import { usePreferencesStore } from '@/stores/preferences'
 
 import {
   applyDocumentLanguage,
-  getRuntimeLocale,
   normalizeLocale,
 } from './core'
+import type { SupportedLocale } from './messages'
 
 export {
   applyDocumentLanguage,
@@ -39,7 +39,7 @@ export function useI18n() {
   }
 
   const setLocale = (nextLocale: string) => {
-    preferencesStore.setUILanguage(nextLocale as any)
+    preferencesStore.setUILanguage(normalizeLocale(nextLocale))
     // Sync will happen via the watch above
   }
 
@@ -59,11 +59,11 @@ export function translate(
   key: string,
   params?: Record<string, string | number>,
 ): string {
-  const i18n = (globalThis as any).__CCX_I18N__
+  const i18n = globalThis.__CCX_I18N__
   if (!i18n) return key
   const prev = i18n.global.locale.value
-  i18n.global.locale.value = locale
+  i18n.global.locale.value = normalizeLocale(locale)
   const result = i18n.global.t(key, params as Record<string, string | number>) as string
-  i18n.global.locale.value = prev
+  i18n.global.locale.value = prev as SupportedLocale
   return result
 }

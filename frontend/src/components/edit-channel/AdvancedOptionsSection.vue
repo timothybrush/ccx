@@ -48,13 +48,13 @@
         />
       </v-col>
 
-      <slot name="custom-headers" />
+      <slot name="custom-headers" ></slot>
 
       <!-- Transport 代理路由网络 -->
       <v-col cols="12">
         <TransportConfigGroup :form="form" :rules="rules" @update:field="updateField">
           <template #stream-timeout>
-            <slot name="stream-timeout" />
+            <slot name="stream-timeout" ></slot>
           </template>
         </TransportConfigGroup>
       </v-col>
@@ -113,7 +113,10 @@ interface Props {
   supportsOpenAIAdvancedOptions: boolean
   reasoningParamStyleOptions: Array<{ title: string; value: string }>
   textVerbosityOptions: Array<{ title: string; value: string }>
-  rules: Record<string, (v: any) => boolean | string>
+  rules: {
+    requestTimeoutMs: (_value: string | number | null) => boolean | string
+    responseHeaderTimeoutMs: (_value: string | number | null) => boolean | string
+  }
 }
 
 defineProps<Props>()
@@ -125,7 +128,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const updateField = (field: keyof FormData, value: any) => {
+const updateField = (field: keyof FormData, value: unknown) => {
   emit('update:form', { [field]: value })
 }
 </script>

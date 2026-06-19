@@ -35,7 +35,7 @@
           :class="{ active: i - 1 === step }"
           :aria-label="`${i}`"
           @click="step = i - 1"
-        />
+        ></button>
       </div>
 
       <v-divider />
@@ -160,7 +160,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
+  'update:modelValue': [value: boolean]
 }>()
 
 const { t } = useI18n()
@@ -419,4 +419,3 @@ onUnmounted(() => {
   }
 }
 </style>
-

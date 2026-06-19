@@ -771,18 +771,27 @@ const buildChannelOrder = (
   })
 }
 
+const isSameIndexOrder = (current: number[], next: number[]) => (
+  current.length === next.length && current.every((index, position) => index === next[position])
+)
+
 // Computed: inactive channels - disabled status only
 const inactiveChannels = computed(() => {
   const inactive = props.channels.filter(ch => ch.status === 'disabled')
-  const sortedInactive = buildChannelOrder(inactive, lastKnownInactiveOrder.value)
-  lastKnownInactiveOrder.value = sortedInactive.map(ch => ch.index)
-  return sortedInactive
+  return buildChannelOrder(inactive, lastKnownInactiveOrder.value)
 })
 
 // Computed: inactive channels after search filtering
 const filteredInactiveChannels = computed(() => {
   return inactiveChannels.value.filter(matchesSearch)
 })
+
+watch(inactiveChannels, (channels) => {
+  const nextOrder = channels.map(ch => ch.index)
+  if (!isSameIndexOrder(lastKnownInactiveOrder.value, nextOrder)) {
+    lastKnownInactiveOrder.value = nextOrder
+  }
+}, { immediate: true })
 
 // Computed: whether multi-channel mode is enabled
 // Multi-channel mode detection logic:

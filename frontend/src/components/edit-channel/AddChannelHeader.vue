@@ -46,9 +46,6 @@
 </template>
 
 <script setup lang="ts">
-import type { StyleValue } from 'vue'
-
-type ClassBinding = string | Record<string, boolean> | Array<string | Record<string, boolean>>
 
 interface Props {
   isEditing: boolean

@@ -1855,7 +1855,9 @@ const applyPreset = (preset: typeof cbPresets[number]) => {
 }
 
 const onSliderChange = (field: string, event: Event) => {
-  const val = Number((event.target as HTMLInputElement).value)
+  const target = event.target
+  if (!(target instanceof window.HTMLInputElement)) return
+  const val = Number(target.value)
   if (field === 'failureThreshold') {
     cbForm.failureThreshold = Math.round(val * 100) / 100
   } else if (field === 'windowSize') {

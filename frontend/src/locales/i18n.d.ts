@@ -7,5 +7,5 @@ import zhCN from './zh-CN.json'
 type MessageSchema = typeof zhCN
 
 declare module 'vue-i18n' {
-  export interface DefineLocaleMessage extends MessageSchema {}
+  export type DefineLocaleMessage = MessageSchema
 }

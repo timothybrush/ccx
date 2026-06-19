@@ -230,7 +230,7 @@
           </div>
 
           <!-- Vision 回退模型（由父组件通过 slot 注入） -->
-          <slot name="vision-fallback" />
+          <slot name="vision-fallback" ></slot>
 
           <!-- 添加新映射 -->
           <div class="add-mapping-row d-flex align-center ga-3 pa-3 mt-3 rounded-lg">
@@ -348,7 +348,6 @@ interface Props {
   supportsReasoningMappingOptions: boolean
   reasoningEffortOptions: Array<{ title: string; value: string }>
 }
-
 
 const emit = defineEmits<{
   'update:mappingRows': [MappingRow[]]

@@ -457,7 +457,7 @@ export class ApiService {
   }
 
   // 更新熔断器运行时配置（partial update）
-  async setCircuitBreaker(params: { windowSize?: number; failureThreshold?: number; consecutiveFailuresThreshold?: number; requestTimeoutMs?: number; responseHeaderTimeoutMs?: number; streamFirstContentTimeoutMs?: number; streamInactivityTimeoutMs?: number; streamToolCallIdleTimeoutMs?: number }): Promise<any> {
+  async setCircuitBreaker(params: { windowSize?: number; failureThreshold?: number; consecutiveFailuresThreshold?: number; requestTimeoutMs?: number; responseHeaderTimeoutMs?: number; streamFirstContentTimeoutMs?: number; streamInactivityTimeoutMs?: number; streamToolCallIdleTimeoutMs?: number }): Promise<unknown> {
     return this.request('/settings/circuit-breaker', {
       method: 'PUT',
       body: JSON.stringify(params)

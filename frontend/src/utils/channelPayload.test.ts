@@ -54,7 +54,7 @@ describe('buildChannelPayload', () => {
     expect(result.proxyUrl).toBe('http://127.0.0.1:7890')
     expect(result.requestTimeoutMs).toBe(15000)
     expect(result.responseHeaderTimeoutMs).toBe(90000)
-    expect((result as any).historicalImageTurnLimit).toBe(3)
+    expect(result.historicalImageTurnLimit).toBe(3)
   })
 
   it('应将模型映射中的 combobox 对象规整为字符串', () => {
@@ -73,7 +73,7 @@ describe('buildChannelPayload', () => {
       description: '',
       apiKeys: ['sk-1'],
       modelMapping: {
-        '{"title":"codex","value":"codex"}': { title: 'MiMo', value: 'mimo-v2.5-pro' } as any
+        '{"title":"codex","value":"codex"}': { title: 'MiMo', value: 'mimo-v2.5-pro' }
       },
       reasoningMapping: {},
       reasoningParamStyle: 'reasoning',
@@ -92,7 +92,7 @@ describe('buildChannelPayload', () => {
       stripImageGenerationTool: false,
       noVision: false,
       noVisionModels: [],
-      visionFallbackModel: { title: 'MiMo', value: 'mimo-v2.5-pro' } as any
+      visionFallbackModel: { title: 'MiMo', value: 'mimo-v2.5-pro' }
     })
 
     expect(result.modelMapping).toEqual({ codex: 'mimo-v2.5-pro' })
@@ -644,7 +644,7 @@ describe('buildChannelPayload', () => {
       modelMapping: {
         'fable': 'claude-3-5-sonnet',
         'haiku': { title: 'claude-3-5-haiku', value: 'claude-3-5-haiku' }
-      } as any,
+      },
       reasoningMapping: {},
       reasoningParamStyle: 'reasoning',
       textVerbosity: '',

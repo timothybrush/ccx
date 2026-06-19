@@ -40,7 +40,7 @@
               step="1000"
               class="timeout-slider"
               :disabled="!firstContentEnabled"
-              @input="$emit('update:firstContentMs', Number(($event.target as HTMLInputElement).value))"
+              @input="emitNumber('update:firstContentMs', $event)"
             />
             <div class="timeout-range">
               <span>5s</span><span>300s</span>
@@ -61,7 +61,7 @@
               step="1000"
               class="timeout-slider"
               :disabled="!inactivityEnabled"
-              @input="$emit('update:inactivityMs', Number(($event.target as HTMLInputElement).value))"
+              @input="emitNumber('update:inactivityMs', $event)"
             />
             <div class="timeout-range">
               <span>1s</span><span>180s</span>
@@ -82,7 +82,7 @@
               step="1000"
               class="timeout-slider"
               :disabled="!toolCallIdleEnabled"
-              @input="$emit('update:toolCallIdleMs', Number(($event.target as HTMLInputElement).value))"
+              @input="emitNumber('update:toolCallIdleMs', $event)"
             />
             <div class="timeout-range">
               <span>30s</span><span>300s</span>
@@ -109,7 +109,7 @@ interface Props {
 
 defineProps<Props>()
 
-defineEmits<{
+const emit = defineEmits<{
   'apply-strategy': [string]
   'update:firstContentMs': [number]
   'update:inactivityMs': [number]
@@ -117,6 +117,22 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const emitNumber = (
+  eventName: 'update:firstContentMs' | 'update:inactivityMs' | 'update:toolCallIdleMs',
+  event: Event,
+) => {
+  const target = event.target
+  if (!(target instanceof window.HTMLInputElement)) return
+  const value = Number(target.value)
+  if (eventName === 'update:firstContentMs') {
+    emit('update:firstContentMs', value)
+  } else if (eventName === 'update:inactivityMs') {
+    emit('update:inactivityMs', value)
+  } else {
+    emit('update:toolCallIdleMs', value)
+  }
+}
 </script>
 
 <style scoped>

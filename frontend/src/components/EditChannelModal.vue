@@ -54,21 +54,21 @@
             <section :ref="(el: any) => setSectionRef('redirect', el)" data-section-id="redirect" class="pa-6 scroll-mt-4">
               <ModelMappingSection
                 v-if="form.serviceType"
-                :mappingRows="modelMappingRows"
-                :sourceModelOptions="sourceModelOptions"
-                :targetModelOptions="targetModelOptions"
-                :fetchingModels="fetchingModels"
-                :sourceMappingError="sourceMappingError"
-                :fetchModelsError="fetchModelsError"
-                :modelMappingHint="modelMappingHint"
-                :targetModelPlaceholder="targetModelPlaceholder"
-                :showModelMappingPresets="showModelMappingPresets"
-                :showMessagesOpenAIChannelPresets="showMessagesOpenAIChannelPresets"
-                :showClaudeChannelPresets="showClaudeChannelPresets"
-                :showCodexResponsesChannelPresets="showCodexResponsesChannelPresets"
-                :supportsReasoningMappingOptions="supportsReasoningMappingOptions"
-                :reasoningEffortOptions="reasoningEffortOptions"
-                @update:mappingRows="modelMappingRows = ($event as any)"
+                :mapping-rows="modelMappingRows"
+                :source-model-options="sourceModelOptions"
+                :target-model-options="targetModelOptions"
+                :fetching-models="fetchingModels"
+                :source-mapping-error="sourceMappingError"
+                :fetch-models-error="fetchModelsError"
+                :model-mapping-hint="modelMappingHint"
+                :target-model-placeholder="targetModelPlaceholder"
+                :show-model-mapping-presets="showModelMappingPresets"
+                :show-messages-open-a-i-channel-presets="showMessagesOpenAIChannelPresets"
+                :show-claude-channel-presets="showClaudeChannelPresets"
+                :show-codex-responses-channel-presets="showCodexResponsesChannelPresets"
+                :supports-reasoning-mapping-options="supportsReasoningMappingOptions"
+                :reasoning-effort-options="reasoningEffortOptions"
+                @update:mapping-rows="modelMappingRows = ($event as any)"
                 @sync-upstream="syncUpstreamModels"
                 @apply-preset="applyPreset"
                 @menu-update="onMenuUpdate"
@@ -156,11 +156,11 @@
             <section :ref="(el: any) => setSectionRef('advanced', el)" data-section-id="advanced" class="pa-6 scroll-mt-4">
               <AdvancedOptionsSection
                 :form="form"
-                :channelType="props.channelType"
-                :supportsChatRoleNormalization="supportsChatRoleNormalization"
-                :supportsOpenAIAdvancedOptions="supportsOpenAIAdvancedOptions"
-                :reasoningParamStyleOptions="reasoningParamStyleOptions"
-                :textVerbosityOptions="textVerbosityOptions"
+                :channel-type="props.channelType"
+                :supports-chat-role-normalization="supportsChatRoleNormalization"
+                :supports-open-a-i-advanced-options="supportsOpenAIAdvancedOptions"
+                :reasoning-param-style-options="reasoningParamStyleOptions"
+                :text-verbosity-options="textVerbosityOptions"
                 :rules="rules"
                 @update:form="updateForm"
                 @menu-update="onMenuUpdate"
@@ -219,8 +219,6 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { useTheme } from 'vuetify'
 import type { Channel } from '../services/api'
 import { ApiService, ApiError } from '../services/api'
-import { useChannelStore } from '../stores/channel'
-import { useDialogStore } from '../stores/dialog'
 import { buildExpectedRequestUrls } from '../utils/expectedRequestUrls'
 import { supportsAdvancedChannelOptions, supportsReasoningMapping } from '../utils/channelAdvancedOptions'
 import {
@@ -232,7 +230,6 @@ import {
   resolveBuiltinUpstreamModelCapability,
   type ModelCapabilityRow,
 } from '../utils/channelPayload'
-import { maskApiKey } from '../utils/apiKeyMask'
 import {
   resolveChannelWatcherAction,
   syncBaseUrlsFormState,
@@ -272,15 +269,12 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const apiService = new ApiService()
-const channelStore = useChannelStore()
-const dialogStore = useDialogStore()
 
 // 主题
 const theme = useTheme()
 
 // 表单引用
 const formRef = ref()
-
 
 const defaultServiceTypeValueFallback = (): 'openai' | 'gemini' | 'claude' | 'responses' => {
   if (props.channelType === 'chat') return 'openai'
@@ -373,8 +367,6 @@ const onMenuUpdate = (open: boolean) => {
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
   }
 }
-
-
 
 // 服务类型选项 - 根据入口接口类型动态调整可用选项
 const serviceTypeOptions = computed(() => {
@@ -986,32 +978,6 @@ watch(() => form.serviceType, () => {
   form.baseUrls = baseUrls
 })
 
-// 原始密钥映射 (掩码密钥 -> 原始密钥)
-const originalKeyMap = ref<Map<string, string>>(new Map())
-
-// 新API密钥输入
-const newApiKey = ref('')
-
-// 密钥重复检测状态
-const apiKeyError = ref('')
-const duplicateKeyIndex = ref(-1)
-
-// 处理 API 密钥输入事件
-const handleApiKeyInput = () => {
-  apiKeyError.value = ''
-  duplicateKeyIndex.value = -1
-}
-
-// 复制功能相关状态
-const copiedKeyIndex = ref<number | null>(null)
-
-// 新模型映射输入
-const newMapping = reactive({
-  source: '',
-  target: '',
-  reasoningEffort: '' as 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | ''
-})
-
 // 模型映射行数据结构（改用数组存储，支持直接编辑）
 interface ModelMappingRow {
   id: number
@@ -1029,53 +995,21 @@ const nextCapabilityRowId = () => ++capabilityRowIdCounter
 const hasNoVisionRows = computed(() => modelMappingRows.value.some(row => row.noVision && row.target.trim()))
 const mappedTargetModels = computed(() => {
   const seen = new Set<string>()
-  return modelMappingRows.value
-    .map(row => normalizeSelectableString(row.target).trim())
-    .filter(model => {
-      if (!model || seen.has(model)) return false
-      seen.add(model)
-      return true
-    })
+  const models = [
+    ...modelMappingRows.value.map(row => normalizeSelectableString(row.target).trim()),
+    normalizeSelectableString(form.visionFallbackModel).trim(),
+  ]
+
+  return models.filter(model => {
+    const key = model.toLowerCase()
+    if (!model || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 })
-
-// 模型映射编辑状态（已废弃，保留以防需要恢复）
-const editingMapping = ref<string | null>(null)
-const editMappingForm = reactive({
-  targetModel: '',
-  reasoning: '' as '' | 'off' | 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-})
-
-// 自定义请求头输入
-const newHeaderKey = ref('')
-const newHeaderValue = ref('')
-
-// 添加自定义请求头
-const addCustomHeader = () => {
-  const key = newHeaderKey.value.trim()
-  const value = newHeaderValue.value.trim()
-  if (key && value) {
-    form.customHeaders[key] = value
-    newHeaderKey.value = ''
-    newHeaderValue.value = ''
-  }
-}
-
-// 删除自定义请求头
-const removeCustomHeader = (key: string) => {
-  delete form.customHeaders[key]
-}
 
 function resetTransientUiState() {
-  newApiKey.value = ''
-  apiKeyError.value = ''
-  duplicateKeyIndex.value = -1
-  copiedKeyIndex.value = null
-  newMapping.source = ''
-  newMapping.target = ''
-  newMapping.reasoningEffort = ''
   sourceMappingError.value = ''
-  newHeaderKey.value = ''
-  newHeaderValue.value = ''
   localRestoredKeys.value = new Set<string>()
   restoringKey.value = ''
   errors.name = ''
@@ -1085,37 +1019,8 @@ function resetTransientUiState() {
   formBaseUrlPreview.value = ''
 }
 
-// 安全地获取字符串值（处理 v-select/v-combobox 可能返回对象的情况）
-const getStringValue = (val: string | { title: string; value: string } | null | undefined): string => {
-  if (!val) return ''
-  if (typeof val === 'string') return val
-  return val.value || ''
-}
-
 // 源模型名验证错误
 const sourceMappingError = ref('')
-
-// 判断是否为内置源模型（内置选项允许更长名称）
-const isPresetSourceModel = (val: string): boolean => {
-  return allSourceModelOptions.value.some(opt => opt.value === val)
-}
-
-// 验证源模型名称（仅允许合法的模型名：字母、数字、连字符、下划线、点、斜杠）
-const validateSourceModelName = (val: string): string => {
-  if (!val) return ''
-  if (!isPresetSourceModel(val) && val.length > 50) return t('addChannel.sourceModelNameTooLong')
-  if (/\s/.test(val)) return t('addChannel.sourceModelNoSpaces')
-  if (!/^[\w.\-/:@+]+$/.test(val)) return t('addChannel.sourceModelInvalidChars')
-  return ''
-}
-
-// 检查映射输入是否有效
-const isMappingInputValid = computed(() => {
-  const source = getStringValue(newMapping.source).trim()
-  const target = getStringValue(newMapping.target).trim()
-  if (!source || !target) return false
-  return !validateSourceModelName(source)
-})
 
 // 目标模型列表只展示上游 /models 真实返回值；手动输入由 combobox 自身支持
 const targetModelOptions = ref<Array<{ title: string; value: string }>>([])
@@ -1152,7 +1057,6 @@ const mergeUpstreamTargetModelOptions = (models: string[]) => {
 resetTargetModelOptions()
 const fetchingModels = ref(false)
 const fetchModelsError = ref('')
-const silentlySaving = ref(false)
 
 // API Key 的 models 状态管理
 interface KeyModelsStatus {
@@ -1163,20 +1067,6 @@ interface KeyModelsStatus {
   modelCount?: number
 }
 const keyModelsStatus = ref<Map<string, KeyModelsStatus>>(new Map())
-
-const restoreDisabledKeyLabelMap = {
-  insufficient_balance: 'channelCard.blacklistReason.insufficient_balance',
-  unavailable: 'channelCard.blacklistReason.unavailable',
-  rate_limited: 'channelCard.blacklistReason.rate_limited',
-  invalid: 'channelCard.blacklistReason.invalid',
-  authentication_error: 'channelCard.blacklistReason.authentication_error',
-  permission_error: 'channelCard.blacklistReason.permission_error',
-  unknown: 'channelCard.blacklistReason.unknown',
-} as const
-
-const getRestoreDisabledKeyLabel = (reason?: string) => {
-  return restoreDisabledKeyLabelMap[reason as keyof typeof restoreDisabledKeyLabelMap] || restoreDisabledKeyLabelMap.unknown
-}
 
 // 表单验证错误
 const errors = reactive({
@@ -1292,11 +1182,11 @@ const modelCapabilitiesError = computed(() => {
 const syncModelCapabilitiesFromMapping = () => {
   const existingModels = new Set(
     form.modelCapabilityRows
-      .map(row => normalizeSelectableString(row.model).trim())
+      .map(row => normalizeSelectableString(row.model).trim().toLowerCase())
       .filter(Boolean)
   )
   const rowsToAdd = mappedTargetModels.value
-    .filter(model => !existingModels.has(model))
+    .filter(model => !existingModels.has(model.toLowerCase()))
     .map(model => {
       const builtin = resolveBuiltinUpstreamModelCapability(model)
       return createModelCapabilityRow(
@@ -1347,12 +1237,10 @@ const isValidUrl = (url: string): boolean => {
   }
 }
 
-const normalizeStringArray = (values: string[]): string[] => values.map(v => v.trim()).filter(Boolean)
-
 const handleSupportedModelsChange = (values: Array<string | { title: string; value: string }>) => {
   // 用户可能把多条规则用顿号/逗号粘进同一项，这里统一按分隔符拆分
   const normalizedValues = values
-    .map(getStringValue)
+    .map(normalizeSelectableString)
     .flatMap(parseSupportedModelInput)
 
   const { validPatterns, hasInvalidPatterns } = filterValidSupportedModelPatterns(normalizedValues)
@@ -1360,49 +1248,9 @@ const handleSupportedModelsChange = (values: Array<string | { title: string; val
   supportedModelsError.value = hasInvalidPatterns ? t('addChannel.supportedModelsInvalidPattern') : ''
 }
 
-const normalizeStringRecord = (record: Record<string, string>): Record<string, string> => {
-  const normalized: Record<string, string> = {}
-  Object.entries(record)
-    .map(([key, value]) => [key.trim(), value.trim()] as const)
-    .filter(([key, value]) => key && value)
-    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-    .forEach(([key, value]) => {
-      normalized[key] = value
-    })
-  return normalized
-}
-
 const normalizeModelCapabilities = (record: Channel['modelCapabilities'] = {}): Channel['modelCapabilities'] => {
   return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)))
 }
-
-const buildComparablePayload = () => {
-  const payload = buildSubmitPayload()
-  return normalizeComparablePayload(payload)
-}
-
-const normalizeComparablePayload = (payload: Partial<Channel>) => ({
-  ...payload,
-  apiKeys: normalizeStringArray(payload.apiKeys || []),
-  baseUrls: normalizeStringArray(payload.baseUrls || []),
-  supportedModels: normalizeStringArray(payload.supportedModels || []),
-  customHeaders: normalizeStringRecord(payload.customHeaders || {}),
-  modelMapping: Object.fromEntries(Object.entries(payload.modelMapping || {}).sort(([a], [b]) => a.localeCompare(b))),
-  modelCapabilities: normalizeModelCapabilities(payload.modelCapabilities || {}),
-  defaultCapability: payload.defaultCapability || {},
-  allowUnknownContext: !!payload.allowUnknownContext,
-  reasoningMapping: Object.fromEntries(Object.entries(payload.reasoningMapping || {}).sort(([a], [b]) => a.localeCompare(b))),
-  reasoningParamStyle: payload.reasoningParamStyle || 'reasoning',
-  requestTimeoutMs: payload.requestTimeoutMs || undefined,
-  responseHeaderTimeoutMs: payload.responseHeaderTimeoutMs || undefined,
-  streamFirstContentTimeoutMs: payload.streamFirstContentTimeoutMs || undefined,
-  streamInactivityTimeoutMs: payload.streamInactivityTimeoutMs || undefined,
-  streamToolCallIdleTimeoutMs: payload.streamToolCallIdleTimeoutMs || undefined,
-  rateLimitRpm: payload.rateLimitRpm || undefined,
-  rateLimitWindowMinutes: payload.rateLimitWindowMinutes || undefined,
-  rateLimitMaxConcurrent: payload.rateLimitMaxConcurrent || undefined,
-  rateLimitAutoFromHeaders: !!payload.rateLimitAutoFromHeaders,
-})
 
 const buildSubmitPayload = () => {
   const payload = buildChannelPayload(form)
@@ -1456,104 +1304,6 @@ const applyVisionFallbackReasoning = (payload: Partial<Channel>) => {
     delete reasoningMapping[fallbackModel]
   }
   payload.reasoningMapping = reasoningMapping
-}
-
-const hasEditableDraftChanges = computed(() => {
-  if (!isEditing.value || !props.channel) return false
-  const currentPayload = buildComparablePayload()
-  const originalPayload = {
-    name: props.channel.name.trim(),
-    serviceType: props.channel.serviceType,
-    baseUrl: props.channel.baseUrl || '',
-    baseUrls: normalizeStringArray(props.channel.baseUrls || []),
-    website: (props.channel.website || '').trim(),
-    insecureSkipVerify: !!props.channel.insecureSkipVerify,
-    lowQuality: !!props.channel.lowQuality,
-    injectDummyThoughtSignature: !!props.channel.injectDummyThoughtSignature,
-    stripThoughtSignature: !!props.channel.stripThoughtSignature,
-    passbackReasoningContent: !!props.channel.passbackReasoningContent,
-    passbackThinkingBlocks: !!props.channel.passbackThinkingBlocks,
-    stripEmptyTextBlocks: !!props.channel.stripEmptyTextBlocks,
-    normalizeSystemRoleToTopLevel: !!props.channel.normalizeSystemRoleToTopLevel,
-    description: (props.channel.description || '').trim(),
-    apiKeys: normalizeStringArray(props.channel.apiKeys || []),
-    modelMapping: Object.fromEntries(Object.entries(props.channel.modelMapping || {}).sort(([a], [b]) => a.localeCompare(b))),
-    modelCapabilities: normalizeModelCapabilities(props.channel.modelCapabilities || {}),
-    defaultCapability: props.channel.defaultCapability || {},
-    allowUnknownContext: !!props.channel.allowUnknownContext,
-    reasoningMapping: Object.fromEntries(Object.entries(props.channel.reasoningMapping || {}).sort(([a], [b]) => a.localeCompare(b))),
-    reasoningParamStyle: props.channel.reasoningParamStyle || 'reasoning',
-    textVerbosity: props.channel.textVerbosity || '',
-    fastMode: !!props.channel.fastMode,
-    customHeaders: normalizeStringRecord(props.channel.customHeaders || {}),
-    proxyUrl: props.channel.proxyUrl || '',
-    requestTimeoutMs: props.channel.requestTimeoutMs || undefined,
-    responseHeaderTimeoutMs: props.channel.responseHeaderTimeoutMs || undefined,
-    streamFirstContentTimeoutMs: props.channel.streamFirstContentTimeoutMs || undefined,
-    streamInactivityTimeoutMs: props.channel.streamInactivityTimeoutMs || undefined,
-    streamToolCallIdleTimeoutMs: props.channel.streamToolCallIdleTimeoutMs || undefined,
-    rateLimitRpm: props.channel.rateLimitRpm || undefined,
-    rateLimitWindowMinutes: props.channel.rateLimitWindowMinutes || undefined,
-    rateLimitMaxConcurrent: props.channel.rateLimitMaxConcurrent || undefined,
-    rateLimitAutoFromHeaders: !!props.channel.rateLimitAutoFromHeaders,
-    routePrefix: props.channel.routePrefix || '',
-    supportedModels: normalizeStringArray(props.channel.supportedModels || []),
-    autoBlacklistBalance: props.channel.autoBlacklistBalance ?? true,
-    normalizeMetadataUserId: props.channel.normalizeMetadataUserId ?? true,
-    stripBillingHeader: props.channel.stripBillingHeader ?? false,
-    codexNativeToolPassthrough: !!props.channel.codexNativeToolPassthrough,
-    codexToolCompat: props.channel.codexToolCompat ?? props.channel.stripCodexClientTools ?? false,
-    normalizeNonstandardChatRoles: !!props.channel.normalizeNonstandardChatRoles,
-    stripCodexClientTools: props.channel.codexToolCompat ?? props.channel.stripCodexClientTools ?? false,
-    stripImageGenerationTool: !!props.channel.stripImageGenerationTool,
-    convertImageUrlToB64Json: !!props.channel.convertImageUrlToB64Json,
-    noVision: !!props.channel.noVision,
-    noVisionModels: [...(props.channel.noVisionModels || [])],
-    visionFallbackModel: props.channel.visionFallbackModel || '',
-    historicalImageTurnLimit: props.channel.historicalImageTurnLimit ?? 0,
-  }
-
-  return JSON.stringify(currentPayload) !== JSON.stringify(normalizeComparablePayload(originalPayload as Partial<Channel>))
-})
-
-const ensureLatestSavedChannel = async (): Promise<number | null> => {
-  if (!isEditing.value || props.channel?.index === undefined || props.channel?.index === null) {
-    return props.channel?.index ?? null
-  }
-  if (!hasEditableDraftChanges.value) {
-    return props.channel.index
-  }
-  if (silentlySaving.value) {
-    return null
-  }
-
-  if (formRef.value) {
-    const { valid } = await formRef.value.validate()
-    if (!valid) {
-      return null
-    }
-  }
-  if (modelCapabilitiesError.value) {
-    return null
-  }
-
-  silentlySaving.value = true
-  try {
-    const payload = buildSubmitPayload()
-    const result = await channelStore.saveChannel(payload, props.channel.index)
-    await channelStore.refreshChannels()
-    const latestChannel = (channelStore.currentChannelsData as any).channels?.find((ch: any) => ch.index === props.channel!.index) || null
-    if (latestChannel) {
-      dialogStore.editingChannel = latestChannel
-    }
-    return result.channelId ?? props.channel.index
-  } catch (error) {
-    const message = error instanceof Error ? error.message : t('system.unknown')
-    emit('error', message)
-    return null
-  } finally {
-    silentlySaving.value = false
-  }
 }
 
 // 表单操作
@@ -1623,9 +1373,6 @@ const resetForm = () => {
   // 重置 baseUrlsText
   baseUrlsText.value = ''
 
-  // 清空原始密钥映射
-  originalKeyMap.value.clear()
-
   // 清空模型缓存和状态
   resetTargetModelOptions()
   fetchingModels.value = false
@@ -1659,9 +1406,6 @@ const loadChannelData = (channel: Channel) => {
 
   // 直接存储原始密钥，不需要映射关系
   form.apiKeys = [...channel.apiKeys]
-
-  // 清空原始密钥映射（现在不需要了）
-  originalKeyMap.value.clear()
 
   form.modelMapping = { ...(channel.modelMapping || {}) }
   form.modelCapabilitiesText = Object.keys(channel.modelCapabilities || {}).length > 0
@@ -1715,10 +1459,6 @@ const loadChannelData = (channel: Channel) => {
   // 立即同步 baseUrl 到预览变量，避免等待 debounce
   formBaseUrlPreview.value = channel.baseUrl
 
-  // 清空模型映射输入框
-  newMapping.source = ''
-  newMapping.target = ''
-
   // 清空模型缓存和状态（切换渠道时重置）
   resetTargetModelOptions()
   fetchingModels.value = false
@@ -1731,65 +1471,6 @@ const loadChannelData = (channel: Channel) => {
       fetchTargetModels()
     })
   }
-}
-
-const addApiKey = () => {
-  const key = newApiKey.value.trim()
-  if (!key) return
-
-  // 重置错误状态
-  apiKeyError.value = ''
-  duplicateKeyIndex.value = -1
-
-  // 检查是否与现有密钥重复
-  const duplicateIndex = findDuplicateKeyIndex(key)
-  if (duplicateIndex !== -1) {
-    apiKeyError.value = t('addChannel.duplicateKeyExists')
-    duplicateKeyIndex.value = duplicateIndex
-    // 清除输入框，让用户重新输入
-    newApiKey.value = ''
-    return
-  }
-
-  // 直接存储原始密钥
-  form.apiKeys.push(key)
-  newApiKey.value = ''
-}
-
-// 检查密钥是否重复，返回重复密钥的索引，如果没有重复返回-1
-const findDuplicateKeyIndex = (newKey: string): number => {
-  return form.apiKeys.findIndex(existingKey => existingKey === newKey)
-}
-
-const removeApiKey = (index: number) => {
-  form.apiKeys.splice(index, 1)
-
-  // 如果删除的是当前高亮的重复密钥，清除高亮状态
-  if (duplicateKeyIndex.value === index) {
-    duplicateKeyIndex.value = -1
-    apiKeyError.value = ''
-  } else if (duplicateKeyIndex.value > index) {
-    // 如果删除的密钥在高亮密钥之前，调整高亮索引
-    duplicateKeyIndex.value--
-  }
-}
-
-// 将指定密钥移到最上方
-const moveApiKeyToTop = (index: number) => {
-  if (index <= 0 || index >= form.apiKeys.length) return
-  const [key] = form.apiKeys.splice(index, 1)
-  form.apiKeys.unshift(key)
-  duplicateKeyIndex.value = -1
-  copiedKeyIndex.value = null
-}
-
-// 将指定密钥移到最下方
-const moveApiKeyToBottom = (index: number) => {
-  if (index < 0 || index >= form.apiKeys.length - 1) return
-  const [key] = form.apiKeys.splice(index, 1)
-  form.apiKeys.push(key)
-  duplicateKeyIndex.value = -1
-  copiedKeyIndex.value = null
 }
 
 // 恢复被拉黑的密钥
@@ -1833,7 +1514,6 @@ const updateCustomHeaders = (headers: Array<{ key: string; value: string }>) => 
   form.customHeaders = newHeaders
 }
 
-
 const restoreDisabledKey = async (apiKey: string) => {
   if (!props.channel) return
   restoringKey.value = apiKey
@@ -1854,99 +1534,10 @@ const restoreDisabledKey = async (apiKey: string) => {
     localRestoredKeys.value.add(apiKey)
     form.apiKeys.push(apiKey)
   } catch (error) {
-    apiKeyError.value = error instanceof Error ? error.message : 'Restore failed'
+    emit('error', error instanceof Error ? error.message : 'Restore failed')
   } finally {
     restoringKey.value = ''
   }
-}
-
-// 复制API密钥到剪贴板
-const copyApiKey = async (key: string, index: number) => {
-  try {
-    await navigator.clipboard.writeText(key)
-    copiedKeyIndex.value = index
-
-    // 2秒后重置复制状态
-    setTimeout(() => {
-      copiedKeyIndex.value = null
-    }, 2000)
-  } catch (err) {
-    console.error('复制密钥失败:', err)
-    // 降级方案：使用传统的复制方法
-    const textArea = document.createElement('textarea')
-    textArea.value = key
-    textArea.style.position = 'fixed'
-    textArea.style.left = '-999999px'
-    textArea.style.top = '-999999px'
-    document.body.appendChild(textArea)
-    textArea.focus()
-    textArea.select()
-
-    try {
-      document.execCommand('copy')
-      copiedKeyIndex.value = index
-
-      setTimeout(() => {
-        copiedKeyIndex.value = null
-      }, 2000)
-    } catch (err) {
-      console.error('降级复制方案也失败:', err)
-    } finally {
-      textArea.remove()
-    }
-  }
-}
-
-// 处理源模型名输入变化，实时验证
-const handleSourceModelChange = (val: string | { title: string; value: string } | null) => {
-  const source = getStringValue(val).trim()
-  if (!source) {
-    sourceMappingError.value = ''
-    return
-  }
-  sourceMappingError.value = validateSourceModelName(source)
-}
-
-const addModelMapping = () => {
-  const source = getStringValue(newMapping.source).trim()
-  const target = getStringValue(newMapping.target).trim()
-
-  // 验证源模型名
-  const sourceErr = validateSourceModelName(source)
-  if (sourceErr) {
-    sourceMappingError.value = sourceErr
-    return
-  }
-  sourceMappingError.value = ''
-
-  if (source && target) {
-    // 检查是否已存在
-    const exists = modelMappingRows.value.some(row => row.source === source)
-    if (exists) {
-      sourceMappingError.value = '该源模型已存在映射'
-      return
-    }
-
-    modelMappingRows.value.push({
-      id: ++rowIdCounter,
-      source,
-      target,
-      reasoning: newMapping.reasoningEffort || '',
-      noVision: false
-    })
-
-    newMapping.source = ''
-    newMapping.target = ''
-    newMapping.reasoningEffort = ''
-  }
-}
-
-const removeModelMappingRow = (index: number) => {
-  modelMappingRows.value.splice(index, 1)
-}
-
-const toggleRowVision = (row: ModelMappingRow) => {
-  row.noVision = !row.noVision
 }
 
 // 将 modelMappingRows 转换为 form.modelMapping 对象（保存时使用）
@@ -1997,24 +1588,6 @@ const syncModelMappingRowsFromForm = () => {
     noVision: noVisionSet.has(target)
   }))
 }
-
-// 开始编辑模型映射（已废弃）
-const startEditMapping = (source: string) => {
-  editingMapping.value = source
-  editMappingForm.targetModel = form.modelMapping[source] || ''
-  editMappingForm.reasoning = (form.reasoningMapping[source] || '') as '' | 'off' | 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-}
-
-// 取消编辑模型映射（已废弃）
-const cancelEditMapping = () => {
-  editingMapping.value = null
-  editMappingForm.targetModel = ''
-  editMappingForm.reasoning = ''
-}
-
-// 保存编辑的模型映射（已废弃，保留以防需要恢复）
-// saveEditMapping - 已废弃，改用直接编辑模式
-// const saveEditMapping = async () => { ... }
 
 const isSupportedModelSelected = (filter: string): boolean => {
   return selectedSupportedModelSet.value.has(filter)
@@ -2174,8 +1747,6 @@ const applyPreset = (presetName: string) => {
   }
 }
 
-
-
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -2244,10 +1815,6 @@ watch(
   newShow => {
     if (newShow) {
       dialogMode.value = props.channel ? 'edit' : 'create'
-
-      // 无论是编辑还是新增，都先清理密钥错误状态
-      apiKeyError.value = ''
-      duplicateKeyIndex.value = -1
       localRestoredKeys.value = new Set<string>()
 
       if (dialogMode.value === 'edit' && props.channel) {
@@ -2376,8 +1943,6 @@ onUnmounted(() => {
   padding: 4px 12px 8px;
   line-height: 1.5;
 }
-
-
 
 /* 高级选项中的右侧开关行 */
 .advanced-switch-row {

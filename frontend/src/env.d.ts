@@ -10,10 +10,25 @@ declare module '*.vue' {
 
 declare module 'vuetify/styles' {}
 
-declare var __APP_UI_LANGUAGE__: string // eslint-disable-line no-var
+import type { SupportedLocale } from './i18n/messages'
 
-interface Window {
-  __CCX_RUNTIME_CONFIG__?: {
-    uiLanguage?: string
+export {}
+
+declare global {
+  var __APP_UI_LANGUAGE__: string
+
+  interface Window {
+    __CCX_RUNTIME_CONFIG__?: {
+      uiLanguage?: string
+    }
   }
+
+  var __CCX_I18N__: {
+    global: {
+      locale: { value: SupportedLocale }
+      t: {
+        (_key: string, _params?: Record<string, string | number>): string
+      }
+    }
+  } | undefined
 }

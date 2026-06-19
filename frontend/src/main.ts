@@ -7,7 +7,7 @@ import App from './App.vue'
 import './assets/style.css'
 import { useAuthStore } from './stores/auth'
 import { usePreferencesStore } from './stores/preferences'
-import { applyDocumentLanguage, getRuntimeLocale, type SupportedLocale } from './i18n'
+import { applyDocumentLanguage, getRuntimeLocale } from './i18n'
 import i18n from './i18n/vue-i18n'
 
 const app = createApp(App)
@@ -27,9 +27,9 @@ authStore.initializeAuth()
 
 const preferencesStore = usePreferencesStore()
 preferencesStore.initializeUILanguage(getRuntimeLocale())
-applyDocumentLanguage(preferencesStore.uiLanguage as unknown as SupportedLocale)
+applyDocumentLanguage(preferencesStore.uiLanguage)
 
 // 同步 vue-i18n locale 为 preferences store 中的持久化值
-;(i18n.global.locale as any).value = preferencesStore.uiLanguage
+i18n.global.locale.value = preferencesStore.uiLanguage
 
 app.mount('#app')

@@ -23,6 +23,8 @@ export interface ModelCapabilityRow {
   matchedPattern?: string
 }
 
+type SelectableString = string | { title?: string; value?: unknown } | null | undefined
+
 export interface ChannelFormLike {
   name: string
   serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | ''
@@ -37,7 +39,7 @@ export interface ChannelFormLike {
   passbackThinkingBlocks: boolean
   description: string
   apiKeys: string[]
-  modelMapping: Record<string, string>
+  modelMapping: Record<string, SelectableString>
   modelCapabilitiesText?: string
   modelCapabilityRows?: ModelCapabilityRow[]
   defaultContextWindowTokens?: string | number | null
@@ -74,11 +76,10 @@ export interface ChannelFormLike {
   convertImageUrlToB64Json?: boolean
   noVision: boolean
   noVisionModels: string[]
-  visionFallbackModel: string
+  visionFallbackModel: SelectableString
   historicalImageTurnLimit?: string | number | null
 
 }
-
 
 function normalizePricingValue(value: unknown): number | null | false {
   const trimmed = String(value ?? '').trim()
@@ -311,8 +312,6 @@ export function modelCapabilityRowsToRecord(rows: ModelCapabilityRow[] = []): Re
   return result
 }
 
-type SelectableString = string | { title?: string; value?: unknown } | null | undefined
-
 export function normalizeSelectableString(value: SelectableString): string {
   if (!value) return ''
   if (typeof value === 'string') {
@@ -397,16 +396,15 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
     convertImageUrlToB64Json: !!form.convertImageUrlToB64Json,
     noVision: form.noVision,
     noVisionModels: form.noVisionModels,
-    visionFallbackModel: normalizeSelectableString(form.visionFallbackModel as SelectableString),
+    visionFallbackModel: normalizeSelectableString(form.visionFallbackModel),
   }
 
   // 历史图片轮次限制：始终发送（含 0），使编辑场景能把渠道级覆盖清回 0（继承全局）。
   // 0=继承全局；后端会对 >0 的值应用最低 3 约束。空/非整数/负数归一为 0。
   const historicalImageTurnLimit = Number(form.historicalImageTurnLimit)
-  ;(channelData as any).historicalImageTurnLimit =
-    Number.isInteger(historicalImageTurnLimit) && historicalImageTurnLimit > 0
-      ? historicalImageTurnLimit
-      : 0
+  channelData.historicalImageTurnLimit = Number.isInteger(historicalImageTurnLimit) && historicalImageTurnLimit > 0
+    ? historicalImageTurnLimit
+    : 0
 
   if (deduplicatedUrls.length > 1) {
     channelData.baseUrls = deduplicatedUrls
