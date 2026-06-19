@@ -969,7 +969,7 @@
   "addChannel.outputTokensShort": "Output",
   "addChannel.thinkingModeLabel": "Thinking mode",
   "addChannel.reasoningEffortsLabel": "Reasoning efforts",
-  "addChannel.modelCapabilityBuiltinMatched": "Matched built-in preset: {pattern}",
+  "addChannel.modelCapabilityBuiltinMatched": "Preset: {pattern}",
   "addChannel.modelCapabilitiesRowsInvalid": "Check model capability rows. Model names are required; token and price values must be non-negative.",
   "addChannel.inputCacheHitPriceLabel": "Cache-hit input",
   "addChannel.inputCacheMissPriceLabel": "Cache-miss input",
@@ -979,5 +979,5 @@
   "addChannel.pricingUnitLabel": "Unit",
   "addChannel.defaultOutputTokensMeta": "Default output {tokens}",
   "addChannel.recommendedOutputTokensMeta": "Recommended output {tokens}",
-  "addChannel.modelPricingUnitHint": "USD / 1M tokens"
+  "addChannel.modelPricingUnitHint": "Per 1M tokens"
 }

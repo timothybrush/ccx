@@ -102,9 +102,10 @@ function createPricingFromRow(row: ModelCapabilityRow): UpstreamModelCapability[
   const inputCacheMissPrice = normalizePricingValue(row.inputCacheMissPrice)
   const outputPrice = normalizePricingValue(row.outputPrice)
   if (inputCacheHitPrice === false || inputCacheMissPrice === false || outputPrice === false) return false
+  const currency = row.pricingCurrency.trim() || 'USD'
   const pricing: NonNullable<UpstreamModelCapability['pricing']> = {
-    unit: row.pricingUnit.trim() || 'per_1m_tokens_usd',
-    currency: row.pricingCurrency.trim() || 'USD',
+    unit: `per_1m_tokens_${currency.toLowerCase()}`,
+    currency,
   }
   if (inputCacheHitPrice !== null) pricing.inputCacheHitPrice = inputCacheHitPrice
   if (inputCacheMissPrice !== null) pricing.inputCacheMissPrice = inputCacheMissPrice

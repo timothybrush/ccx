@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { Coins, Database, Plus, Trash2 } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 import {
-  capabilityRowDefaultsFromBuiltin,
   createModelCapabilityRow,
   resolveBuiltinUpstreamModelCapability,
   type ModelCapabilityRow,
@@ -55,17 +54,6 @@ function updateRow(id: number, patch: Partial<ModelCapabilityRow>) {
   updateRows(props.rows.map(row => row.id === id ? { ...row, ...patch } : row))
 }
 
-function updateModel(row: ModelCapabilityRow, model: string) {
-  const nextModel = model.trim()
-  const builtin = resolveBuiltinUpstreamModelCapability(nextModel)
-  updateRow(row.id, {
-    model: nextModel,
-    ...(builtin ? capabilityRowDefaultsFromBuiltin(builtin.capability) : {}),
-    source: builtin ? 'builtin' : 'custom',
-    matchedPattern: builtin?.pattern || '',
-  })
-}
-
 function formatTokens(value?: number) {
   if (!value) return ''
   if (value >= 1000 && value % 1000 === 0) return `${value / 1000}k`
@@ -85,12 +73,8 @@ function formatTokenMeta(value: ModelCapabilityRow['contextWindowTokens']) {
   return formatted
 }
 
-function pricingUnitLabel(row: ModelCapabilityRow) {
-  const currency = row.pricingCurrency.trim() || 'USD'
-  const unit = row.pricingUnit.trim()
-  if (unit.includes('1m')) return `${currency} / 1M tokens`
-  if (unit.includes('1k')) return `${currency} / 1K tokens`
-  return unit ? `${currency} · ${unit}` : t('addChannel.modelPricingUnitHint')
+function pricingUnitLabel() {
+  return t('addChannel.modelPricingUnitHint')
 }
 
 function modelInitial(row: ModelCapabilityRow) {
@@ -142,11 +126,6 @@ function closeModelDropdownSoon() {
   window.setTimeout(() => {
     activeModelInputId.value = ''
   }, 120)
-}
-
-function selectExistingModel(row: ModelCapabilityRow, model: string) {
-  updateModel(row, model)
-  activeModelInputId.value = ''
 }
 
 function selectNewModel(model: string) {
@@ -250,8 +229,8 @@ function removeRow(id: number) {
         :key="row.id"
         class="overflow-hidden rounded-lg border border-border/60 bg-background/70 shadow-2xs"
       >
-        <div class="flex items-start justify-between gap-3 border-b border-border/50 bg-muted/30 px-3 py-2">
-          <div class="flex min-w-0 items-start gap-2">
+        <div class="flex items-center justify-between gap-3 border-b border-border/50 bg-muted/30 px-3 py-2">
+          <div class="flex min-w-0 items-center gap-2">
             <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs font-bold text-primary">
               {{ modelInitial(row) }}
             </span>
@@ -283,41 +262,8 @@ function removeRow(id: number) {
           </Button>
         </div>
 
-        <div class="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.42fr)]">
+        <div class="grid gap-3 p-3">
           <div class="space-y-3">
-            <div class="relative space-y-1">
-              <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.modelCapabilityModelLabel') }}</Label>
-              <Input
-                :model-value="row.model"
-                class="h-8 font-mono text-xs"
-                placeholder="actual-model"
-                @focus="focusModelInput(`row-${row.id}`)"
-                @blur="closeModelDropdownSoon"
-                @update:model-value="(val) => { updateModel(row, String(val || '')); activeModelInputId = `row-${row.id}` }"
-              />
-              <div
-                v-if="activeModelInputId === `row-${row.id}` && filteredModels(row.model).length"
-                class="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
-              >
-                <button
-                  v-for="model in filteredModels(row.model)"
-                  :key="model"
-                  type="button"
-                  class="flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                  :class="model === row.model ? 'bg-primary/10 text-primary' : ''"
-                  @mousedown.prevent="selectExistingModel(row, model)"
-                >
-                  {{ model }}
-                </button>
-              </div>
-              <div
-                v-else-if="activeModelInputId === `row-${row.id}`"
-                class="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-border bg-popover px-3 py-2 text-[10px] leading-4 text-muted-foreground shadow-lg"
-              >
-                {{ modelListEmptyHint }}
-              </div>
-            </div>
-
             <div class="grid gap-2 sm:grid-cols-2">
               <div class="space-y-1">
                 <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.contextTokensShort') }}</Label>
@@ -412,9 +358,9 @@ function removeRow(id: number) {
                 <Coins class="h-3.5 w-3.5 text-primary" />
                 {{ t('addChannel.pricingTitle') }}
               </div>
-              <span class="text-[10px] text-muted-foreground">{{ pricingUnitLabel(row) }}</span>
+              <span class="text-[10px] text-muted-foreground">{{ pricingUnitLabel() }}</span>
             </div>
-            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-[0.7fr_repeat(3,minmax(0,1fr))]">
               <div class="space-y-1">
                 <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.pricingCurrencyLabel') }}</Label>
                 <Input
@@ -424,46 +370,38 @@ function removeRow(id: number) {
                 />
               </div>
               <div class="space-y-1">
-                <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.pricingUnitLabel') }}</Label>
+                <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.inputCacheHitPriceLabel') }}</Label>
                 <Input
-                  :model-value="row.pricingUnit"
+                  :model-value="row.inputCacheHitPrice ?? ''"
+                  type="number"
+                  min="0"
+                  step="0.000001"
                   class="h-8 text-xs"
-                  @update:model-value="(val) => updateRow(row.id, { pricingUnit: String(val || '') })"
+                  @update:model-value="(val) => updateRow(row.id, { inputCacheHitPrice: val as string | number })"
                 />
               </div>
-            </div>
-            <div class="space-y-1">
-              <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.inputCacheHitPriceLabel') }}</Label>
-              <Input
-                :model-value="row.inputCacheHitPrice ?? ''"
-                type="number"
-                min="0"
-                step="0.000001"
-                class="h-8 text-xs"
-                @update:model-value="(val) => updateRow(row.id, { inputCacheHitPrice: val as string | number })"
-              />
-            </div>
-            <div class="space-y-1">
-              <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.inputCacheMissPriceLabel') }}</Label>
-              <Input
-                :model-value="row.inputCacheMissPrice ?? ''"
-                type="number"
-                min="0"
-                step="0.000001"
-                class="h-8 text-xs"
-                @update:model-value="(val) => updateRow(row.id, { inputCacheMissPrice: val as string | number })"
-              />
-            </div>
-            <div class="space-y-1">
-              <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.outputPriceLabel') }}</Label>
-              <Input
-                :model-value="row.outputPrice ?? ''"
-                type="number"
-                min="0"
-                step="0.000001"
-                class="h-8 text-xs"
-                @update:model-value="(val) => updateRow(row.id, { outputPrice: val as string | number })"
-              />
+              <div class="space-y-1">
+                <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.inputCacheMissPriceLabel') }}</Label>
+                <Input
+                  :model-value="row.inputCacheMissPrice ?? ''"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  class="h-8 text-xs"
+                  @update:model-value="(val) => updateRow(row.id, { inputCacheMissPrice: val as string | number })"
+                />
+              </div>
+              <div class="space-y-1">
+                <Label class="text-[10px] font-semibold uppercase text-muted-foreground/70">{{ t('addChannel.outputPriceLabel') }}</Label>
+                <Input
+                  :model-value="row.outputPrice ?? ''"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  class="h-8 text-xs"
+                  @update:model-value="(val) => updateRow(row.id, { outputPrice: val as string | number })"
+                />
+              </div>
             </div>
           </div>
         </div>

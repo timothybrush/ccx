@@ -969,7 +969,7 @@
   "addChannel.outputTokensShort": "输出",
   "addChannel.thinkingModeLabel": "思考模式",
   "addChannel.reasoningEffortsLabel": "思考强度",
-  "addChannel.modelCapabilityBuiltinMatched": "已匹配内置预设：{pattern}",
+  "addChannel.modelCapabilityBuiltinMatched": "预设：{pattern}",
   "addChannel.modelCapabilitiesRowsInvalid": "请检查模型能力行，模型名不能为空，tokens 和价格必须是非负数。",
   "addChannel.inputCacheHitPriceLabel": "缓存命中输入价",
   "addChannel.inputCacheMissPriceLabel": "缓存未命中输入价",
@@ -979,5 +979,5 @@
   "addChannel.pricingUnitLabel": "单位",
   "addChannel.defaultOutputTokensMeta": "默认输出 {tokens}",
   "addChannel.recommendedOutputTokensMeta": "推荐输出 {tokens}",
-  "addChannel.modelPricingUnitHint": "美元 / 100万 tokens"
+  "addChannel.modelPricingUnitHint": "每 100 万 tokens"
 }

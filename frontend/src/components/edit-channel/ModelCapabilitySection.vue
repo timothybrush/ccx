@@ -48,7 +48,7 @@
                     <div class="font-mono text-body-2 font-weight-bold text-truncate">
                       {{ row.model || t('addChannel.modelCapabilityModelPlaceholder') }}
                     </div>
-                    <div v-if="row.displayName" class="text-caption text-medium-emphasis text-truncate">
+                    <div v-if="shouldShowDisplayName(row)" class="text-caption text-medium-emphasis text-truncate">
                       {{ row.displayName }}
                     </div>
                   </div>
@@ -81,27 +81,6 @@
               <div class="capability-card-body pa-3">
                 <div class="capability-main">
                   <v-row dense>
-                    <v-col cols="12">
-                      <v-combobox
-                        :model-value="row.model"
-                        :items="targetModelOptions"
-                        item-title="title"
-                        item-value="value"
-                        :no-data-text="modelListNoDataText"
-                        :loading="fetchingModels"
-                        :label="t('addChannel.modelCapabilityModelLabel')"
-                        placeholder="actual-model"
-                        variant="outlined"
-                        density="compact"
-                        hide-details
-                        clearable
-                        eager
-                        class="font-mono"
-                        @focus="$emit('sync-upstream')"
-                        @update:model-value="updateModel(index, $event)"
-                        @update:menu="$emit('menu-update', $event)"
-                      />
-                    </v-col>
                     <v-col cols="6">
                       <v-text-field
                         :model-value="row.contextWindowTokens"
@@ -189,10 +168,10 @@
                       <v-icon size="14" color="primary">mdi-cash-multiple</v-icon>
                       <span>{{ t('addChannel.pricingTitle') }}</span>
                     </div>
-                    <span class="text-caption text-medium-emphasis">{{ pricingUnitLabel(row) }}</span>
+                    <span class="text-caption text-medium-emphasis">{{ pricingUnitLabel() }}</span>
                   </div>
                   <v-row dense>
-                    <v-col cols="6">
+                    <v-col cols="6" md="2">
                       <v-text-field
                         :model-value="row.pricingCurrency"
                         :label="t('addChannel.pricingCurrencyLabel')"
@@ -202,17 +181,7 @@
                         @update:model-value="updateRow(index, { pricingCurrency: String($event || '') })"
                       />
                     </v-col>
-                    <v-col cols="6">
-                      <v-text-field
-                        :model-value="row.pricingUnit"
-                        :label="t('addChannel.pricingUnitLabel')"
-                        variant="outlined"
-                        density="compact"
-                        hide-details
-                        @update:model-value="updateRow(index, { pricingUnit: String($event || '') })"
-                      />
-                    </v-col>
-                    <v-col cols="12">
+                    <v-col cols="12" sm="4" md="3">
                       <v-text-field
                         :model-value="row.inputCacheHitPrice"
                         :label="t('addChannel.inputCacheHitPriceLabel')"
@@ -225,7 +194,7 @@
                         @update:model-value="updateRow(index, { inputCacheHitPrice: $event })"
                       />
                     </v-col>
-                    <v-col cols="12">
+                    <v-col cols="12" sm="4" md="3">
                       <v-text-field
                         :model-value="row.inputCacheMissPrice"
                         :label="t('addChannel.inputCacheMissPriceLabel')"
@@ -238,7 +207,7 @@
                         @update:model-value="updateRow(index, { inputCacheMissPrice: $event })"
                       />
                     </v-col>
-                    <v-col cols="12">
+                    <v-col cols="12" sm="4" md="3">
                       <v-text-field
                         :model-value="row.outputPrice"
                         :label="t('addChannel.outputPriceLabel')"
@@ -308,7 +277,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from '../../i18n'
 import {
-  capabilityRowDefaultsFromBuiltin,
   createModelCapabilityRow,
   normalizeSelectableString,
   resolveBuiltinUpstreamModelCapability,
@@ -359,17 +327,19 @@ function formatTokenMeta(value: ModelCapabilityRow['contextWindowTokens']) {
   return formatted
 }
 
-function pricingUnitLabel(row: ModelCapabilityRow) {
-  const currency = row.pricingCurrency.trim() || 'USD'
-  const unit = row.pricingUnit.trim()
-  if (unit.includes('1m')) return `${currency} / 1M tokens`
-  if (unit.includes('1k')) return `${currency} / 1K tokens`
-  return unit ? `${currency} · ${unit}` : t('addChannel.modelPricingUnitHint')
+function pricingUnitLabel() {
+  return t('addChannel.modelPricingUnitHint')
 }
 
 function modelInitial(row: ModelCapabilityRow) {
   const source = (row.displayName || row.model || '?').trim()
   return source ? source.slice(0, 1).toUpperCase() : '?'
+}
+
+function shouldShowDisplayName(row: ModelCapabilityRow) {
+  const displayName = (row.displayName || '').trim()
+  if (!displayName) return false
+  return displayName.toLowerCase() !== row.model.trim().toLowerCase()
 }
 
 const nextRowId = () => Date.now() + Math.floor(Math.random() * 1000)
@@ -383,17 +353,6 @@ function updateRow(index: number, patch: Partial<ModelCapabilityRow>) {
     rowIndex === index ? { ...row, ...patch, source: patch.source || row.source } : row
   ))
   updateRows(rows)
-}
-
-function updateModel(index: number, value: SelectableString) {
-  const model = normalizeSelectableString(value).trim()
-  const builtin = resolveBuiltinUpstreamModelCapability(model)
-  updateRow(index, {
-    model,
-    ...(builtin ? capabilityRowDefaultsFromBuiltin(builtin.capability) : {}),
-    source: builtin ? 'builtin' : 'custom',
-    matchedPattern: builtin?.pattern || '',
-  })
 }
 
 function reasoningEffortsToList(value: string) {
@@ -479,8 +438,8 @@ function removeRow(index: number) {
 
 .capability-card-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.45fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
 .pricing-panel {
@@ -528,9 +487,4 @@ function removeRow(index: number) {
   font-weight: 600;
 }
 
-@media (max-width: 960px) {
-  .capability-card-body {
-    grid-template-columns: 1fr;
-  }
-}
 </style>

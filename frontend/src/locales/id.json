@@ -730,7 +730,7 @@
   "addChannel.outputTokensShort": "Output",
   "addChannel.thinkingModeLabel": "Mode thinking",
   "addChannel.reasoningEffortsLabel": "Reasoning effort",
-  "addChannel.modelCapabilityBuiltinMatched": "Preset bawaan cocok: {pattern}",
+  "addChannel.modelCapabilityBuiltinMatched": "Preset: {pattern}",
   "addChannel.modelCapabilitiesRowsInvalid": "Periksa baris kemampuan model. Nama model wajib; token dan harga harus non-negatif.",
   "addChannel.inputCacheHitPriceLabel": "Input cache hit",
   "addChannel.inputCacheMissPriceLabel": "Input cache miss",
@@ -740,5 +740,5 @@
   "addChannel.pricingUnitLabel": "Unit",
   "addChannel.defaultOutputTokensMeta": "Output default {tokens}",
   "addChannel.recommendedOutputTokensMeta": "Output rekomendasi {tokens}",
-  "addChannel.modelPricingUnitHint": "USD / 1 juta token"
+  "addChannel.modelPricingUnitHint": "Per 1 juta token"
 }
