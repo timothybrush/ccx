@@ -26,3 +26,23 @@
 如涉及多文件变更，可补充 `**关键变更：**` 列出受影响文件。
 
 ---
+
+## [ ] 管理后台使用报表导出 (#229)
+
+来源：https://github.com/BenedictKing/ccx/issues/229
+
+需求：在管理后台为渠道使用统计增加“导出使用报表”能力，支持按月份（默认当前月，后续可考虑自定义日期范围）导出当前渠道或全部渠道的使用数据。
+
+建议范围：优先支持浏览器下载 CSV；JSON 可作为可选格式；XLSX 和定时邮件属于 nice-to-have，暂不作为首批必做项。
+
+导出内容应覆盖当前仪表盘已有的核心指标：渠道名、服务类型、日期/小时桶、请求数、可用率、输入/输出 token、缓存读写、RPM、TPM。
+
+备注：该需求目前不确定是否有更多用户需要，先记录为待评估项。
+
+---
+
+> **上游版本变更**
+
+## [ ] Codex rust-v0.141.0 上游协议/工具变更评估
+
+发现协议/工具/用法变更：plugin/MCP、Realtime speech/control、ResponseItem metadata、dynamic tool namespaces、thread/environment/session 行为。请评估对 ccx Responses 渠道的影响。
