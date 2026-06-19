@@ -1,21 +1,11 @@
 <template>
   <div class="model-capability-section">
     <v-card variant="outlined" rounded="lg">
-      <v-card-title class="d-flex align-center justify-space-between pa-4 pb-2">
+      <v-card-title class="d-flex align-center pa-4 pb-2">
         <div class="d-flex align-center ga-2">
           <v-icon color="primary">mdi-database</v-icon>
           <span class="section-title">{{ t('addChannel.contextCapabilityTitle') }}</span>
         </div>
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="primary"
-          prepend-icon="mdi-refresh"
-          :loading="fetchingModels"
-          @click="$emit('sync-upstream')"
-        >
-          {{ t('addChannel.syncModelList') }}
-        </v-btn>
       </v-card-title>
 
       <v-card-text class="pt-2">
@@ -23,39 +13,22 @@
           {{ t('addChannel.modelCapabilitiesRowsHint') }}
         </div>
 
-        <v-row dense>
-          <v-col cols="12" md="6">
-            <v-text-field
-              :model-value="defaultContextWindowTokens"
-              :label="t('addChannel.defaultContextWindowLabel')"
-              :hint="t('addChannel.defaultContextWindowHint')"
-              type="number"
-              min="0"
-              prepend-inner-icon="mdi-database"
-              persistent-hint
-              variant="outlined"
-              density="comfortable"
-              @update:model-value="$emit('update:defaultContextWindowTokens', $event)"
-            />
-          </v-col>
-          <v-col cols="12" md="6">
-            <v-text-field
-              :model-value="defaultMaxOutputTokens"
-              :label="t('addChannel.defaultMaxOutputLabel')"
-              :hint="t('addChannel.defaultMaxOutputHint')"
-              type="number"
-              min="0"
-              prepend-inner-icon="mdi-text"
-              persistent-hint
-              variant="outlined"
-              density="comfortable"
-              @update:model-value="$emit('update:defaultMaxOutputTokens', $event)"
-            />
-          </v-col>
-        </v-row>
+        <div v-if="mappedTargetModels.length" class="d-flex align-center flex-wrap ga-2 mb-3">
+          <span class="text-caption text-medium-emphasis">{{ t('addChannel.modelCapabilityRedirectTargets') }}</span>
+          <v-chip
+            v-for="model in mappedTargetModels"
+            :key="model"
+            size="x-small"
+            variant="tonal"
+            color="primary"
+            class="font-mono"
+          >
+            {{ model }}
+          </v-chip>
+        </div>
 
         <div class="capability-container rounded-xl pa-3 mt-3">
-          <div v-if="rows.length" class="d-flex flex-column ga-2">
+          <div v-if="rows.length" class="d-flex flex-column ga-3">
             <div class="text-caption text-medium-emphasis d-flex align-center justify-space-between px-1">
               <span class="uppercase-label">{{ t('addChannel.modelCapabilitiesConfigured') }}</span>
               <v-chip size="x-small" variant="flat" color="primary" class="font-weight-bold px-2 font-mono">
@@ -66,162 +39,231 @@
             <div
               v-for="(row, index) in rows"
               :key="row.id"
-              class="capability-item pa-3 rounded-lg"
+              class="capability-card rounded-lg overflow-hidden"
             >
-              <v-row dense align="center">
-                <v-col cols="12" md="4">
-                  <v-combobox
-                    :model-value="row.model"
-                    :items="targetModelOptions"
-                    :loading="fetchingModels"
-                    :label="t('addChannel.modelCapabilityModelLabel')"
-                    placeholder="actual-model"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    clearable
-                    eager
-                    class="font-mono"
-                    @focus="$emit('sync-upstream')"
-                    @update:model-value="updateModel(index, $event)"
-                    @update:menu="$emit('menu-update', $event)"
-                  />
-                </v-col>
-                <v-col cols="6" md="2">
-                  <v-text-field
-                    :model-value="row.contextWindowTokens"
-                    :label="t('addChannel.contextTokensShort')"
-                    type="number"
-                    min="0"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { contextWindowTokens: $event })"
-                  />
-                </v-col>
-                <v-col cols="6" md="2">
-                  <v-text-field
-                    :model-value="row.maxOutputTokens"
-                    :label="t('addChannel.outputTokensShort')"
-                    type="number"
-                    min="0"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { maxOutputTokens: $event })"
-                  />
-                </v-col>
-                <v-col cols="6" md="2">
-                  <v-combobox
-                    :model-value="row.thinkingMode"
-                    :items="thinkingModeOptions"
-                    :label="t('addChannel.thinkingModeLabel')"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    clearable
-                    eager
-                    @update:model-value="updateRow(index, { thinkingMode: normalizeSelectableString($event) })"
-                    @update:menu="$emit('menu-update', $event)"
-                  />
-                </v-col>
-                <v-col cols="6" md="2" class="d-flex align-center ga-1">
-                  <v-text-field
-                    :model-value="row.reasoningEffortsText"
-                    :label="t('addChannel.reasoningEffortsLabel')"
-                    placeholder="high, max"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { reasoningEffortsText: String($event || '') })"
-                  />
-                  <v-tooltip :text="t('app.actions.delete')" location="top" :open-delay="150">
-                    <template #activator="{ props: tip }">
-                      <v-btn
-                        v-bind="tip"
-                        size="small"
-                        color="error"
-                        icon
-                        variant="text"
-                        @click="removeRow(index)"
-                      >
-                        <v-icon size="16">mdi-close</v-icon>
-                      </v-btn>
-                    </template>
-                  </v-tooltip>
-                </v-col>
-              </v-row>
-              <div v-if="row.displayName || row.description" class="text-caption text-medium-emphasis mt-1 px-1">
-                <span v-if="row.displayName" class="font-weight-medium">{{ row.displayName }}</span>
-                <span v-if="row.displayName && row.description"> · </span>
-                <span v-if="row.description">{{ row.description }}</span>
+              <div class="capability-card-header d-flex align-center justify-space-between ga-3 px-3 py-2">
+                <div class="d-flex align-center ga-2 min-width-0">
+                  <div class="model-avatar flex-shrink-0">{{ modelInitial(row) }}</div>
+                  <div class="min-width-0">
+                    <div class="font-mono text-body-2 font-weight-bold text-truncate">
+                      {{ row.model || t('addChannel.modelCapabilityModelPlaceholder') }}
+                    </div>
+                    <div v-if="row.displayName" class="text-caption text-medium-emphasis text-truncate">
+                      {{ row.displayName }}
+                    </div>
+                  </div>
+                  <v-chip
+                    v-if="row.source === 'builtin' && row.matchedPattern"
+                    size="x-small"
+                    color="primary"
+                    variant="tonal"
+                    class="preset-chip"
+                  >
+                    {{ t('addChannel.modelCapabilityBuiltinMatched', { pattern: row.matchedPattern }) }}
+                  </v-chip>
+                </div>
+                <v-tooltip :text="t('app.actions.delete')" location="top" :open-delay="150">
+                  <template #activator="{ props: tip }">
+                    <v-btn
+                      v-bind="tip"
+                      size="small"
+                      color="error"
+                      icon
+                      variant="text"
+                      @click="removeRow(index)"
+                    >
+                      <v-icon size="16">mdi-close</v-icon>
+                    </v-btn>
+                  </template>
+                </v-tooltip>
               </div>
-              <div
-                v-if="row.defaultOutputTokens || row.recommendedOutputTokens"
-                class="text-caption text-medium-emphasis mt-1 px-1"
-              >
-                <span v-if="row.defaultOutputTokens">
-                  {{ t('addChannel.defaultOutputTokensMeta', { tokens: formatTokens(row.defaultOutputTokens) }) }}
-                </span>
-                <span v-if="row.defaultOutputTokens && row.recommendedOutputTokens"> · </span>
-                <span v-if="row.recommendedOutputTokens">
-                  {{ t('addChannel.recommendedOutputTokensMeta', { tokens: formatTokens(row.recommendedOutputTokens) }) }}
-                </span>
-              </div>
-              <v-row dense class="mt-1">
-                <v-col cols="12" sm="4" md="3">
-                  <v-text-field
-                    :model-value="row.inputCacheHitPrice"
-                    :label="t('addChannel.inputCacheHitPriceLabel')"
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { inputCacheHitPrice: $event })"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4" md="3">
-                  <v-text-field
-                    :model-value="row.inputCacheMissPrice"
-                    :label="t('addChannel.inputCacheMissPriceLabel')"
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { inputCacheMissPrice: $event })"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4" md="3">
-                  <v-text-field
-                    :model-value="row.outputPrice"
-                    :label="t('addChannel.outputPriceLabel')"
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    @update:model-value="updateRow(index, { outputPrice: $event })"
-                  />
-                </v-col>
-                <v-col cols="12" md="3" class="d-flex align-center text-caption text-medium-emphasis">
-                  {{ t('addChannel.modelPricingUnitHint') }}
-                </v-col>
-              </v-row>
-              <div v-if="row.source === 'builtin' && row.matchedPattern" class="text-caption text-primary mt-1 px-1">
-                {{ t('addChannel.modelCapabilityBuiltinMatched', { pattern: row.matchedPattern }) }}
+
+              <div class="capability-card-body pa-3">
+                <div class="capability-main">
+                  <v-row dense>
+                    <v-col cols="12">
+                      <v-combobox
+                        :model-value="row.model"
+                        :items="targetModelOptions"
+                        item-title="title"
+                        item-value="value"
+                        :no-data-text="modelListNoDataText"
+                        :loading="fetchingModels"
+                        :label="t('addChannel.modelCapabilityModelLabel')"
+                        placeholder="actual-model"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        clearable
+                        eager
+                        class="font-mono"
+                        @focus="$emit('sync-upstream')"
+                        @update:model-value="updateModel(index, $event)"
+                        @update:menu="$emit('menu-update', $event)"
+                      />
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field
+                        :model-value="row.contextWindowTokens"
+                        :label="t('addChannel.contextTokensShort')"
+                        type="number"
+                        min="0"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { contextWindowTokens: $event })"
+                      />
+                      <div v-if="formatTokenMeta(row.contextWindowTokens)" class="field-meta">
+                        {{ formatTokenMeta(row.contextWindowTokens) }}
+                      </div>
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field
+                        :model-value="row.maxOutputTokens"
+                        :label="t('addChannel.outputTokensShort')"
+                        type="number"
+                        min="0"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { maxOutputTokens: $event })"
+                      />
+                      <div v-if="formatTokenMeta(row.maxOutputTokens)" class="field-meta">
+                        {{ formatTokenMeta(row.maxOutputTokens) }}
+                      </div>
+                    </v-col>
+                    <v-col cols="12" sm="6">
+                      <v-combobox
+                        :model-value="row.thinkingMode"
+                        :items="thinkingModeOptions"
+                        :label="t('addChannel.thinkingModeLabel')"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        clearable
+                        eager
+                        @update:model-value="updateRow(index, { thinkingMode: normalizeSelectableString($event) })"
+                        @update:menu="$emit('menu-update', $event)"
+                      />
+                    </v-col>
+                    <v-col cols="12" sm="6">
+                      <v-combobox
+                        :model-value="reasoningEffortsToList(row.reasoningEffortsText)"
+                        :items="reasoningEffortOptions"
+                        :label="t('addChannel.reasoningEffortsLabel')"
+                        placeholder="high, max"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        multiple
+                        chips
+                        closable-chips
+                        clearable
+                        eager
+                        @update:model-value="updateReasoningEfforts(index, $event)"
+                        @update:menu="$emit('menu-update', $event)"
+                      />
+                    </v-col>
+                  </v-row>
+
+                  <div v-if="row.description" class="text-caption text-medium-emphasis mt-2">
+                    {{ row.description }}
+                  </div>
+                  <div
+                    v-if="row.defaultOutputTokens || row.recommendedOutputTokens"
+                    class="text-caption text-medium-emphasis mt-1"
+                  >
+                    <span v-if="row.defaultOutputTokens">
+                      {{ t('addChannel.defaultOutputTokensMeta', { tokens: formatTokens(row.defaultOutputTokens) }) }}
+                    </span>
+                    <span v-if="row.defaultOutputTokens && row.recommendedOutputTokens"> · </span>
+                    <span v-if="row.recommendedOutputTokens">
+                      {{ t('addChannel.recommendedOutputTokensMeta', { tokens: formatTokens(row.recommendedOutputTokens) }) }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="pricing-panel rounded-lg pa-3">
+                  <div class="d-flex align-center justify-space-between ga-2 mb-2">
+                    <div class="d-flex align-center ga-1 text-caption font-weight-bold">
+                      <v-icon size="14" color="primary">mdi-cash-multiple</v-icon>
+                      <span>{{ t('addChannel.pricingTitle') }}</span>
+                    </div>
+                    <span class="text-caption text-medium-emphasis">{{ pricingUnitLabel(row) }}</span>
+                  </div>
+                  <v-row dense>
+                    <v-col cols="6">
+                      <v-text-field
+                        :model-value="row.pricingCurrency"
+                        :label="t('addChannel.pricingCurrencyLabel')"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { pricingCurrency: String($event || '') })"
+                      />
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field
+                        :model-value="row.pricingUnit"
+                        :label="t('addChannel.pricingUnitLabel')"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { pricingUnit: String($event || '') })"
+                      />
+                    </v-col>
+                    <v-col cols="12">
+                      <v-text-field
+                        :model-value="row.inputCacheHitPrice"
+                        :label="t('addChannel.inputCacheHitPriceLabel')"
+                        type="number"
+                        min="0"
+                        step="0.000001"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { inputCacheHitPrice: $event })"
+                      />
+                    </v-col>
+                    <v-col cols="12">
+                      <v-text-field
+                        :model-value="row.inputCacheMissPrice"
+                        :label="t('addChannel.inputCacheMissPriceLabel')"
+                        type="number"
+                        min="0"
+                        step="0.000001"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { inputCacheMissPrice: $event })"
+                      />
+                    </v-col>
+                    <v-col cols="12">
+                      <v-text-field
+                        :model-value="row.outputPrice"
+                        :label="t('addChannel.outputPriceLabel')"
+                        type="number"
+                        min="0"
+                        step="0.000001"
+                        variant="outlined"
+                        density="compact"
+                        hide-details
+                        @update:model-value="updateRow(index, { outputPrice: $event })"
+                      />
+                    </v-col>
+                  </v-row>
+                </div>
               </div>
             </div>
           </div>
 
           <div class="add-capability-row d-flex align-center ga-3 pa-3 mt-3 rounded-lg">
             <v-combobox
-              v-model="newModel"
+              :model-value="newModel"
               :items="targetModelOptions"
+              item-title="title"
+              item-value="value"
+              :no-data-text="modelListNoDataText"
               :loading="fetchingModels"
               :label="t('addChannel.modelCapabilityModelLabel')"
               :placeholder="t('addChannel.modelCapabilityModelPlaceholder')"
@@ -232,6 +274,7 @@
               eager
               class="flex-grow-1 font-mono"
               @focus="$emit('sync-upstream')"
+              @update:model-value="handleNewModelUpdate"
               @update:menu="$emit('menu-update', $event)"
               @keyup.enter="addRow"
             />
@@ -256,17 +299,6 @@
           {{ fetchModelsError }}
         </div>
 
-        <v-switch
-          :model-value="allowUnknownContext"
-          :label="t('addChannel.allowUnknownContextLabel')"
-          :hint="t('addChannel.allowUnknownContextHint')"
-          color="primary"
-          inset
-          persistent-hint
-          hide-details="auto"
-          class="mt-2"
-          @update:model-value="$emit('update:allowUnknownContext', !!$event)"
-        />
       </v-card-text>
     </v-card>
   </div>
@@ -289,19 +321,14 @@ type ModelOptionValue = string | { title: string; value: string } | null
 const props = defineProps<{
   rows: ModelCapabilityRow[]
   targetModelOptions: Array<{ title: string; value: string }>
+  mappedTargetModels: string[]
   fetchingModels: boolean
   fetchModelsError: string
   error: string
-  defaultContextWindowTokens: string | number | null
-  defaultMaxOutputTokens: string | number | null
-  allowUnknownContext: boolean
 }>()
 
 const emit = defineEmits<{
   'update:rows': [ModelCapabilityRow[]]
-  'update:defaultContextWindowTokens': [value: string | number | null]
-  'update:defaultMaxOutputTokens': [value: string | number | null]
-  'update:allowUnknownContext': [value: boolean]
   'sync-upstream': []
   'menu-update': [open: boolean]
 }>()
@@ -309,12 +336,40 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const newModel = ref<ModelOptionValue>('')
 const thinkingModeOptions = ['thinking', 'extended', 'adaptive', 'adaptive_only', 'adaptive_always_on']
+const reasoningEffortOptions = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
 const newModelName = computed(() => normalizeSelectableString(newModel.value).trim())
+const modelListNoDataText = computed(() => props.fetchModelsError || t('addChannel.modelListEmptyHint'))
 
 function formatTokens(value?: number) {
   if (!value) return ''
   if (value >= 1000 && value % 1000 === 0) return `${value / 1000}k`
   return value.toLocaleString()
+}
+
+function formatTokenMeta(value: ModelCapabilityRow['contextWindowTokens']) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return ''
+  const formatted = numericValue.toLocaleString()
+  if (numericValue >= 1000000 && numericValue % 1000000 === 0) {
+    return `${formatted} (${numericValue / 1000000}M)`
+  }
+  if (numericValue >= 1000 && numericValue % 1000 === 0) {
+    return `${formatted} (${numericValue / 1000}K)`
+  }
+  return formatted
+}
+
+function pricingUnitLabel(row: ModelCapabilityRow) {
+  const currency = row.pricingCurrency.trim() || 'USD'
+  const unit = row.pricingUnit.trim()
+  if (unit.includes('1m')) return `${currency} / 1M tokens`
+  if (unit.includes('1k')) return `${currency} / 1K tokens`
+  return unit ? `${currency} · ${unit}` : t('addChannel.modelPricingUnitHint')
+}
+
+function modelInitial(row: ModelCapabilityRow) {
+  const source = (row.displayName || row.model || '?').trim()
+  return source ? source.slice(0, 1).toUpperCase() : '?'
 }
 
 const nextRowId = () => Date.now() + Math.floor(Math.random() * 1000)
@@ -341,9 +396,34 @@ function updateModel(index: number, value: SelectableString) {
   })
 }
 
+function reasoningEffortsToList(value: string) {
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function updateReasoningEfforts(index: number, value: SelectableString[] | SelectableString) {
+  const values = Array.isArray(value) ? value : [value]
+  const seen = new Set<string>()
+  const reasoningEffortsText = values
+    .map(item => normalizeSelectableString(item).trim())
+    .filter(item => {
+      if (!item || seen.has(item)) return false
+      seen.add(item)
+      return true
+    })
+    .join(', ')
+  updateRow(index, { reasoningEffortsText })
+}
+
 function addRow() {
   const model = newModelName.value
   if (!model) return
+  if (props.rows.some(row => normalizeSelectableString(row.model).trim() === model)) {
+    newModel.value = ''
+    return
+  }
   const builtin = resolveBuiltinUpstreamModelCapability(model)
   const row = createModelCapabilityRow(
     nextRowId(),
@@ -354,6 +434,17 @@ function addRow() {
   )
   updateRows([...props.rows, row])
   newModel.value = ''
+}
+
+function handleNewModelUpdate(value: ModelOptionValue) {
+  newModel.value = value
+  const model = normalizeSelectableString(value).trim()
+  const selectedKnownModel = props.targetModelOptions.some(option => (
+    option.value.trim().toLowerCase() === model.toLowerCase()
+  ))
+  if (selectedKnownModel) {
+    addRow()
+  }
 }
 
 function removeRow(index: number) {
@@ -376,9 +467,54 @@ function removeRow(index: number) {
   border: 1px solid rgba(var(--v-border-color), 0.08);
 }
 
-.capability-item {
+.capability-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), 0.12);
+}
+
+.capability-card-header {
+  background: rgba(var(--v-border-color), 0.035);
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.08);
+}
+
+.capability-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.45fr);
+  gap: 16px;
+}
+
+.pricing-panel {
+  background: rgba(var(--v-theme-primary), 0.035);
+  border: 1px solid rgba(var(--v-theme-primary), 0.1);
+}
+
+.model-avatar {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.12);
+  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  border-radius: 999px;
+  color: rgb(var(--v-theme-primary));
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.preset-chip {
+  max-width: 240px;
+}
+
+.field-meta {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 0.72rem;
+  line-height: 1rem;
+  margin-top: 4px;
+}
+
+.min-width-0 {
+  min-width: 0;
 }
 
 .add-capability-row {
@@ -390,5 +526,11 @@ function removeRow(index: number) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .capability-card-body {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

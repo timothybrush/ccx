@@ -128,10 +128,8 @@
               <div v-if="props.channelType !== 'images'" class="mt-6">
                 <ModelCapabilitySection
                   v-model:rows="form.modelCapabilityRows"
-                  v-model:default-context-window-tokens="form.defaultContextWindowTokens"
-                  v-model:default-max-output-tokens="form.defaultMaxOutputTokens"
-                  v-model:allow-unknown-context="form.allowUnknownContext"
                   :target-model-options="targetModelOptions"
+                  :mapped-target-models="mappedTargetModels"
                   :fetching-models="fetchingModels"
                   :fetch-models-error="fetchModelsError"
                   :error="modelCapabilitiesError"
@@ -227,9 +225,11 @@ import { buildExpectedRequestUrls } from '../utils/expectedRequestUrls'
 import { supportsAdvancedChannelOptions, supportsReasoningMapping } from '../utils/channelAdvancedOptions'
 import {
   buildChannelPayload,
+  createModelCapabilityRow,
   modelCapabilitiesToRows,
   modelCapabilityRowsToRecord,
   normalizeSelectableString,
+  resolveBuiltinUpstreamModelCapability,
   type ModelCapabilityRow,
 } from '../utils/channelPayload'
 import { maskApiKey } from '../utils/apiKeyMask'
@@ -662,10 +662,10 @@ const claudeChannelPresets: Record<
     noVisionModels: [],
     visionFallbackModel: '',
     modelMapping: {
-      fable: 'MiniMax-M3',
-      haiku: 'MiniMax-M2.7',
-      opus: 'MiniMax-M3',
-      sonnet: 'MiniMax-M3'
+      fable: 'minimax-m3',
+      haiku: 'minimax-m2.7',
+      opus: 'minimax-m3',
+      sonnet: 'minimax-m3'
     }
   }
 }
@@ -746,9 +746,9 @@ const codexResponsesChannelPresets: Record<
   },
   minimax: {
     modelMapping: {
-      codex: 'MiniMax-M2.7',
-      gpt: 'MiniMax-M3',
-      mini: 'MiniMax-M2.7'
+      codex: 'minimax-m2.7',
+      gpt: 'minimax-m3',
+      mini: 'minimax-m2.7'
     },
     reasoningMapping: {},
     reasoningParamStyle: 'reasoning',
@@ -1020,6 +1020,16 @@ let capabilityRowIdCounter = 0
 const nextCapabilityRowId = () => ++capabilityRowIdCounter
 
 const hasNoVisionRows = computed(() => modelMappingRows.value.some(row => row.noVision && row.target.trim()))
+const mappedTargetModels = computed(() => {
+  const seen = new Set<string>()
+  return modelMappingRows.value
+    .map(row => normalizeSelectableString(row.target).trim())
+    .filter(model => {
+      if (!model || seen.has(model)) return false
+      seen.add(model)
+      return true
+    })
+})
 
 // 模型映射编辑状态（已废弃，保留以防需要恢复）
 const editingMapping = ref<string | null>(null)
@@ -1118,9 +1128,9 @@ const commonTargetModelPresets = [
   'kimi-k2.7-code-highspeed',
   'kimi-k2.6',
   'kimi-k2.5',
-  'MiniMax-M3',
-  'MiniMax-M2.5',
-  'MiniMax-M2.1',
+  'minimax-m3',
+  'minimax-m2.5',
+  'minimax-m2.1',
   'mimo-v2.5',
   'mimo-v2.5-pro',
   'mimo-v2-flash',
@@ -1134,12 +1144,21 @@ const commonTargetModelPresets = [
 // 目标模型列表（从上游获取，未拉取前合并常用预置候选）
 const targetModelOptions = ref<Array<{ title: string; value: string }>>([])
 const mergeTargetModelOptions = (models: string[]) => {
-  const allModels = new Set<string>([
+  const byLowercaseModel = new Map<string, string>()
+  for (const model of [
     ...targetModelOptions.value.map(opt => opt.value),
     ...commonTargetModelPresets,
     ...models,
-  ])
-  targetModelOptions.value = sortModelNamesDesc(Array.from(allModels)).map(id => ({ title: id, value: id }))
+  ]) {
+    const trimmed = String(model || '').trim()
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    const existing = byLowercaseModel.get(key)
+    if (!existing || trimmed === key) {
+      byLowercaseModel.set(key, trimmed)
+    }
+  }
+  targetModelOptions.value = sortModelNamesDesc(Array.from(byLowercaseModel.values())).map(id => ({ title: id, value: id }))
 }
 mergeTargetModelOptions([])
 const fetchingModels = ref(false)
@@ -1281,6 +1300,28 @@ const modelCapabilitiesError = computed(() => {
     ? t('addChannel.modelCapabilitiesRowsInvalid')
     : ''
 })
+
+const syncModelCapabilitiesFromMapping = () => {
+  const existingModels = new Set(
+    form.modelCapabilityRows
+      .map(row => normalizeSelectableString(row.model).trim())
+      .filter(Boolean)
+  )
+  const rowsToAdd = mappedTargetModels.value
+    .filter(model => !existingModels.has(model))
+    .map(model => {
+      const builtin = resolveBuiltinUpstreamModelCapability(model)
+      return createModelCapabilityRow(
+        nextCapabilityRowId(),
+        model,
+        builtin?.capability,
+        builtin ? 'builtin' : 'custom',
+        builtin?.pattern || '',
+      )
+    })
+  if (!rowsToAdd.length) return
+  form.modelCapabilityRows = [...form.modelCapabilityRows, ...rowsToAdd]
+}
 
 // 动态header样式
 const headerClasses = computed(() => {
@@ -2293,6 +2334,13 @@ watch(
     }, 200)
   },
   { immediate: true }
+)
+
+watch(
+  mappedTargetModels,
+  () => {
+    syncModelCapabilitiesFromMapping()
+  }
 )
 
 watch(
