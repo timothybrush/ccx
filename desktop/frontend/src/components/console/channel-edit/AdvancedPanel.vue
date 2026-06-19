@@ -5,16 +5,10 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Clock, Globe, ShieldCheck, Zap } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
-import type { ModelCapabilityRow } from '@/utils/channel-payload'
-import ModelCapabilityPanel from './ModelCapabilityPanel.vue'
 
 interface FormData {
   fastMode: boolean
   modelCapabilitiesText: string
-  modelCapabilityRows: ModelCapabilityRow[]
-  defaultContextWindowTokens: string | number
-  defaultMaxOutputTokens: string | number
-  allowUnknownContext: boolean
   historicalImageTurnLimit: number
   insecureSkipVerify: boolean
   passbackReasoningContent: boolean
@@ -47,21 +41,14 @@ interface FormData {
 defineProps<{
   form: FormData
   channelType: string
-  modelCapabilitiesError?: string
   supportsOpenAIAdvancedOptions: boolean
   supportsChatRoleNormalization: boolean
   reasoningParamStyleOptions: Array<{ label: string; value: string }>
   textVerbosityOptions: Array<{ label: string; value: string }>
-  modelCapabilityRows: ModelCapabilityRow[]
-  targetModels: string[]
-  fetchingModels: boolean
-  fetchModelsError: string
 }>()
 
 const emit = defineEmits<{
   'update:form': [value: Partial<FormData>]
-  'update:model-capability-rows': [rows: ModelCapabilityRow[]]
-  'sync-upstream-models': []
 }>()
 
 const { t, tf } = useLanguage()
@@ -104,23 +91,6 @@ function updateTextVerbosity(value: string) {
         <Switch :model-value="form.lowQuality" @update:model-value="updateField('lowQuality', $event)" />
       </div>
     </div>
-
-    <ModelCapabilityPanel
-      v-if="channelType !== 'images'"
-      :rows="modelCapabilityRows"
-      :target-models="targetModels"
-      :fetching-models="fetchingModels"
-      :fetch-models-error="fetchModelsError"
-      :error="modelCapabilitiesError || ''"
-      :default-context-window-tokens="form.defaultContextWindowTokens"
-      :default-max-output-tokens="form.defaultMaxOutputTokens"
-      :allow-unknown-context="form.allowUnknownContext"
-      @update:rows="emit('update:model-capability-rows', $event)"
-      @update:default-context-window-tokens="(val) => updateField('defaultContextWindowTokens', val)"
-      @update:default-max-output-tokens="(val) => updateField('defaultMaxOutputTokens', val)"
-      @update:allow-unknown-context="(val) => updateField('allowUnknownContext', val)"
-      @sync-upstream-models="emit('sync-upstream-models')"
-    />
 
     <div class="space-y-2.5">
       <!-- Runtime 运行期策略 -->

@@ -322,8 +322,6 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
   const modelCapabilities = form.modelCapabilityRows
     ? modelCapabilityRowsToRecord(form.modelCapabilityRows)
     : parseModelCapabilitiesText(form.modelCapabilitiesText)
-  const defaultContextWindowTokens = Number(form.defaultContextWindowTokens)
-  const defaultMaxOutputTokens = Number(form.defaultMaxOutputTokens)
 
   const channelData: Omit<Channel, 'index' | 'latency' | 'status'> = {
     name: form.name.trim(),
@@ -341,7 +339,7 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
     modelMapping: form.modelMapping,
     modelCapabilities: modelCapabilities || {},
     defaultCapability: {},
-    allowUnknownContext: !!form.allowUnknownContext,
+    allowUnknownContext: false,
     reasoningMapping: advancedOptions.reasoningMapping,
     reasoningParamStyle: advancedOptions.reasoningParamStyle,
     textVerbosity: advancedOptions.textVerbosity,
@@ -365,13 +363,6 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
     visionFallbackModel: typeof form.visionFallbackModel === 'object' && form.visionFallbackModel !== null
       ? (form.visionFallbackModel as unknown as { value: string }).value || ''
       : form.visionFallbackModel || '',
-  }
-
-  if (Number.isInteger(defaultContextWindowTokens) && defaultContextWindowTokens > 0) {
-    channelData.defaultCapability!.contextWindowTokens = defaultContextWindowTokens
-  }
-  if (Number.isInteger(defaultMaxOutputTokens) && defaultMaxOutputTokens > 0) {
-    channelData.defaultCapability!.maxOutputTokens = defaultMaxOutputTokens
   }
 
   if (deduplicatedUrls.length > 1) {

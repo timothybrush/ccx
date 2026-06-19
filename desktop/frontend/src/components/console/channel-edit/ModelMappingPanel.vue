@@ -67,6 +67,7 @@ const { t } = useLanguage()
 const hasNoVisionRows = computed(() => props.modelMappingRows.some(row => row.noVision && row.target.trim()))
 const isSupportedModelSelected = (filter: string) => props.selectedSupportedModelSet.has(filter)
 const stableInputFocusClass = 'focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary/60 focus-visible:shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.2)]'
+const isSameModel = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 function toSelectValue(effort: ReasoningEffort | ''): string {
   return effort === '' ? props.DEFAULT_SELECT_VALUE : effort
@@ -213,7 +214,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
                 :key="model"
                 type="button"
                 class="flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                :class="model === row.target ? 'bg-primary/10 text-primary' : ''"
+                :class="isSameModel(model, row.target) ? 'bg-primary/10 text-primary' : ''"
                 @mousedown.prevent="emit('selectTargetModel', `row-${index}`, model)"
               >
                 {{ model }}
@@ -289,7 +290,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
                 :key="model"
                 type="button"
                 class="flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                :class="model === visionFallbackModel ? 'bg-primary/10 text-primary' : ''"
+                :class="isSameModel(model, visionFallbackModel) ? 'bg-primary/10 text-primary' : ''"
                 @mousedown.prevent="emit('update:visionFallbackModel', model); emit('hideTargetDropdown')"
               >
                 {{ model }}
@@ -367,7 +368,7 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
               :key="model"
               type="button"
               class="flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-              :class="model === newModelMapping.target ? 'bg-primary/10 text-primary' : ''"
+              :class="isSameModel(model, newModelMapping.target) ? 'bg-primary/10 text-primary' : ''"
               @mousedown.prevent="emit('selectTargetModel', 'new', model)"
             >
               {{ model }}

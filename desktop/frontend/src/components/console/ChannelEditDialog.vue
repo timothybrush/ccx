@@ -10,8 +10,10 @@ import { useLanguage } from '@/composables/useLanguage'
 import { AdminApiError } from '@/composables/useAdminApi'
 import {
   buildChannelPayload,
+  createModelCapabilityRow,
   modelCapabilitiesToRows,
   modelCapabilityRowsToRecord,
+  resolveBuiltinUpstreamModelCapability,
   type ModelCapabilityRow,
 } from '@/utils/channel-payload'
 import { supportsAdvancedChannelOptions, supportsReasoningMapping } from '@/utils/channel-advanced-options'
@@ -31,6 +33,7 @@ import QuickCreatePanel from './channel-edit/QuickCreatePanel.vue'
 import BasicConfigPanel from './channel-edit/BasicConfigPanel.vue'
 import AuthPanel from './channel-edit/AuthPanel.vue'
 import ModelMappingPanel from './channel-edit/ModelMappingPanel.vue'
+import ModelCapabilityPanel from './channel-edit/ModelCapabilityPanel.vue'
 import AdvancedPanel from './channel-edit/AdvancedPanel.vue'
 import CustomHeadersPanel from './channel-edit/CustomHeadersPanel.vue'
 import StreamTimeoutPanel from './channel-edit/StreamTimeoutPanel.vue'
@@ -136,6 +139,16 @@ function updateActiveSectionFromScroll() {
 }
 const modelMappingRows = ref<ModelMappingRow[]>([])
 const modelCapabilityRows = ref<ModelCapabilityRow[]>([])
+const mappedTargetModels = computed(() => {
+  const seen = new Set<string>()
+  return modelMappingRows.value
+    .map(row => row.target.trim())
+    .filter(model => {
+      if (!model || seen.has(model)) return false
+      seen.add(model)
+      return true
+    })
+})
 const newModelMapping = reactive<ModelMappingRow>({ id: 0, source: '', target: '', reasoning: '', noVision: false })
 const headerRows = ref<HeaderRow[]>([])
 const newHeader = reactive<HeaderRow>({ id: 0, key: '', value: '' })
@@ -152,7 +165,7 @@ function getFilteredTargetModels(filter: string): string[] {
 
   const lower = value.toLowerCase()
   const exactIndex = models.findIndex(m => m.toLowerCase() === lower)
-  if (exactIndex >= 0) return getTargetModelWindow(exactIndex)
+  if (exactIndex >= 0 && models[exactIndex] !== value) return []
 
   const filtered = models.filter(m => m.toLowerCase().includes(lower))
   if (filtered.length === 1) {
@@ -589,9 +602,6 @@ function buildSubmitPayload() {
         apiKeys: getSubmitApiKeys(),
         modelMapping: parseJsonObject<Record<string, string>>(form.modelMappingText, 'Model mapping'),
         modelCapabilityRows: modelCapabilityRows.value,
-        defaultContextWindowTokens: form.defaultContextWindowTokens,
-        defaultMaxOutputTokens: form.defaultMaxOutputTokens,
-        allowUnknownContext: form.allowUnknownContext,
         reasoningMapping: parseJsonObject<Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>>(form.reasoningMappingText, 'Reasoning mapping'),
         reasoningParamStyle: form.reasoningParamStyle,
         textVerbosity: form.textVerbosity,
@@ -921,14 +931,14 @@ const claudeChannelPresets: Record<string, {
     normalizeSystemRoleToTopLevel: false,
     noVision: false,
     noVisionModels: ['glm-5.2', 'deepseek-v4-flash'],
-    visionFallbackModel: 'MiniMax-M2.7',
+    visionFallbackModel: 'minimax-m2.7',
   },
   minimax: {
     mapping: [
-      { source: 'fable', target: 'MiniMax-M3' },
-      { source: 'opus', target: 'MiniMax-M3' },
-      { source: 'sonnet', target: 'MiniMax-M3' },
-      { source: 'haiku', target: 'MiniMax-M2.7' },
+      { source: 'fable', target: 'minimax-m3' },
+      { source: 'opus', target: 'minimax-m3' },
+      { source: 'sonnet', target: 'minimax-m3' },
+      { source: 'haiku', target: 'minimax-m2.7' },
     ],
     passbackReasoningContent: true,
     passbackThinkingBlocks: false,
@@ -997,13 +1007,13 @@ const codexResponsesPresets: Record<string, {
     normalizeNonstandardChatRoles: true,
     noVision: false,
     noVisionModels: ['glm-5.2', 'deepseek-v4-flash'],
-    visionFallbackModel: 'MiniMax-M2.7',
+    visionFallbackModel: 'minimax-m2.7',
   },
   minimax: {
     mapping: [
-      { source: 'codex', target: 'MiniMax-M2.7' },
-      { source: 'gpt', target: 'MiniMax-M3' },
-      { source: 'mini', target: 'MiniMax-M2.7' },
+      { source: 'codex', target: 'minimax-m2.7' },
+      { source: 'gpt', target: 'minimax-m3' },
+      { source: 'mini', target: 'minimax-m2.7' },
     ],
     reasoningParamStyle: '',
     codexNativeToolPassthrough: true,
@@ -1257,9 +1267,9 @@ const commonTargetModelPresets = [
   'kimi-k2.7-code-highspeed',
   'kimi-k2.6',
   'kimi-k2.5',
-  'MiniMax-M3',
-  'MiniMax-M2.5',
-  'MiniMax-M2.1',
+  'minimax-m3',
+  'minimax-m2.5',
+  'minimax-m2.1',
   'mimo-v2.5',
   'mimo-v2.5-pro',
   'mimo-v2-flash',
@@ -1271,8 +1281,17 @@ const commonTargetModelPresets = [
 ]
 
 const targetModelDatalist = computed(() => {
-  const allModels = new Set([...targetModelOptions.value, ...commonTargetModelPresets])
-  return Array.from(allModels).sort()
+  const byLowercaseModel = new Map<string, string>()
+  for (const model of [...targetModelOptions.value, ...commonTargetModelPresets]) {
+    const trimmed = String(model || '').trim()
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    const existing = byLowercaseModel.get(key)
+    if (!existing || trimmed === key) {
+      byLowercaseModel.set(key, trimmed)
+    }
+  }
+  return Array.from(byLowercaseModel.values()).sort((a, b) => a.localeCompare(b))
 })
 
 const commonSupportedModelFilters = ['claude-*', 'gpt-5*', 'gpt-image-2', 'grok-4*', 'gemini-3*', '!*image*']
@@ -1415,13 +1434,25 @@ async function fetchTargetModels() {
         return []
       }
     }))
-    const allModels = new Set<string>(targetModelOptions.value)
+    const byLowercaseModel = new Map<string, string>()
+    for (const model of targetModelOptions.value) {
+      const trimmed = model.trim()
+      if (trimmed) byLowercaseModel.set(trimmed.toLowerCase(), trimmed)
+    }
     results
       .flat()
       .map((m: any) => m.id || m.name || String(m))
       .filter(Boolean)
-      .forEach(model => allModels.add(model))
-    targetModelOptions.value = Array.from(allModels).sort()
+      .forEach(model => {
+        const trimmed = String(model).trim()
+        if (!trimmed) return
+        const key = trimmed.toLowerCase()
+        const existing = byLowercaseModel.get(key)
+        if (!existing || trimmed === key) {
+          byLowercaseModel.set(key, trimmed)
+        }
+      })
+    targetModelOptions.value = Array.from(byLowercaseModel.values()).sort((a, b) => a.localeCompare(b))
     showTargetSuggestions.value = !!activeTargetInputId.value && targetModelDatalist.value.length > 0
 
     const allFailed = keys.every(key => {
@@ -1554,6 +1585,32 @@ function updateModelCapabilityRows(rows: ModelCapabilityRow[]) {
   form.modelCapabilityRows = rows
 }
 
+function syncModelCapabilitiesFromMapping() {
+  const existingModels = new Set(
+    modelCapabilityRows.value
+      .map(row => row.model.trim())
+      .filter(Boolean)
+  )
+  const rowsToAdd = mappedTargetModels.value
+    .filter(model => !existingModels.has(model))
+    .map(model => {
+      const builtin = resolveBuiltinUpstreamModelCapability(model)
+      return createModelCapabilityRow(
+        ++rowId,
+        model,
+        builtin?.capability,
+        builtin ? 'builtin' : 'custom',
+        builtin?.pattern || '',
+      )
+    })
+  if (!rowsToAdd.length) return
+  updateModelCapabilityRows([...modelCapabilityRows.value, ...rowsToAdd])
+}
+
+watch(mappedTargetModels, () => {
+  syncModelCapabilitiesFromMapping()
+})
+
 // ── Custom Headers 行操作 ──
 
 function headerRowsFromChannel(ch: Channel) {
@@ -1621,9 +1678,6 @@ function buildCurrentPayload() {
     apiKeys: getSubmitApiKeys(),
     modelMapping,
     modelCapabilityRows: modelCapabilityRows.value,
-    defaultContextWindowTokens: form.defaultContextWindowTokens,
-    defaultMaxOutputTokens: form.defaultMaxOutputTokens,
-    allowUnknownContext: form.allowUnknownContext,
     reasoningMapping,
     reasoningParamStyle: form.reasoningParamStyle,
     textVerbosity: form.textVerbosity,
@@ -1799,6 +1853,18 @@ void toggleSupportedModelFilter
                         @handle-target-focus="handleTargetFocus"
                         @append-supported-model-filter="toggleSupportedModelFilter"
                       />
+                      <ModelCapabilityPanel
+                        v-if="channelType !== 'images'"
+                        class="mt-6"
+                        :rows="modelCapabilityRows"
+                        :target-models="targetModelDatalist"
+                        :mapped-target-models="mappedTargetModels"
+                        :fetching-models="fetchingModels"
+                        :fetch-models-error="fetchedModelsError"
+                        :error="errors.modelCapabilitiesText"
+                        @update:rows="updateModelCapabilityRows"
+                        @sync-upstream-models="syncUpstreamModels"
+                      />
                     </section>
 
                     <!-- Section: 认证管理 -->
@@ -1828,18 +1894,11 @@ void toggleSupportedModelFilter
                       <AdvancedPanel
                         :form="form"
                         :channel-type="channelType"
-                        :model-capabilities-error="errors.modelCapabilitiesText"
-                        :model-capability-rows="modelCapabilityRows"
-                        :target-models="targetModelDatalist"
-                        :fetching-models="fetchingModels"
-                        :fetch-models-error="fetchedModelsError"
                         :supports-open-a-i-advanced-options="supportsOpenAIAdvancedOptions"
                         :supports-chat-role-normalization="supportsChatRoleNormalization"
                         :reasoning-param-style-options="reasoningParamStyleOptions"
                         :text-verbosity-options="textVerbosityOptions"
                         @update:form="(updates) => Object.assign(form, updates)"
-                        @update:model-capability-rows="updateModelCapabilityRows"
-                        @sync-upstream-models="syncUpstreamModels"
                       />
                     </section>
 
