@@ -761,18 +761,30 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 		},
 		ProviderOpenCodeZen: {
 			ModelMapping: map[string]string{
-				"fable":  "glm-5.1",
-				"haiku":  "glm-5.1",
-				"opus":   "glm-5.1",
-				"sonnet": "glm-5.1",
+				"fable":  "glm-5.2",
+				"haiku":  "deepseek-v4-flash",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
+			},
+			ReasoningMapping: map[string]string{
+				"fable":  "max",
+				"haiku":  "high",
+				"opus":   "max",
+				"sonnet": "max",
 			},
 		},
 		ProviderOpenCodeGo: {
 			ModelMapping: map[string]string{
-				"fable":  "glm-5.1",
-				"haiku":  "glm-5.1",
-				"opus":   "glm-5.1",
-				"sonnet": "glm-5.1",
+				"fable":  "glm-5.2",
+				"haiku":  "deepseek-v4-flash",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
+			},
+			ReasoningMapping: map[string]string{
+				"fable":  "max",
+				"haiku":  "high",
+				"opus":   "max",
+				"sonnet": "max",
 			},
 		},
 		ProviderModelScope: {
@@ -915,10 +927,28 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			},
 		},
 		ProviderOpenCodeZen: {
-			ModelMapping: map[string]string{"codex": "glm-5.1", "gpt": "glm-5.1"},
+			ModelMapping: map[string]string{
+				"codex": "deepseek-v4-flash",
+				"gpt":   "glm-5.2",
+				"mini":  "deepseek-v4-flash",
+			},
+			ReasoningMapping: map[string]string{
+				"codex": "high",
+				"gpt":   "max",
+				"mini":  "high",
+			},
 		},
 		ProviderOpenCodeGo: {
-			ModelMapping: map[string]string{"codex": "glm-5.1", "gpt": "glm-5.1"},
+			ModelMapping: map[string]string{
+				"codex": "deepseek-v4-flash",
+				"gpt":   "glm-5.2",
+				"mini":  "deepseek-v4-flash",
+			},
+			ReasoningMapping: map[string]string{
+				"codex": "high",
+				"gpt":   "max",
+				"mini":  "high",
+			},
 		},
 		ProviderKimi: {
 			ModelMapping: map[string]string{"codex": "kimi-k2.6", "gpt": "kimi-k2.6"},

@@ -331,6 +331,42 @@ func TestBuildPayload(t *testing.T) {
 			},
 		},
 		{
+			name:        "opencode zen messages",
+			req:         CreateChannelRequest{Provider: ProviderOpenCodeZen, Target: TargetMessages, APIKey: "sk-test"},
+			wantBaseURL: "https://opencode.ai/zen/v1/messages",
+			wantService: "claude",
+			wantModelMap: map[string]string{
+				"fable":  "glm-5.2",
+				"haiku":  "deepseek-v4-flash",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
+			},
+			wantReasoning: map[string]string{
+				"fable":  "max",
+				"haiku":  "high",
+				"opus":   "max",
+				"sonnet": "max",
+			},
+		},
+		{
+			name:        "opencode go messages",
+			req:         CreateChannelRequest{Provider: ProviderOpenCodeGo, Target: TargetMessages, APIKey: "sk-test"},
+			wantBaseURL: "https://opencode.ai/zen/go/v1/messages",
+			wantService: "claude",
+			wantModelMap: map[string]string{
+				"fable":  "glm-5.2",
+				"haiku":  "deepseek-v4-flash",
+				"opus":   "glm-5.2",
+				"sonnet": "glm-5.2",
+			},
+			wantReasoning: map[string]string{
+				"fable":  "max",
+				"haiku":  "high",
+				"opus":   "max",
+				"sonnet": "max",
+			},
+		},
+		{
 			name:          "opencode zen chat",
 			req:           CreateChannelRequest{Provider: ProviderOpenCodeZen, Target: TargetChat, APIKey: "sk-test"},
 			wantBaseURL:   "https://opencode.ai/zen/v1",
@@ -351,7 +387,8 @@ func TestBuildPayload(t *testing.T) {
 			wantService:    "openai",
 			wantCodex:      true,
 			wantStripCodex: true,
-			wantModelMap:   map[string]string{"codex": "glm-5.1", "gpt": "glm-5.1"},
+			wantModelMap:   map[string]string{"codex": "deepseek-v4-flash", "gpt": "glm-5.2", "mini": "deepseek-v4-flash"},
+			wantReasoning:  map[string]string{"codex": "high", "gpt": "max", "mini": "high"},
 		},
 		{
 			name:           "opencode go responses",
@@ -360,7 +397,8 @@ func TestBuildPayload(t *testing.T) {
 			wantService:    "openai",
 			wantCodex:      true,
 			wantStripCodex: true,
-			wantModelMap:   map[string]string{"codex": "glm-5.1", "gpt": "glm-5.1"},
+			wantModelMap:   map[string]string{"codex": "deepseek-v4-flash", "gpt": "glm-5.2", "mini": "deepseek-v4-flash"},
+			wantReasoning:  map[string]string{"codex": "high", "gpt": "max", "mini": "high"},
 		},
 		{
 			name:           "kimi responses auto-review redirect",
