@@ -73,6 +73,10 @@ func HandleMultiChannelFailoverWithContextRequirement(
 	failedChannels := make(map[int]bool)
 	var lastError error
 	var lastFailoverError *FailoverError
+	hasImageContent := false
+	if body := GetEffectiveRequestBody(c, nil); len(body) > 0 {
+		hasImageContent = HasImageContent(c, body)
+	}
 
 	maxChannelAttempts := channelScheduler.GetActiveChannelCount(kind)
 
@@ -96,6 +100,7 @@ func HandleMultiChannelFailoverWithContextRequirement(
 			RoutePrefix:        c.Param("routePrefix"),
 			ChannelName:        c.GetHeader("X-Channel"),
 			ContextRequirement: contextRequirement,
+			HasImageContent:    hasImageContent,
 		})
 		if err != nil {
 			lastError = err

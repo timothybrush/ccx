@@ -7,6 +7,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/metrics"
+	"github.com/BenedictKing/ccx/internal/ratelimit"
 )
 
 func TestDeleteChannelMetrics_SharedMetricsKeyPreserved(t *testing.T) {
@@ -502,5 +503,269 @@ func TestAffinitySkipsRuntimeCooldownChannel(t *testing.T) {
 	}
 	if result.ChannelIndex != 1 {
 		t.Fatalf("期望跳过 cooldown 亲和渠道并选择 index=1，实际为 index=%d", result.ChannelIndex)
+	}
+}
+
+func TestSelectChannelSoftShiftsNewSessionsAtHalfRateLimit(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:                   "primary-channel",
+				BaseURL:                "https://primary.example.com",
+				APIKeys:                []string{"sk-primary"},
+				Status:                 "active",
+				Priority:               1,
+				RateLimitRPM:           4,
+				RateLimitWindowMinutes: 1,
+			},
+			{
+				Name:     "next-channel",
+				BaseURL:  "https://next.example.com",
+				APIKeys:  []string{"sk-next"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	limiter := scheduler.GetRateLimitManager().GetOrCreate("Messages", 0, ratelimit.Config{
+		RPM:           4,
+		WindowSeconds: 60,
+	})
+	now := time.Now()
+	for i := 0; i < 2; i++ {
+		release, err := limiter.Acquire(context.Background(), time.Millisecond, now)
+		if err != nil {
+			t.Fatalf("预置限速窗口失败: %v", err)
+		}
+		release()
+	}
+
+	result, err := scheduler.SelectChannel(context.Background(), "new-user", map[int]bool{}, ChannelKindMessages, "", "", "")
+	if err != nil {
+		t.Fatalf("选择渠道失败: %v", err)
+	}
+	if result.ChannelIndex != 1 {
+		t.Fatalf("期望新会话在主渠道达到 50%% 后选择 index=1，实际为 index=%d", result.ChannelIndex)
+	}
+	if result.Reason != "priority_order" {
+		t.Fatalf("期望选择原因为 priority_order，实际为 %s", result.Reason)
+	}
+}
+
+func TestRateLimitSoftSheddingRequiresSustainedLowWater(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:     "primary-channel",
+				BaseURL:  "https://primary.example.com",
+				APIKeys:  []string{"sk-primary"},
+				Status:   "active",
+				Priority: 1,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	limiter := scheduler.GetRateLimitManager().GetOrCreate("Messages", 0, ratelimit.Config{
+		MaxConcurrent: 10,
+	})
+	base := time.Now()
+	releases := make([]func(), 0, 5)
+	for i := 0; i < 5; i++ {
+		release, err := limiter.Acquire(context.Background(), time.Millisecond, base)
+		if err != nil {
+			t.Fatalf("预置并发水位失败: %v", err)
+		}
+		releases = append(releases, release)
+	}
+
+	deferred, ratio := scheduler.ShouldDeferForRateLimit(ChannelKindMessages, 0, "", ratelimit.Config{}, base)
+	if !deferred || ratio < rateLimitLoadShedHighWatermark {
+		t.Fatalf("期望 50%% 水位进入软分流，deferred=%v ratio=%.2f", deferred, ratio)
+	}
+
+	for _, release := range releases {
+		release()
+	}
+
+	deferred, ratio = scheduler.ShouldDeferForRateLimit(ChannelKindMessages, 0, "", ratelimit.Config{}, base.Add(time.Second))
+	if !deferred || ratio >= rateLimitLoadShedLowWatermark {
+		t.Fatalf("期望低水位未满 5 分钟仍保持软分流，deferred=%v ratio=%.2f", deferred, ratio)
+	}
+
+	deferred, ratio = scheduler.ShouldDeferForRateLimit(ChannelKindMessages, 0, "", ratelimit.Config{}, base.Add(5*time.Minute+2*time.Second))
+	if deferred || ratio >= rateLimitLoadShedLowWatermark {
+		t.Fatalf("期望低水位持续 5 分钟后恢复，deferred=%v ratio=%.2f", deferred, ratio)
+	}
+}
+
+func TestTextRequestReservesVisionChannelDuringSoftShedding(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:         "deepseek-text",
+				BaseURL:      "https://deepseek.example.com",
+				APIKeys:      []string{"sk-text"},
+				Status:       "active",
+				Priority:     1,
+				NoVision:     true,
+				RateLimitRPM: 10,
+			},
+			{
+				Name:     "minimax-vision",
+				BaseURL:  "https://minimax.example.com",
+				APIKeys:  []string{"sk-vision"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	limiter := scheduler.GetRateLimitManager().GetOrCreate("Messages", 0, ratelimit.Config{
+		RPM:           10,
+		WindowSeconds: 60,
+	})
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		release, err := limiter.Acquire(context.Background(), time.Millisecond, now)
+		if err != nil {
+			t.Fatalf("预置限速窗口失败: %v", err)
+		}
+		release()
+	}
+
+	result, err := scheduler.SelectChannelWithOptions(context.Background(), SelectionOptions{
+		UserID:          "text-user",
+		FailedChannels:  map[int]bool{},
+		Kind:            ChannelKindMessages,
+		HasImageContent: false,
+	})
+	if err != nil {
+		t.Fatalf("选择渠道失败: %v", err)
+	}
+	if result.ChannelIndex != 0 {
+		t.Fatalf("期望文本请求在 50%% 水位继续使用文本渠道 index=0，实际为 index=%d", result.ChannelIndex)
+	}
+	if result.Reason != "rate_limit_pressure" {
+		t.Fatalf("期望选择原因为 rate_limit_pressure，实际为 %s", result.Reason)
+	}
+}
+
+func TestTextRequestUsesVisionChannelAfterReserveWatermark(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:         "deepseek-text",
+				BaseURL:      "https://deepseek.example.com",
+				APIKeys:      []string{"sk-text"},
+				Status:       "active",
+				Priority:     1,
+				NoVision:     true,
+				RateLimitRPM: 10,
+			},
+			{
+				Name:     "minimax-vision",
+				BaseURL:  "https://minimax.example.com",
+				APIKeys:  []string{"sk-vision"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	limiter := scheduler.GetRateLimitManager().GetOrCreate("Messages", 0, ratelimit.Config{
+		RPM:           10,
+		WindowSeconds: 60,
+	})
+	now := time.Now()
+	for i := 0; i < 8; i++ {
+		release, err := limiter.Acquire(context.Background(), time.Millisecond, now)
+		if err != nil {
+			t.Fatalf("预置限速窗口失败: %v", err)
+		}
+		release()
+	}
+
+	result, err := scheduler.SelectChannelWithOptions(context.Background(), SelectionOptions{
+		UserID:          "text-user",
+		FailedChannels:  map[int]bool{},
+		Kind:            ChannelKindMessages,
+		HasImageContent: false,
+	})
+	if err != nil {
+		t.Fatalf("选择渠道失败: %v", err)
+	}
+	if result.ChannelIndex != 1 {
+		t.Fatalf("期望文本渠道达到 80%% 后可使用视觉渠道 index=1，实际为 index=%d", result.ChannelIndex)
+	}
+	if result.Reason != "priority_order" {
+		t.Fatalf("期望选择原因为 priority_order，实际为 %s", result.Reason)
+	}
+}
+
+func TestImageRequestCanUseVisionChannelDuringSoftShedding(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:         "deepseek-text",
+				BaseURL:      "https://deepseek.example.com",
+				APIKeys:      []string{"sk-text"},
+				Status:       "active",
+				Priority:     1,
+				NoVision:     true,
+				RateLimitRPM: 10,
+			},
+			{
+				Name:     "minimax-vision",
+				BaseURL:  "https://minimax.example.com",
+				APIKeys:  []string{"sk-vision"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	limiter := scheduler.GetRateLimitManager().GetOrCreate("Messages", 0, ratelimit.Config{
+		RPM:           10,
+		WindowSeconds: 60,
+	})
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		release, err := limiter.Acquire(context.Background(), time.Millisecond, now)
+		if err != nil {
+			t.Fatalf("预置限速窗口失败: %v", err)
+		}
+		release()
+	}
+
+	result, err := scheduler.SelectChannelWithOptions(context.Background(), SelectionOptions{
+		UserID:          "vision-user",
+		FailedChannels:  map[int]bool{},
+		Kind:            ChannelKindMessages,
+		HasImageContent: true,
+	})
+	if err != nil {
+		t.Fatalf("选择渠道失败: %v", err)
+	}
+	if result.ChannelIndex != 1 {
+		t.Fatalf("期望含图请求可使用视觉渠道 index=1，实际为 index=%d", result.ChannelIndex)
+	}
+	if result.Reason != "priority_order" {
+		t.Fatalf("期望选择原因为 priority_order，实际为 %s", result.Reason)
 	}
 }

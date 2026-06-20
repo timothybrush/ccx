@@ -10,8 +10,29 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/conversation"
+	"github.com/BenedictKing/ccx/internal/keypool"
 	"github.com/BenedictKing/ccx/internal/metrics"
+	"github.com/BenedictKing/ccx/internal/ratelimit"
 )
+
+const (
+	rateLimitLoadShedHighWatermark  = 0.50
+	rateLimitLoadShedLowWatermark   = 0.30
+	rateLimitVisionReserveWatermark = 0.80
+	rateLimitLoadShedRecovery       = 5 * time.Minute
+)
+
+type rateLimitLoadShedState struct {
+	shedding bool
+	lowSince time.Time
+}
+
+type softSkippedChannel struct {
+	channel  ChannelInfo
+	upstream *config.UpstreamConfig
+	ratio    float64
+	scope    string
+}
 
 func (s *ChannelScheduler) SelectChannel(
 	ctx context.Context,
@@ -178,7 +199,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	if userID != "" {
 		compositeKey := traceAffinityKey(kind, userID, opts.ContextRequirement)
 		if preferredIdx, ok := s.traceAffinity.GetPreferredChannel(compositeKey); ok {
-			bestPriority := s.findBestAvailableChannelPriority(activeChannels, failedChannels, kind)
+			bestPriority := s.findBestAvailableChannelPriority(activeChannels, failedChannels, kind, model)
 			for _, ch := range activeChannels {
 				if ch.Index == preferredIdx && !failedChannels[preferredIdx] {
 					// 检查渠道状态：只有 active 状态才使用亲和性
@@ -206,6 +227,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	}
 
 	// 2. 按优先级遍历活跃渠道
+	softSkipped := make([]softSkippedChannel, 0)
 	for _, ch := range activeChannels {
 		// 跳过本次请求已经失败的渠道
 		if failedChannels[ch.Index] {
@@ -244,9 +266,39 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			continue
 		}
 
+		if deferred, ratio, scope := s.channelRateLimitSoftDeferred(upstream, kind, ch.Index, model, time.Now()); deferred {
+			prefix := kindSchedulerLogPrefix(kind)
+			log.Printf("[%s-RateLimit] 软跳过高水位渠道: [%d] %s scope=%s usage=%.0f%% (high=%.0f%%, recover<%.0f%%/%s)",
+				prefix, ch.Index, upstream.Name, scope, ratio*100, rateLimitLoadShedHighWatermark*100, rateLimitLoadShedLowWatermark*100, rateLimitLoadShedRecovery)
+			softSkipped = append(softSkipped, softSkippedChannel{
+				channel:  ch,
+				upstream: upstream,
+				ratio:    ratio,
+				scope:    scope,
+			})
+			continue
+		}
+
+		if shouldReserveVisionChannelForText(kind, opts.HasImageContent, upstream, softSkipped) {
+			prefix := kindSchedulerLogPrefix(kind)
+			log.Printf("[%s-Vision] 文本请求保留可识图渠道: [%d] %s (待普通文本渠道水位 >= %.0f%% 后再作为溢出池)",
+				prefix, ch.Index, upstream.Name, rateLimitVisionReserveWatermark*100)
+			continue
+		}
+
 		prefix := kindSchedulerLogPrefix(kind)
 		log.Printf("[%s-Channel] 选择渠道: [%d] %s (优先级: %d)", prefix, ch.Index, upstream.Name, ch.Priority)
 		return s.selectionResult(kind, upstream, ch.Index, "priority_order"), nil
+	}
+
+	for _, skipped := range softSkipped {
+		if skipped.upstream == nil || !s.channelIsRuntimeAvailable(skipped.upstream, kind, skipped.channel.Index) {
+			continue
+		}
+		prefix := kindSchedulerLogPrefix(kind)
+		log.Printf("[%s-RateLimit] 所有低水位候选不可用，回退选择高水位渠道: [%d] %s scope=%s usage=%.0f%%",
+			prefix, skipped.channel.Index, skipped.upstream.Name, skipped.scope, skipped.ratio*100)
+		return s.selectionResult(kind, skipped.upstream, skipped.channel.Index, "rate_limit_pressure"), nil
 	}
 
 	// 3. 所有健康渠道都失败，选择失败率最低的作为降级
@@ -271,6 +323,143 @@ func (s *ChannelScheduler) channelInRuntimeCooldown(kind ChannelKind, channelInd
 	}
 	inCooldown, _ := limiter.InCooldown(time.Now())
 	return inCooldown
+}
+
+// ShouldDeferForRateLimit 判断指定渠道或 key/quota scope 是否应因高水位暂缓新请求。
+func (s *ChannelScheduler) ShouldDeferForRateLimit(kind ChannelKind, channelIndex int, scope string, cfg ratelimit.Config, now time.Time) (bool, float64) {
+	if s == nil || s.rateLimitManager == nil {
+		return false, 0
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	apiType := kindAPIType(kind)
+	limiter := s.rateLimitManager.Get(apiType, channelIndex)
+	if scope != "" {
+		limiter = s.rateLimitManager.GetOrCreateScoped(apiType, channelIndex, scope, cfg)
+	}
+	if limiter == nil {
+		return false, 0
+	}
+
+	status := limiter.Status(now)
+	if status.InCooldown {
+		return true, 1
+	}
+	if status.MaxRequests <= 0 && status.MaxConcurrent <= 0 {
+		s.clearRateLimitLoadShed(apiType, channelIndex, scope)
+		return false, 0
+	}
+
+	ratio := status.Utilization()
+	key := rateLimitLoadShedKey(apiType, channelIndex, scope)
+
+	s.loadShedMu.Lock()
+	defer s.loadShedMu.Unlock()
+	if s.loadShedStates == nil {
+		s.loadShedStates = make(map[string]rateLimitLoadShedState)
+	}
+
+	state := s.loadShedStates[key]
+	if ratio >= rateLimitLoadShedHighWatermark {
+		state.shedding = true
+		state.lowSince = time.Time{}
+		s.loadShedStates[key] = state
+		return true, ratio
+	}
+
+	if !state.shedding {
+		delete(s.loadShedStates, key)
+		return false, ratio
+	}
+
+	if ratio < rateLimitLoadShedLowWatermark {
+		if state.lowSince.IsZero() {
+			state.lowSince = now
+			s.loadShedStates[key] = state
+			return true, ratio
+		}
+		if now.Sub(state.lowSince) >= rateLimitLoadShedRecovery {
+			delete(s.loadShedStates, key)
+			return false, ratio
+		}
+		s.loadShedStates[key] = state
+		return true, ratio
+	}
+
+	state.lowSince = time.Time{}
+	s.loadShedStates[key] = state
+	return true, ratio
+}
+
+func (s *ChannelScheduler) clearRateLimitLoadShed(apiType string, channelIndex int, scope string) {
+	if s == nil {
+		return
+	}
+	key := rateLimitLoadShedKey(apiType, channelIndex, scope)
+	s.loadShedMu.Lock()
+	defer s.loadShedMu.Unlock()
+	delete(s.loadShedStates, key)
+}
+
+func rateLimitLoadShedKey(apiType string, channelIndex int, scope string) string {
+	if scope == "" {
+		scope = "channel"
+	}
+	return fmt.Sprintf("%s:%d:%s", apiType, channelIndex, scope)
+}
+
+func (s *ChannelScheduler) channelRateLimitSoftDeferred(upstream *config.UpstreamConfig, kind ChannelKind, channelIndex int, model string, now time.Time) (bool, float64, string) {
+	if upstream == nil || s == nil || s.rateLimitManager == nil {
+		return false, 0, ""
+	}
+
+	if deferred, ratio := s.ShouldDeferForRateLimit(kind, channelIndex, "", ratelimit.Config{}, now); deferred {
+		return true, ratio, "channel"
+	}
+
+	if !keypool.HasEffectiveConfig(upstream) {
+		return false, 0, ""
+	}
+
+	candidates := keypool.CandidatesForModel(upstream, nil, model)
+	if len(candidates) == 0 {
+		return false, 0, ""
+	}
+
+	maxRatio := 0.0
+	maxScope := ""
+	for _, candidate := range candidates {
+		cfg := keypool.ConfigForCandidate(*upstream, candidate.Config)
+		deferred, ratio := s.ShouldDeferForRateLimit(kind, channelIndex, candidate.Scope, cfg, now)
+		if ratio > maxRatio {
+			maxRatio = ratio
+			maxScope = candidate.Scope
+		}
+		if !deferred {
+			return false, ratio, candidate.Scope
+		}
+	}
+	if maxScope == "" {
+		maxScope = "key"
+	}
+	return true, maxRatio, maxScope
+}
+
+func shouldReserveVisionChannelForText(kind ChannelKind, hasImageContent bool, upstream *config.UpstreamConfig, softSkipped []softSkippedChannel) bool {
+	if kind == ChannelKindImages || hasImageContent || upstream == nil || upstream.NoVision {
+		return false
+	}
+	for _, skipped := range softSkipped {
+		if skipped.upstream == nil || !skipped.upstream.NoVision {
+			continue
+		}
+		if skipped.ratio < rateLimitVisionReserveWatermark {
+			return true
+		}
+	}
+	return false
 }
 
 // MarkChannelCooldown 将渠道置入短期冷却，后续调度会暂时跳过该渠道。
@@ -639,6 +828,7 @@ func (s *ChannelScheduler) findBestAvailableChannelPriority(
 	activeChannels []ChannelInfo,
 	failedChannels map[int]bool,
 	kind ChannelKind,
+	model string,
 ) int {
 	bestPriority := -1
 
@@ -652,6 +842,9 @@ func (s *ChannelScheduler) findBestAvailableChannelPriority(
 			continue
 		}
 		if !s.channelIsRuntimeAvailable(upstream, kind, ch.Index) {
+			continue
+		}
+		if deferred, _, _ := s.channelRateLimitSoftDeferred(upstream, kind, ch.Index, model, time.Now()); deferred {
 			continue
 		}
 

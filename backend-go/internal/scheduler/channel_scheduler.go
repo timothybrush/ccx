@@ -31,6 +31,8 @@ type ChannelScheduler struct {
 	conversationTracker      *conversation.ConversationTracker
 	overrideManager          *conversation.OverrideManager
 	rateLimitManager         *ratelimit.Manager
+	loadShedMu               sync.Mutex
+	loadShedStates           map[string]rateLimitLoadShedState
 	lastSelectedMu           sync.RWMutex
 	lastSelectedChannels     map[ChannelKind]int
 }
@@ -74,6 +76,7 @@ func NewChannelScheduler(
 		chatChannelLogStore:      metrics.NewChannelLogStore(),
 		imagesChannelLogStore:    metrics.NewChannelLogStore(),
 		conversationTracker:      nil,
+		loadShedStates:           make(map[string]rateLimitLoadShedState),
 		lastSelectedChannels:     make(map[ChannelKind]int),
 	}
 }

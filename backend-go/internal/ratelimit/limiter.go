@@ -337,3 +337,18 @@ type LimiterStatus struct {
 
 	AutoFromHeaders bool
 }
+
+// Utilization 返回当前限速器的最大使用率：请求窗口使用率与并发使用率取较大值。
+func (s LimiterStatus) Utilization() float64 {
+	utilization := 0.0
+	if s.MaxRequests > 0 {
+		utilization = float64(s.WindowSize) / float64(s.MaxRequests)
+	}
+	if s.MaxConcurrent > 0 {
+		concurrentUtilization := float64(s.ActiveRequests) / float64(s.MaxConcurrent)
+		if concurrentUtilization > utilization {
+			utilization = concurrentUtilization
+		}
+	}
+	return utilization
+}

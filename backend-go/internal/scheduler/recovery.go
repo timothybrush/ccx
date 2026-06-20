@@ -53,6 +53,7 @@ type SelectionOptions struct {
 	RoutePrefix        string
 	ChannelName        string
 	ContextRequirement *ContextRequirement
+	HasImageContent    bool
 }
 
 func (s *ChannelScheduler) selectionResult(kind ChannelKind, upstream *config.UpstreamConfig, channelIndex int, reason string) *SelectionResult {

@@ -22,7 +22,11 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-const upstreamAccountPoolCooldown = time.Minute
+const (
+	upstreamAccountPoolCooldown = time.Minute
+	halfOpenProbeWaitTimeout    = 5 * time.Second
+	halfOpenProbePollInterval   = 100 * time.Millisecond
+)
 
 // isClientSideError 判断错误是否由客户端明确取消（不应计入渠道失败）
 // 仅识别 context.Canceled，broken pipe/connection reset 视为连接故障需要 failover
@@ -198,7 +202,7 @@ func TryUpstreamWithAllKeys(
 			RestoreRequestBody(c, attemptBody)
 			c.Set("requestBodyBytes", attemptBody)
 
-			selection, apiKey, err := selectAttemptAPIKey(upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey)
+			selection, apiKey, err := selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey)
 			if err != nil {
 				lastError = err
 				break // 当前 BaseURL 没有可用 Key，尝试下一个 BaseURL
@@ -214,12 +218,22 @@ func TryUpstreamWithAllKeys(
 			if circuitState == metrics.CircuitStateHalfOpen {
 				probeKey := currentBaseURL + "|" + apiKey
 				if !metricsManager.TryAcquireProbe(currentBaseURL, apiKey, metricsServiceType) {
-					failedKeys[apiKey] = true
-					RequestLogf(c, "[%s-Circuit] 跳过 half-open 探针已占用的 Key: %s", apiType, utils.MaskAPIKey(apiKey))
-					continue
+					RequestLogf(c, "[%s-Circuit] half-open 探针已占用，等待 Key 恢复: %s", apiType, utils.MaskAPIKey(apiKey))
+					acquired, state := waitForHalfOpenProbe(c.Request.Context(), metricsManager, currentBaseURL, apiKey, metricsServiceType)
+					if acquired {
+						probeAcquired[probeKey] = true
+						RequestLogf(c, "[%s-Circuit] 等待后取得 half-open 探针 Key: %s", apiType, utils.MaskAPIKey(apiKey))
+					} else if state == metrics.CircuitStateClosed {
+						RequestLogf(c, "[%s-Circuit] half-open 探针已由其他请求恢复，继续使用 Key: %s", apiType, utils.MaskAPIKey(apiKey))
+					} else {
+						failedKeys[apiKey] = true
+						RequestLogf(c, "[%s-Circuit] half-open 探针等待超时或已熔断，暂时跳过 Key: %s", apiType, utils.MaskAPIKey(apiKey))
+						continue
+					}
+				} else {
+					probeAcquired[probeKey] = true
+					RequestLogf(c, "[%s-Circuit] 使用 half-open 探针 Key: %s", apiType, utils.MaskAPIKey(apiKey))
 				}
-				probeAcquired[probeKey] = true
-				RequestLogf(c, "[%s-Circuit] 使用 half-open 探针 Key: %s", apiType, utils.MaskAPIKey(apiKey))
 			}
 
 			if envCfg.ShouldLog("info") {
@@ -517,7 +531,36 @@ func BuildDefaultURLResults(urls []string) []warmup.URLLatencyResult {
 	return results
 }
 
-func selectAttemptAPIKey(upstream *config.UpstreamConfig, failedKeys map[string]bool, failedQuotaGroups map[string]bool, model string, fallback NextAPIKeyFunc) (keypool.Selection, string, error) {
+func waitForHalfOpenProbe(ctx context.Context, metricsManager *metrics.MetricsManager, baseURL, apiKey, serviceType string) (bool, metrics.CircuitState) {
+	if metricsManager == nil {
+		return false, metrics.CircuitStateOpen
+	}
+
+	timer := time.NewTimer(halfOpenProbeWaitTimeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(halfOpenProbePollInterval)
+	defer ticker.Stop()
+
+	lastState := metrics.CircuitStateHalfOpen
+	for {
+		select {
+		case <-ctx.Done():
+			return false, lastState
+		case <-timer.C:
+			return false, lastState
+		case <-ticker.C:
+			lastState = metricsManager.GetKeyCircuitState(baseURL, apiKey, serviceType)
+			if lastState != metrics.CircuitStateHalfOpen {
+				return false, lastState
+			}
+			if metricsManager.TryAcquireProbe(baseURL, apiKey, serviceType) {
+				return true, metrics.CircuitStateHalfOpen
+			}
+		}
+	}
+}
+
+func selectAttemptAPIKey(channelScheduler *scheduler.ChannelScheduler, kind scheduler.ChannelKind, channelIndex int, upstream *config.UpstreamConfig, failedKeys map[string]bool, failedQuotaGroups map[string]bool, model string, fallback NextAPIKeyFunc) (keypool.Selection, string, error) {
 	if !keypool.HasEffectiveConfig(upstream) {
 		if fallback == nil {
 			return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
@@ -529,6 +572,7 @@ func selectAttemptAPIKey(upstream *config.UpstreamConfig, failedKeys map[string]
 		return keypool.Selection{APIKey: apiKey}, apiKey, nil
 	}
 
+	var deferred []keypool.Selection
 	for _, candidate := range keypool.CandidatesForModel(upstream, failedKeys, model) {
 		if candidate.QuotaGroup != "" && failedQuotaGroups[candidate.QuotaGroup] {
 			continue
@@ -541,7 +585,20 @@ func selectAttemptAPIKey(upstream *config.UpstreamConfig, failedKeys map[string]
 			LimiterScope:   candidate.Scope,
 			Config:         candidate.Config,
 		}
+		if channelScheduler != nil && selection.LimiterScope != "" {
+			cfg := keypool.ConfigForCandidate(*upstream, selection.Config)
+			deferForLoad, _ := channelScheduler.ShouldDeferForRateLimit(kind, channelIndex, selection.LimiterScope, cfg, time.Now())
+			if deferForLoad {
+				deferred = append(deferred, selection)
+				continue
+			}
+		}
 		return selection, candidate.APIKey, nil
+	}
+
+	if len(deferred) > 0 {
+		selection := deferred[0]
+		return selection, selection.APIKey, nil
 	}
 
 	return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
