@@ -47,7 +47,7 @@
                 <v-icon size="10">mdi-check</v-icon>
               </template>
               <template v-else-if="ch.index === nextChannel" #append>
-                <span class="next-label">| {{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}</span>
+                <span class="next-label">| {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}</span>
               </template>
             </v-chip>
           </template>
@@ -81,9 +81,9 @@
             <span class="seq-arrow">&rarr;</span>
             <span class="text-caption flex-grow-1 channel-name" @click.stop="handleMoveToTop(ch, i)">{{ ch.name }}</span>
             <v-chip v-if="ch.index === conversation.currentChannel" size="x-small" color="primary" variant="flat" class="mr-1">CURRENT</v-chip>
-            <v-chip v-else-if="ch.index === nextChannel" size="x-small" :color="nextChannelCircuitOpen ? 'error' : 'success'" variant="flat" class="mr-1">{{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}</v-chip>
-            <v-chip v-if="ch.status === 'suspended'" size="x-small" variant="flat" class="fused-chip mr-1">FUSED</v-chip>
-            <v-chip v-else-if="ch.circuitOpen" size="x-small" color="error" variant="tonal" class="mr-1">FUSED</v-chip>
+            <v-chip v-else-if="ch.index === nextChannel" size="x-small" :color="nextChannelCircuitOpen ? 'error' : 'success'" variant="flat" class="mr-1">{{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}</v-chip>
+            <v-chip v-if="ch.status === 'suspended'" size="x-small" variant="flat" class="fused-chip mr-1">PAUSED</v-chip>
+            <v-chip v-if="ch.circuitOpen" size="x-small" color="error" variant="tonal" class="mr-1">TRIPPED</v-chip>
             <v-btn icon size="x-small" variant="text" :disabled="i === channelSequence.length - 1" @click.stop="handleDemote(i)">
               <v-icon size="14">mdi-arrow-down</v-icon>
             </v-btn>

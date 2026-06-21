@@ -304,7 +304,7 @@ async function copyRawUserId() {
         <span class="truncate">{{ channel.name }}</span>
         <Check v-if="channel.index === conversation.currentChannel" class="h-2.5 w-2.5 shrink-0" />
         <span v-else-if="channel.index === nextChannel" class="next-label shrink-0">
-          | {{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}
+          | {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
         </span>
       </button>
       <button
@@ -366,7 +366,7 @@ async function copyRawUserId() {
             class="sequence-badge"
             :class="sequenceBadgeClass(channel)"
           >
-            {{ nextChannelCircuitOpen ? 'FUSED' : 'NEXT' }}
+            {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
           </span>
           <span
             v-if="channel.status === 'suspended'"
@@ -378,7 +378,7 @@ async function copyRawUserId() {
             v-if="channel.circuitOpen"
             class="sequence-badge bg-red-500 text-white"
           >
-            FUSED
+            TRIPPED
           </span>
           <Button
             variant="ghost"
