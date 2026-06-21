@@ -798,13 +798,22 @@ function setDuplicateKeyHighlight(index: number) {
 
 async function addNewApiKeys() {
   const lines = parseLines(newApiKeysText.value)
-  for (const k of lines) {
+  if (lines.length === 0) return
+
+  // 去重粘贴内容内部的重复
+  const uniqueLines = [...new Set(lines)]
+
+  // 预检全部 key：检查与 existingApiKeys 的重复（用去重后的列表）
+  for (const k of uniqueLines) {
     const duplicateIndex = findDuplicateKeyIndex(k)
     if (duplicateIndex !== -1) {
       error.value = t('addChannel.duplicateKey')
       setDuplicateKeyHighlight(duplicateIndex)
       return
     }
+  }
+  // 无重复，批量添加（去重后）
+  for (const k of uniqueLines) {
     existingApiKeys.value.push(k)
   }
   clearDuplicateKeyHighlight()

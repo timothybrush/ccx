@@ -734,7 +734,6 @@ const handleCopyToTab = async (targetProtocol: string, serviceProtocol = targetP
   }
 }
 
-
   return {
     showCapabilityTestDialog, capabilityTestChannelName, capabilityTestChannelId,
     capabilityTestChannelType, capabilityTestSourceTab, capabilityTestDialogRef,

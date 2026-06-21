@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### 修复
+
+- **驾驶舱暂停/熔断状态徽标区分** - 区分暂停与熔断状态 badge 并统一文案
+- **驾驶舱渠道选择交互** - 修复驾驶舱渠道选择交互问题
+- **渠道统计图表交互对齐** - 对齐渠道统计图表交互逻辑
+- **重复 Key 提示** - 添加重复 Key 时给出明确提示
+- **前端 ConversationCard 样式修复** - 修复 Web 端对话卡片展示问题
+- **驾驶舱 auto-resume 容错** - 设置 override 时自动恢复暂停/熔断渠道，resume 幂等容错避免与 setStatus 状态不一致
+- **批量添加 Key 预检** - 批量粘贴 Key 时预检全部重复项，避免遇到第一个重复即停止导致前面已添加的 key 丢失
+
 ### 变更
 
 - **内置模型预设匹配改用正则表达式** - builtin model registry 的 patterns 从简单通配符（`claude-opus-4-7*`）改为显式正则，精确控制前后边界，避免 `gpt-5.4-mini` 被 `gpt-5.4` 误吃、`glm-5.1` 被 `glm-5` 误吃等歧义；支持厂商前缀（`bedrock/claude-opus-4-7`、`xxx-claude-opus-4-7`）和日期版本号后缀（`-20260101`），同时拒绝 `claude-haiku-4-5-with-claude-opus-4-7-fallback` 这类异常组合名

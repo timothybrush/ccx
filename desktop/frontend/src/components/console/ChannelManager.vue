@@ -150,7 +150,11 @@ async function loadKeyMetrics(channelId: number, duration?: string) {
     }
     const apiPath = typeMap[props.type]
     const dur = duration || keyMetricsDuration.value
-    keyMetricsDuration.value = dur
+    // 只在 duration 真正变化时更新 ref，避免触发子组件 KeyTrendChart 的 props.duration watcher
+    // 产生 emit refresh → handleKeyMetricsRefresh → loadKeyMetrics 的 double-fetch 链式反应
+    if (keyMetricsDuration.value !== dur) {
+      keyMetricsDuration.value = dur
+    }
     const data = await adminApi.get<{ keys: KeyHistoryData[]; summary?: GlobalStatsSummary }>(
       `/api/${apiPath}/channels/${channelId}/keys/metrics/history?duration=${dur}`
     )

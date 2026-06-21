@@ -171,7 +171,13 @@ async function handleSetOverride(conversationId: string, sequence: ChannelSequen
       const channel = channelsByKind.value[channelType]?.find(item => item.index === target.channelIndex)
       if (channel?.status === 'suspended' || channel?.circuitOpen) {
         const typeApi = getChannelTypeApi(channelType)
-        await typeApi.resume(target.channelIndex)
+        try {
+          await typeApi.resume(target.channelIndex)
+        } catch {
+          // resume 可能已生效（幂等），继续尝试 setStatus
+        }
+        // setStatus 不包 try/catch——失败时阻止 setOverride 执行，
+        // 避免 override 指向仍处于暂停/熔断状态的渠道
         await typeApi.setStatus(target.channelIndex, 'active')
       }
     }
