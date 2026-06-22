@@ -27,7 +27,9 @@ import { getChannelTypeApi, type ManagedChannelType } from '@/utils/channel-type
 import { buildExpectedRequestUrls } from '@/utils/expected-request-urls'
 import { sortModelNamesDesc } from '@/utils/model-priority'
 import { parseQuickInput } from '@/utils/quick-input-parser'
+import { claudeMessagesPresets } from '@/generated/claude-messages-presets'
 import { codexResponsesPresets } from '@/generated/codex-responses-presets'
+import { openaiMessagesPresets } from '@/generated/openai-messages-presets'
 import type { Channel, DisabledKeyInfo } from '@/services/admin-api'
 import ChannelEditorHeader from './channel-edit/ChannelEditorHeader.vue'
 import QuickCreatePanel from './channel-edit/QuickCreatePanel.vue'
@@ -966,103 +968,8 @@ function removeModelMappingRow(id: number) {
 
 // ── 预设模板 ──
 
-type ModelMappingPresetEntry = { source: string; target: string; reasoning?: ModelMappingRow['reasoning'] }
-
-const modelMappingPresets: Record<string, { mapping: ModelMappingPresetEntry[]; fastMode?: boolean; textVerbosity?: string }> = {
-  'gpt-5.5': {
-    mapping: [
-      { source: 'fable', target: 'gpt-5.5', reasoning: 'xhigh' },
-      { source: 'opus', target: 'gpt-5.5', reasoning: 'xhigh' },
-      { source: 'sonnet', target: 'gpt-5.4', reasoning: 'xhigh' },
-      { source: 'haiku', target: 'gpt-5.4-mini', reasoning: 'high' },
-    ],
-    fastMode: true,
-    textVerbosity: 'medium',
-  },
-  'gpt-5.4': {
-    mapping: [
-      { source: 'fable', target: 'gpt-5.4', reasoning: 'xhigh' },
-      { source: 'opus', target: 'gpt-5.4', reasoning: 'xhigh' },
-      { source: 'sonnet', target: 'gpt-5.4', reasoning: 'xhigh' },
-      { source: 'haiku', target: 'gpt-5.4-mini', reasoning: 'high' },
-    ],
-    fastMode: true,
-    textVerbosity: 'medium',
-  },
-}
-
-type ClaudePresetEntry = { source: string; target: string }
-const claudeChannelPresets: Record<string, {
-  mapping: ClaudePresetEntry[]
-  passbackReasoningContent: boolean
-  passbackThinkingBlocks: boolean
-  stripEmptyTextBlocks: boolean
-  normalizeSystemRoleToTopLevel: boolean
-  noVision: boolean
-  noVisionModels: string[]
-  visionFallbackModel: string
-}> = {
-  mimo: {
-    mapping: [
-      { source: 'fable', target: 'mimo-v2.5-pro' },
-      { source: 'opus', target: 'mimo-v2.5-pro' },
-      { source: 'sonnet', target: 'mimo-v2.5-pro' },
-      { source: 'haiku', target: 'mimo-v2.5-pro' },
-    ],
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: false,
-    stripEmptyTextBlocks: false,
-    normalizeSystemRoleToTopLevel: false,
-    noVision: false,
-    noVisionModels: ['mimo-v2.5-pro'],
-    visionFallbackModel: 'mimo-v2.5',
-  },
-  deepseek: {
-    mapping: [
-      { source: 'fable', target: 'deepseek-v4-pro' },
-      { source: 'opus', target: 'deepseek-v4-pro' },
-      { source: 'sonnet', target: 'deepseek-v4-pro' },
-      { source: 'haiku', target: 'deepseek-v4-flash' },
-    ],
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: true,
-    stripEmptyTextBlocks: true,
-    normalizeSystemRoleToTopLevel: false,
-    noVision: true,
-    noVisionModels: [],
-    visionFallbackModel: '',
-  },
-  compshare: {
-    mapping: [
-      { source: 'fable', target: 'glm-5.2' },
-      { source: 'opus', target: 'glm-5.2' },
-      { source: 'sonnet', target: 'glm-5.2' },
-      { source: 'haiku', target: 'deepseek-v4-flash' },
-    ],
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: true,
-    stripEmptyTextBlocks: true,
-    normalizeSystemRoleToTopLevel: false,
-    noVision: false,
-    noVisionModels: ['glm-5.2', 'deepseek-v4-flash'],
-    visionFallbackModel: 'minimax-m2.7',
-  },
-  minimax: {
-    mapping: [
-      { source: 'fable', target: 'minimax-m3' },
-      { source: 'opus', target: 'minimax-m3' },
-      { source: 'sonnet', target: 'minimax-m3' },
-      { source: 'haiku', target: 'minimax-m2.7' },
-    ],
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: false,
-    stripEmptyTextBlocks: false,
-    normalizeSystemRoleToTopLevel: false,
-    noVision: true,
-    noVisionModels: [],
-    visionFallbackModel: '',
-  },
-}
+const modelMappingPresets = openaiMessagesPresets
+const claudeChannelPresets = claudeMessagesPresets
 
 const serviceTypeOptions = computed(() => {
   const all = [
@@ -1137,26 +1044,34 @@ function applyModelMappingPreset(name: string) {
   if (!preset) return
   // 仅 OpenAI/Responses 上游应用 reasoning 映射（对齐 WebUI）
   const applyReasoning = supportsOpenAIAdvanced.value
-  modelMappingRows.value = preset.mapping.map(m => ({
+  modelMappingRows.value = Object.entries(preset.modelMapping).map(([source, target]) => ({
     id: ++rowId,
-    source: m.source,
-    target: m.target,
-    reasoning: applyReasoning ? (m.reasoning || '') : '',
+    source,
+    target,
+    reasoning: applyReasoning ? (preset.reasoningMapping[source] || '') : '',
     noVision: false,
   }))
-  if (preset.fastMode !== undefined) form.fastMode = preset.fastMode
-  if (preset.textVerbosity !== undefined) form.textVerbosity = preset.textVerbosity as typeof form.textVerbosity
+  form.fastMode = preset.fastMode
+  form.textVerbosity = preset.textVerbosity as typeof form.textVerbosity
 }
 
 function applyClaudePreset(name: string) {
   const preset = claudeChannelPresets[name.toLowerCase()]
   if (!preset) return
   const noVisionSet = new Set(preset.noVisionModels)
-  modelMappingRows.value = preset.mapping.map(m => ({ id: ++rowId, source: m.source, target: m.target, reasoning: '', noVision: noVisionSet.has(m.target) }))
+  modelMappingRows.value = Object.entries(preset.modelMapping).map(([source, target]) => ({
+    id: ++rowId,
+    source,
+    target,
+    reasoning: preset.reasoningMapping[source] || '',
+    noVision: noVisionSet.has(target),
+  }))
+  form.reasoningParamStyle = preset.reasoningParamStyle as typeof form.reasoningParamStyle
   form.passbackReasoningContent = preset.passbackReasoningContent
   form.passbackThinkingBlocks = preset.passbackThinkingBlocks
   form.stripEmptyTextBlocks = preset.stripEmptyTextBlocks
   form.normalizeSystemRoleToTopLevel = preset.normalizeSystemRoleToTopLevel
+  form.stripImageGenerationTool = preset.stripImageGenerationTool
   form.noVision = preset.noVision
   form.visionFallbackModel = preset.visionFallbackModel
   form.visionFallbackReasoningEffort = ''

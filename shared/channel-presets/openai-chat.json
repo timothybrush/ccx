@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "providers": {
+    "deepseek": {
+      "reasoningParamStyle": "reasoning",
+      "noVision": true
+    },
+    "mimo": {
+      "reasoningParamStyle": "reasoning",
+      "noVisionModels": ["mimo-v2.5-pro"],
+      "visionFallbackModel": "mimo-v2.5",
+      "rateLimitRpm": 80
+    },
+    "compshare": {
+      "reasoningParamStyle": "reasoning",
+      "noVisionModels": ["glm-5.2", "deepseek-v4-flash"],
+      "visionFallbackModel": "MiniMax-M2.7"
+    },
+    "runapi": {},
+    "unity2": {},
+    "openrouter": {},
+    "modelscope": {
+      "normalizeNonstandardChatRoles": true
+    },
+    "minimax": {},
+    "dashscope": {},
+    "opencode-zen": {},
+    "opencode-go": {},
+    "volc-ark": {
+      "normalizeNonstandardChatRoles": true
+    },
+    "qianfan": {
+      "normalizeNonstandardChatRoles": true
+    },
+    "xfyun": {
+      "normalizeNonstandardChatRoles": true
+    }
+  }
+}

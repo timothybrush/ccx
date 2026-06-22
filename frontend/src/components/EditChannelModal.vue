@@ -238,7 +238,9 @@ import {
 } from '../utils/add-channel-modal-state'
 import { streamTimeoutPresets } from '../utils/streamTimeoutPresets'
 import { sortModelNamesDesc } from '../utils/modelPriority'
+import { claudeMessagesPresets } from '../generated/claudeMessagesPresets'
 import { codexResponsesPresets } from '../generated/codexResponsesPresets'
+import { openaiMessagesPresets } from '../generated/openaiMessagesPresets'
 import { useI18n } from '../i18n'
 
 // 子组件导入
@@ -542,48 +544,7 @@ const showMessagesOpenAIChannelPresets = computed(() => {
   return props.channelType === 'messages' && (form.serviceType === 'openai' || form.serviceType === 'responses')
 })
 
-const modelMappingPresets: Record<
-  'gpt-5.5' | 'gpt-5.4',
-  {
-    modelMapping: Record<string, string>
-    reasoningMapping: Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
-    fastMode: boolean
-    textVerbosity: 'low' | 'medium' | 'high'
-  }
-> = {
-  'gpt-5.5': {
-    modelMapping: {
-      fable: 'gpt-5.5',
-      opus: 'gpt-5.5',
-      sonnet: 'gpt-5.4',
-      haiku: 'gpt-5.4-mini'
-    },
-    reasoningMapping: {
-      fable: 'xhigh',
-      opus: 'xhigh',
-      sonnet: 'xhigh',
-      haiku: 'high'
-    },
-    fastMode: true,
-    textVerbosity: 'medium'
-  },
-  'gpt-5.4': {
-    modelMapping: {
-      fable: 'gpt-5.4',
-      opus: 'gpt-5.4',
-      sonnet: 'gpt-5.4',
-      haiku: 'gpt-5.4-mini'
-    },
-    reasoningMapping: {
-      fable: 'xhigh',
-      opus: 'xhigh',
-      sonnet: 'xhigh',
-      haiku: 'high'
-    },
-    fastMode: true,
-    textVerbosity: 'medium'
-  }
-}
+const modelMappingPresets = openaiMessagesPresets
 
 const applyModelMappingPreset = (preset: keyof typeof modelMappingPresets) => {
   const presetConfig = modelMappingPresets[preset]
@@ -592,7 +553,7 @@ const applyModelMappingPreset = (preset: keyof typeof modelMappingPresets) => {
   form.textVerbosity = presetConfig.textVerbosity
 
   if (supportsOpenAIAdvancedOptions.value) {
-    form.reasoningMapping = { ...presetConfig.reasoningMapping }
+    form.reasoningMapping = { ...presetConfig.reasoningMapping } as typeof form.reasoningMapping
   } else {
     form.reasoningMapping = {}
   }
@@ -606,69 +567,7 @@ const showClaudeChannelPresets = computed(() => {
     && (props.channelType === 'messages' || props.channelType === 'chat' || props.channelType === 'responses')
 })
 
-const claudeChannelPresets: Record<
-  'mimo' | 'deepseek' | 'minimax',
-  {
-    passbackReasoningContent: boolean
-    passbackThinkingBlocks: boolean
-    stripEmptyTextBlocks: boolean
-    normalizeSystemRoleToTopLevel: boolean
-    stripImageGenerationTool: boolean
-    noVision: boolean
-    noVisionModels: string[]
-    visionFallbackModel: string
-    modelMapping?: Record<string, string>
-  }
-> = {
-  mimo: {
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: false,
-    stripEmptyTextBlocks: false,
-    normalizeSystemRoleToTopLevel: false,
-    stripImageGenerationTool: false,
-    noVision: false,
-    noVisionModels: ['mimo-v2.5-pro'],
-    visionFallbackModel: 'mimo-v2.5',
-    modelMapping: {
-      fable: 'mimo-v2.5-pro',
-      haiku: 'mimo-v2.5-pro',
-      opus: 'mimo-v2.5-pro',
-      sonnet: 'mimo-v2.5-pro'
-    }
-  },
-  deepseek: {
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: true,
-    stripEmptyTextBlocks: true,
-    normalizeSystemRoleToTopLevel: false,
-    stripImageGenerationTool: true,
-    noVision: true,
-    noVisionModels: [],
-    visionFallbackModel: '',
-    modelMapping: {
-      fable: 'deepseek-v4-pro',
-      haiku: 'deepseek-v4-flash',
-      opus: 'deepseek-v4-pro',
-      sonnet: 'deepseek-v4-pro'
-    }
-  },
-  minimax: {
-    passbackReasoningContent: true,
-    passbackThinkingBlocks: false,
-    stripEmptyTextBlocks: false,
-    normalizeSystemRoleToTopLevel: false,
-    stripImageGenerationTool: false,
-    noVision: true,
-    noVisionModels: [],
-    visionFallbackModel: '',
-    modelMapping: {
-      fable: 'minimax-m3',
-      haiku: 'minimax-m2.7',
-      opus: 'minimax-m3',
-      sonnet: 'minimax-m3'
-    }
-  }
-}
+const claudeChannelPresets = claudeMessagesPresets
 
 const applyClaudeChannelPreset = (preset: keyof typeof claudeChannelPresets) => {
   const presetConfig = claudeChannelPresets[preset]
@@ -681,11 +580,10 @@ const applyClaudeChannelPreset = (preset: keyof typeof claudeChannelPresets) => 
   form.noVisionModels = [...presetConfig.noVisionModels]
   form.visionFallbackModel = presetConfig.visionFallbackModel
   form.visionFallbackReasoningEffort = ''
-  if (presetConfig.modelMapping) {
-    form.modelMapping = { ...presetConfig.modelMapping }
-    form.reasoningMapping = {}
-    syncModelMappingRowsFromForm()
-  }
+  form.modelMapping = { ...presetConfig.modelMapping }
+  form.reasoningMapping = { ...presetConfig.reasoningMapping } as typeof form.reasoningMapping
+  form.reasoningParamStyle = presetConfig.reasoningParamStyle as typeof form.reasoningParamStyle
+  syncModelMappingRowsFromForm()
 }
 
 // Codex Responses 转 OpenAI 兼容上游的一键预设（MiMo / DeepSeek）

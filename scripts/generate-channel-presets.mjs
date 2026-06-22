@@ -3,12 +3,25 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const sourcePath = join(root, 'shared/channel-presets/codex-responses.json')
-const source = JSON.parse(readFileSync(sourcePath, 'utf8'))
-
-const providers = source.providers || {}
 const reasoningEfforts = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
-const responseDefaults = {
+const textVerbosityValues = ['low', 'medium', 'high']
+
+const channelPresetDefaults = {
+  modelMapping: {},
+  reasoningMapping: {},
+  reasoningParamStyle: '',
+  passbackReasoningContent: false,
+  passbackThinkingBlocks: false,
+  stripEmptyTextBlocks: false,
+  normalizeSystemRoleToTopLevel: false,
+  stripImageGenerationTool: false,
+  normalizeNonstandardChatRoles: false,
+  noVision: false,
+  noVisionModels: [],
+  visionFallbackModel: '',
+}
+
+const codexResponsesDefaults = {
   modelMapping: {},
   reasoningMapping: {},
   reasoningParamStyle: '',
@@ -22,34 +35,128 @@ const responseDefaults = {
   visionFallbackModel: '',
 }
 
-function normalizedPreset(preset) {
-  return {
-    ...responseDefaults,
-    ...preset,
-    modelMapping: preset.modelMapping || {},
-    reasoningMapping: preset.reasoningMapping || {},
-    noVisionModels: preset.noVisionModels || [],
-  }
+const openaiMessagesDefaults = {
+  modelMapping: {},
+  reasoningMapping: {},
+  fastMode: false,
+  textVerbosity: 'medium',
+}
+
+const generatedSources = [
+  {
+    sourceFile: 'codex-responses.json',
+    kind: 'codexResponses',
+    collectionKey: 'providers',
+    defaults: codexResponsesDefaults,
+    exportName: 'codexResponsesPresets',
+    interfaceName: 'CodexResponsesPreset',
+    typePrefix: 'CodexResponses',
+    webTsPath: 'frontend/src/generated/codexResponsesPresets.ts',
+    desktopTsPath: 'desktop/frontend/src/generated/codex-responses-presets.ts',
+    goPath: 'desktop/internal/channelpreset/generated_codex_responses_presets.go',
+    goFunctionName: 'generatedCodexResponsesTargetConfigs',
+  },
+  {
+    sourceFile: 'claude-messages.json',
+    kind: 'channelTarget',
+    collectionKey: 'providers',
+    defaults: channelPresetDefaults,
+    exportName: 'claudeMessagesPresets',
+    interfaceName: 'ClaudeMessagesPreset',
+    typePrefix: 'ClaudeMessages',
+    webTsPath: 'frontend/src/generated/claudeMessagesPresets.ts',
+    desktopTsPath: 'desktop/frontend/src/generated/claude-messages-presets.ts',
+    goPath: 'desktop/internal/channelpreset/generated_claude_messages_presets.go',
+    goFunctionName: 'generatedClaudeMessagesTargetConfigs',
+  },
+  {
+    sourceFile: 'openai-chat.json',
+    kind: 'channelTarget',
+    collectionKey: 'providers',
+    defaults: channelPresetDefaults,
+    exportName: 'openaiChatPresets',
+    interfaceName: 'OpenAIChatPreset',
+    typePrefix: 'OpenAIChat',
+    webTsPath: 'frontend/src/generated/openaiChatPresets.ts',
+    desktopTsPath: 'desktop/frontend/src/generated/openai-chat-presets.ts',
+    goPath: 'desktop/internal/channelpreset/generated_openai_chat_presets.go',
+    goFunctionName: 'generatedOpenAIChatTargetConfigs',
+  },
+  {
+    sourceFile: 'openai-messages.json',
+    kind: 'mappingPreset',
+    collectionKey: 'presets',
+    defaults: openaiMessagesDefaults,
+    exportName: 'openaiMessagesPresets',
+    interfaceName: 'OpenAIMessagesPreset',
+    typePrefix: 'OpenAIMessages',
+    webTsPath: 'frontend/src/generated/openaiMessagesPresets.ts',
+    desktopTsPath: 'desktop/frontend/src/generated/openai-messages-presets.ts',
+  },
+]
+
+function readPresetSource(sourceFile) {
+  const sourcePath = join(root, 'shared/channel-presets', sourceFile)
+  return JSON.parse(readFileSync(sourcePath, 'utf8'))
 }
 
 function quote(value) {
   return JSON.stringify(value)
 }
 
-function formatTs() {
-  const normalized = Object.fromEntries(
-    Object.entries(providers).map(([provider, preset]) => [provider, normalizedPreset(preset)]),
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key)
+}
+
+function normalizedCollection(source, collectionKey, defaults) {
+  const collection = source[collectionKey] || {}
+  return Object.fromEntries(
+    Object.entries(collection).map(([name, preset]) => {
+      const normalized = { ...defaults, ...preset }
+      if (hasOwn(defaults, 'modelMapping') || hasOwn(preset, 'modelMapping')) {
+        normalized.modelMapping = preset.modelMapping || {}
+      }
+      if (hasOwn(defaults, 'reasoningMapping') || hasOwn(preset, 'reasoningMapping')) {
+        normalized.reasoningMapping = preset.reasoningMapping || {}
+      }
+      if (hasOwn(defaults, 'noVisionModels') || hasOwn(preset, 'noVisionModels')) {
+        normalized.noVisionModels = preset.noVisionModels || []
+      }
+      return [name, normalized]
+    }),
   )
+}
+
+function formatTs(config, source) {
+  const normalized = normalizedCollection(source, config.collectionKey, config.defaults)
   const json = JSON.stringify(normalized, null, 2)
-  return `// Code generated by scripts/generate-channel-presets.mjs; DO NOT EDIT.
+  if (config.kind === 'mappingPreset') {
+    return `// Code generated by scripts/generate-channel-presets.mjs; DO NOT EDIT.
 
-export type CodexResponsesReasoningEffort = ${reasoningEfforts.map(quote).join(' | ')}
-export type CodexResponsesReasoningParamStyle = '' | 'reasoning' | 'reasoning_effort' | 'thinking'
+export type ${config.typePrefix}ReasoningEffort = ${reasoningEfforts.map(quote).join(' | ')}
+export type ${config.typePrefix}TextVerbosity = ${textVerbosityValues.map(quote).join(' | ')}
 
-export interface CodexResponsesPreset {
+export interface ${config.interfaceName} {
   modelMapping: Record<string, string>
-  reasoningMapping: Partial<Record<string, CodexResponsesReasoningEffort>>
-  reasoningParamStyle: CodexResponsesReasoningParamStyle
+  reasoningMapping: Partial<Record<string, ${config.typePrefix}ReasoningEffort>>
+  fastMode: boolean
+  textVerbosity: ${config.typePrefix}TextVerbosity
+}
+
+export const ${config.exportName}: Record<string, ${config.interfaceName}> = ${json}
+`
+  }
+
+  if (config.kind === 'codexResponses') {
+    return `// Code generated by scripts/generate-channel-presets.mjs; DO NOT EDIT.
+
+export type ${config.typePrefix}ReasoningEffort = ${reasoningEfforts.map(quote).join(' | ')}
+export type ${config.typePrefix}ReasoningParamStyle = '' | 'reasoning' | 'reasoning_effort' | 'thinking'
+
+export interface ${config.interfaceName} {
+  modelMapping: Record<string, string>
+  reasoningMapping: Partial<Record<string, ${config.typePrefix}ReasoningEffort>>
+  reasoningParamStyle: ${config.typePrefix}ReasoningParamStyle
   codexNativeToolPassthrough: boolean
   codexToolCompat: boolean
   stripCodexClientTools: boolean
@@ -61,7 +168,32 @@ export interface CodexResponsesPreset {
   rateLimitRpm?: number
 }
 
-export const codexResponsesPresets: Record<string, CodexResponsesPreset> = ${json}
+export const ${config.exportName}: Record<string, ${config.interfaceName}> = ${json}
+`
+  }
+
+  return `// Code generated by scripts/generate-channel-presets.mjs; DO NOT EDIT.
+
+export type ${config.typePrefix}ReasoningEffort = ${reasoningEfforts.map(quote).join(' | ')}
+export type ${config.typePrefix}ReasoningParamStyle = '' | 'reasoning' | 'reasoning_effort' | 'thinking'
+
+export interface ${config.interfaceName} {
+  modelMapping: Record<string, string>
+  reasoningMapping: Partial<Record<string, ${config.typePrefix}ReasoningEffort>>
+  reasoningParamStyle: ${config.typePrefix}ReasoningParamStyle
+  passbackReasoningContent: boolean
+  passbackThinkingBlocks: boolean
+  stripEmptyTextBlocks: boolean
+  normalizeSystemRoleToTopLevel: boolean
+  stripImageGenerationTool: boolean
+  normalizeNonstandardChatRoles: boolean
+  noVision: boolean
+  noVisionModels: string[]
+  visionFallbackModel: string
+  rateLimitRpm?: number
+}
+
+export const ${config.exportName}: Record<string, ${config.interfaceName}> = ${json}
 `
 }
 
@@ -76,10 +208,6 @@ function formatGoStringSlice(values) {
   return `[]string{${values.map(quote).join(', ')}}`
 }
 
-function hasOwn(object, key) {
-  return Object.prototype.hasOwnProperty.call(object, key)
-}
-
 function formatGoConfig(preset) {
   const fields = []
   const modelMapping = formatGoStringMap(preset.modelMapping)
@@ -89,9 +217,12 @@ function formatGoConfig(preset) {
   if (modelMapping) fields.push(`ModelMapping: ${modelMapping}`)
   if (reasoningMapping) fields.push(`ReasoningMapping: ${reasoningMapping}`)
   if (preset.reasoningParamStyle) fields.push(`ReasoningParamStyle: ${quote(preset.reasoningParamStyle)}`)
+  if (preset.passbackReasoningContent) fields.push('PassbackReasoningContent: true')
+  if (preset.passbackThinkingBlocks) fields.push('PassbackThinkingBlocks: true')
   if (preset.noVision) fields.push('NoVision: true')
   if (noVisionModels) fields.push(`NoVisionModels: ${noVisionModels}`)
   if (preset.visionFallbackModel) fields.push(`VisionFallbackModel: ${quote(preset.visionFallbackModel)}`)
+  if (preset.stripEmptyTextBlocks) fields.push('StripEmptyTextBlocks: true')
   if (preset.codexNativeToolPassthrough) fields.push('CodexNativeToolPassthrough: true')
   if (hasOwn(preset, 'codexToolCompat')) fields.push(`CodexToolCompat: boolRef(${Boolean(preset.codexToolCompat)})`)
   if (hasOwn(preset, 'stripCodexClientTools')) fields.push(`StripCodexClientTools: boolRef(${Boolean(preset.stripCodexClientTools)})`)
@@ -102,13 +233,14 @@ function formatGoConfig(preset) {
   return `channelTargetConfig{${fields.join(', ')}}`
 }
 
-function formatGo() {
+function formatGo(config, source) {
+  const providers = source[config.collectionKey] || {}
   const lines = [
     'package channelpreset',
     '',
     '// Code generated by scripts/generate-channel-presets.mjs; DO NOT EDIT.',
     '',
-    'func generatedCodexResponsesTargetConfigs() map[string]channelTargetConfig {',
+    `func ${config.goFunctionName}() map[string]channelTargetConfig {`,
     '\treturn map[string]channelTargetConfig{',
   ]
 
@@ -120,7 +252,12 @@ function formatGo() {
   return `${lines.join('\n')}\n`
 }
 
-const ts = formatTs()
-writeFileSync(join(root, 'frontend/src/generated/codexResponsesPresets.ts'), ts)
-writeFileSync(join(root, 'desktop/frontend/src/generated/codex-responses-presets.ts'), ts)
-writeFileSync(join(root, 'desktop/internal/channelpreset/generated_codex_responses_presets.go'), formatGo())
+for (const config of generatedSources) {
+  const source = readPresetSource(config.sourceFile)
+  const ts = formatTs(config, source)
+  writeFileSync(join(root, config.webTsPath), ts)
+  writeFileSync(join(root, config.desktopTsPath), ts)
+  if (config.goPath) {
+    writeFileSync(join(root, config.goPath), formatGo(config, source))
+  }
+}

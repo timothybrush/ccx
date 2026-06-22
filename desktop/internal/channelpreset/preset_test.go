@@ -421,7 +421,7 @@ func TestBuildPayload(t *testing.T) {
 			wantService:    "openai",
 			wantCodex:      true,
 			wantStripCodex: true,
-			wantModelMap:   map[string]string{"codex": "glm-5.1", "gpt": "glm-5.1"},
+			wantModelMap:   map[string]string{"codex": "glm-5.2", "gpt": "glm-5.2"},
 		},
 		{
 			name:         "volc-ark messages (anthropic endpoint)",

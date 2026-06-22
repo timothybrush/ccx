@@ -234,7 +234,7 @@ export const codexResponsesPresets: Record<string, CodexResponsesPreset> = {
   "modelscope": {
     "modelMapping": {
       "codex": "deepseek-ai/DeepSeek-V4-Flash",
-      "gpt": "ZhipuAI/GLM-5.1",
+      "gpt": "ZhipuAI/GLM-5.2",
       "mini": "deepseek-ai/DeepSeek-V4-Flash"
     },
     "reasoningMapping": {},
