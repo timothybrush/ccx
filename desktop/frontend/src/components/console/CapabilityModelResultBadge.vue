@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, onBeforeUnmount } from 'vue'
 import { Loader2, CheckCircle2, XCircle, ArrowRight, Clock } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 import type { CapabilityProtocolJobResult, CapabilityModelJobResult } from '@/services/admin-api'
@@ -37,15 +37,8 @@ const shouldShowDetailsUnavailable = computed(() => {
   return true
 })
 
-function getModelStatusIcon(status: string) {
-  if (status === 'success') return CheckCircle2
-  if (status === 'failed') return XCircle
-  if (status === 'running' || status === 'queued') return Loader2
-  return Clock
-}
-
 function getModelBadgeClasses(result: CapabilityModelJobResult) {
-  const base = 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono cursor-default select-none'
+  const base = 'relative inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono cursor-default select-none'
   if (result.status === 'success') return `${base} bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20`
   if (result.status === 'failed') {
     const retry = props.retryEnabled && canRetry(result)
@@ -93,6 +86,49 @@ function handleBadgeClick(result: CapabilityModelJobResult) {
     emit('retryModel', props.test.protocol, result.model)
   }
 }
+
+// 浮动 tooltip：使用 fixed 定位 + 动态计算坐标，逃出父级 overflow:hidden
+const tooltipState = reactive({
+  visible: false,
+  hoveredKey: '',
+  x: 0,
+  y: 0,
+  placement: 'top' as 'top' | 'bottom',
+})
+
+function showTooltip(event: MouseEvent | FocusEvent, result: CapabilityModelJobResult) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  const tooltipWidth = 240
+  const tooltipHeight = 132
+  const margin = 8
+  // 默认在 badge 上方
+  let placement: 'top' | 'bottom' = 'top'
+  let x = rect.left + rect.width / 2
+  let y = rect.top - margin
+  // 上方空间不够就改到下方
+  if (rect.top - tooltipHeight - margin < 0) {
+    placement = 'bottom'
+    y = rect.bottom + margin
+  }
+  // 横向贴边修正
+  const halfWidth = tooltipWidth / 2
+  if (x - halfWidth < margin) x = halfWidth + margin
+  if (x + halfWidth > window.innerWidth - margin) x = window.innerWidth - halfWidth - margin
+  tooltipState.placement = placement
+  tooltipState.x = x
+  tooltipState.y = y
+  tooltipState.hoveredKey = `${props.test.protocol}-${result.model}`
+  tooltipState.visible = true
+}
+
+function hideTooltip() {
+  tooltipState.visible = false
+  tooltipState.hoveredKey = ''
+}
+
+onBeforeUnmount(hideTooltip)
 </script>
 
 <template>
@@ -114,21 +150,151 @@ function handleBadgeClick(result: CapabilityModelJobResult) {
         v-for="result in modelResults"
         :key="`${test.protocol}-${result.model}`"
         :class="getModelBadgeClasses(result)"
-        :title="getModelTooltipView(result) === 'success'
-          ? `${result.model}${result.actualModel && result.actualModel !== result.model ? ` → ${result.actualModel}` : ''} | ${getModelTooltipLatencyText(result)} | Streaming: ${formatStreaming(result)}`
-          : getModelTooltipView(result) === 'pending'
-          ? `${result.model} — ${result.status}`
-          : `${result.model}${result.error ? ` — ${result.error}` : ''}${canRetry(result) ? ` | ${getRetryHint(result)}` : ''}`"
+        tabindex="0"
         @click="handleBadgeClick(result)"
+        @mouseenter="showTooltip($event, result)"
+        @mouseleave="hideTooltip"
+        @focus="showTooltip($event, result)"
+        @blur="hideTooltip"
       >
         <span>{{ result.model }}</span>
         <ArrowRight v-if="isRedirected(result)" class="h-3 w-3 text-muted-foreground" />
-        <component
-          :is="getModelStatusIcon(result.status)"
+        <CheckCircle2
+          v-if="result.status === 'success'"
           class="h-3 w-3"
-          :class="{ 'animate-spin': result.status === 'running' }"
+        />
+        <XCircle
+          v-else-if="result.status === 'failed'"
+          class="h-3 w-3"
+        />
+        <Loader2
+          v-else-if="result.status === 'running' || result.status === 'queued'"
+          class="h-3 w-3 animate-spin"
+        />
+        <Clock
+          v-else
+          class="h-3 w-3"
         />
       </div>
     </div>
+
+    <!-- 浮动 tooltip：使用 fixed 定位 + 动态计算坐标，逃出父级 overflow:hidden -->
+    <Teleport to="body">
+      <div
+        v-if="tooltipState.visible"
+        class="model-tooltip-content"
+        :class="`model-tooltip-${tooltipState.placement}`"
+        :style="{ left: `${tooltipState.x}px`, top: `${tooltipState.y}px` }"
+      >
+        <template v-for="result in modelResults" :key="`tt-${test.protocol}-${result.model}`">
+          <div v-if="tooltipState.hoveredKey === `${test.protocol}-${result.model}`">
+            <div class="model-tooltip-title">{{ result.model }}</div>
+            <div v-if="isRedirected(result)" class="model-tooltip-row">
+              <span class="model-tooltip-label">{{ t('capability.actualModel') }}</span>
+              <span class="model-tooltip-value">{{ result.actualModel }}</span>
+            </div>
+            <template v-if="getModelTooltipView(result) === 'success'">
+              <div class="model-tooltip-row">
+                <span class="model-tooltip-label">{{ t('capability.tooltipLatency') }}</span>
+                <span class="model-tooltip-value">{{ getModelTooltipLatencyText(result) }}</span>
+              </div>
+              <div class="model-tooltip-row">
+                <span class="model-tooltip-label">{{ t('capability.tooltipStreaming') }}</span>
+                <span class="model-tooltip-value">{{ formatStreaming(result) }}</span>
+              </div>
+            </template>
+            <div class="model-tooltip-row">
+              <span class="model-tooltip-label">{{ t('capability.modelStatus') }}</span>
+              <span class="model-tooltip-value">{{ result.status }}</span>
+            </div>
+            <div v-if="getModelTooltipView(result) === 'failed' && result.error" class="model-tooltip-error">
+              {{ result.error }}
+            </div>
+            <div v-if="getModelTooltipView(result) === 'failed' && canRetry(result)" class="model-tooltip-retry">
+              {{ getRetryHint(result) }}
+            </div>
+          </div>
+        </template>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.model-tooltip-content {
+  position: fixed;
+  z-index: 9999;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-popover);
+  color: var(--color-popover-foreground);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.model-tooltip-top {
+  transform: translate(-50%, -100%);
+}
+
+.model-tooltip-bottom {
+  transform: translate(-50%, 0);
+}
+
+.model-tooltip-content::after {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-popover);
+  content: '';
+}
+
+.model-tooltip-top::after {
+  top: 100%;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.model-tooltip-bottom::after {
+  bottom: 100%;
+  transform: translate(-50%, 50%) rotate(225deg);
+}
+
+.model-tooltip-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.model-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-tooltip-label {
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.model-tooltip-value {
+  text-align: right;
+  word-break: break-word;
+}
+
+.model-tooltip-error {
+  margin-top: 4px;
+  color: var(--color-destructive);
+  word-break: break-word;
+}
+
+.model-tooltip-retry {
+  margin-top: 4px;
+  color: var(--color-muted-foreground);
+}
+</style>
