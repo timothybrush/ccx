@@ -1121,7 +1121,7 @@ func applyTargetDefaults(payload *ChannelPayload, provider string, target string
 		payload.ServiceType = "openai"
 		payload.CodexToolCompat = true
 		payload.StripCodexClientTools = true
-		if provider == ProviderRunAPI {
+		if provider == ProviderRunAPI || provider == ProviderUnity2 {
 			payload.ServiceType = "responses"
 			payload.CodexToolCompat = false
 			payload.StripCodexClientTools = false
