@@ -242,8 +242,8 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="space-y-5">
-    <div class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5">
+  <div class="flex h-full min-h-0 flex-col gap-5">
+    <div class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 shrink-0">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 text-primary mb-2">
@@ -258,8 +258,8 @@ const submit = async () => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
-      <div class="space-y-1.5">
+    <div class="grid grid-cols-1 gap-4 md:min-h-0 md:flex-1 md:overflow-hidden md:grid-cols-[280px_1fr]">
+      <div class="space-y-1.5 md:min-h-0 md:overflow-y-auto md:overscroll-contain md:pr-1">
         <button
           v-for="preset in orderedPresets"
           :key="preset.id"
@@ -294,7 +294,7 @@ const submit = async () => {
         </button>
       </div>
 
-      <div v-if="currentPreset" class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 space-y-5">
+      <div v-if="currentPreset" class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 space-y-5 md:min-h-0 md:overflow-y-auto md:overscroll-contain">
         <div class="space-y-3">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="text-lg font-semibold text-foreground">{{ localizePresetLabel(currentPreset) }}</h3>
