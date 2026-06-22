@@ -442,8 +442,8 @@ func getChannelMetricsHistoryWithKind(metricsManager *metrics.MetricsManager, cf
 				c.JSON(400, gin.H{"error": "Invalid duration parameter"})
 				return
 			}
-			if duration > 30*24*time.Hour {
-				duration = 30 * 24 * time.Hour
+			if duration > 366*24*time.Hour {
+				duration = 366 * 24 * time.Hour
 			}
 			interval = selectIntervalForDuration(c.Query("interval"), duration)
 		} else {
@@ -700,7 +700,7 @@ func GetChannelKeyMetricsHistory(metricsManager *metrics.MetricsManager, cfgMana
 	if isResponses {
 		kind = scheduler.ChannelKindResponses
 	}
-	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, kind, true, 30*24*time.Hour)
+	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, kind, true, 366*24*time.Hour)
 }
 
 // truncateKeyMask 截取 keyMask 的前 N 个字符
@@ -837,7 +837,7 @@ func GetGeminiChannelMetricsHistory(metricsManager *metrics.MetricsManager, cfgM
 // GetGeminiChannelKeyMetricsHistory 获取 Gemini 渠道下各 Key 的历史数据（用于 Key 趋势图表）
 // GET /api/gemini/channels/:id/keys/metrics/history?duration=6h
 func GetGeminiChannelKeyMetricsHistory(metricsManager *metrics.MetricsManager, cfgManager *config.ConfigManager) gin.HandlerFunc {
-	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindGemini, true, 30*24*time.Hour)
+	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindGemini, true, 366*24*time.Hour)
 }
 
 // GetGeminiChannelMetrics 获取 Gemini 渠道指标
@@ -857,7 +857,7 @@ func GetImagesChannelMetricsHistory(metricsManager *metrics.MetricsManager, cfgM
 
 // GetImagesChannelKeyMetricsHistory 获取 Images 渠道下各 Key 的历史数据
 func GetImagesChannelKeyMetricsHistory(metricsManager *metrics.MetricsManager, cfgManager *config.ConfigManager) gin.HandlerFunc {
-	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindImages, false, 30*24*time.Hour)
+	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindImages, false, 366*24*time.Hour)
 }
 
 // GetChatChannelMetrics 获取 Chat 渠道指标
@@ -872,7 +872,7 @@ func GetChatChannelMetricsHistory(metricsManager *metrics.MetricsManager, cfgMan
 
 // GetChatChannelKeyMetricsHistory 获取 Chat 渠道下各 Key 的历史数据
 func GetChatChannelKeyMetricsHistory(metricsManager *metrics.MetricsManager, cfgManager *config.ConfigManager) gin.HandlerFunc {
-	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindChat, false, 30*24*time.Hour)
+	return getChannelKeyMetricsHistoryWithKind(metricsManager, cfgManager, scheduler.ChannelKindChat, false, 366*24*time.Hour)
 }
 
 // ResumeChannelWithKind 恢复指定类型的熔断渠道（重置熔断状态、恢复拉黑 Key，保留历史统计）
@@ -922,7 +922,7 @@ func parseHistoryDuration(c *gin.Context) (time.Duration, time.Duration) {
 	if err != nil || duration <= 0 {
 		duration = 24 * time.Hour
 	}
-	maxDuration := 30 * 24 * time.Hour
+	maxDuration := 366 * 24 * time.Hour
 	if duration > maxDuration {
 		duration = maxDuration
 	}
@@ -936,7 +936,7 @@ func parseKeyHistoryDuration(c *gin.Context) (time.Duration, time.Duration) {
 	if err != nil || duration < time.Minute {
 		duration = 6 * time.Hour // 回退到默认值
 	}
-	maxDuration := 30 * 24 * time.Hour
+	maxDuration := 366 * 24 * time.Hour
 	if duration > maxDuration {
 		duration = maxDuration
 	}
@@ -960,13 +960,17 @@ func selectIntervalForDuration(intervalStr string, duration time.Duration) time.
 		return 15 * time.Minute
 	case duration <= 7*24*time.Hour:
 		return time.Hour
-	default:
+	case duration <= 90*24*time.Hour:
 		return 4 * time.Hour
+	case duration <= 180*24*time.Hour:
+		return 8 * time.Hour
+	default:
+		return 12 * time.Hour
 	}
 }
 
 // parseExtendedDuration 解析扩展的时间范围字符串
-// 支持标准 Go duration (1h, 6h, 24h) 和扩展格式 (7d, 30d, today)
+// 支持标准 Go duration (1h, 6h, 24h) 和扩展格式 (7d, 30d, 90d, 180d, 365d, today, thisyear)
 func parseExtendedDuration(s string) (time.Duration, error) {
 	if s == "today" {
 		d := metrics.CalculateTodayDuration()
@@ -975,7 +979,17 @@ func parseExtendedDuration(s string) (time.Duration, error) {
 		}
 		return d, nil
 	}
-	// 尝试天数格式: 7d, 30d
+	if s == "thisyear" {
+		// 计算从今年 1 月 1 日 00:00:00 到现在的时长
+		now := time.Now()
+		startOfYear := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+		d := now.Sub(startOfYear)
+		if d < time.Minute {
+			d = time.Minute
+		}
+		return d, nil
+	}
+	// 尝试天数格式: 7d, 30d, 90d, 180d, 365d
 	if strings.HasSuffix(s, "d") {
 		dayStr := strings.TrimSuffix(s, "d")
 		days, err := strconv.Atoi(dayStr)

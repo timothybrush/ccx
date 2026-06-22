@@ -19,6 +19,10 @@
           <v-btn value="today" size="x-small" class="chart-control-btn">{{ t('chart.today') }}</v-btn>
           <v-btn value="7d" size="x-small" class="chart-control-btn">{{ t('chart.7d') }}</v-btn>
           <v-btn value="30d" size="x-small" class="chart-control-btn">{{ t('chart.30d') }}</v-btn>
+          <v-btn value="90d" size="x-small" class="chart-control-btn">{{ t('chart.90d') }}</v-btn>
+          <v-btn value="180d" size="x-small" class="chart-control-btn">{{ t('chart.180d') }}</v-btn>
+          <v-btn value="365d" size="x-small" class="chart-control-btn">{{ t('chart.365d') }}</v-btn>
+          <v-btn value="thisyear" size="x-small" class="chart-control-btn">{{ t('chart.thisyear') }}</v-btn>
         </v-btn-toggle>
 
         <v-btn icon size="x-small" variant="text" :loading="isLoading" :disabled="isLoading" @click="refreshData">
@@ -126,7 +130,7 @@ const { t } = useI18n()
 
 // Types
 type ViewMode = 'traffic' | 'tokens'
-type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d'
+type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d' | '90d' | '180d' | '365d' | 'thisyear'
 
 // LocalStorage keys for preferences (per apiType)
 const getStorageKey = (apiType: string, key: string) => `globalStats:${apiType}:${key}`
@@ -137,7 +141,7 @@ const loadSavedPreferences = (apiType: string) => {
   const savedDuration = localStorage.getItem(getStorageKey(apiType, 'duration')) as Duration | null
   return {
     view: savedView && ['traffic', 'tokens'].includes(savedView) ? savedView : 'traffic',
-    duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d'].includes(savedDuration) ? savedDuration : '6h'
+    duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(savedDuration) ? savedDuration : '6h'
   }
 }
 
@@ -235,12 +239,16 @@ const FAILURE_RATE_THRESHOLD = 0.1 // 10%
 
 // Aggregation interval settings (kept consistent with the backend)
 const AGGREGATION_INTERVALS: Record<Duration, number> = {
-  '1h': 60000,      // 1 minute
-  '6h': 300000,     // 5 minutes
-  '24h': 900000,    // 15 minutes
-  'today': 300000,  // 5 minutes
-  '7d': 3600000,    // 1 hour
-  '30d': 14400000   // 4 hours
+  '1h': 60000,         // 1 minute
+  '6h': 300000,        // 5 minutes
+  '24h': 900000,       // 15 minutes
+  'today': 300000,     // 5 minutes
+  '7d': 3600000,       // 1 hour
+  '30d': 14400000,     // 4 hours
+  '90d': 14400000,     // 4 hours
+  '180d': 28800000,    // 8 hours
+  '365d': 43200000,    // 12 hours
+  'thisyear': 43200000 // 12 hours
 }
 
 const getAggregationInterval = (duration: Duration): number => {
@@ -364,7 +372,7 @@ const chartOptions = computed<ApexOptions>(() => {
       type: 'datetime',
       labels: {
         datetimeUTC: false,
-        format: selectedDuration.value === '7d' || selectedDuration.value === '30d' ? 'MM-dd HH:mm' : 'HH:mm',
+        format: ['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value) ? 'MM-dd HH:mm' : 'HH:mm',
         style: { fontSize: '11px', colors: theme.global.current.value.dark ? '#9ca3af' : '#6b7280' }
       },
       axisBorder: { show: false },

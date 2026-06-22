@@ -19,6 +19,10 @@
           <v-btn value="today" size="x-small" class="chart-control-btn">{{ t('chart.today') }}</v-btn>
           <v-btn value="7d" size="x-small" class="chart-control-btn">{{ t('chart.7d') }}</v-btn>
           <v-btn value="30d" size="x-small" class="chart-control-btn">{{ t('chart.30d') }}</v-btn>
+          <v-btn value="90d" size="x-small" class="chart-control-btn">{{ t('chart.90d') }}</v-btn>
+          <v-btn value="180d" size="x-small" class="chart-control-btn">{{ t('chart.180d') }}</v-btn>
+          <v-btn value="365d" size="x-small" class="chart-control-btn">{{ t('chart.365d') }}</v-btn>
+          <v-btn value="thisyear" size="x-small" class="chart-control-btn">{{ t('chart.thisyear') }}</v-btn>
         </v-btn-toggle>
 
         <v-btn icon size="x-small" variant="text" :loading="isLoading" :disabled="isLoading" @click="refreshData">
@@ -116,7 +120,7 @@ const { t } = useI18n()
 
 // View mode type
 type ViewMode = 'traffic' | 'tokens' | 'cache'
-type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d'
+type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d' | '90d' | '180d' | '365d' | 'thisyear'
 
 // LocalStorage keys for preferences (per channelType)
 const getStorageKey = (channelType: string, key: string) => `keyTrendChart:${channelType}:${key}`
@@ -139,7 +143,7 @@ const loadSavedPreferences = (channelType: string): { view: ViewMode; duration: 
     const savedDuration = window.localStorage.getItem(getStorageKey(channelType, 'duration')) as Duration | null
     return {
       view: savedView && ['traffic', 'tokens', 'cache'].includes(savedView) ? savedView : 'traffic',
-      duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d'].includes(savedDuration) ? savedDuration : '1h'
+      duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(savedDuration) ? savedDuration : '1h'
     }
   } catch {
     return { view: 'traffic', duration: '1h' }
@@ -207,25 +211,35 @@ const keyColors = [
 // Failure rate threshold: show red background when exceeded
 const FAILURE_RATE_THRESHOLD = 0.1 // 10%
 
-// Aggregation interval settings (kept consistent with the backend)
-// 1h = 1m, 6h = 5m, 24h = 15m, today = dynamically calculated, 7d = 1h, 30d = 4h
+// Aggregation interval settings (kept consistent with the backend selectIntervalForDuration)
+// 1h = 1m, 6h = 5m, 24h = 15m, 7d = 1h, <=90d = 4h, <=180d = 8h, >180d = 12h
 const AGGREGATION_INTERVALS: Record<Duration, number> = {
-  '1h': 60000,    // 1 minute
-  '6h': 300000,   // 5 minutes
-  '24h': 900000,  // 15 minutes
-  'today': 300000, // 5 minutes (today uses 5-minute intervals by default)
-  '7d': 3600000,   // 1 hour
-  '30d': 14400000  // 4 hours
+  '1h': 60000,         // 1 minute
+  '6h': 300000,        // 5 minutes
+  '24h': 900000,       // 15 minutes
+  'today': 300000,     // 5 minutes (today uses 5-minute intervals by default)
+  '7d': 3600000,       // 1 hour
+  '30d': 14400000,     // 4 hours
+  '90d': 14400000,     // 4 hours
+  '180d': 28800000,    // 8 hours
+  '365d': 43200000,    // 12 hours
+  'thisyear': 0        // 动态计算（根据今年已过天数）
 }
 
 // Get the aggregation interval based on the selected duration
 const getAggregationInterval = (duration: Duration): number => {
-  const interval = AGGREGATION_INTERVALS[duration]
-  if (interval === undefined) {
-    console.warn(`[KeyTrendChart] Unknown duration "${duration}", falling back to 1m interval`)
-    return 60000
+  if (duration === 'thisyear') {
+    // 计算今年已过天数，选择合适的间隔（与后端逻辑一致）
+    const now = new Date()
+    const startOfYear = new Date(now.getFullYear(), 0, 1)
+    const daysPassed = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 3600000))
+
+    if (daysPassed <= 7) return 3600000      // ≤7d: 1 hour
+    if (daysPassed <= 90) return 14400000    // ≤90d: 4 hours
+    if (daysPassed <= 180) return 28800000   // ≤180d: 8 hours
+    return 43200000                          // >180d: 12 hours
   }
-  return interval
+  return AGGREGATION_INTERVALS[duration]
 }
 
 // Align the timestamp to the aggregation bucket (round down)
@@ -494,7 +508,7 @@ const chartOptions = computed<ApexOptions>(() => {
       type: 'datetime',
       labels: {
         datetimeUTC: false,
-        format: selectedDuration.value === '7d' || selectedDuration.value === '30d' ? 'MM-dd HH:mm' : 'HH:mm',
+        format: ['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value) ? 'MM-dd HH:mm' : 'HH:mm',
         style: { fontSize: '11px', colors: theme.global.current.value.dark ? '#9ca3af' : '#6b7280' }
       },
       axisBorder: { show: false },

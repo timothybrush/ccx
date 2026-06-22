@@ -15,8 +15,6 @@
           <v-btn value="6h" size="x-small">{{ t('chart.6h') }}</v-btn>
           <v-btn value="24h" size="x-small">{{ t('chart.24h') }}</v-btn>
           <v-btn value="today" size="x-small">{{ t('chart.today') }}</v-btn>
-          <v-btn value="7d" size="x-small">{{ t('chart.7d') }}</v-btn>
-          <v-btn value="30d" size="x-small">{{ t('chart.30d') }}</v-btn>
         </v-btn-toggle>
         <v-btn icon size="x-small" variant="text" :loading="isLoading" :disabled="isLoading" @click="refreshData()">
           <v-icon size="small">mdi-refresh</v-icon>
@@ -79,7 +77,7 @@ const props = defineProps<{
   apiType: 'messages' | 'chat' | 'responses' | 'gemini' | 'images'
 }>()
 
-type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d'
+type Duration = '1h' | '6h' | '24h' | 'today'
 type ViewMode = 'requests' | 'tokens' | 'cache'
 
 const theme = useTheme()
@@ -177,7 +175,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     type: 'datetime',
     labels: {
       datetimeUTC: false,
-      format: selectedDuration.value === '7d' || selectedDuration.value === '30d' ? 'MM-dd HH:mm' : 'HH:mm',
+      format: 'HH:mm',
       style: { fontSize: '10px' }
     },
     axisBorder: { show: false },

@@ -13,15 +13,15 @@ type ChannelEntry struct {
 }
 
 type ChannelSequenceOverride struct {
-	ConversationID    string         `json:"conversationId"`
-	Kind              string         `json:"kind"`
-	UserID            string         `json:"userID"`
-	Sequence          []ChannelEntry `json:"sequence"`
-	SubagentSequence  []ChannelEntry `json:"subagentSequence,omitempty"` // subagent 角色专用序列（为空时 fallback 到 Sequence）
-	SetAt             time.Time      `json:"setAt"`
-	ExpiresAt         time.Time      `json:"expiresAt"`
-	IsPerpetual       bool           `json:"isPerpetual,omitempty"` // 永不过期（手动恢复前不会自动过期）
-	ttlDuration       time.Duration  `json:"-"`                    // 原始有效期（续期时使用，不序列化）
+	ConversationID   string         `json:"conversationId"`
+	Kind             string         `json:"kind"`
+	UserID           string         `json:"userID"`
+	Sequence         []ChannelEntry `json:"sequence"`
+	SubagentSequence []ChannelEntry `json:"subagentSequence,omitempty"` // subagent 角色专用序列（为空时 fallback 到 Sequence）
+	SetAt            time.Time      `json:"setAt"`
+	ExpiresAt        time.Time      `json:"expiresAt"`
+	IsPerpetual      bool           `json:"isPerpetual,omitempty"` // 永不过期（手动恢复前不会自动过期）
+	ttlDuration      time.Duration  `json:"-"`                     // 原始有效期（续期时使用，不序列化）
 }
 
 // clone 返回 override 的深拷贝（用于返回快照，避免并发数据竞争）。

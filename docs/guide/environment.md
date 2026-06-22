@@ -62,6 +62,11 @@ QUIET_POLLING_LOGS=true                # 静默前端轮询端点日志（如 /a
 # 性能配置
 MAX_REQUEST_BODY_SIZE_MB=50            # 请求体最大大小（MB，默认 50）
 
+# 指标持久化配置
+METRICS_PERSISTENCE_ENABLED=true       # 是否启用 SQLite 持久化（默认 true）
+METRICS_RETENTION_DAYS=366             # 数据保留天数（3-366，默认 366）
+                                       # 支持查询最长 1 年的历史数据
+
 # CORS 配置
 ENABLE_CORS=false                      # 是否启用 CORS
 CORS_ORIGIN=*                          # CORS 允许的源

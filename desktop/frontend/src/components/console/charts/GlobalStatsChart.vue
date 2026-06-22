@@ -167,7 +167,7 @@ const emit = defineEmits<{
 }>()
 
 type ViewMode = 'traffic' | 'tokens'
-type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d'
+type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d' | '90d' | '180d' | '365d' | 'thisyear'
 
 // LocalStorage keys for preferences (per apiType)
 const getStorageKey = (apiType: string, key: string) => `globalStats:${apiType}:${key}`
@@ -178,7 +178,7 @@ const loadSavedPreferences = (apiType: string) => {
   const savedDuration = localStorage.getItem(getStorageKey(apiType, 'duration')) as Duration | null
   return {
     view: savedView && ['traffic', 'tokens'].includes(savedView) ? savedView : 'traffic',
-    duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d'].includes(savedDuration) ? savedDuration : '6h'
+    duration: savedDuration && ['1h', '6h', '24h', 'today', '7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(savedDuration) ? savedDuration : '6h'
   }
 }
 
@@ -214,6 +214,10 @@ const durationOptions = computed(() => [
   { label: t('chart.today'), value: 'today' as Duration },
   { label: t('chart.7d'), value: '7d' as Duration },
   { label: t('chart.30d'), value: '30d' as Duration },
+  { label: t('chart.90d'), value: '90d' as Duration },
+  { label: t('chart.180d'), value: '180d' as Duration },
+  { label: t('chart.365d'), value: '365d' as Duration },
+  { label: t('chart.thisyear'), value: 'thisyear' as Duration },
 ])
 
 const viewOptions = computed(() => [
@@ -306,12 +310,16 @@ const FAILURE_RATE_THRESHOLD = 0.1 // 10%
 
 // Aggregation interval settings (kept consistent with the backend)
 const AGGREGATION_INTERVALS: Record<Duration, number> = {
-  '1h': 60000,      // 1 minute
-  '6h': 300000,     // 5 minutes
-  '24h': 900000,    // 15 minutes
-  'today': 300000,  // 5 minutes
-  '7d': 3600000,    // 1 hour
-  '30d': 14400000   // 4 hours
+  '1h': 60000,         // 1 minute
+  '6h': 300000,        // 5 minutes
+  '24h': 900000,       // 15 minutes
+  'today': 300000,     // 5 minutes
+  '7d': 3600000,       // 1 hour
+  '30d': 14400000,     // 4 hours
+  '90d': 14400000,     // 4 hours
+  '180d': 28800000,    // 8 hours
+  '365d': 43200000,    // 12 hours
+  'thisyear': 43200000 // 12 hours
 }
 
 const getAggregationInterval = (duration: Duration): number => {
@@ -393,7 +401,7 @@ const chartOptions = computed<ApexOptions>(() => {
 
   const textColor = isDark.value ? '#9ca3af' : '#6b7280'
   const gridBorder = isDark.value ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
-  const xLabelFormat = selectedDuration.value === '7d' || selectedDuration.value === '30d' ? 'MM-dd HH:mm' : 'HH:mm'
+  const xLabelFormat = ['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value) ? 'MM-dd HH:mm' : 'HH:mm'
 
   return {
     chart: {

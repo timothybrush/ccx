@@ -17,7 +17,7 @@ func GetGlobalStatsHistory(metricsManager *metrics.MetricsManager) gin.HandlerFu
 		if err != nil || duration < time.Minute {
 			duration = 6 * time.Hour // 回退到默认值
 		}
-		maxDuration := 30 * 24 * time.Hour
+		maxDuration := 366 * 24 * time.Hour
 		if duration > maxDuration {
 			duration = maxDuration
 		}
@@ -97,6 +97,8 @@ func GetGlobalStatsHistory(metricsManager *metrics.MetricsManager) gin.HandlerFu
 		result := metricsManager.GetGlobalHistoricalStatsWithTokens(duration, interval)
 		if durationStr == "today" {
 			result.Summary.Duration = "today"
+		} else if durationStr == "thisyear" {
+			result.Summary.Duration = "thisyear"
 		}
 
 		c.JSON(200, result)

@@ -150,8 +150,8 @@ const KEY_COLORS = [
 
 // View and duration mode
 type ViewMode = 'traffic' | 'tokens' | 'cache'
-type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d'
-const isDuration = (value?: string): value is Duration => !!value && ['1h', '6h', '24h', 'today', '7d', '30d'].includes(value)
+type Duration = '1h' | '6h' | '24h' | 'today' | '7d' | '30d' | '90d' | '180d' | '365d' | 'thisyear'
+const isDuration = (value?: string): value is Duration => !!value && ['1h', '6h', '24h', 'today', '7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(value)
 const selectedView = ref<ViewMode>('traffic')
 const selectedDuration = ref<Duration>(isDuration(props.duration) ? props.duration : '1h')
 
@@ -162,6 +162,10 @@ const durationOptions = computed(() => [
   { label: t('chart.today'), value: 'today' as Duration },
   { label: t('chart.7d'), value: '7d' as Duration },
   { label: t('chart.30d'), value: '30d' as Duration },
+  { label: t('chart.90d'), value: '90d' as Duration },
+  { label: t('chart.180d'), value: '180d' as Duration },
+  { label: t('chart.365d'), value: '365d' as Duration },
+  { label: t('chart.thisyear'), value: 'thisyear' as Duration },
 ])
 
 const viewOptions = computed(() => [
@@ -194,7 +198,7 @@ const hasData = computed(() => {
 })
 
 const xLabelFormat = computed(() =>
-  selectedDuration.value === '7d' || selectedDuration.value === '30d' ? 'MM-dd HH:mm' : 'HH:mm',
+  ['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value) ? 'MM-dd HH:mm' : 'HH:mm',
 )
 
 // Failure rate background bands
@@ -207,6 +211,25 @@ const AGGREGATION_INTERVALS: Record<string, number> = {
   'today': 300000,
   '7d': 3600000,
   '30d': 14400000,
+  '90d': 14400000,
+  '180d': 28800000,
+  '365d': 43200000,
+  'thisyear': 0, // 动态计算
+}
+
+const getAggregationInterval = (duration: string): number => {
+  if (duration === 'thisyear') {
+    // 计算今年已过天数，选择合适的间隔（与后端逻辑一致）
+    const now = new Date()
+    const startOfYear = new Date(now.getFullYear(), 0, 1)
+    const daysPassed = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 3600000))
+
+    if (daysPassed <= 7) return 3600000      // ≤7d: 1 hour
+    if (daysPassed <= 90) return 14400000    // ≤90d: 4 hours
+    if (daysPassed <= 180) return 28800000   // ≤180d: 8 hours
+    return 43200000                          // >180d: 12 hours
+  }
+  return AGGREGATION_INTERVALS[duration] || 60000
 }
 
 
@@ -221,7 +244,7 @@ const failureAnnotations = computed(() => {
   if (selectedView.value !== 'traffic') return []
   if (!props.data?.length) return []
 
-  const interval = AGGREGATION_INTERVALS[selectedDuration.value] || 60000
+  const interval = getAggregationInterval(selectedDuration.value)
 
   // Aggregate all keys by aligned timestamp
   const timeMap = new Map<number, { totalRequests: number; totalFailures: number }>()
@@ -452,7 +475,7 @@ const buildTrafficTooltip = ({ seriesIndex, dataPointIndex, w }: any): string =>
     minute: '2-digit',
   })
 
-  const interval = AGGREGATION_INTERVALS[selectedDuration.value] || 60000
+  const interval = getAggregationInterval(selectedDuration.value)
   const alignedTimestamp = Math.floor(timestamp / interval) * interval
 
   interface KeyStat {

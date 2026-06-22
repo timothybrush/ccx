@@ -15,33 +15,21 @@ func GetModelStatsHistory(metricsManager *metrics.MetricsManager) gin.HandlerFun
 		var duration time.Duration
 		var err error
 
-		if durationStr == "today" {
-			duration = metrics.CalculateTodayDuration()
-			if duration < time.Minute {
-				duration = time.Minute
-			}
-		} else {
-			duration, err = time.ParseDuration(durationStr)
-			if err != nil {
-				c.JSON(400, gin.H{"error": "Invalid duration parameter. Use: 1h, 6h, 24h, or today"})
-				return
-			}
+		duration, err = parseExtendedDuration(durationStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid duration parameter. Use: 1h, 6h, 24h, or today"})
+			return
 		}
 
-		if duration > 24*time.Hour {
-			duration = 24 * time.Hour
+		// 模型统计基于内存 requestHistory，只保留 24 小时数据
+		maxDuration := 24 * time.Hour
+		if duration > maxDuration {
+			c.JSON(400, gin.H{"error": "Model stats only support up to 24 hours. Use: 1h, 6h, 24h, or today"})
+			return
 		}
 
 		// 根据 duration 自动选择聚合粒度
-		var interval time.Duration
-		switch {
-		case duration <= time.Hour:
-			interval = time.Minute
-		case duration <= 6*time.Hour:
-			interval = 5 * time.Minute
-		default:
-			interval = 15 * time.Minute
-		}
+		interval := selectIntervalForDuration(c.Query("interval"), duration)
 
 		models := metricsManager.GetModelStatsHistory(duration, interval)
 

@@ -57,15 +57,15 @@ func NewSQLiteStore(cfg *SQLiteStoreConfig) (*SQLiteStore, error) {
 	if cfg == nil {
 		cfg = &SQLiteStoreConfig{
 			DBPath:        ".config/metrics.db",
-			RetentionDays: 30,
+			RetentionDays: 366,
 		}
 	}
 
 	// 验证保留天数范围
 	if cfg.RetentionDays < 3 {
 		cfg.RetentionDays = 3
-	} else if cfg.RetentionDays > 90 {
-		cfg.RetentionDays = 90
+	} else if cfg.RetentionDays > 366 {
+		cfg.RetentionDays = 366
 	}
 
 	// 确保目录存在
