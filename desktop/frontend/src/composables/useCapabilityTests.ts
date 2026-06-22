@@ -541,6 +541,11 @@ export function useCapabilityTests() {
       `/api/${channelType}/channels/${channelId}/capability-test/${jobId}/retry`,
       { protocol, model },
     )
+    try {
+      await fetchJobStatus(channelType, channelId, jobId)
+    } catch (e) {
+      console.error('Failed to refresh capability test job after retry:', e)
+    }
     startPolling(channelType, channelId, jobId)
     // 也为子 job 启动轮询
     if (activeJob.value?.protocolJobRefs?.[protocol]?.jobId) {

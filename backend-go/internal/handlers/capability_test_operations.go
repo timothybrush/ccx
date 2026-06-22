@@ -207,7 +207,7 @@ func RetryCapabilityTestModel(cfgManager *config.ConfigManager, channelLogStore 
 				j.Tests[i].Status = CapabilityProtocolStatusRunning
 				j.Tests[i].Reason = nil
 				j.Tests[i].Error = nil
-				updateCapabilityJobModelResult(j, req.Protocol, req.Model, CapabilityModelStatusRunning, ModelTestResult{
+				updateCapabilityRetryModelResult(j, channel, req.Protocol, req.Model, CapabilityModelStatusRunning, ModelTestResult{
 					Model:     req.Model,
 					StartedAt: retryStartedAt,
 				})
@@ -251,7 +251,7 @@ func RetryCapabilityTestModel(cfgManager *config.ConfigManager, channelLogStore 
 					jobID, req.Protocol, req.Model, err)
 				capabilityJobs.update(jobID, func(j *CapabilityTestJob) {
 					errMsg := fmt.Sprintf("retry_queue_cancelled: %v", err)
-					updateCapabilityJobModelResult(j, req.Protocol, req.Model, CapabilityModelStatusFailed, ModelTestResult{
+					updateCapabilityRetryModelResult(j, channel, req.Protocol, req.Model, CapabilityModelStatusFailed, ModelTestResult{
 						Model:    req.Model,
 						Error:    &errMsg,
 						TestedAt: time.Now().Format(time.RFC3339Nano),
@@ -317,7 +317,23 @@ func executeRetryModelTest(ctx context.Context, channel *config.UpstreamConfig, 
 		TestedAt:           redirectResult.TestedAt,
 	}
 	capabilityJobs.update(jobID, func(job *CapabilityTestJob) {
-		updateCapabilityJobModelResult(job, protocol, model, modelStatus, result)
+		updateCapabilityRetryModelResult(job, channel, protocol, model, modelStatus, result)
 	})
 	return result
+}
+
+func updateCapabilityRetryModelResult(job *CapabilityTestJob, channel *config.UpstreamConfig, protocol, model string, status CapabilityModelStatus, result ModelTestResult) {
+	if channel != nil && strings.Contains(protocol, "->") {
+		actualModel := result.ActualModel
+		if actualModel == "" {
+			actualModel = config.RedirectModel(model, channel)
+		}
+		groupResult := result
+		groupResult.ActualModel = actualModel
+		if updateCapabilityJobModelResultsByActualModel(job, protocol, actualModel, status, groupResult) > 0 {
+			return
+		}
+	}
+
+	updateCapabilityJobModelResult(job, protocol, model, status, result)
 }

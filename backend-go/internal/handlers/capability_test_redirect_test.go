@@ -432,6 +432,79 @@ func TestUpdateCapabilityJobModelResultsByActualModel_UpdatesSharedModelsImmedia
 	}
 }
 
+func TestUpdateCapabilityRetryModelResult_UpdatesRedirectTargetGroup(t *testing.T) {
+	now := time.Now().Format(time.RFC3339Nano)
+	channel := &config.UpstreamConfig{
+		ModelMapping: map[string]string{
+			"gpt-5.4-mini": "gpt-5.5",
+		},
+	}
+	job := &CapabilityTestJob{
+		JobID:       "cap-test-retry-redirect-target",
+		ChannelID:   1,
+		ChannelName: "test-channel",
+		ChannelKind: "responses",
+		SourceType:  "openai",
+		Tests: []CapabilityProtocolJobResult{
+			{
+				Protocol:  "responses->chat",
+				Status:    CapabilityProtocolStatusCompleted,
+				Lifecycle: CapabilityLifecycleDone,
+				Outcome:   CapabilityOutcomePartial,
+				ModelResults: []CapabilityModelJobResult{
+					{Model: "gpt-5.5", Status: CapabilityModelStatusSuccess, Lifecycle: CapabilityLifecycleDone, Outcome: CapabilityOutcomeSuccess, Success: true},
+					{Model: "gpt-5.4-mini", ActualModel: "gpt-5.5", Status: CapabilityModelStatusFailed, Lifecycle: CapabilityLifecycleDone, Outcome: CapabilityOutcomeFailed},
+					{Model: "codex-auto-review", Status: CapabilityModelStatusFailed, Lifecycle: CapabilityLifecycleDone, Outcome: CapabilityOutcomeFailed},
+				},
+				TestedAt: now,
+			},
+		},
+		UpdatedAt: now,
+	}
+
+	updateCapabilityRetryModelResult(job, channel, "responses->chat", "gpt-5.4-mini", CapabilityModelStatusRunning, ModelTestResult{
+		Model:     "gpt-5.4-mini",
+		StartedAt: now,
+	})
+
+	for _, mr := range job.Tests[0].ModelResults[:2] {
+		if mr.Status != CapabilityModelStatusRunning {
+			t.Fatalf("model %s status=%s, want running", mr.Model, mr.Status)
+		}
+		if mr.Lifecycle != CapabilityLifecycleActive {
+			t.Fatalf("model %s lifecycle=%s, want active", mr.Model, mr.Lifecycle)
+		}
+		if mr.ActualModel != "gpt-5.5" {
+			t.Fatalf("model %s actualModel=%q, want gpt-5.5", mr.Model, mr.ActualModel)
+		}
+	}
+	if job.Tests[0].ModelResults[2].Status != CapabilityModelStatusFailed {
+		t.Fatalf("unrelated model status=%s, want failed", job.Tests[0].ModelResults[2].Status)
+	}
+
+	updateCapabilityRetryModelResult(job, channel, "responses->chat", "gpt-5.4-mini", CapabilityModelStatusSuccess, ModelTestResult{
+		Model:              "gpt-5.4-mini",
+		ActualModel:        "gpt-5.5",
+		Success:            true,
+		Latency:            321,
+		StreamingSupported: true,
+		StartedAt:          now,
+		TestedAt:           now,
+	})
+
+	for _, mr := range job.Tests[0].ModelResults[:2] {
+		if mr.Status != CapabilityModelStatusSuccess {
+			t.Fatalf("model %s status=%s, want success", mr.Model, mr.Status)
+		}
+		if !mr.Success {
+			t.Fatalf("model %s success=false, want true", mr.Model)
+		}
+		if mr.Latency != 321 {
+			t.Fatalf("model %s latency=%d, want 321", mr.Model, mr.Latency)
+		}
+	}
+}
+
 // TestVirtualProtocolSnapshot_InitialState 测试虚拟协议快照的初始状态
 func TestVirtualProtocolSnapshot_InitialState(t *testing.T) {
 	channel := &config.UpstreamConfig{
