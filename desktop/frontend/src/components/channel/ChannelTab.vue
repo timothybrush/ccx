@@ -10,6 +10,7 @@ import { useLanguage } from '@/composables/useLanguage'
 import { openProviderPromotion, openProviderConsole, providerConsoleLinks, providerPromotionLinks } from '@/lib/external-link'
 import compshareIcon from '@/assets/compshare.png'
 import runapiIcon from '@/assets/runapi.svg'
+import unity2Icon from '@/assets/unity2.jpg'
 import type { ProviderPreset, ProviderPlan, ChannelTarget } from '@/types'
 
 const { t, tf } = useLanguage()
@@ -31,6 +32,7 @@ const {
 const providerIcons: Record<string, string> = {
   compshare: compshareIcon,
   runapi: runapiIcon,
+  unity2: unity2Icon,
 }
 
 const selectedProvider = ref('')
@@ -59,6 +61,7 @@ const presetOrder = [
   'mimo',
   'compshare',
   'runapi',
+  'unity2',
   'openrouter',
   'kimi',
   'glm',

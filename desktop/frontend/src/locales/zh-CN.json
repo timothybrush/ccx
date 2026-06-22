@@ -308,6 +308,7 @@
   "agent.provider.mimoDirect": "MiMo 直连",
   "agent.provider.compshareDirect": "Compshare 直连",
   "agent.provider.runapiDirect": "RunAPI 直连",
+  "agent.provider.unity2Direct": "Unity2.ai 直连",
   "agent.provider.kimiDirect": "Kimi 直连",
   "agent.provider.glmDirect": "GLM 直连",
   "agent.provider.minimaxDirect": "MiniMax 直连",

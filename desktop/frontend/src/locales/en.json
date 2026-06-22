@@ -308,6 +308,7 @@
   "agent.provider.mimoDirect": "MiMo direct",
   "agent.provider.compshareDirect": "Compshare direct",
   "agent.provider.runapiDirect": "RunAPI direct",
+  "agent.provider.unity2Direct": "Unity2.ai direct",
   "agent.provider.kimiDirect": "Kimi direct",
   "agent.provider.glmDirect": "GLM direct",
   "agent.provider.minimaxDirect": "MiniMax direct",

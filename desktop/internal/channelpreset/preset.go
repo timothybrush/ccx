@@ -12,6 +12,7 @@ const (
 	ProviderMiMo         = "mimo"
 	ProviderCompshare    = "compshare"
 	ProviderRunAPI       = "runapi"
+	ProviderUnity2       = "unity2"
 	ProviderKimi         = "kimi"
 	ProviderGLM          = "glm"
 	ProviderMiniMax      = "minimax"
@@ -130,6 +131,7 @@ var providerConsoleURLs = map[string]string{
 	ProviderMiMo:         "https://platform.xiaomimimo.com/console/balance",
 	ProviderCompshare:    "https://console.compshare.cn/light-gpu/model-subscription",
 	ProviderRunAPI:       "https://runapi.co/console",
+	ProviderUnity2:       "https://unity2.ai/dashboard",
 	ProviderKimi:         "https://platform.moonshot.cn/console/account",
 	ProviderGLM:          "https://open.bigmodel.cn/coding-plan/personal/overview",
 	ProviderMiniMax:      "https://platform.minimaxi.com/user-center/payment/balance",
@@ -233,6 +235,25 @@ func Presets() []ProviderPreset {
 				{Type: TargetChat, Label: "Chat 渠道透传", Description: "OpenAI Chat 协议，供 Chat 客户端使用"},
 			},
 			DefaultTarget: TargetMessages,
+		},
+		{
+			ID:                  ProviderUnity2,
+			Order:               45,
+			Label:               "Unity2.ai",
+			Description:         "Unity2.ai 是面向个人开发者、团队、企业的高性能 AI 模型 API 中转平台，长期服务国内头部企业，日均承载超 300 亿 token 调用，支持 5000 RPM 级高并发。一个 API Key 即可适配 Claude Code、Codex、OpenAI 模型、IDE 插件和 Agent 工作流等场景。具备企业级稳定供应能力，在高并发、持续调用和团队集中采购场景下依然保持低延迟、高可用。现在注册 Unity2.ai 可领取 $2 余额，加入官方群再送 $10 余额，合计最高可领 $12 免费额度。",
+			DirectAgent:         true,
+			NativeMessages:      true,
+			ChatCompatible:      true,
+			ResponsesCompatible: true,
+			Plans: []ProviderPlan{
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://unity2.ai/v1", Description: "OpenAI Chat 兼容入口", Recommended: true},
+			},
+			Targets: []ChannelTarget{
+				{Type: TargetChat, Label: "Chat 渠道透传", Description: "OpenAI Chat 协议，供 Chat 客户端使用", Recommended: true},
+				{Type: TargetResponses, Label: "Codex Responses", Description: "OpenAI Responses 协议，供 Codex 使用"},
+				{Type: TargetMessages, Label: "Messages 原生透传", Description: "通过 CCX messages 渠道使用"},
+			},
+			DefaultTarget: TargetChat,
 		},
 		{
 			ID:                  ProviderKimi,
@@ -727,6 +748,7 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			VisionFallbackModel:      "MiniMax-M2.7",
 		},
 		ProviderRunAPI: {},
+		ProviderUnity2: {},
 		ProviderKimi: {
 			ModelMapping: map[string]string{
 				"fable":  "kimi-k2.6",
@@ -845,6 +867,7 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			VisionFallbackModel: "MiniMax-M2.7",
 		},
 		ProviderRunAPI:     {},
+		ProviderUnity2:     {},
 		ProviderOpenRouter: {},
 		ProviderModelScope: {
 			NormalizeNonstandardChatRoles: true,
@@ -907,6 +930,10 @@ var channelTargetConfigs = map[string]map[string]channelTargetConfig{
 			VisionFallbackModel:           "MiniMax-M2.7",
 		},
 		ProviderRunAPI: {
+			CodexToolCompat:       boolRef(false),
+			StripCodexClientTools: boolRef(false),
+		},
+		ProviderUnity2: {
 			CodexToolCompat:       boolRef(false),
 			StripCodexClientTools: boolRef(false),
 		},

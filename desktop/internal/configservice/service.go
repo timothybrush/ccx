@@ -25,6 +25,7 @@ const (
 	ProviderMiMo         = "mimo"
 	ProviderCompshare    = "compshare"
 	ProviderRunAPI       = "runapi"
+	ProviderUnity2       = "unity2"
 	ProviderKimi         = "kimi"
 	ProviderGLM          = "glm"
 	ProviderMiniMax      = "minimax"
@@ -43,6 +44,7 @@ const (
 	defaultMiMoBaseURL               = "https://api.xiaomimimo.com/anthropic"
 	compshareClaudeBaseURL           = "https://cp.compshare.cn"
 	runAPIBaseURL                    = "https://runapi.co/v1"
+	unity2BaseURL                    = "https://unity2.ai/v1"
 	kimiClaudeBaseURL                = "https://api.moonshot.cn/anthropic"
 	glmClaudeBaseURL                 = "https://open.bigmodel.cn/api/anthropic"
 	miniMaxClaudeBaseURL             = "https://api.minimaxi.com/anthropic"
@@ -267,7 +269,7 @@ func (s *Service) GetSavedProviderKeys() map[string]string {
 		planID := asset.PlanID
 		keys["channel:"+provider] = asset.APIKey
 		switch provider {
-		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderXFyun:
+		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderUnity2, ProviderXFyun:
 			if planID != "" {
 				keys[PlatformClaude+":"+provider+":"+planID] = asset.APIKey
 			}
@@ -855,6 +857,8 @@ func codexResponsesBaseURL(provider string) (string, bool) {
 		return "https://dashscope.aliyuncs.com/compatible-mode/v1", true
 	case ProviderRunAPI:
 		return runAPIBaseURL, true
+	case ProviderUnity2:
+		return unity2BaseURL, true
 	case ProviderOpenCodeZen:
 		return "https://opencode.ai/zen/v1", true
 	case ProviderOpenCodeGo:
@@ -1522,6 +1526,8 @@ func normalizeClaudeProvider(provider string) string {
 		return ProviderCompshare
 	case ProviderRunAPI:
 		return ProviderRunAPI
+	case ProviderUnity2:
+		return ProviderUnity2
 	case ProviderKimi:
 		return ProviderKimi
 	case ProviderGLM:
@@ -1561,6 +1567,8 @@ func normalizeCodexProvider(provider string) string {
 		return ProviderCompshare
 	case ProviderRunAPI:
 		return ProviderRunAPI
+	case ProviderUnity2:
+		return ProviderUnity2
 	case ProviderKimi:
 		return ProviderKimi
 	case ProviderGLM:
@@ -2704,6 +2712,8 @@ func normalizeOpenCodeProvider(provider string) string {
 		return ProviderCompshare
 	case ProviderRunAPI:
 		return ProviderRunAPI
+	case ProviderUnity2:
+		return ProviderUnity2
 	case ProviderKimi:
 		return ProviderKimi
 	case ProviderGLM:
@@ -2731,7 +2741,7 @@ func normalizeOpenCodeProvider(provider string) string {
 
 func isOpenCodeDirectProvider(provider string) bool {
 	switch provider {
-	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderXFyun, ProviderOpenCodeZen, ProviderOpenCodeGo, ProviderTencentLkeap, ProviderVolcArk, ProviderQianfan:
+	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderUnity2, ProviderKimi, ProviderGLM, ProviderMiniMax, ProviderDashScope, ProviderXFyun, ProviderOpenCodeZen, ProviderOpenCodeGo, ProviderTencentLkeap, ProviderVolcArk, ProviderQianfan:
 		return true
 	default:
 		return false

@@ -5,6 +5,7 @@ export const providerConsoleLinks: Record<string, string> = {
   mimo: 'https://platform.xiaomimimo.com/console/balance',
   compshare: 'https://console.compshare.cn/light-gpu/model-subscription',
   runapi: 'https://runapi.co/console',
+  unity2: 'https://unity2.ai/dashboard',
   'tencent-lkeap': 'https://console.cloud.tencent.com/lkeap/token-plan',
   kimi: 'https://platform.moonshot.cn/console/account',
   'volc-ark': 'https://console.volcengine.com/ark',
@@ -24,6 +25,7 @@ export const providerConsoleLinks: Record<string, string> = {
 export const providerPromotionLinks: Record<string, string> = {
   compshare: 'https://www.compshare.cn/?ytag=GPU_YY_git_ccx',
   runapi: 'https://runapi.co/register?aff=CqQO',
+  unity2: 'https://unity2.ai/register?source=ccx',
 }
 
 export function openExternalLink(url: string) {

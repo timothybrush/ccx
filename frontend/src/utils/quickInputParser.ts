@@ -255,6 +255,8 @@ const detectServiceTypeAndCleanUrl = (
       'https://api.lkeap.cloud.tencent.com/plan/v3',
       'https://ark.cn-beijing.volces.com/api/coding/v3',
       'https://qianfan.baidubce.com/v2/coding',
+      'https://runapi.co/api/v1',
+      'https://unity2.ai/v1',
       'https://openrouter.ai/api/v1',
       'https://api-inference.modelscope.cn/v1',
       'https://api.easytransnote.com/coding/v1',
