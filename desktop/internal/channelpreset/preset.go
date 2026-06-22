@@ -246,7 +246,8 @@ func Presets() []ProviderPreset {
 			ChatCompatible:      true,
 			ResponsesCompatible: true,
 			Plans: []ProviderPlan{
-				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://unity2.ai/v1", Description: "OpenAI Chat 兼容入口", Recommended: true},
+				{ID: "anthropic", Label: "Anthropic-compatible", BaseURL: "https://unity2.ai/v1", Description: "Claude Messages 原生入口", Recommended: true},
+				{ID: "openai-chat", Label: "OpenAI-compatible", BaseURL: "https://unity2.ai/v1", Description: "OpenAI Chat / Responses 兼容入口"},
 			},
 			Targets: []ChannelTarget{
 				{Type: TargetMessages, Label: "Messages 原生透传", Description: "Claude Code 直连或 CCX messages 渠道", Recommended: true},
