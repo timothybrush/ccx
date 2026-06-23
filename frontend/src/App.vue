@@ -88,7 +88,7 @@
             <v-list-item
               v-for="tab in translatedApiTabOptions"
               :key="tab.value"
-              :active="tab.value === 'conversations' ? route.path === '/conversations' : channelStore.activeTab === tab.value"
+              :active="route.path !== '/conversations' && channelStore.activeTab === tab.value"
               :to="tab.route"
             >
               <v-list-item-title>{{ tab.label }}</v-list-item-title>
@@ -116,10 +116,6 @@
           <span class="api-type-text separator">/</span>
           <router-link to="/channels/gemini" class="api-type-text" :class="{ active: channelStore.activeTab === 'gemini' && route.path !== '/conversations' }">
             {{ t('app.tabs.gemini') }}
-          </router-link>
-          <span class="api-type-text separator">/</span>
-          <router-link to="/conversations" class="api-type-text" :class="{ active: route.path === '/conversations' }">
-            {{ t('app.tabs.conversations') }}
           </router-link>
           <span class="brand-text d-none d-md-inline">API Proxy - CCX</span>
         </div>
@@ -220,6 +216,37 @@
         <v-icon size="20">mdi-logout</v-icon>
       </v-btn>
     </v-app-bar>
+
+    <v-navigation-drawer
+      v-if="isAuthenticated"
+      permanent
+      :rail="$vuetify.display.width < 960"
+      :width="204"
+      class="app-sidebar"
+    >
+      <v-list density="compact" nav class="sidebar-nav">
+        <v-list-item
+          to="/conversations"
+          prepend-icon="mdi-view-dashboard-outline"
+          :title="t('app.tabs.conversations')"
+          :active="route.path === '/conversations'"
+          class="sidebar-nav-item sidebar-nav-item-primary"
+        />
+        <v-divider class="my-2" />
+        <v-list-subheader v-if="$vuetify.display.width >= 960" class="sidebar-subheader">
+          {{ t('app.sidebar.channels') }}
+        </v-list-subheader>
+        <v-list-item
+          v-for="tab in translatedApiTabOptions"
+          :key="tab.value"
+          :to="tab.route"
+          :prepend-icon="tab.icon"
+          :title="tab.label"
+          :active="route.path !== '/conversations' && channelStore.activeTab === tab.value"
+          class="sidebar-nav-item"
+        />
+      </v-list>
+    </v-navigation-drawer>
 
     <!-- 主要内容 -->
     <v-main>
@@ -782,12 +809,11 @@ const currentLanguageShortLabel = computed(() => {
 
 // API 类型 Tab 选项（移动端下拉菜单使用）
 const apiTabOptions = [
-  { value: 'messages', labelKey: 'app.tabs.messages', route: '/channels/messages' },
-  { value: 'chat', labelKey: 'app.tabs.chat', route: '/channels/chat' },
-  { value: 'images', labelKey: 'app.tabs.images', route: '/channels/images' },
-  { value: 'responses', labelKey: 'app.tabs.responses', route: '/channels/responses' },
-  { value: 'gemini', labelKey: 'app.tabs.gemini', route: '/channels/gemini' },
-  { value: 'conversations', labelKey: 'app.tabs.conversations', route: '/conversations' },
+  { value: 'messages', labelKey: 'app.tabs.messages', route: '/channels/messages', icon: 'mdi-code-braces' },
+  { value: 'chat', labelKey: 'app.tabs.chat', route: '/channels/chat', icon: 'mdi-chat-processing-outline' },
+  { value: 'images', labelKey: 'app.tabs.images', route: '/channels/images', icon: 'mdi-image-outline' },
+  { value: 'responses', labelKey: 'app.tabs.responses', route: '/channels/responses', icon: 'mdi-console' },
+  { value: 'gemini', labelKey: 'app.tabs.gemini', route: '/channels/gemini', icon: 'mdi-google' },
 ] as const
 
 const translatedApiTabOptions = computed(() => {

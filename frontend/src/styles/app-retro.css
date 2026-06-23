@@ -467,6 +467,73 @@ a.api-type-text {
   font-weight: 700;
 }
 
+/* ----- 左侧一级导航 ----- */
+.app-sidebar {
+  background: rgb(var(--v-theme-surface)) !important;
+  border-right: 2px solid rgb(var(--v-theme-on-surface)) !important;
+  box-shadow: none !important;
+  top: 72px !important;
+  height: calc(100dvh - 72px) !important;
+}
+
+.v-theme--dark .app-sidebar {
+  border-right-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.sidebar-nav {
+  padding: 12px 8px !important;
+}
+
+.sidebar-subheader {
+  min-height: 24px !important;
+  padding-inline-start: 8px !important;
+  color: rgb(var(--v-theme-on-surface) / 55%) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: uppercase !important;
+}
+
+.sidebar-nav-item {
+  min-height: 42px !important;
+  margin-bottom: 6px !important;
+  border: 2px solid transparent !important;
+  border-radius: 0 !important;
+  font-weight: 700 !important;
+}
+
+.sidebar-nav-item .v-list-item-title {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.sidebar-nav-item.v-list-item--active {
+  color: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-on-surface)) !important;
+  background: rgba(var(--v-theme-primary), 0.12) !important;
+  box-shadow: 3px 3px 0 0 rgb(var(--v-theme-on-surface)) !important;
+}
+
+.sidebar-nav-item-primary.v-list-item--active {
+  color: rgb(var(--v-theme-warning)) !important;
+  background: rgba(var(--v-theme-warning), 0.14) !important;
+}
+
+.v-theme--dark .sidebar-nav-item.v-list-item--active {
+  border-color: rgba(255, 255, 255, 0.65) !important;
+  box-shadow: 3px 3px 0 0 rgba(255, 255, 255, 0.45) !important;
+}
+
+.app-sidebar.v-navigation-drawer--rail .sidebar-nav {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.app-sidebar.v-navigation-drawer--rail .sidebar-nav-item.v-list-item--active {
+  box-shadow: none !important;
+}
+
 .header-btn {
   border: 2px solid rgb(var(--v-theme-on-surface)) !important;
   box-shadow: 2px 2px 0 0 rgb(var(--v-theme-on-surface)) !important;
@@ -1013,6 +1080,11 @@ a.api-type-text {
     background: rgb(var(--v-theme-surface)) !important;
     border-bottom: 2px solid rgb(var(--v-theme-on-surface)) !important;
     box-shadow: none !important;
+  }
+
+  .app-sidebar {
+    top: 56px !important;
+    height: calc(100dvh - 56px) !important;
   }
 
   .v-theme--dark .app-header {
