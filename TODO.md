@@ -39,12 +39,3 @@
 
 备注：该需求目前不确定是否有更多用户需要，先记录为待评估项。
 
----
-
-## [x] web端编辑渠道对话框需要考虑屏幕宽度 适当缩减对话框高度
-
-有用户反应用宽屏幕 100% 比例下看不到保存按钮 要换到90% 比例才能看到 他的分辨率是1920x1080 默认用125%显示比例
-
-**关键变更：**
-- `frontend/src/components/EditChannelModal.vue` 为渠道编辑对话框启用 `scrollable`，移除主体区域内联固定高度。
-- `frontend/src/components/edit-channel/edit-channel-modal.css` 使用视口自适应高度限制对话框和主体内容，确保底部保存按钮在 1080p + 125% 缩放场景下保持可见。
