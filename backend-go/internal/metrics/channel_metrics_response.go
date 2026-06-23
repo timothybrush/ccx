@@ -976,6 +976,7 @@ type GlobalStatsSummary struct {
 	TotalCacheReadTokens     int64   `json:"totalCacheReadTokens"`
 	AvgSuccessRate           float64 `json:"avgSuccessRate"`
 	Duration                 string  `json:"duration"`
+	IntervalSeconds          int64   `json:"intervalSeconds,omitempty"`
 }
 
 // GlobalStatsHistoryResponse 全局统计响应

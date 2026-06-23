@@ -447,6 +447,7 @@ export interface GlobalStatsSummary {
   totalCacheReadTokens: number
   avgSuccessRate: number
   duration: string
+  intervalSeconds?: number
 }
 
 // 全局统计响应

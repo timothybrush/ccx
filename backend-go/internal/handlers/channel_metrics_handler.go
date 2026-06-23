@@ -467,11 +467,13 @@ func getChannelMetricsHistoryWithKind(metricsManager *metrics.MetricsManager, cf
 			for i, upstream := range upstreams {
 				channelBuckets := filterBucketsByURLs(store, apiType, since, intervalSec, upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), scheduler.NormalizedMetricsServiceType(kind, upstream.ServiceType))
 				points := convertBucketsToDataPoints(channelBuckets)
+				summary := summarizeAggregatedBuckets(durationLabel, channelBuckets)
+				summary.IntervalSeconds = intervalSec
 				result = append(result, MetricsHistoryResponse{
 					ChannelIndex: i,
 					ChannelName:  upstream.Name,
 					DataPoints:   points,
-					Summary:      summarizeAggregatedBuckets(durationLabel, channelBuckets),
+					Summary:      summary,
 				})
 			}
 			c.JSON(200, result)
@@ -481,11 +483,13 @@ func getChannelMetricsHistoryWithKind(metricsManager *metrics.MetricsManager, cf
 		result := make([]MetricsHistoryResponse, 0, len(upstreams))
 		for i, upstream := range upstreams {
 			dataPoints := metricsManager.GetHistoricalStatsMultiURL(upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), scheduler.NormalizedMetricsServiceType(kind, upstream.ServiceType), duration, interval)
+			summary := summarizeHistoryDataPoints(durationLabel, dataPoints)
+			summary.IntervalSeconds = int64(interval.Seconds())
 			result = append(result, MetricsHistoryResponse{
 				ChannelIndex: i,
 				ChannelName:  upstream.Name,
 				DataPoints:   dataPoints,
-				Summary:      summarizeHistoryDataPoints(durationLabel, dataPoints),
+				Summary:      summary,
 			})
 		}
 
@@ -599,6 +603,7 @@ func getChannelKeyMetricsHistoryWithKind(metricsManager *metrics.MetricsManager,
 			// 整个渠道的汇总
 			channelBuckets := filterBucketsByURLs(store, apiType, since, intervalSec, upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), serviceType)
 			result.Summary = summarizeAggregatedBuckets(durationLabel, channelBuckets)
+			result.Summary.IntervalSeconds = intervalSec
 
 			// 逐 key 生成曲线
 			colorIndex := 0
@@ -688,6 +693,7 @@ func getChannelKeyMetricsHistoryWithKind(metricsManager *metrics.MetricsManager,
 		// 内存路径的 summary：从整个渠道所有 key 聚合（而非仅 top 10 展示 keys）
 		channelDataPoints := metricsManager.GetHistoricalStatsMultiURL(upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), serviceType, duration, interval)
 		result.Summary = summarizeHistoryDataPoints(durationLabel, channelDataPoints)
+		result.Summary.IntervalSeconds = int64(interval.Seconds())
 
 		c.JSON(200, result)
 	}
@@ -960,12 +966,14 @@ func selectIntervalForDuration(intervalStr string, duration time.Duration) time.
 		return 15 * time.Minute
 	case duration <= 7*24*time.Hour:
 		return time.Hour
-	case duration <= 90*24*time.Hour:
+	case duration <= 30*24*time.Hour:
 		return 4 * time.Hour
-	case duration <= 180*24*time.Hour:
-		return 8 * time.Hour
-	default:
+	case duration <= 90*24*time.Hour:
 		return 12 * time.Hour
+	case duration <= 180*24*time.Hour:
+		return 24 * time.Hour
+	default:
+		return 48 * time.Hour
 	}
 }
 

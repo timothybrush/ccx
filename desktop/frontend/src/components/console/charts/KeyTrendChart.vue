@@ -211,26 +211,47 @@ const AGGREGATION_INTERVALS: Record<string, number> = {
   'today': 300000,
   '7d': 3600000,
   '30d': 14400000,
-  '90d': 14400000,
-  '180d': 28800000,
-  '365d': 43200000,
-  'thisyear': 0, // 动态计算
+  '90d': 43200000,
+  '180d': 86400000,
+  '365d': 172800000,
+  'thisyear': 43200000,
 }
 
 const getAggregationInterval = (duration: string): number => {
-  if (duration === 'thisyear') {
-    // 计算今年已过天数，选择合适的间隔（与后端逻辑一致）
-    const now = new Date()
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const daysPassed = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 3600000))
-
-    if (daysPassed <= 7) return 3600000      // ≤7d: 1 hour
-    if (daysPassed <= 90) return 14400000    // ≤90d: 4 hours
-    if (daysPassed <= 180) return 28800000   // ≤180d: 8 hours
-    return 43200000                          // >180d: 12 hours
+  const intervalSeconds = props.summary?.intervalSeconds
+  if (intervalSeconds && intervalSeconds > 0) {
+    return intervalSeconds * 1000
   }
   return AGGREGATION_INTERVALS[duration] || 60000
 }
+
+const firstNonEmptyTimestamp = computed(() => {
+  if (!props.data?.length) return undefined
+  let earliest = Infinity
+  props.data.forEach(keyData => {
+    if (!keyData.dataPoints?.length) return
+    keyData.dataPoints.forEach(dp => {
+      const hasVisibleData = selectedView.value === 'traffic'
+        ? dp.requestCount > 0
+        : selectedView.value === 'tokens'
+          ? dp.inputTokens > 0 || dp.outputTokens > 0
+          : dp.cacheReadTokens > 0 || dp.cacheCreationTokens > 0
+      if (hasVisibleData) {
+        const ts = new Date(dp.timestamp).getTime()
+        if (ts < earliest) earliest = ts
+      }
+    })
+  })
+  return earliest === Infinity ? undefined : earliest
+})
+
+const xaxisMin = computed(() => {
+  if (!['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value)) return undefined
+  const ts = firstNonEmptyTimestamp.value
+  if (ts === undefined) return undefined
+  const interval = getAggregationInterval(selectedDuration.value)
+  return ts - interval
+})
 
 
 const getFailureOpacity = (failureRate: number): number => {
@@ -436,6 +457,7 @@ const chartOptions = computed<ApexOptions>(() => {
     grid: { borderColor: gridBorder.value, padding: { left: 10, right: 10 } },
     xaxis: {
       type: 'datetime',
+      min: xaxisMin.value,
       labels: {
         datetimeUTC: false,
         format: xLabelFormat.value,

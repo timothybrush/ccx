@@ -77,6 +77,7 @@ func GetGlobalStatsHistory(metricsManager *metrics.MetricsManager) gin.HandlerFu
 			result := metrics.GlobalStatsHistoryResponse{
 				Summary: metrics.GlobalStatsSummary{
 					Duration:                 durationStr,
+					IntervalSeconds:          intervalSec,
 					TotalRequests:            totalReqs,
 					TotalSuccess:             totalSuccess,
 					TotalFailure:             totalReqs - totalSuccess,
@@ -95,6 +96,7 @@ func GetGlobalStatsHistory(metricsManager *metrics.MetricsManager) gin.HandlerFu
 
 		// <=24h 走内存
 		result := metricsManager.GetGlobalHistoricalStatsWithTokens(duration, interval)
+		result.Summary.IntervalSeconds = int64(interval.Seconds())
 		if durationStr == "today" {
 			result.Summary.Duration = "today"
 		} else if durationStr == "thisyear" {

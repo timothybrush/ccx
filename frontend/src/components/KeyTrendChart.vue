@@ -212,34 +212,27 @@ const keyColors = [
 const FAILURE_RATE_THRESHOLD = 0.1 // 10%
 
 // Aggregation interval settings (kept consistent with the backend selectIntervalForDuration)
-// 1h = 1m, 6h = 5m, 24h = 15m, 7d = 1h, <=90d = 4h, <=180d = 8h, >180d = 12h
+// Keep each default range under 200 buckets.
 const AGGREGATION_INTERVALS: Record<Duration, number> = {
-  '1h': 60000,         // 1 minute
-  '6h': 300000,        // 5 minutes
-  '24h': 900000,       // 15 minutes
-  'today': 300000,     // 5 minutes (today uses 5-minute intervals by default)
-  '7d': 3600000,       // 1 hour
-  '30d': 14400000,     // 4 hours
-  '90d': 14400000,     // 4 hours
-  '180d': 28800000,    // 8 hours
-  '365d': 43200000,    // 12 hours
-  'thisyear': 0        // 动态计算（根据今年已过天数）
+  '1h': 60000,          // 1 minute
+  '6h': 300000,         // 5 minutes
+  '24h': 900000,        // 15 minutes
+  'today': 300000,       // 5 minutes fallback
+  '7d': 3600000,        // 1 hour
+  '30d': 14400000,      // 4 hours
+  '90d': 43200000,      // 12 hours
+  '180d': 86400000,     // 24 hours
+  '365d': 172800000,    // 48 hours
+  'thisyear': 43200000  // 12 hours fallback
 }
 
 // Get the aggregation interval based on the selected duration
 const getAggregationInterval = (duration: Duration): number => {
-  if (duration === 'thisyear') {
-    // 计算今年已过天数，选择合适的间隔（与后端逻辑一致）
-    const now = new Date()
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const daysPassed = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 3600000))
-
-    if (daysPassed <= 7) return 3600000      // ≤7d: 1 hour
-    if (daysPassed <= 90) return 14400000    // ≤90d: 4 hours
-    if (daysPassed <= 180) return 28800000   // ≤180d: 8 hours
-    return 43200000                          // >180d: 12 hours
+  const intervalSeconds = summaryData.value?.intervalSeconds
+  if (intervalSeconds && intervalSeconds > 0) {
+    return intervalSeconds * 1000
   }
-  return AGGREGATION_INTERVALS[duration]
+  return AGGREGATION_INTERVALS[duration] || 60000
 }
 
 // Align the timestamp to the aggregation bucket (round down)
@@ -384,7 +377,38 @@ const failureAnnotations = computed(() => {
   return annotations
 })
 
-// Computed: get all data points flattened
+// Computed: trim leading empty buckets for long-duration charts
+// When data only exists for a few days and duration is 365d, avoid compressing
+// the real data into a narrow strip by starting the x-axis at the first
+// non-empty timestamp (minus one interval of context).
+const firstNonEmptyTimestamp = computed(() => {
+  if (!historyData.value?.keys?.length) return undefined
+  let earliest = Infinity
+  historyData.value.keys.forEach(keyData => {
+    if (!keyData.dataPoints?.length) return
+    keyData.dataPoints.forEach(dp => {
+      const hasVisibleData = selectedView.value === 'traffic'
+        ? dp.requestCount > 0
+        : selectedView.value === 'tokens'
+          ? dp.inputTokens > 0 || dp.outputTokens > 0
+          : dp.cacheReadTokens > 0 || dp.cacheCreationTokens > 0
+      if (hasVisibleData) {
+        const ts = new Date(dp.timestamp).getTime()
+        if (ts < earliest) earliest = ts
+      }
+    })
+  })
+  return earliest === Infinity ? undefined : earliest
+})
+
+const xaxisMin = computed(() => {
+  if (!['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value)) return undefined
+  const ts = firstNonEmptyTimestamp.value
+  if (ts === undefined) return undefined
+  const interval = getAggregationInterval(selectedDuration.value)
+  // Leave one interval of context before the first data point
+  return ts - interval
+})
 const _allDataPoints = computed(() => {
   if (!historyData.value?.keys) return []
   return historyData.value.keys.flatMap(k => k.dataPoints || [])
@@ -506,6 +530,7 @@ const chartOptions = computed<ApexOptions>(() => {
     },
     xaxis: {
       type: 'datetime',
+      min: xaxisMin.value,
       labels: {
         datetimeUTC: false,
         format: ['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value) ? 'MM-dd HH:mm' : 'HH:mm',

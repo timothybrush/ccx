@@ -440,6 +440,7 @@ export interface GlobalStatsSummary {
   totalCacheReadTokens: number
   avgSuccessRate: number
   duration: string
+  intervalSeconds?: number
 }
 
 export interface GlobalStatsHistoryResponse {

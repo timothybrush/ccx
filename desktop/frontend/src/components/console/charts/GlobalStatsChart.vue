@@ -309,20 +309,25 @@ const hasMultiModel = computed(() => sortedModels.value.length > 0)
 const FAILURE_RATE_THRESHOLD = 0.1 // 10%
 
 // Aggregation interval settings (kept consistent with the backend)
+// Keep each default range under 200 buckets.
 const AGGREGATION_INTERVALS: Record<Duration, number> = {
-  '1h': 60000,         // 1 minute
-  '6h': 300000,        // 5 minutes
-  '24h': 900000,       // 15 minutes
-  'today': 300000,     // 5 minutes
-  '7d': 3600000,       // 1 hour
-  '30d': 14400000,     // 4 hours
-  '90d': 14400000,     // 4 hours
-  '180d': 28800000,    // 8 hours
-  '365d': 43200000,    // 12 hours
-  'thisyear': 43200000 // 12 hours
+  '1h': 60000,          // 1 minute
+  '6h': 300000,         // 5 minutes
+  '24h': 900000,        // 15 minutes
+  'today': 300000,       // 5 minutes fallback
+  '7d': 3600000,        // 1 hour
+  '30d': 14400000,      // 4 hours
+  '90d': 43200000,      // 12 hours
+  '180d': 86400000,     // 24 hours
+  '365d': 172800000,    // 48 hours
+  'thisyear': 43200000  // 12 hours fallback
 }
 
 const getAggregationInterval = (duration: Duration): number => {
+  const intervalSeconds = summary.value?.intervalSeconds
+  if (intervalSeconds && intervalSeconds > 0) {
+    return intervalSeconds * 1000
+  }
   return AGGREGATION_INTERVALS[duration] || 60000
 }
 
@@ -380,6 +385,29 @@ const failureAnnotations = computed(() => {
   })
 
   return annotations
+})
+
+const firstNonEmptyTimestamp = computed(() => {
+  if (!historyData.value?.dataPoints?.length) return undefined
+  let earliest = Infinity
+  historyData.value.dataPoints.forEach(dp => {
+    const hasVisibleData = selectedView.value === 'traffic'
+      ? dp.requestCount > 0
+      : dp.inputTokens > 0 || dp.outputTokens > 0 || dp.cacheReadTokens > 0 || dp.cacheCreationTokens > 0
+    if (hasVisibleData) {
+      const ts = new Date(dp.timestamp).getTime()
+      if (ts < earliest) earliest = ts
+    }
+  })
+  return earliest === Infinity ? undefined : earliest
+})
+
+const xaxisMin = computed(() => {
+  if (!['7d', '30d', '90d', '180d', '365d', 'thisyear'].includes(selectedDuration.value)) return undefined
+  const ts = firstNonEmptyTimestamp.value
+  if (ts === undefined) return undefined
+  const interval = getAggregationInterval(selectedDuration.value)
+  return ts - interval
 })
 
 // Format number for display
@@ -445,6 +473,7 @@ const chartOptions = computed<ApexOptions>(() => {
     },
     xaxis: {
       type: 'datetime',
+      min: xaxisMin.value,
       labels: {
         datetimeUTC: false,
         format: xLabelFormat,
