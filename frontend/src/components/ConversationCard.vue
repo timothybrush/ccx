@@ -152,7 +152,7 @@
             <v-spacer />
             <v-btn v-if="hasSubagentOverride" size="x-small" variant="text" @click.stop="handleClearSubagentOverride">Clear</v-btn>
           </div>
-          <div class="d-flex align-center ga-1 flex-wrap">
+          <div class="d-flex align-center ga-1 flex-wrap subagent-routing-chips">
             <v-chip
               v-for="ch in subagentSequence"
               :key="`sa-${ch.index}`"
@@ -752,6 +752,12 @@ function sendFeedback() {
   font-size: 11px;
 }
 
+.subagent-routing-chips {
+  max-height: 90px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .subagent-more {
   width: 100%;
   padding: 6px 10px;
@@ -776,8 +782,7 @@ function sendFeedback() {
   overflow-x: hidden;
   overflow-y: auto;
   /* 限制为约 20 个渠道的高度，超出滚动（每行 40px，留出半行提示下方有更多内容）*/
-  max-height: calc(20 * 40px);
-  /* 滚到头/尾时滚动链透传到外层页面，避免"卡住"感 */
+  max-height: calc(8 * 36px);
   overscroll-behavior: auto;
 }
 .channel-item {

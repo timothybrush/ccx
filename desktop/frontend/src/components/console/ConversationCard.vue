@@ -547,7 +547,7 @@ function shortId(value: string): string {
             清除
           </Button>
         </div>
-        <div class="flex flex-wrap items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5 max-h-[90px] overflow-y-auto overscroll-contain">
           <button
             v-for="ch in subagentSequence"
             :key="`sa-${ch.index}`"
@@ -731,7 +731,7 @@ function shortId(value: string): string {
 }
 
 .channel-sequence {
-  max-height: calc(20 * 40px);
+  max-height: calc(8 * 36px);
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--color-border);
