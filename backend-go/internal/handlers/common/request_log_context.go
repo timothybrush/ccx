@@ -23,6 +23,7 @@ type RequestLogContext struct {
 	SessionID string
 	Round     int
 	AgentCtx  *types.AgentContext
+	AgentRole string
 }
 
 func SetRequestLogContext(c *gin.Context, sessionID string, round int) {
@@ -34,10 +35,15 @@ func SetRequestLogContextWithAgent(c *gin.Context, sessionID string, round int, 
 	if c == nil {
 		return
 	}
+	agentRole := ""
+	if agentCtx != nil {
+		agentRole = agentCtx.AgentRole
+	}
 	c.Set(requestLogContextKey, RequestLogContext{
 		SessionID: strings.TrimSpace(sessionID),
 		Round:     round,
 		AgentCtx:  agentCtx,
+		AgentRole: agentRole,
 	})
 }
 
@@ -52,6 +58,15 @@ func AgentContextFromGin(c *gin.Context) *types.AgentContext {
 	}
 	snapshot := *ctx.AgentCtx
 	return &snapshot
+}
+
+// RequestConversationContextFromGin 获取请求对应的会话上下文（nil 安全）。
+func RequestConversationContextFromGin(c *gin.Context) (sessionID string, round int, agentRole string, ok bool) {
+	ctx, ok := requestLogContextFromGin(c)
+	if !ok {
+		return "", 0, "", false
+	}
+	return ctx.SessionID, ctx.Round, ctx.AgentRole, true
 }
 
 // sessionIDFromGin 从 gin.Context 读取会话标识（用于 ChannelLog.SessionID 关联）。

@@ -62,6 +62,26 @@ func (s *ChannelScheduler) TrackConversation(kind ChannelKind, userID, model str
 	}
 }
 
+// TrackConversationWithStatus 追踪对话并指定状态，主要用于流式请求的进行中展示。
+func (s *ChannelScheduler) TrackConversationWithStatus(kind ChannelKind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole, status string, agentCtx *types.AgentContext) {
+	if s.conversationTracker != nil && userID != "" {
+		s.conversationTracker.TrackWithStatus(string(kind), userID, model, channelIndex, channelName, sessionID, lastUserMessage, userMessageCount, agentRole, status, agentCtx)
+	}
+}
+
+func (s *ChannelScheduler) UpdateConversationStatus(kind ChannelKind, userID, status string) {
+	if s.conversationTracker != nil && userID != "" {
+		s.conversationTracker.UpdateStatus(string(kind), userID, status)
+	}
+}
+
+func (s *ChannelScheduler) UpdateConversationStatusByID(conversationID, status string) bool {
+	if s.conversationTracker == nil || conversationID == "" {
+		return false
+	}
+	return s.conversationTracker.UpdateStatusByID(conversationID, status)
+}
+
 func (s *ChannelScheduler) UpdateConversationTitle(kind ChannelKind, userID, title string) bool {
 	if s.conversationTracker == nil || userID == "" || title == "" {
 		return false

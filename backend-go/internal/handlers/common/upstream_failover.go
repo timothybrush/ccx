@@ -438,7 +438,9 @@ func TryUpstreamWithAllKeys(
 				markURLSuccess(currentBaseURL)
 			}
 
+			streamingUserID := ""
 			if isStream {
+				streamingUserID = trackStreamingConversation(c, channelScheduler, kind, model, channelIndex, upstream.Name)
 				StartStreamTimeoutObservation(c, channelLogStore, metricsKey, logRequestID, time.Now())
 			}
 			usage, err = handleSuccess(c, resp, upstreamCopy, apiKey, attemptBody)
@@ -446,6 +448,9 @@ func TryUpstreamWithAllKeys(
 				FinishStreamTimeoutObservation(c)
 			}
 			if err != nil {
+				if isStream && streamingUserID != "" {
+					channelScheduler.UpdateConversationStatus(kind, streamingUserID, "active")
+				}
 				lastError = err
 				// 区分客户端错误和渠道故障
 				if isClientSideError(err) {
@@ -602,4 +607,29 @@ func selectAttemptAPIKey(channelScheduler *scheduler.ChannelScheduler, kind sche
 	}
 
 	return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
+}
+
+func trackStreamingConversation(c *gin.Context, channelScheduler *scheduler.ChannelScheduler, kind scheduler.ChannelKind, model string, channelIndex int, channelName string) string {
+	if c == nil || channelScheduler == nil {
+		return ""
+	}
+
+	lastUserMsg, _ := c.Get("lastUserMessage")
+	lastUserMsgStr, _ := lastUserMsg.(string)
+	userMsgCount, _ := c.Get("userMessageCount")
+	userMsgCountInt, _ := userMsgCount.(int)
+	if lastUserMsgStr == "" && userMsgCountInt == 0 {
+		return ""
+	}
+
+	userID, _, agentRole, ok := RequestConversationContextFromGin(c)
+	if !ok || userID == "" {
+		return ""
+	}
+	if agentCtx := AgentContextFromGin(c); agentCtx != nil && agentRole == "" {
+		agentRole = agentCtx.AgentRole
+	}
+
+	channelScheduler.TrackConversationWithStatus(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, userMsgCountInt, agentRole, "streaming", AgentContextFromGin(c))
+	return userID
 }

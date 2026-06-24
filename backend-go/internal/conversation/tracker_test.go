@@ -155,6 +155,78 @@ func TestConversationTracker_StatusUpdatePersists(t *testing.T) {
 	}
 }
 
+func TestConversationTracker_UpdateStatusByID(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.Track("messages", "user-abc", "model-a", 0, "primary", "", "第一轮", 1, "")
+	conv := requireConversationByRawUserID(t, ct, "user-abc")
+
+	if !ct.UpdateStatusByID(conv.ID, "streaming") {
+		t.Fatal("expected UpdateStatusByID to update existing conversation")
+	}
+	updated, ok := ct.GetConversation(conv.ID)
+	if !ok {
+		t.Fatalf("expected conversation %s to exist", conv.ID)
+	}
+	if updated.Status != "streaming" {
+		t.Fatalf("expected status=streaming, got %s", updated.Status)
+	}
+	if ct.UpdateStatusByID("missing", "idle") {
+		t.Fatal("expected UpdateStatusByID to return false for missing conversation")
+	}
+	if ct.UpdateStatusByID("", "idle") {
+		t.Fatal("expected UpdateStatusByID to return false for empty id")
+	}
+}
+
+func TestConversationTracker_TrackWithStatusFallsBackToActiveTrack(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	ct.TrackWithStatus("messages", "user-abc", "model-a", 0, "primary", "", "第一轮", 1, "", "streaming")
+	conv := requireConversationByRawUserID(t, ct, "user-abc")
+	if conv.Status != "streaming" {
+		t.Fatalf("expected status=streaming, got %s", conv.Status)
+	}
+	if conv.RequestCount != 1 {
+		t.Fatalf("expected requestCount=1, got %d", conv.RequestCount)
+	}
+
+	ct.Track("messages", "user-abc", "model-a", 1, "backup", "", "第一轮", 1, "")
+	conv = requireConversationByRawUserID(t, ct, "user-abc")
+	if conv.Status != "active" {
+		t.Fatalf("expected status=active after normal Track, got %s", conv.Status)
+	}
+	if conv.RequestCount != 1 {
+		t.Fatalf("expected requestCount to remain user message count 1, got %d", conv.RequestCount)
+	}
+	if conv.CurrentChannel != 1 {
+		t.Fatalf("expected currentChannel=1, got %d", conv.CurrentChannel)
+	}
+}
+
+func TestConversationTracker_StreamingSubagentDoesNotDoubleCount(t *testing.T) {
+	ct := NewConversationTracker(1*time.Hour, 2*time.Hour)
+	defer ct.Stop()
+
+	agentCtx := &types.AgentContext{AgentRole: "subagent"}
+	ct.TrackWithStatus("messages", "user-abc", "model-a", 0, "primary", "", "子任务", 1, "subagent", "streaming", agentCtx)
+	conv := requireConversationByRawUserID(t, ct, "user-abc")
+	if !conv.HasSubagents {
+		t.Fatal("expected streaming pre-track to mark hasSubagents")
+	}
+	if conv.SubagentCount != 0 {
+		t.Fatalf("expected streaming pre-track not to increment subagentCount, got %d", conv.SubagentCount)
+	}
+
+	ct.Track("messages", "user-abc", "model-a", 0, "primary", "", "子任务", 1, "subagent", agentCtx)
+	conv = requireConversationByRawUserID(t, ct, "user-abc")
+	if conv.SubagentCount != 1 {
+		t.Fatalf("expected final Track to increment subagentCount once, got %d", conv.SubagentCount)
+	}
+}
+
 func TestConversationTracker_TTLFilterOnLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/state.json"

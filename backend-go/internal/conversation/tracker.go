@@ -106,8 +106,16 @@ func NewConversationTracker(idleTTL, expireTTL time.Duration, persistPath ...str
 }
 
 func (ct *ConversationTracker) Track(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole string, agentCtx ...*types.AgentContext) {
+	ct.TrackWithStatus(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, userMessageCount, agentRole, "active", agentCtx...)
+}
+
+// TrackWithStatus 追踪对话并写入指定状态，用于流式请求开始时让驾驶舱立即可见。
+func (ct *ConversationTracker) TrackWithStatus(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole, status string, agentCtx ...*types.AgentContext) {
 	if userID == "" {
 		return
+	}
+	if status == "" {
+		status = "active"
 	}
 
 	ct.mu.Lock()
@@ -158,12 +166,14 @@ func (ct *ConversationTracker) Track(kind, userID, model string, channelIndex in
 	conv.CurrentChannel = channelIndex
 	conv.ChannelName = channelName
 	conv.LastModel = model
-	conv.Status = "active"
+	conv.Status = status
 
 	// 角色观测：subagent 单独累计，主对话记录主渠道
 	if agentRole == "subagent" {
 		conv.HasSubagents = true
-		conv.SubagentCount++
+		if status != "streaming" {
+			conv.SubagentCount++
+		}
 		conv.SubagentChannel = channelIndex
 	} else {
 		conv.MainChannel = channelIndex
@@ -235,6 +245,25 @@ func (ct *ConversationTracker) UpdateStatus(kind, userID, status string) {
 	conv.Status = status
 	conv.LastActiveAt = time.Now()
 	ct.dirty = true
+}
+
+// UpdateStatusByID 按会话 ID 更新状态，用于请求生命周期结束后的状态回写。
+func (ct *ConversationTracker) UpdateStatusByID(conversationID, status string) bool {
+	if conversationID == "" {
+		return false
+	}
+
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	conv, ok := ct.conversations[conversationID]
+	if !ok {
+		return false
+	}
+	conv.Status = status
+	conv.LastActiveAt = time.Now()
+	ct.dirty = true
+	return true
 }
 
 func (ct *ConversationTracker) SetLastRequestID(kind, userID, requestID string) {
