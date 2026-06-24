@@ -540,7 +540,54 @@ func GetChannelModels(cfgManager *config.ConfigManager) gin.HandlerFunc {
 	}
 }
 
-// UpdateModelMapping 更新渠道的单个模型映射
+// DiagnoseCopilotChannel 诊断指定 Copilot 渠道的 GitHub 用户、token exchange 和 /models 可达性。
+func DiagnoseCopilotChannel(cfgManager *config.ConfigManager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel ID"})
+			return
+		}
+		var req struct {
+			AccessToken string `json:"accessToken"`
+		}
+		_ = c.ShouldBindJSON(&req)
+
+		cfg := cfgManager.GetConfig()
+		if id < 0 || id >= len(cfg.ResponsesUpstream) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+			return
+		}
+		upstream := cfg.ResponsesUpstream[id]
+		if upstream.ServiceType != "copilot" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Channel is not a copilot channel"})
+			return
+		}
+
+		accessToken := strings.TrimSpace(req.AccessToken)
+		if accessToken == "" && len(upstream.APIKeys) > 0 {
+			accessToken = strings.TrimSpace(upstream.APIKeys[0])
+		}
+		if accessToken == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No access token provided"})
+			return
+		}
+
+		httpClient := httpclient.GetManager().GetStandardClient(15*time.Second, upstream.InsecureSkipVerify, upstream.ProxyURL)
+		diagnoseResult, err := copilot.Diagnose(c.Request.Context(), httpClient, accessToken, upstream.ProxyURL, upstream.InsecureSkipVerify)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"channelId": id,
+			"name":      upstream.Name,
+			"result":    diagnoseResult,
+		})
+	}
+}
+
 func UpdateModelMapping(cfgManager *config.ConfigManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")

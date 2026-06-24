@@ -148,6 +148,7 @@
                 :is-editing="isEditing"
                 :restoring-key="restoringKey"
                 :service-type="form.serviceType"
+                :channel-id="props.channel?.index"
                 @update:api-keys="form.apiKeys = $event"
                 @restore-key="restoreDisabledKey"
               />

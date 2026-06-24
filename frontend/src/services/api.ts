@@ -122,6 +122,13 @@ export class ApiService {
     })
   }
 
+  async diagnoseCopilotChannel(channelId: number, accessToken?: string): Promise<Record<string, unknown>> {
+    return this.request(`/responses/channels/${channelId}/copilot/diagnose`, {
+      method: 'POST',
+      body: JSON.stringify({ accessToken })
+    })
+  }
+
   async getChannels(): Promise<ChannelsResponse> {
     return this.request('/messages/channels')
   }

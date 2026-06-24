@@ -240,6 +240,47 @@
                 {{ t('copilotOAuth.waiting') }}
               </span>
             </div>
+            <div class="d-flex align-center ga-2 mt-1">
+              <v-btn
+                v-if="copilotPolling || copilotOAuthLoading"
+                size="small"
+                color="warning"
+                variant="text"
+                @click="cancelCopilotOAuth"
+              >
+                {{ t('copilotOAuth.cancel') }}
+              </v-btn>
+              <v-btn
+                v-if="copilotOAuthError"
+                size="small"
+                color="primary"
+                variant="text"
+                @click="retryCopilotOAuth"
+              >
+                {{ t('copilotOAuth.retry') }}
+              </v-btn>
+            </div>
+            <div v-if="serviceType === 'copilot' && isEditing && channelId !== undefined" class="mt-3 d-flex flex-column ga-2">
+              <div class="d-flex align-center ga-2">
+                <v-btn
+                  color="secondary"
+                  variant="tonal"
+                  :loading="copilotDiagnoseLoading"
+                  @click="diagnoseCopilotChannel"
+                >
+                  {{ t('copilotDiagnose.button') }}
+                </v-btn>
+                <span v-if="copilotDiagnoseLoading" class="text-caption text-medium-emphasis">
+                  {{ t('copilotDiagnose.loading') }}
+                </span>
+              </div>
+              <v-alert v-if="copilotDiagnoseError" color="error" variant="tonal" density="compact">
+                {{ copilotDiagnoseError }}
+              </v-alert>
+              <v-alert v-if="copilotDiagnoseResult" color="info" variant="tonal" density="compact" class="text-caption">
+                <pre class="mb-0" style="white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(copilotDiagnoseResult, null, 2) }}</pre>
+              </v-alert>
+            </div>
           </div>
         </v-alert>
 
@@ -317,6 +358,7 @@ interface Props {
   isEditing: boolean
   restoringKey: string
   serviceType?: string
+  channelId?: number
 }
 
 const props = defineProps<Props>()
@@ -340,6 +382,9 @@ const copilotOAuthSuccess = ref(false)
 const copilotDeviceCode = ref('')
 const copilotUserCode = ref('')
 const copilotVerificationUri = ref('')
+const copilotDiagnoseLoading = ref(false)
+const copilotDiagnoseResult = ref<Record<string, unknown> | null>(null)
+const copilotDiagnoseError = ref('')
 let copilotPollTimer: number | null = null
 
 const hasConfigurableKeys = computed(() => props.apiKeys.length > 0)
@@ -421,6 +466,14 @@ const pollCopilotAccessToken = async (intervalSeconds: number) => {
       clearCopilotPollTimer()
       return
     }
+    if (token.error === 'expired_token') {
+      copilotOAuthError.value = t('copilotOAuth.expired')
+      copilotOAuthSuccess.value = false
+      copilotPolling.value = false
+      copilotOAuthLoading.value = false
+      clearCopilotPollTimer()
+      return
+    }
     if (token.error && token.error !== 'authorization_pending') {
       copilotOAuthError.value = token.errorDescription || token.error
       copilotOAuthSuccess.value = false
@@ -463,6 +516,31 @@ const startCopilotOAuth = async () => {
 }
 
 onBeforeUnmount(clearCopilotPollTimer)
+
+const cancelCopilotOAuth = () => {
+  clearCopilotPollTimer()
+  copilotPolling.value = false
+  copilotOAuthLoading.value = false
+}
+
+const retryCopilotOAuth = () => {
+  void startCopilotOAuth()
+}
+
+const diagnoseCopilotChannel = async () => {
+  if (!props.channelId) return
+  copilotDiagnoseLoading.value = true
+  copilotDiagnoseError.value = ''
+  copilotDiagnoseResult.value = null
+  try {
+    const latestKey = props.apiKeys[0]
+    copilotDiagnoseResult.value = await apiService.diagnoseCopilotChannel(props.channelId, latestKey)
+  } catch (err) {
+    copilotDiagnoseError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    copilotDiagnoseLoading.value = false
+  }
+}
 
 const copyKey = (key: string, index: number) => {
   navigator.clipboard.writeText(key)
