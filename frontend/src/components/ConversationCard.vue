@@ -123,26 +123,15 @@
       <!-- Expanded: Full channel sequence -->
       <div v-if="expanded" class="mt-3">
         <div class="text-caption text-medium-emphasis mb-1">{{ conversation.lastModel }}</div>
-        <div class="channel-sequence" @click.stop>
-          <div
-            v-for="(ch, i) in channelSequence"
-            :key="ch.index"
-            :class="['channel-item d-flex align-center pa-1', { 'demoted': isDemoted(i) }]"
-            :style="{ animationDelay: `${Math.min(i, 12) * 35}ms` }"
-            class="channel-item-animated"
-          >
-            <span class="seq-num">{{ String(i + 1).padStart(2, '0') }}</span>
-            <span class="seq-arrow">&rarr;</span>
-            <span class="text-caption flex-grow-1 channel-name" @click.stop="handleMoveToTop(ch, i)">{{ ch.name }}</span>
-            <v-chip v-if="ch.index === conversation.currentChannel" size="x-small" color="primary" variant="flat" class="mr-1">CURRENT</v-chip>
-            <v-chip v-else-if="ch.index === nextChannel" size="x-small" :color="nextChannelCircuitOpen ? 'error' : 'success'" variant="flat" class="mr-1">{{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}</v-chip>
-            <v-chip v-if="ch.status === 'suspended'" size="x-small" variant="flat" class="fused-chip mr-1">PAUSED</v-chip>
-            <v-chip v-if="ch.circuitOpen" size="x-small" color="error" variant="tonal" class="mr-1">TRIPPED</v-chip>
-            <v-btn icon size="x-small" variant="text" :disabled="i === channelSequence.length - 1" @click.stop="handleDemote(i)">
-              <v-icon size="14">mdi-arrow-down</v-icon>
-            </v-btn>
-          </div>
-        </div>
+        <ConversationChannelSequence
+          :channels="channelSequence"
+          :current-channel="conversation.currentChannel"
+          :next-channel="nextChannel"
+          :next-channel-circuit-open="nextChannelCircuitOpen"
+          :override-active="hasOverride"
+          @move-to-top="handleMoveToTop"
+          @demote="handleDemote"
+        />
 
         <!-- Subagent Routing：为主对话与 subagent 分别指定渠道 -->
         <div v-if="showSubagentSection" class="subagent-routing mt-3" @click.stop>
@@ -152,24 +141,15 @@
             <v-spacer />
             <v-btn v-if="hasSubagentOverride" size="x-small" variant="text" @click.stop="handleClearSubagentOverride">Clear</v-btn>
           </div>
-          <div class="channel-sequence" @click.stop>
-            <div
-              v-for="(ch, i) in subagentSequence"
-              :key="`sa-${ch.index}`"
-              :class="['channel-item d-flex align-center pa-1 channel-item-animated', { 'demoted': i >= subagentSequence.length - 1 }]"
-              :style="{ animationDelay: `${Math.min(i, 12) * 35}ms` }"
-            >
-              <span class="seq-num">{{ String(i + 1).padStart(2, '0') }}</span>
-              <span class="seq-arrow">&rarr;</span>
-              <span class="text-caption flex-grow-1 channel-name" @click.stop="handleSubagentMoveToTop(ch, i)">{{ ch.name }}</span>
-              <v-chip v-if="ch.index === subagentCurrentChannel" size="x-small" color="warning" variant="flat" class="mr-1">CURRENT</v-chip>
-              <v-chip v-if="ch.status === 'suspended'" size="x-small" variant="flat" class="fused-chip mr-1">PAUSED</v-chip>
-              <v-chip v-if="ch.circuitOpen" size="x-small" color="error" variant="tonal" class="mr-1">TRIPPED</v-chip>
-              <v-btn icon size="x-small" variant="text" :disabled="i === subagentSequence.length - 1" @click.stop="handleSubagentDemote(i)">
-                <v-icon size="14">mdi-arrow-down</v-icon>
-              </v-btn>
-            </div>
-          </div>
+          <ConversationChannelSequence
+            :channels="subagentSequence"
+            :current-channel="subagentCurrentChannel"
+            :next-channel="subagentNextChannel"
+            :next-channel-circuit-open="subagentNextChannelCircuitOpen"
+            :override-active="hasOverride"
+            @move-to-top="handleSubagentMoveToTop"
+            @demote="handleSubagentDemote"
+          />
         </div>
 
         <div class="feedback-panel mt-3" @click.stop>
@@ -211,6 +191,7 @@ import { computed, ref } from 'vue'
 import type { ConversationInfo, SequenceOverrideInfo, ChannelSequenceEntry } from '@/services/api'
 import type { SubagentSummary } from '@/utils/conversationDashboard'
 import { useI18n } from '@/i18n'
+import ConversationChannelSequence from './ConversationChannelSequence.vue'
 
 const { t } = useI18n()
 
@@ -399,6 +380,25 @@ const nextChannelCircuitOpen = computed(() => {
   return nextChannelInfo.value.circuitOpen === true
 })
 
+const subagentNextChannel = computed(() => {
+  const candidate = props.override?.subagentSequence?.[0]?.channelIndex ?? props.override?.sequence?.[0]?.channelIndex
+  return candidate !== undefined && candidate !== subagentCurrentChannel.value ? candidate : undefined
+})
+
+const subagentNextChannelInfo = computed(() => {
+  if (subagentNextChannel.value === undefined) return undefined
+  const existing = subagentSequence.value.find(ch => ch.index === subagentNextChannel.value)
+    ?? props.availableChannels.find(ch => ch.index === subagentNextChannel.value)
+  if (existing) return existing
+  const entry = props.override?.subagentSequence?.[0]
+  return { index: subagentNextChannel.value!, name: entry?.channelName || `Channel ${subagentNextChannel.value}`, status: 'active' }
+})
+
+const subagentNextChannelCircuitOpen = computed(() => {
+  if (!subagentNextChannelInfo.value) return false
+  return subagentNextChannelInfo.value.circuitOpen === true
+})
+
 const visibleChannels = computed(() => {
   const result: ChannelInfo[] = []
   const required = [currentChannelInfo.value, nextChannelInfo.value].filter((ch): ch is ChannelInfo => !!ch)
@@ -427,11 +427,6 @@ const visibleChannels = computed(() => {
 
 const hiddenCount = computed(() => Math.max(0, channelSequence.value.length - visibleChannels.value.length))
 
-function isDemoted(index: number): boolean {
-  if (!props.override) return false
-  return index >= channelSequence.value.length - 1
-}
-
 function buildSequence(channels: ChannelInfo[]): ChannelSequenceEntry[] {
   return channels.map(ch => ({ channelIndex: ch.index, channelName: ch.name }))
 }
@@ -457,21 +452,15 @@ function handleSubagentMoveToTop(ch: ChannelInfo, currentIdx: number) {
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence(current))
 }
 
-// subagent 渠道：下移一位
 function handleSubagentDemote(index: number) {
   const current = [...subagentSequence.value]
   if (index >= current.length - 1) return
-  ;[current[index], current[index + 1]] = [current[index + 1], current[index]]
+  const [item] = current.splice(index, 1)
+  current.push(item)
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence(current))
 }
 
-// subagent 渠道快捷覆盖：保留主序列不变，仅设置 subagent 专用序列
-function handleSubagentOverride(ch: ChannelInfo) {
-  const rest = subagentSequence.value.filter(c => c.index !== ch.index)
-  emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence([ch, ...rest]))
-}
-
-// 清除 subagent override（传空数组由后端忽略，这里通过重设主 override 不带 subagentSequence 实现）
+// 清除 subagent override：API 会省略空 subagentSequence，后端重建主 override 时移除旧子序列。
 function handleClearSubagentOverride() {
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), [])
 }
@@ -772,12 +761,6 @@ function sendFeedback() {
   font-size: 11px;
 }
 
-.subagent-routing-chips {
-  max-height: 90px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .subagent-more {
   width: 100%;
   padding: 6px 10px;
@@ -792,69 +775,6 @@ function sendFeedback() {
   margin-left: 6px;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-}
-
-/* Channel sequence (expanded) */
-.channel-sequence {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  /* 限制为约 20 个渠道的高度，超出滚动（每行 40px，留出半行提示下方有更多内容）*/
-  max-height: calc(8 * 36px);
-  overscroll-behavior: auto;
-}
-.channel-item {
-  border-bottom: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.6));
-}
-.channel-item:last-child {
-  border-bottom: none;
-}
-.channel-item-animated {
-  animation: ccx-slide-in 0.18s ease both;
-}
-.channel-item.demoted {
-  opacity: 0.5;
-}
-.seq-num {
-  font-size: 10px;
-  font-weight: 700;
-  opacity: 0.5;
-  min-width: 2.5ch;
-  font-variant-numeric: tabular-nums;
-}
-.seq-arrow {
-  font-size: 10px;
-  opacity: 0.35;
-  margin: 0 4px;
-}
-.channel-name {
-  cursor: pointer;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.channel-name:hover {
-  text-decoration: underline;
-  color: rgb(var(--v-theme-primary));
-}
-
-/* Fused chip */
-.fused-chip {
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--ccx-fused-stripe-b) 0px,
-    var(--ccx-fused-stripe-b) 4px,
-    var(--ccx-fused-stripe-a) 4px,
-    var(--ccx-fused-stripe-a) 8px
-  ) !important;
-  color: #fff !important;
-  border-radius: 0 !important;
-  border: none !important;
-  font-weight: 700;
-  font-size: 9px !important;
   letter-spacing: 0.05em;
 }
 
@@ -875,20 +795,6 @@ function sendFeedback() {
 .current-channel-chip {
   cursor: default !important;
   opacity: 0.85;
-}
-
-.next-channel-chip {
-  font-weight: 700;
-  animation: ccx-breathe 2s ease-in-out infinite;
-}
-.next-channel-chip :deep(.v-chip__content),
-.next-channel-chip :deep(.v-chip__append) {
-  color: #fff !important;
-}
-
-@keyframes ccx-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
 }
 
 .font-weight-mono {

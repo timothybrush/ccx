@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowDown, Check, ChevronDown, Copy, CornerUpLeft, GitBranch, MessageSquareReply, Send } from 'lucide-vue-next'
+import { Check, Copy, CornerUpLeft, GitBranch, MessageSquareReply, Send } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 import type {
   ChannelSequenceEntry,
@@ -11,6 +11,7 @@ import type {
   SequenceOverrideInfo,
 } from '@/services/admin-api'
 import type { SubagentSummary } from '@/utils/conversation-dashboard'
+import ConversationChannelSequence from './ConversationChannelSequence.vue'
 
 interface ChannelInfo {
   index: number
@@ -224,6 +225,25 @@ const subagentSequence = computed((): ChannelInfo[] => {
 const hasSubagentOverride = computed(() => !!props.override?.subagentSequence?.length)
 const showSubagentSection = computed(() => hasSubagentActivity.value || hasSubagentOverride.value)
 const subagentCurrentChannel = computed(() => props.conversation.subagentChannel ?? -1)
+const subagentNextChannel = computed(() => {
+  const candidate = props.override?.subagentSequence?.[0]?.channelIndex ?? props.override?.sequence?.[0]?.channelIndex
+  return candidate !== undefined && candidate !== subagentCurrentChannel.value ? candidate : undefined
+})
+
+const subagentNextChannelInfo = computed(() => {
+  if (subagentNextChannel.value === undefined) return undefined
+  const existing = subagentSequence.value.find(channel => channel.index === subagentNextChannel.value)
+    ?? normalizedAvailableChannels.value.find(channel => channel.index === subagentNextChannel.value)
+  if (existing) return existing
+  const entry = props.override?.subagentSequence?.[0]
+  return {
+    index: subagentNextChannel.value,
+    name: entry?.channelName || `Channel ${subagentNextChannel.value}`,
+    status: 'active',
+  }
+})
+
+const subagentNextChannelCircuitOpen = computed(() => subagentNextChannelInfo.value?.circuitOpen === true)
 
 function subagentStatusClass(status: ConversationInfo['status']): string {
   switch (status) {
@@ -232,11 +252,6 @@ function subagentStatusClass(status: ConversationInfo['status']): string {
     case 'idle': return 'bg-muted-foreground'
     default: return 'bg-muted-foreground'
   }
-}
-
-function isDemoted(index: number): boolean {
-  if (!props.override) return false
-  return index >= channelSequence.value.length - 1
 }
 
 function buildSequence(channels: ChannelInfo[]): ChannelSequenceEntry[] {
@@ -265,19 +280,12 @@ function channelChipClass(channel: ChannelInfo): string {
   return 'border-border bg-background/50 text-foreground hover:border-primary/40 hover:bg-accent/30'
 }
 
-function sequenceBadgeClass(channel: ChannelInfo): string {
-  if (channel.index === props.conversation.currentChannel) return 'bg-primary text-primary-foreground'
-  if (channel.index === nextChannel.value) return nextChannelCircuitOpen.value ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
-  return 'border border-border bg-muted/30 text-muted-foreground'
-}
-
 function handleQuickOverride(channel: ChannelInfo) {
   if (!hasOverride.value && channel.index === props.conversation.currentChannel && channel.status !== 'suspended' && !channel.circuitOpen) return
   const rest = channelSequence.value.filter(item => item.index !== channel.index)
   emit('setOverride', props.conversation.id, buildSequence([channel, ...rest]))
 }
 
-// subagent 渠道：移到最前
 function handleSubagentMoveToTop(channel: ChannelInfo, currentIndex: number) {
   if (currentIndex === 0) return
   const current = [...subagentSequence.value]
@@ -286,21 +294,15 @@ function handleSubagentMoveToTop(channel: ChannelInfo, currentIndex: number) {
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence(current))
 }
 
-// subagent 渠道：下移一位
 function handleSubagentDemote(index: number) {
   const current = [...subagentSequence.value]
   if (index >= current.length - 1) return
-  ;[current[index], current[index + 1]] = [current[index + 1], current[index]]
+  const [item] = current.splice(index, 1)
+  current.push(item)
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence(current))
 }
 
-// subagent 渠道快捷覆盖：保留主序列不变，仅设置 subagent 专用序列
-function handleSubagentOverride(channel: ChannelInfo) {
-  const rest = subagentSequence.value.filter(c => c.index !== channel.index)
-  emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), buildSequence([channel, ...rest]))
-}
-
-// 清除 subagent override
+// 清除 subagent override：API 会省略空 subagentSequence，后端重建主 override 时移除旧子序列。
 function handleClearSubagentOverride() {
   emit('setOverride', props.conversation.id, buildSequence(channelSequence.value), [])
 }
@@ -499,60 +501,15 @@ function shortId(value: string): string {
     <!-- Expanded: Full channel sequence -->
     <div v-if="expanded" class="mt-3">
       <div class="mb-1 text-xs text-muted-foreground">{{ conversation.lastModel }}</div>
-      <div class="channel-sequence" @click.stop>
-        <div
-          v-for="(channel, index) in channelSequence"
-          :key="channel.index"
-          class="channel-item channel-item-animated flex items-center gap-1 border-b border-border/60 px-2 py-1.5 last:border-b-0"
-          :class="{ demoted: isDemoted(index) }"
-          :style="{ animationDelay: `${Math.min(index, 12) * 35}ms` }"
-        >
-          <span class="seq-num">{{ String(index + 1).padStart(2, '0') }}</span>
-          <span class="seq-arrow">→</span>
-          <button
-            type="button"
-            class="channel-name min-w-0 flex-1 truncate text-left text-xs"
-            @click.stop="handleMoveToTop(channel, index)"
-          >
-            {{ channel.name }}
-          </button>
-          <span
-            v-if="channel.index === conversation.currentChannel"
-            class="sequence-badge"
-            :class="sequenceBadgeClass(channel)"
-          >
-            CURRENT
-          </span>
-          <span
-            v-else-if="channel.index === nextChannel"
-            class="sequence-badge"
-            :class="sequenceBadgeClass(channel)"
-          >
-            {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
-          </span>
-          <span
-            v-if="channel.status === 'suspended'"
-            class="sequence-badge fused-chip text-white"
-          >
-            PAUSED
-          </span>
-          <span
-            v-if="channel.circuitOpen"
-            class="sequence-badge bg-red-500 text-white"
-          >
-            TRIPPED
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="h-6 w-6"
-            :disabled="index === channelSequence.length - 1"
-            @click.stop="handleDemote(index)"
-          >
-            <ArrowDown class="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
+      <ConversationChannelSequence
+        :channels="channelSequence"
+        :current-channel="conversation.currentChannel"
+        :next-channel="nextChannel"
+        :next-channel-circuit-open="nextChannelCircuitOpen"
+        :override-active="hasOverride"
+        @move-to-top="handleMoveToTop"
+        @demote="handleDemote"
+      />
 
       <!-- Subagent Routing：为主对话与 subagent 分别指定渠道 -->
       <div v-if="showSubagentSection" class="subagent-routing mt-3 border-t border-dashed border-border pt-2" @click.stop>
@@ -564,25 +521,15 @@ function shortId(value: string): string {
             清除
           </Button>
         </div>
-        <div class="channel-sequence" @click.stop>
-          <div
-            v-for="(ch, i) in subagentSequence"
-            :key="`sa-${ch.index}`"
-            class="channel-item channel-item-animated flex items-center gap-1 border-b border-border/60 px-2 py-1.5 last:border-b-0"
-            :class="{ demoted: i >= subagentSequence.length - 1 }"
-            :style="{ animationDelay: `${Math.min(i, 12) * 35}ms` }"
-          >
-            <span class="seq-num">{{ String(i + 1).padStart(2, '0') }}</span>
-            <span class="seq-arrow">→</span>
-            <span class="channel-name flex-1 truncate text-xs" @click.stop="handleSubagentMoveToTop(ch, i)">{{ ch.name }}</span>
-            <span v-if="ch.index === subagentCurrentChannel" class="mr-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">CURRENT</span>
-            <span v-if="ch.status === 'suspended'" class="fused-chip mr-1">PAUSED</span>
-            <span v-if="ch.circuitOpen" class="mr-1 rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-500">TRIPPED</span>
-            <button type="button" class="ml-auto shrink-0 p-0.5 opacity-50 hover:opacity-100 disabled:opacity-20" :disabled="i === subagentSequence.length - 1" @click.stop="handleSubagentDemote(i)">
-              <ChevronDown class="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+        <ConversationChannelSequence
+          :channels="subagentSequence"
+          :current-channel="subagentCurrentChannel"
+          :next-channel="subagentNextChannel"
+          :next-channel-circuit-open="subagentNextChannelCircuitOpen"
+          :override-active="hasOverride"
+          @move-to-top="handleSubagentMoveToTop"
+          @demote="handleSubagentDemote"
+        />
       </div>
 
       <div class="mt-1 text-right">
@@ -749,61 +696,6 @@ function shortId(value: string): string {
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.channel-sequence {
-  max-height: calc(8 * 36px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 0;
-  overscroll-behavior: auto;
-}
-
-.channel-item-animated {
-  animation: ccx-slide-in 0.18s ease both;
-}
-
-.channel-item.demoted {
-  opacity: 0.5;
-}
-
-.seq-num {
-  min-width: 2.5ch;
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  font-weight: 700;
-  opacity: 0.5;
-}
-
-.seq-arrow {
-  font-size: 10px;
-  opacity: 0.35;
-}
-
-.channel-name:hover {
-  color: var(--color-primary);
-  text-decoration: underline;
-}
-
-.sequence-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-}
-
-.fused-chip {
-  border: none;
-  background: repeating-linear-gradient(
-    -45deg,
-    rgba(239, 68, 68, 0.9) 0,
-    rgba(239, 68, 68, 0.9) 4px,
-    rgba(127, 29, 29, 0.9) 4px,
-    rgba(127, 29, 29, 0.9) 8px
-  );
-}
-
 .override-alert {
   border-radius: 0;
 }
@@ -845,11 +737,6 @@ function shortId(value: string): string {
 @keyframes ccx-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
-}
-
-@keyframes ccx-slide-in {
-  from { opacity: 0; transform: translateX(-6px); }
-  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes ccx-alert-blink {
