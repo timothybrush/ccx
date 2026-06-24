@@ -82,6 +82,9 @@ func ValidateBaseURL(rawURL string) error {
 
 // DefaultVersionPrefixForService 返回服务类型默认自动补齐的版本前缀。
 func DefaultVersionPrefixForService(serviceType string) string {
+	if strings.EqualFold(serviceType, "copilot") {
+		return ""
+	}
 	if strings.EqualFold(serviceType, "gemini") {
 		return "/v1beta"
 	}
@@ -112,7 +115,7 @@ func CanonicalBaseURL(rawURL, serviceType string) string {
 	}
 
 	versionPrefix := DefaultVersionPrefixForService(serviceType)
-	if strings.HasSuffix(normalized, versionPrefix) {
+	if versionPrefix != "" && strings.HasSuffix(normalized, versionPrefix) {
 		return strings.TrimSuffix(normalized, versionPrefix)
 	}
 	return normalized
@@ -131,10 +134,14 @@ func MetricsIdentityBaseURL(rawURL, serviceType string) string {
 	if hasHash {
 		return normalized + "#"
 	}
+	versionPrefix := DefaultVersionPrefixForService(serviceType)
+	if versionPrefix == "" {
+		return normalized
+	}
 	if reBaseURLVersionSuffix.MatchString(normalized) {
 		return normalized
 	}
-	return normalized + DefaultVersionPrefixForService(serviceType)
+	return normalized + versionPrefix
 }
 
 // EquivalentBaseURLVariants 返回与当前 BaseURL 等效的兼容变体，
@@ -165,6 +172,11 @@ func EquivalentBaseURLVariants(rawURL, serviceType string) []string {
 	}
 
 	versionPrefix := DefaultVersionPrefixForService(serviceType)
+	if versionPrefix == "" {
+		add(normalized)
+		add(normalized + "/")
+		return variants
+	}
 	if reBaseURLVersionSuffix.MatchString(normalized) && !strings.HasSuffix(normalized, versionPrefix) {
 		add(normalized)
 		add(normalized + "/")

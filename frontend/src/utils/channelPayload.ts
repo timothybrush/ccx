@@ -28,7 +28,7 @@ type SelectableString = string | { title?: string; value?: unknown } | null | un
 
 export interface ChannelFormLike {
   name: string
-  serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | ''
+  serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | ''
   authHeader?: 'auto' | 'bearer' | 'x-api-key' | ''
   baseUrl: string
   baseUrls: string[]
@@ -401,7 +401,7 @@ export function buildChannelPayload(form: ChannelFormLike): Omit<Channel, 'index
 
   const channelData: Omit<Channel, 'index' | 'latency' | 'status'> = {
     name: form.name.trim(),
-    serviceType: form.serviceType as 'openai' | 'gemini' | 'claude' | 'responses',
+    serviceType: form.serviceType as 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot',
     baseUrl: deduplicatedUrls[0] || '',
     website: form.website.trim(),
     insecureSkipVerify: form.insecureSkipVerify,

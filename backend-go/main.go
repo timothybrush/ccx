@@ -19,6 +19,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/conversation"
 	"github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/BenedictKing/ccx/internal/handlers/chat"
+	"github.com/BenedictKing/ccx/internal/handlers/copilot"
 	"github.com/BenedictKing/ccx/internal/handlers/gemini"
 	"github.com/BenedictKing/ccx/internal/handlers/images"
 	"github.com/BenedictKing/ccx/internal/handlers/messages"
@@ -582,6 +583,10 @@ func main() {
 	// Web 管理界面 API 路由
 	apiGroup := r.Group("/api")
 	{
+		apiGroup.POST("/copilot/oauth/device/code", copilot.RequestDeviceCode())
+		apiGroup.POST("/copilot/oauth/token", copilot.PollAccessToken())
+		apiGroup.POST("/copilot/oauth/verify", copilot.VerifyToken())
+
 		// Messages 渠道管理
 		apiGroup.GET("/messages/channels", messages.GetUpstreams(cfgManager))
 		apiGroup.POST("/messages/channels", messages.AddUpstream(cfgManager))

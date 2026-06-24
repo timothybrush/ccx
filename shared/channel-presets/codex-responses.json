@@ -160,6 +160,15 @@
     },
     "xfyun": {
       "normalizeNonstandardChatRoles": true
+    },
+    "github-copilot": {
+      "serviceType": "copilot",
+      "baseUrl": "https://api.githubcopilot.com",
+      "codexToolCompat": false,
+      "stripCodexClientTools": false,
+      "codexNativeToolPassthrough": true,
+      "stripImageGenerationTool": true,
+      "normalizeNonstandardChatRoles": false
     }
   }
 }

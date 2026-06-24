@@ -18,6 +18,9 @@ import type {
   ChannelSequenceEntry,
   ChannelsResponse,
   ChannelStatus,
+  CopilotDeviceCodeResponse,
+  CopilotTokenResponse,
+  CopilotUserResponse,
   ConversationsResponse,
   GlobalStatsHistoryResponse,
   MetricsHistoryResponse,
@@ -99,6 +102,24 @@ export class ApiService {
 
     if (response.status === 204) return null
     return this.parseResponseBody(response)
+  }
+
+  async requestCopilotDeviceCode(): Promise<CopilotDeviceCodeResponse> {
+    return this.request('/copilot/oauth/device/code', { method: 'POST' })
+  }
+
+  async pollCopilotAccessToken(deviceCode: string): Promise<CopilotTokenResponse> {
+    return this.request('/copilot/oauth/token', {
+      method: 'POST',
+      body: JSON.stringify({ deviceCode })
+    })
+  }
+
+  async verifyCopilotAccessToken(accessToken: string): Promise<CopilotUserResponse> {
+    return this.request('/copilot/oauth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ accessToken })
+    })
   }
 
   async getChannels(): Promise<ChannelsResponse> {

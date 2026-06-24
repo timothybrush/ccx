@@ -176,7 +176,7 @@ import { parseQuickInput as parseQuickInputUtil } from '../utils/quickInputParse
 import { useI18n } from '../i18n'
 import { usePreferencesStore } from '../stores/preferences'
 
-type ServiceType = 'openai' | 'gemini' | 'claude' | 'responses'
+type ServiceType = 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot'
 type ChannelType = 'messages' | 'chat' | 'responses' | 'gemini' | 'images'
 
 interface Props {
@@ -231,6 +231,7 @@ const serviceTypeOptions = computed(() => {
     { title: 'Claude', value: 'claude' as const },
     { title: 'Gemini', value: 'gemini' as const },
     { title: 'Responses (Codex)', value: 'responses' as const },
+    { title: 'GitHub Copilot', value: 'copilot' as const },
   ]
 
   const reorder = (options: typeof allOptions, first: ServiceType) => {
@@ -275,6 +276,7 @@ const quickServiceTypeIcon = computed(() => {
     claude: 'mdi-message-processing',
     gemini: 'mdi-diamond-stone',
     responses: 'mdi-rocket-launch',
+    copilot: 'mdi-code-braces',
   }
   return iconMap[quickServiceType.value] || 'mdi-api'
 })
@@ -285,6 +287,7 @@ const quickServiceTypeColor = computed(() => {
     claude: 'orange',
     gemini: 'purple',
     responses: 'success',
+    copilot: 'grey-darken-2',
   }
   return colorMap[quickServiceType.value] || 'primary'
 })
@@ -295,6 +298,7 @@ const upstreamTypeCardStyle = computed(() => {
     claude: '249, 115, 22',
     gemini: '168, 85, 247',
     responses: '34, 197, 94',
+    copilot: '36, 41, 47',
   }
   const rgb = rgbMap[quickServiceType.value] || '99, 102, 241'
   return {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
+	"github.com/BenedictKing/ccx/internal/copilot"
 	"github.com/BenedictKing/ccx/internal/session"
 	"github.com/BenedictKing/ccx/internal/types"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -65,6 +66,18 @@ func (p *ResponsesProvider) ConvertBodyToProviderRequest(
 		return nil, bodyBytes, err
 	}
 
+	requestAPIKey := apiKey
+	if upstream.ServiceType == "copilot" {
+		copilotToken, copilotBaseURL, err := copilot.ResolveToken(c.Request.Context(), apiKey)
+		if err != nil {
+			return nil, bodyBytes, fmt.Errorf("获取 GitHub Copilot token 失败: %w", err)
+		}
+		requestAPIKey = copilotToken
+		if copilotBaseURL != "" {
+			targetURL = strings.TrimRight(copilotBaseURL, "/") + "/responses"
+		}
+	}
+
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, targetURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, bodyBytes, err
@@ -78,22 +91,27 @@ func (p *ResponsesProvider) ConvertBodyToProviderRequest(
 	switch upstream.ServiceType {
 	case "gemini":
 		if utils.HasAuthenticationHeaderOverride(upstream.AuthHeader) {
-			utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, upstream.AuthHeader)
+			utils.SetAuthenticationHeaderWithOverride(req.Header, requestAPIKey, upstream.AuthHeader)
 		} else {
-			utils.SetGeminiAuthenticationHeader(req.Header, apiKey)
+			utils.SetGeminiAuthenticationHeader(req.Header, requestAPIKey)
 		}
 	case "claude":
-		utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, "x-api-key")
+		utils.SetAuthenticationHeaderWithOverride(req.Header, requestAPIKey, "x-api-key")
 		if utils.HasAuthenticationHeaderOverride(upstream.AuthHeader) {
-			utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, upstream.AuthHeader)
+			utils.SetAuthenticationHeaderWithOverride(req.Header, requestAPIKey, upstream.AuthHeader)
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
+	case "copilot":
+		copilot.ApplyRuntimeHeaders(req.Header, requestAPIKey)
 	default:
-		utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, upstream.AuthHeader)
+		utils.SetAuthenticationHeaderWithOverride(req.Header, requestAPIKey, upstream.AuthHeader)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	utils.ApplyCustomHeaders(req.Header, upstream.CustomHeaders)
+	if upstream.ServiceType == "copilot" {
+		copilot.ApplyRuntimeHeaders(req.Header, requestAPIKey)
+	}
 
 	return req, bodyBytes, nil
 }
@@ -500,7 +518,7 @@ func (p *ResponsesProvider) buildTargetURL(upstream *config.UpstreamConfig) stri
 
 	var endpoint string
 	switch upstream.ServiceType {
-	case "responses":
+	case "responses", "copilot":
 		endpoint = "/responses"
 	case "claude":
 		endpoint = "/messages"
@@ -510,6 +528,12 @@ func (p *ResponsesProvider) buildTargetURL(upstream *config.UpstreamConfig) stri
 		endpoint = "/chat/completions"
 	}
 
+	if upstream.ServiceType == "copilot" {
+		if baseURL == "" {
+			baseURL = copilot.DefaultAPIBaseURL
+		}
+		return baseURL + endpoint
+	}
 	if hasVersionSuffix || skipVersionPrefix {
 		return baseURL + endpoint
 	}

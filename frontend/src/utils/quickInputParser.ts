@@ -199,13 +199,13 @@ const extractTokens = (input: string): string[] => {
  */
 const detectServiceTypeAndCleanUrl = (
   url: string
-): { serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | null; cleanedUrl: string } => {
+): { serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | null; cleanedUrl: string } => {
   try {
     const cleanUrl = url.replace(/#$/, '')
     const parsed = new URL(cleanUrl)
     const path = parsed.pathname.toLowerCase()
 
-    const endpointRules: Array<{ pattern: RegExp; serviceType: 'openai' | 'gemini' | 'claude' | 'responses' }> = [
+    const endpointRules: Array<{ pattern: RegExp; serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' }> = [
       { pattern: /\/v\d+[a-z]*\/messages(?:\/|$)/, serviceType: 'claude' },
       { pattern: /\/messages(?:\/|$)/, serviceType: 'claude' },
       { pattern: /\/v\d+[a-z]*\/chat\/completions(?:\/|$)/, serviceType: 'openai' },
@@ -227,6 +227,9 @@ const detectServiceTypeAndCleanUrl = (
     }
 
     const urlKey = `${parsed.origin}${path}`.replace(/\/$/, '')
+    if (parsed.hostname.toLowerCase() === 'api.githubcopilot.com') {
+      return { serviceType: 'copilot', cleanedUrl: parsed.origin }
+    }
     const knownClaudeUrls = new Set([
       'https://cp.compshare.cn',
       'https://api.kimi.com/coding',
@@ -278,6 +281,9 @@ const detectServiceTypeAndCleanUrl = (
     if (/\bresponses\b/.test(hintText)) {
       return { serviceType: 'responses', cleanedUrl: url }
     }
+    if (/\bcopilot\b/.test(hintText)) {
+      return { serviceType: 'copilot', cleanedUrl: url }
+    }
     if (/\b(openai|chatgpt)\b/.test(hintText)) {
       return { serviceType: 'openai', cleanedUrl: url }
     }
@@ -304,7 +310,7 @@ const detectServiceTypeAndCleanUrl = (
 }
 
 // 保留导出以兼容可能的外部使用
-export const detectServiceType = (url: string): 'openai' | 'gemini' | 'claude' | 'responses' | null => {
+export const detectServiceType = (url: string): 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | null => {
   return detectServiceTypeAndCleanUrl(url).serviceType
 }
 
@@ -334,10 +340,10 @@ export const parseQuickInput = (
   detectedBaseUrls: string[]
   rawBaseUrls: string[]
   detectedApiKeys: string[]
-  detectedServiceType: 'openai' | 'gemini' | 'claude' | 'responses' | null
+  detectedServiceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | null
 } => {
   const rawUrls: string[] = []
-  let detectedServiceType: 'openai' | 'gemini' | 'claude' | 'responses' | null = null
+  let detectedServiceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | null = null
   const detectedApiKeys: string[] = []
 
   const tokens = extractTokens(input)

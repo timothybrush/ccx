@@ -2,6 +2,7 @@
 package responses
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/copilot"
 	handlers "github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/httpclient"
@@ -295,6 +297,15 @@ func buildPingRequest(upstream config.UpstreamConfig, baseURL string) (*http.Req
 				req.Header.Set("x-goog-api-key", upstream.APIKeys[0])
 			}
 		}
+	case "copilot":
+		req, _ = http.NewRequest(http.MethodGet, strings.TrimSuffix(baseURL, "/")+"/models", nil)
+		if len(upstream.APIKeys) > 0 {
+			copilotToken, _, err := copilot.ResolveToken(context.Background(), upstream.APIKeys[0])
+			if err != nil {
+				return nil, err
+			}
+			copilot.ApplyRuntimeHeaders(req.Header, copilotToken)
+		}
 	default:
 		req, _ = http.NewRequest(http.MethodGet, buildModelsURL(baseURL), nil)
 		if len(upstream.APIKeys) > 0 {
@@ -345,6 +356,9 @@ func buildGeminiModelsURL(baseURL string) string {
 
 // buildModelsURL 构建 models 端点的 URL
 func buildModelsURL(baseURL string) string {
+	if strings.Contains(baseURL, "api.githubcopilot.com") {
+		return strings.TrimSuffix(strings.TrimSuffix(baseURL, "#"), "/") + "/models"
+	}
 	return buildEndpointURL(baseURL, "/v1", "/models")
 }
 
@@ -452,6 +466,9 @@ func GetChannelModels(cfgManager *config.ConfigManager) gin.HandlerFunc {
 
 		// 5. 发起请求
 		url := buildModelsURL(baseURL)
+		if serviceType == "copilot" {
+			url = strings.TrimSuffix(strings.TrimSuffix(baseURL, "#"), "/") + "/models"
+		}
 		client := httpclient.GetManager().GetStandardClient(10*time.Second, insecureSkipVerify, proxyURL)
 		if req.BaseURL != "" && req.ProxyURL != "" {
 			client = httpclient.GetManager().NewStandardClient(10*time.Second, insecureSkipVerify, proxyURL)
@@ -477,6 +494,13 @@ func GetChannelModels(cfgManager *config.ConfigManager) gin.HandlerFunc {
 			} else {
 				httpReq.Header.Set("x-goog-api-key", apiKey)
 			}
+		case "copilot":
+			copilotToken, _, err := copilot.ResolveToken(c.Request.Context(), apiKey)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("Failed to exchange Copilot token: %v", err)})
+				return
+			}
+			copilot.ApplyRuntimeHeaders(httpReq.Header, copilotToken)
 		default:
 			utils.SetAuthenticationHeaderWithOverride(httpReq.Header, apiKey, authHeader)
 		}

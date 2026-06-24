@@ -70,7 +70,7 @@ func GetProvider(serviceType string) Provider {
 		return &GeminiProvider{}
 	case "claude":
 		return &ClaudeProvider{}
-	case "responses":
+	case "responses", "copilot":
 		return &ResponsesProvider{SessionManager: newDefaultSessionManager()}
 	default:
 		return nil

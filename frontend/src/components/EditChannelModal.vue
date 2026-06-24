@@ -147,6 +147,7 @@
                 :key-models-status="keyModelsStatus"
                 :is-editing="isEditing"
                 :restoring-key="restoringKey"
+                :service-type="form.serviceType"
                 @update:api-keys="form.apiKeys = $event"
                 @restore-key="restoreDisabledKey"
               />
@@ -280,7 +281,7 @@ const theme = useTheme()
 // 表单引用
 const formRef = ref()
 
-const defaultServiceTypeValueFallback = (): 'openai' | 'gemini' | 'claude' | 'responses' => {
+const defaultServiceTypeValueFallback = (): 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' => {
   if (props.channelType === 'chat') return 'openai'
   if (props.channelType === 'gemini') return 'gemini'
   if (props.channelType === 'responses') return 'responses'
@@ -379,7 +380,8 @@ const serviceTypeOptions = computed(() => {
     { title: 'OpenAI Chat', value: 'openai' },
     { title: 'Claude', value: 'claude' },
     { title: 'Gemini', value: 'gemini' },
-    { title: 'Responses (Codex)', value: 'responses' }
+    { title: 'Responses (Codex)', value: 'responses' },
+    { title: 'GitHub Copilot', value: 'copilot' }
   ]
 
   // 根据入口接口类型调整排序（原生/默认类型排第一）
@@ -619,7 +621,7 @@ type StreamTimeoutPresetKey = 'gentle' | 'balanced' | 'aggressive' | 'custom'
 
 const form = reactive({
   name: '',
-  serviceType: '' as 'openai' | 'gemini' | 'claude' | 'responses' | '',
+  serviceType: '' as 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot' | '',
   authHeader: 'auto' as 'auto' | 'bearer' | 'x-api-key' | '',
   baseUrl: '',
   baseUrls: [] as string[],

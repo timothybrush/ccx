@@ -4,7 +4,7 @@ package converters
 // 根据上游服务类型返回对应的转换器实例
 
 // NewConverter 创建转换器实例
-// serviceType: "openai", "claude", "gemini", "responses"
+// serviceType: "openai", "claude", "gemini", "responses", "copilot"
 func NewConverter(serviceType string) ResponsesConverter {
 	switch serviceType {
 	case "openai":
@@ -13,7 +13,7 @@ func NewConverter(serviceType string) ResponsesConverter {
 		return &ClaudeConverter{}
 	case "gemini":
 		return &GeminiResponsesConverter{}
-	case "responses":
+	case "responses", "copilot":
 		return &ResponsesPassthroughConverter{}
 	default:
 		// 默认使用 OpenAI Chat 转换器

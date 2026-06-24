@@ -196,6 +196,50 @@
           </v-btn>
         </div>
 
+        <v-alert
+          v-if="serviceType === 'copilot'"
+          class="mt-3"
+          color="info"
+          variant="tonal"
+          density="comfortable"
+        >
+          <div class="d-flex flex-column ga-2">
+            <div class="text-body-2">{{ t('copilotOAuth.description') }}</div>
+            <div v-if="copilotUserCode" class="d-flex align-center flex-wrap ga-2">
+              <span class="text-body-2">{{ t('copilotOAuth.userCode') }}</span>
+              <code class="px-2 py-1 rounded bg-surface">{{ copilotUserCode }}</code>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="text"
+                :href="copilotVerificationUri"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <v-icon start size="small">mdi-open-in-new</v-icon>
+                {{ t('copilotOAuth.openAuthorize') }}
+              </v-btn>
+            </div>
+            <v-alert v-if="copilotOAuthError" color="error" variant="tonal" density="compact">
+              {{ copilotOAuthError }}
+            </v-alert>
+            <div class="d-flex align-center ga-2">
+              <v-btn
+                color="primary"
+                variant="tonal"
+                :loading="copilotOAuthLoading"
+                @click="startCopilotOAuth"
+              >
+                <v-icon start>mdi-code-braces</v-icon>
+                {{ t('copilotOAuth.button') }}
+              </v-btn>
+              <span v-if="copilotPolling" class="text-caption text-medium-emphasis">
+                {{ t('copilotOAuth.waiting') }}
+              </span>
+            </div>
+          </div>
+        </v-alert>
+
         <!-- 被拉黑的密钥（仅编辑模式） -->
         <div v-if="isEditing && visibleDisabledKeys.length" class="mt-4">
           <div class="d-flex align-center ga-2 mb-2">
@@ -244,8 +288,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from '../../i18n'
+import { ApiService } from '../../services/api'
 import { maskApiKey } from '../../utils/apiKeyMask'
 
 interface KeyModelsStatus {
@@ -268,6 +313,7 @@ interface Props {
   keyModelsStatus: Map<string, KeyModelsStatus>
   isEditing: boolean
   restoringKey: string
+  serviceType?: string
 }
 
 const props = defineProps<Props>()
@@ -278,11 +324,19 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const apiService = new ApiService()
 
 const newApiKey = ref('')
 const apiKeyError = ref('')
 const duplicateKeyIndex = ref<number | null>(null)
 const copiedKeyIndex = ref<number | null>(null)
+const copilotOAuthLoading = ref(false)
+const copilotPolling = ref(false)
+const copilotOAuthError = ref('')
+const copilotDeviceCode = ref('')
+const copilotUserCode = ref('')
+const copilotVerificationUri = ref('')
+let copilotPollTimer: number | null = null
 
 const hasConfigurableKeys = computed(() => props.apiKeys.length > 0)
 
@@ -335,6 +389,72 @@ const moveToBottom = (index: number) => {
   updated.push(key)
   emit('update:apiKeys', updated)
 }
+
+const clearCopilotPollTimer = () => {
+  if (copilotPollTimer !== null) {
+    window.clearTimeout(copilotPollTimer)
+    copilotPollTimer = null
+  }
+}
+
+const appendOAuthKey = (accessToken: string) => {
+  if (!props.apiKeys.includes(accessToken)) {
+    emit('update:apiKeys', [...props.apiKeys, accessToken])
+  }
+}
+
+const pollCopilotAccessToken = async (intervalSeconds: number) => {
+  if (!copilotDeviceCode.value) return
+  copilotPolling.value = true
+  try {
+    const token = await apiService.pollCopilotAccessToken(copilotDeviceCode.value)
+    if (token.accessToken) {
+      appendOAuthKey(token.accessToken)
+      copilotOAuthError.value = ''
+      copilotPolling.value = false
+      copilotOAuthLoading.value = false
+      clearCopilotPollTimer()
+      return
+    }
+    if (token.error && token.error !== 'authorization_pending') {
+      copilotOAuthError.value = token.errorDescription || token.error
+      copilotPolling.value = false
+      copilotOAuthLoading.value = false
+      clearCopilotPollTimer()
+      return
+    }
+  } catch (err) {
+    copilotOAuthError.value = err instanceof Error ? err.message : String(err)
+    copilotPolling.value = false
+    copilotOAuthLoading.value = false
+    clearCopilotPollTimer()
+    return
+  }
+
+  copilotPollTimer = window.setTimeout(() => {
+    void pollCopilotAccessToken(intervalSeconds)
+  }, Math.max(intervalSeconds, 5) * 1000)
+}
+
+const startCopilotOAuth = async () => {
+  clearCopilotPollTimer()
+  copilotOAuthLoading.value = true
+  copilotOAuthError.value = ''
+  try {
+    const device = await apiService.requestCopilotDeviceCode()
+    copilotDeviceCode.value = device.deviceCode
+    copilotUserCode.value = device.userCode
+    copilotVerificationUri.value = device.verificationUri
+    window.open(device.verificationUri, '_blank', 'noopener,noreferrer')
+    await pollCopilotAccessToken(device.interval || 5)
+  } catch (err) {
+    copilotOAuthError.value = err instanceof Error ? err.message : String(err)
+    copilotOAuthLoading.value = false
+    copilotPolling.value = false
+  }
+}
+
+onBeforeUnmount(clearCopilotPollTimer)
 
 const copyKey = (key: string, index: number) => {
   navigator.clipboard.writeText(key)
