@@ -299,9 +299,11 @@ func buildProviderRequest(
 	req.Header.Set("Content-Type", "application/json")
 
 	// 设置认证头
+	var copilotToken string
 	switch upstream.ServiceType {
 	case "copilot":
-		copilotToken, _, err := copilot.ResolveToken(c.Request.Context(), apiKey)
+		var err error
+		copilotToken, _, err = copilot.ResolveToken(c.Request.Context(), apiKey)
 		if err != nil {
 			return nil, fmt.Errorf("Copilot token 交换失败: %w", err)
 		}
@@ -310,12 +312,15 @@ func buildProviderRequest(
 		utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, upstream.AuthHeader)
 		req.Header.Set("anthropic-version", "2023-06-01")
 	default:
-		// OpenAI / Gemini / Responses 等都使用 Bearer token
 		utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, upstream.AuthHeader)
 	}
 
 	// 应用自定义请求头
 	utils.ApplyCustomHeaders(req.Header, upstream.CustomHeaders)
+	// copilot 认证头必须在自定义头之后再次设置，防止 customHeaders 覆盖 token
+	if upstream.ServiceType == "copilot" {
+		copilot.ApplyRuntimeHeaders(req.Header, copilotToken)
+	}
 
 	return req, nil
 }
