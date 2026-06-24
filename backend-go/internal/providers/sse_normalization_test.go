@@ -4,6 +4,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/BenedictKing/ccx/internal/types"
 )
 
 func TestNormalizeSSEFieldLine(t *testing.T) {
@@ -172,6 +174,35 @@ func TestOpenAIProvider_HandleStreamResponse_MapsVLLMReasoningToThinkingDelta(t 
 	}
 	if !strings.Contains(joined, `"type":"text_delta"`) || !strings.Contains(joined, `"text":"你好！"`) {
 		t.Fatalf("expected text delta after reasoning, got %v", events)
+	}
+}
+
+func TestOpenAIProvider_ConvertToClaudeResponse_MapsVLLMReasoningToThinking(t *testing.T) {
+	provider := &OpenAIProvider{}
+	claudeResp, err := provider.ConvertToClaudeResponse(&types.ProviderResponse{
+		Body: []byte(`{
+			"id": "chatcmpl-vllm",
+			"choices": [{
+				"message": {
+					"role": "assistant",
+					"reasoning": "vllm reasoning",
+					"content": "final answer"
+				},
+				"finish_reason": "stop"
+			}]
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("ConvertToClaudeResponse() error = %v", err)
+	}
+	if len(claudeResp.Content) != 2 {
+		t.Fatalf("Content len = %d, want 2: %#v", len(claudeResp.Content), claudeResp.Content)
+	}
+	if claudeResp.Content[0].Type != "thinking" || claudeResp.Content[0].Thinking != "vllm reasoning" {
+		t.Fatalf("expected vLLM reasoning mapped to thinking block, got %#v", claudeResp.Content[0])
+	}
+	if claudeResp.Content[1].Type != "text" || claudeResp.Content[1].Text != "final answer" {
+		t.Fatalf("expected text block after thinking, got %#v", claudeResp.Content[1])
 	}
 }
 
