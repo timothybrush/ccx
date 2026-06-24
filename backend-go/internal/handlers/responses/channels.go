@@ -298,14 +298,15 @@ func buildPingRequest(upstream config.UpstreamConfig, baseURL string) (*http.Req
 			}
 		}
 	case "copilot":
-		req, _ = http.NewRequest(http.MethodGet, strings.TrimSuffix(baseURL, "/")+"/models", nil)
-		if len(upstream.APIKeys) > 0 {
-			copilotToken, _, err := copilot.ResolveToken(context.Background(), upstream.APIKeys[0])
-			if err != nil {
-				return nil, err
-			}
-			copilot.ApplyRuntimeHeaders(req.Header, copilotToken)
+		if len(upstream.APIKeys) == 0 {
+			return nil, fmt.Errorf("Copilot 渠道缺少 GitHub OAuth token")
 		}
+		copilotToken, _, err := copilot.ResolveToken(context.Background(), upstream.APIKeys[0])
+		if err != nil {
+			return nil, fmt.Errorf("Copilot token 交换失败: %w", err)
+		}
+		req, _ = http.NewRequest(http.MethodGet, strings.TrimSuffix(baseURL, "/")+"/models", nil)
+		copilot.ApplyRuntimeHeaders(req.Header, copilotToken)
 	default:
 		req, _ = http.NewRequest(http.MethodGet, buildModelsURL(baseURL), nil)
 		if len(upstream.APIKeys) > 0 {

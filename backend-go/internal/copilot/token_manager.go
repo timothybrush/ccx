@@ -54,6 +54,46 @@ func NewTokenManager(client *http.Client) *TokenManager {
 	}
 }
 
+type TokenErrorKind string
+
+const (
+	TokenErrorUnknown      TokenErrorKind = "unknown"
+	TokenErrorGitHubOAuth  TokenErrorKind = "github_oauth"
+	TokenErrorCopilotToken TokenErrorKind = "copilot_token"
+)
+
+type TokenExchangeError struct {
+	Kind    TokenErrorKind
+	Status  int
+	Message string
+}
+
+func (e *TokenExchangeError) Error() string {
+	return e.Message
+}
+
+func classifyTokenExchangeError(status int, body string) *TokenExchangeError {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return &TokenExchangeError{
+			Kind:    TokenErrorGitHubOAuth,
+			Status:  status,
+			Message: fmt.Sprintf("GitHub OAuth token 无效或已过期: status=%d body=%s", status, body),
+		}
+	}
+	if status == http.StatusTooManyRequests || status >= http.StatusInternalServerError {
+		return &TokenExchangeError{
+			Kind:    TokenErrorCopilotToken,
+			Status:  status,
+			Message: fmt.Sprintf("GitHub Copilot token exchange 暂时不可用: status=%d body=%s", status, body),
+		}
+	}
+	return &TokenExchangeError{
+		Kind:    TokenErrorUnknown,
+		Status:  status,
+		Message: fmt.Sprintf("GitHub Copilot token exchange 失败: status=%d body=%s", status, body),
+	}
+}
+
 // ResolveToken 使用默认 TokenManager 解析 Copilot API token。
 func ResolveToken(ctx context.Context, githubToken string) (string, string, error) {
 	return defaultTokenManager.ResolveToken(ctx, githubToken)
@@ -131,7 +171,7 @@ func (m *TokenManager) exchange(ctx context.Context, githubToken string) (*Token
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub Copilot token exchange 失败: status=%d body=%s", resp.StatusCode, string(body))
+		return nil, classifyTokenExchangeError(resp.StatusCode, string(body))
 	}
 
 	var tokenResp TokenResponse

@@ -220,6 +220,9 @@
                 {{ t('copilotOAuth.openAuthorize') }}
               </v-btn>
             </div>
+            <v-alert v-if="copilotOAuthSuccess" color="success" variant="tonal" density="compact">
+              {{ t('copilotOAuth.success') }}
+            </v-alert>
             <v-alert v-if="copilotOAuthError" color="error" variant="tonal" density="compact">
               {{ copilotOAuthError }}
             </v-alert>
@@ -333,6 +336,7 @@ const copiedKeyIndex = ref<number | null>(null)
 const copilotOAuthLoading = ref(false)
 const copilotPolling = ref(false)
 const copilotOAuthError = ref('')
+const copilotOAuthSuccess = ref(false)
 const copilotDeviceCode = ref('')
 const copilotUserCode = ref('')
 const copilotVerificationUri = ref('')
@@ -411,6 +415,7 @@ const pollCopilotAccessToken = async (intervalSeconds: number) => {
     if (token.accessToken) {
       appendOAuthKey(token.accessToken)
       copilotOAuthError.value = ''
+      copilotOAuthSuccess.value = true
       copilotPolling.value = false
       copilotOAuthLoading.value = false
       clearCopilotPollTimer()
@@ -418,6 +423,7 @@ const pollCopilotAccessToken = async (intervalSeconds: number) => {
     }
     if (token.error && token.error !== 'authorization_pending') {
       copilotOAuthError.value = token.errorDescription || token.error
+      copilotOAuthSuccess.value = false
       copilotPolling.value = false
       copilotOAuthLoading.value = false
       clearCopilotPollTimer()
@@ -425,6 +431,7 @@ const pollCopilotAccessToken = async (intervalSeconds: number) => {
     }
   } catch (err) {
     copilotOAuthError.value = err instanceof Error ? err.message : String(err)
+    copilotOAuthSuccess.value = false
     copilotPolling.value = false
     copilotOAuthLoading.value = false
     clearCopilotPollTimer()
@@ -440,6 +447,7 @@ const startCopilotOAuth = async () => {
   clearCopilotPollTimer()
   copilotOAuthLoading.value = true
   copilotOAuthError.value = ''
+  copilotOAuthSuccess.value = false
   try {
     const device = await apiService.requestCopilotDeviceCode()
     copilotDeviceCode.value = device.deviceCode
