@@ -48,8 +48,11 @@ type User struct {
 
 // OAuthClient 封装 GitHub Copilot OAuth Device Flow。
 type OAuthClient struct {
-	HTTPClient *http.Client
-	ClientID   string
+	HTTPClient     *http.Client
+	ClientID       string
+	DeviceCodeURL  string
+	AccessTokenURL string
+	UserURL        string
 }
 
 // NewOAuthClient 创建 OAuthClient。
@@ -57,7 +60,13 @@ func NewOAuthClient(client *http.Client) *OAuthClient {
 	if client == nil {
 		client = &http.Client{Timeout: defaultRequestTimout}
 	}
-	return &OAuthClient{HTTPClient: client, ClientID: defaultClientID}
+	return &OAuthClient{
+		HTTPClient:     client,
+		ClientID:       defaultClientID,
+		DeviceCodeURL:  deviceCodeURL,
+		AccessTokenURL: accessTokenURL,
+		UserURL:        userURL,
+	}
 }
 
 // RequestDeviceCode 请求 GitHub 设备授权码。
@@ -67,7 +76,7 @@ func (c *OAuthClient) RequestDeviceCode(ctx context.Context) (*DeviceCodeRespons
 		"scope":     defaultDeviceScope,
 	}
 	var out DeviceCodeResponse
-	if err := c.postJSON(ctx, deviceCodeURL, payload, &out); err != nil {
+	if err := c.postJSON(ctx, c.deviceCodeURL(), payload, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -81,7 +90,7 @@ func (c *OAuthClient) PollAccessToken(ctx context.Context, deviceCode string) (*
 		"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
 	}
 	var out AccessTokenResponse
-	if err := c.postJSON(ctx, accessTokenURL, payload, &out); err != nil {
+	if err := c.postJSON(ctx, c.accessTokenURL(), payload, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -89,7 +98,7 @@ func (c *OAuthClient) PollAccessToken(ctx context.Context, deviceCode string) (*
 
 // VerifyUser 使用 GitHub OAuth token 验证用户身份。
 func (c *OAuthClient) VerifyUser(ctx context.Context, token string) (*User, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.userURL(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -152,4 +161,25 @@ func (c *OAuthClient) clientID() string {
 		return strings.TrimSpace(c.ClientID)
 	}
 	return defaultClientID
+}
+
+func (c *OAuthClient) deviceCodeURL() string {
+	if strings.TrimSpace(c.DeviceCodeURL) != "" {
+		return c.DeviceCodeURL
+	}
+	return deviceCodeURL
+}
+
+func (c *OAuthClient) accessTokenURL() string {
+	if strings.TrimSpace(c.AccessTokenURL) != "" {
+		return c.AccessTokenURL
+	}
+	return accessTokenURL
+}
+
+func (c *OAuthClient) userURL() string {
+	if strings.TrimSpace(c.UserURL) != "" {
+		return c.UserURL
+	}
+	return userURL
 }

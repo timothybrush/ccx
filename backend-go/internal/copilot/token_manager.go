@@ -34,10 +34,11 @@ type TokenResponse struct {
 
 // TokenManager 将 GitHub OAuth token 换成短期 Copilot API token 并缓存。
 type TokenManager struct {
-	client *http.Client
-	mu     sync.Mutex
-	cache  map[string]cachedToken
-	now    func() time.Time
+	client   *http.Client
+	mu       sync.Mutex
+	cache    map[string]cachedToken
+	now      func() time.Time
+	tokenURL string
 }
 
 var defaultTokenManager = NewTokenManager(nil)
@@ -48,9 +49,10 @@ func NewTokenManager(client *http.Client) *TokenManager {
 		client = &http.Client{Timeout: defaultRequestTimout}
 	}
 	return &TokenManager{
-		client: client,
-		cache:  make(map[string]cachedToken),
-		now:    time.Now,
+		client:   client,
+		cache:    make(map[string]cachedToken),
+		now:      time.Now,
+		tokenURL: copilotTokenURL,
 	}
 }
 
@@ -153,7 +155,11 @@ func (m *TokenManager) ResolveToken(ctx context.Context, githubToken string) (st
 }
 
 func (m *TokenManager) exchange(ctx context.Context, githubToken string) (*TokenResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, copilotTokenURL, nil)
+	tokenURL := m.tokenURL
+	if tokenURL == "" {
+		tokenURL = copilotTokenURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
 		return nil, err
 	}
