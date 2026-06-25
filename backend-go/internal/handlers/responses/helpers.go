@@ -92,10 +92,33 @@ func cleanResponsesUserText(text string) string {
 	text = removeResponsesTaggedBlocks(text, "local-command-stdout")
 	text = removeResponsesTaggedBlocks(text, "local-command-stderr")
 	text = strings.TrimSpace(text)
+	if isInjectedContextTitleText(text) {
+		return ""
+	}
 	if strings.HasPrefix(text, "<") && strings.Contains(text, ">") {
 		return ""
 	}
 	return text
+}
+
+func isInjectedContextTitleText(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	injectedPrefixes := []string{
+		"# agents.md instructions",
+		"# claude.md instructions",
+		"# codebase and user instructions",
+		"<instructions>",
+	}
+	for _, prefix := range injectedPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return strings.Contains(lower, "project-doc") && strings.Contains(lower, "agents.md")
 }
 
 func removeResponsesTaggedBlocks(text, tag string) string {

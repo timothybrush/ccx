@@ -23,6 +23,25 @@ func TestExtractLastResponsesUserInputUsesLastInputText(t *testing.T) {
 	}
 }
 
+func TestExtractLastResponsesUserInputSkipsInjectedAgentsInstructions(t *testing.T) {
+	input := []interface{}{
+		map[string]interface{}{
+			"role": "user",
+			"content": []interface{}{
+				map[string]interface{}{"type": "input_text", "text": "# AGENTS.md instructions for /Users/example/project\n<INSTRUCTIONS>\nAlways respond in Chinese\n</INSTRUCTIONS>"},
+				map[string]interface{}{"type": "input_text", "text": "这个展开的对话卡片应该优化"},
+			},
+		},
+	}
+
+	if got := extractLastResponsesUserInput(input); got != "这个展开的对话卡片应该优化" {
+		t.Fatalf("extractLastResponsesUserInput() = %q, want %q", got, "这个展开的对话卡片应该优化")
+	}
+	if got := countResponsesUserMessages(input); got != 1 {
+		t.Fatalf("countResponsesUserMessages() = %d, want 1", got)
+	}
+}
+
 func TestExtractLastResponsesUserInputJoinsShortInputs(t *testing.T) {
 	input := []interface{}{
 		map[string]interface{}{"role": "user", "content": []interface{}{map[string]interface{}{"type": "input_text", "text": "第一个"}}},

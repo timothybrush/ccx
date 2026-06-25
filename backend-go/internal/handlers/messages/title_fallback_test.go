@@ -23,6 +23,27 @@ func TestExtractLastUserMessageSkipsSystemReminder(t *testing.T) {
 	}
 }
 
+func TestExtractLastUserMessageSkipsInjectedAgentsInstructions(t *testing.T) {
+	messages := []types.ClaudeMessage{{
+		Role: "user",
+		Content: []interface{}{
+			map[string]interface{}{
+				"type": "text",
+				"text": "# AGENTS.md instructions for /Users/example/project\n<INSTRUCTIONS>\nAlways respond in Chinese\n</INSTRUCTIONS>",
+			},
+			map[string]interface{}{
+				"type": "text",
+				"text": "这个展开的对话卡片应该优化",
+			},
+		},
+	}}
+
+	got := extractLastUserMessage(messages)
+	if got != "这个展开的对话卡片应该优化" {
+		t.Fatalf("extractLastUserMessage() = %q, want %q", got, "这个展开的对话卡片应该优化")
+	}
+}
+
 func TestExtractLastUserMessageIgnoresOnlyTaggedContent(t *testing.T) {
 	messages := []types.ClaudeMessage{{
 		Role:    "user",
