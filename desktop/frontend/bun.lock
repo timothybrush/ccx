@@ -7,7 +7,7 @@
       "dependencies": {
         "@tailwindcss/vite": "^4.3.0",
         "@vueuse/core": "^14.3.0",
-        "@wailsio/runtime": "3.0.0-alpha.79",
+        "@wailsio/runtime": "3.0.0-alpha.94",
         "apexcharts": "^5.12.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -343,7 +343,7 @@
 
     "@vueuse/shared": ["@vueuse/shared@14.3.0", "https://registry.npmmirror.com/@vueuse/shared/-/shared-14.3.0.tgz", { "peerDependencies": { "vue": "^3.5.0" } }, "sha512-bZpge9eSXwa4ToSiqJ7j6KRwhAsneMFoSz3LMWKQDkqimm3D/tbFlrklrs/IOqC8tEcYmXQZJ6N0UrjhBirVCg=="],
 
-    "@wailsio/runtime": ["@wailsio/runtime@3.0.0-alpha.79", "https://registry.npmmirror.com/@wailsio/runtime/-/runtime-3.0.0-alpha.79.tgz", {}, "sha512-NITzxKmJsMEruc39L166lbPJVECxzcbdqpHVqOOF7Cu/7Zqk/e3B/gNpkUjhNyo5rVb3V1wpS8oEgLUmpu1cwA=="],
+    "@wailsio/runtime": ["@wailsio/runtime@3.0.0-alpha.94", "https://registry.npmmirror.com/@wailsio/runtime/-/runtime-3.0.0-alpha.94.tgz", {}, "sha512-jtOtyWLDLop9NfU373sA43NjyGntxDFUIHY6kzmArz5HGn66Ok3vl9N2nIyVs7cArvADxk/mBBZ9wXOX7R0NFA=="],
 
     "acorn": ["acorn@8.17.0", "https://registry.npmmirror.com/acorn/-/acorn-8.17.0.tgz", { "bin": { "acorn": "bin/acorn" } }, "sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg=="],
 
