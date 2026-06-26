@@ -192,7 +192,7 @@ const visibleBoardItems = computed(() => {
 
 const boardStats = computed<CockpitStat[]>(() => {
   const counts = bucketBoardItems(visibleBoardItems.value)
-  const subagentTotal = visibleBoardItems.value.reduce((total, item) => total + item.subagentSummary.total, 0)
+  const subagentTotal = visibleBoardItems.value.reduce((total, item) => total + getDisplaySubagentCount(item), 0)
   const streamingTotal = visibleBoardItems.value.reduce((total, item) => total + (item.conversation.status === 'streaming' ? 1 : 0) + item.subagentSummary.streaming, 0)
   return [
     ...boardColumnMeta.value.map(column => ({
@@ -217,6 +217,10 @@ function bucketBoardItems(items: ConversationBoardItem[]): Record<BoardColumnKey
     buckets[item.aggregateStatus].push(item)
     return buckets
   }, { working: [], idle: [] })
+}
+
+function getDisplaySubagentCount(item: ConversationBoardItem): number {
+  return item.subagentSummary.total || item.conversation.subagentCount || item.subagents.length || 0
 }
 
 function normalizeChannel(ch: any): DashboardChannel {
