@@ -8,6 +8,7 @@ export {
 
 export {
     EnvFileState,
+    FrontendErrorReport,
     LanguagePreference,
     ReleaseCheckResult,
     VersionInfo

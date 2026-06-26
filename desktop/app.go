@@ -44,6 +44,15 @@ type EnvFileState struct {
 	Exists  bool   `json:"exists"`
 }
 
+// FrontendErrorReport 描述桌面 WebView 前端上报的运行时错误。
+type FrontendErrorReport struct {
+	Source    string `json:"source"`
+	Message   string `json:"message"`
+	Stack     string `json:"stack"`
+	URL       string `json:"url"`
+	UserAgent string `json:"userAgent"`
+}
+
 // LanguagePreference 描述桌面语言最终选择和原始系统语言。
 type LanguagePreference struct {
 	Locale       string `json:"locale"`
@@ -214,6 +223,22 @@ func (s *DesktopService) RestartService() error {
 
 func (s *DesktopService) GetLogs() []string {
 	return s.manager.Logs()
+}
+
+// ReportFrontendError 将真实 WebView 中捕获的前端错误写入桌面日志。
+func (s *DesktopService) ReportFrontendError(report FrontendErrorReport) {
+	source := normalizeFrontendLogField(report.Source, 80)
+	message := normalizeFrontendLogField(report.Message, 2000)
+	stack := normalizeFrontendLogField(report.Stack, 6000)
+	pageURL := normalizeFrontendLogField(report.URL, 500)
+	userAgent := normalizeFrontendLogField(report.UserAgent, 300)
+	if message == "" && stack == "" {
+		return
+	}
+	log.Printf("[Desktop-Frontend] source=%s url=%s userAgent=%s message=%s", source, pageURL, userAgent, message)
+	if stack != "" {
+		log.Printf("[Desktop-Frontend] stack=%s", stack)
+	}
 }
 
 func (s *DesktopService) GetAgentConfigStatus(platform string) (configservice.AgentConfigStatus, error) {
@@ -608,6 +633,20 @@ func (s *DesktopService) Shutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	_ = s.manager.Stop(ctx)
+}
+
+func normalizeFrontendLogField(value string, maxLen int) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	value = strings.ReplaceAll(value, "\n", " | ")
+	if len(value) > maxLen {
+		return value[:maxLen] + "...(truncated)"
+	}
+	return value
 }
 
 func (s *DesktopService) showWindow() {

@@ -193,6 +193,13 @@ export function PreviewRestoreConfigDiff(platform: string): $CancellablePromise<
     });
 }
 
+/**
+ * ReportFrontendError 将真实 WebView 中捕获的前端错误写入桌面日志。
+ */
+export function ReportFrontendError(report: $models.FrontendErrorReport): $CancellablePromise<void> {
+    return $Call.ByID(1230912679, report);
+}
+
 export function RestartService(): $CancellablePromise<void> {
     return $Call.ByID(194936479);
 }

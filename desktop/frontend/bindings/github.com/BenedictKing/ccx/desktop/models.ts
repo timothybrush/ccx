@@ -35,6 +35,46 @@ export class EnvFileState {
 }
 
 /**
+ * FrontendErrorReport 描述桌面 WebView 前端上报的运行时错误。
+ */
+export class FrontendErrorReport {
+    "source": string;
+    "message": string;
+    "stack": string;
+    "url": string;
+    "userAgent": string;
+
+    /** Creates a new FrontendErrorReport instance. */
+    constructor($$source: Partial<FrontendErrorReport> = {}) {
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("stack" in $$source)) {
+            this["stack"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("userAgent" in $$source)) {
+            this["userAgent"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new FrontendErrorReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): FrontendErrorReport {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new FrontendErrorReport($$parsedSource as Partial<FrontendErrorReport>);
+    }
+}
+
+/**
  * LanguagePreference 描述桌面语言最终选择和原始系统语言。
  */
 export class LanguagePreference {
