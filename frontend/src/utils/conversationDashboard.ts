@@ -17,26 +17,27 @@ export interface ConversationBoardItem {
 }
 
 export function buildConversationBoardItems(items: ConversationInfo[]): ConversationBoardItem[] {
-  const byID = new Map(items.map(item => [item.id, item]))
+  const conversations = deduplicateConversations(items)
+  const byID = new Map(conversations.map(item => [item.id, item]))
   const childrenByParent = new Map<string, ConversationInfo[]>()
   const referencedChildIDs = new Set<string>()
 
-  for (const item of items) {
+  for (const item of conversations) {
     for (const childID of item.childConversationIds ?? []) {
-      const child = byID.get(childID)
+      const child = byID.get(normalizeConversationID(childID))
       if (!child || child.id === item.id) continue
       referencedChildIDs.add(child.id)
       appendChild(childrenByParent, item.id, child)
     }
   }
 
-  for (const item of items) {
-    const parentID = item.parentConversationId
+  for (const item of conversations) {
+    const parentID = normalizeConversationID(item.parentConversationId)
     if (!parentID || !byID.has(parentID)) continue
     appendChild(childrenByParent, parentID, item)
   }
 
-  const roots = items.filter(item => !hasExistingParent(item, byID, referencedChildIDs))
+  const roots = conversations.filter(item => !hasExistingParent(item, byID, referencedChildIDs))
   return roots.map(conversation => {
     const subagents = collectSubagents(conversation, childrenByParent)
     const subagentSummary = summarizeSubagents(subagents)
@@ -49,6 +50,24 @@ export function buildConversationBoardItems(items: ConversationInfo[]): Conversa
   })
 }
 
+function deduplicateConversations(items: ConversationInfo[]): ConversationInfo[] {
+  const seen = new Set<string>()
+  const result: ConversationInfo[] = []
+
+  for (const item of items) {
+    const id = normalizeConversationID(item.id)
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    result.push(id === item.id ? item : { ...item, id })
+  }
+
+  return result
+}
+
+function normalizeConversationID(id?: string): string {
+  return String(id ?? '').trim()
+}
+
 function appendChild(childrenByParent: Map<string, ConversationInfo[]>, parentID: string, child: ConversationInfo) {
   const children = childrenByParent.get(parentID) ?? []
   if (!children.some(item => item.id === child.id)) children.push(child)
@@ -56,7 +75,8 @@ function appendChild(childrenByParent: Map<string, ConversationInfo[]>, parentID
 }
 
 function hasExistingParent(item: ConversationInfo, byID: Map<string, ConversationInfo>, referencedChildIDs: Set<string>): boolean {
-  if (item.parentConversationId && byID.has(item.parentConversationId)) return true
+  const parentID = normalizeConversationID(item.parentConversationId)
+  if (parentID && byID.has(parentID)) return true
   return referencedChildIDs.has(item.id)
 }
 

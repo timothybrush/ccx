@@ -41,6 +41,18 @@ describe('conversation dashboard columns', () => {
     expect(items[0].subagentSummary).toEqual({ total: 2, streaming: 1, active: 1, idle: 0 })
   })
 
+  it('skips empty IDs and keeps the first duplicate conversation', () => {
+    const items = buildConversationBoardItems([
+      conversation({ id: '', title: 'Empty ID' }),
+      conversation({ id: 'dup', title: 'First Duplicate' }),
+      conversation({ id: 'dup', title: 'Second Duplicate' }),
+      conversation({ id: ' valid ', title: 'Trimmed ID' }),
+    ])
+
+    expect(items.map(item => item.conversation.id)).toEqual(['dup', 'valid'])
+    expect(items.map(item => item.conversation.title)).toEqual(['First Duplicate', 'Trimmed ID'])
+  })
+
   it('buckets root conversations into working and idle columns', () => {
     const buckets = buildConversationColumnBuckets([
       conversation({ id: 'streaming', status: 'streaming' }),

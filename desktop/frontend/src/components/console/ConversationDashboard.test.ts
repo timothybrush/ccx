@@ -366,6 +366,22 @@ describe('ConversationDashboard', () => {
     expect(errors).toEqual([])
   })
 
+  it('ignores empty IDs and duplicate conversations before rendering cards', async () => {
+    conversations.value = [
+      createConversation({ id: '', title: 'Empty ID' }),
+      createConversation({ id: 'dup', title: 'First Duplicate' }),
+      createConversation({ id: 'dup', title: 'Second Duplicate' }),
+      createConversation({ id: 'valid', title: 'Valid Conversation' }),
+    ]
+
+    const { vueErrors } = mountDashboard()
+    await nextTick()
+
+    expect(getAllColumnCards()).toEqual(['First Duplicate', 'Valid Conversation'])
+    expect(vueErrors).toEqual([])
+    expect(errors).toEqual([])
+  })
+
 
   it('keeps card order stable while a card is expanded', async () => {
     conversations.value = [
