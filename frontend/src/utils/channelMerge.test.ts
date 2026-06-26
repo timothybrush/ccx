@@ -111,6 +111,19 @@ describe('mergeChannelsWithLocalData', () => {
     }
   })
 
+  it('过滤非法 index 和重复 index，避免列表 key 冲突', () => {
+    const fresh = [
+      makeChannel({ index: 0, name: 'first' }),
+      makeChannel({ index: -1, name: 'invalid' }),
+      makeChannel({ index: 0, name: 'duplicate' }),
+      makeChannel({ index: 2, name: 'second' }),
+    ]
+
+    const result = mergeChannelsWithLocalData(fresh, undefined, NOW)
+
+    expect(result.map(ch => ch.name)).toEqual(['first', 'second'])
+  })
+
   it('预索引不漏项：1000 个渠道找最后一个也能命中 O(1)', () => {
     const existing: Channel[] = []
     for (let i = 0; i < 1000; i++) {

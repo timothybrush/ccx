@@ -46,10 +46,12 @@ export function mergeChannelsWithLocalData(
   existingChannels: Channel[] | undefined,
   now: number = Date.now()
 ): Channel[] {
+  const channels = deduplicateChannelsByIndex(newChannels)
+
   if (!existingChannels) {
     // 首次加载，直接冻结每个 channel 的不可变字段
-    for (let i = 0; i < newChannels.length; i++) freezeImmutableFields(newChannels[i])
-    return newChannels
+    for (let i = 0; i < channels.length; i++) freezeImmutableFields(channels[i])
+    return channels
   }
 
   // 预索引 existingChannels，避免每次 .find 的 O(n) 遍历
@@ -58,7 +60,7 @@ export function mergeChannelsWithLocalData(
 
   const validSince = now - LATENCY_VALID_DURATION
 
-  return newChannels.map(newCh => {
+  return channels.map(newCh => {
     const existingCh = existingByIndex.get(newCh.index)
     // 只有在 5 分钟有效期内才保留本地延迟测试结果
     if (existingCh?.latencyTestTime && existingCh.latencyTestTime > validSince) {
@@ -71,4 +73,21 @@ export function mergeChannelsWithLocalData(
     }
     return freezeImmutableFields(newCh)
   })
+}
+
+function deduplicateChannelsByIndex(channels: Channel[]): Channel[] {
+  const seen = new Set<number>()
+  let result: Channel[] | undefined
+
+  for (let i = 0; i < channels.length; i++) {
+    const channel = channels[i]
+    if (!Number.isInteger(channel.index) || channel.index < 0 || seen.has(channel.index)) {
+      result ??= channels.slice(0, i)
+      continue
+    }
+    seen.add(channel.index)
+    result?.push(channel)
+  }
+
+  return result ?? channels
 }
