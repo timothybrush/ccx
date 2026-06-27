@@ -75,7 +75,11 @@
               <span class="cockpit-column-dot" :style="{ background: column.color }"></span>
               <span>{{ column.label }}</span>
             </div>
-            <span class="cockpit-column-count">{{ column.items.length }}</span>
+            <v-tooltip :text="t('cockpit.tooltip.columnCount', { column: column.label, count: column.items.length })" location="top" :open-delay="150" content-class="ccx-tooltip">
+              <template #activator="{ props: tooltipProps }">
+                <span v-bind="tooltipProps" class="cockpit-column-count">{{ column.items.length }}</span>
+              </template>
+            </v-tooltip>
           </div>
 
           <div class="cockpit-column-body">

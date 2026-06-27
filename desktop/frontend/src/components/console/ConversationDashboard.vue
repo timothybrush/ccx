@@ -4,6 +4,7 @@ import { Alert } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageSquare, Search, X } from 'lucide-vue-next'
 import { useAdminApi } from '@/composables/useAdminApi'
 import { useConversations } from '@/composables/useConversations'
@@ -337,6 +338,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <TooltipProvider>
   <div class="mx-auto flex w-full max-w-[1680px] flex-col gap-4">
     <Alert v-if="error" variant="destructive">
       <p class="text-sm">{{ error }}</p>
@@ -426,7 +428,14 @@ onBeforeUnmount(() => {
                 <div class="text-[10px] text-muted-foreground">{{ column.hint }}</div>
               </div>
             </div>
-            <span class="text-xs font-semibold text-muted-foreground">{{ column.items.length }}</span>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="text-xs font-semibold text-muted-foreground">{{ column.items.length }}</span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {{ t('cockpit.tooltip.columnCount', { column: column.label, count: String(column.items.length) }) }}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div class="space-y-3 p-3">
@@ -461,6 +470,7 @@ onBeforeUnmount(() => {
       </div>
     </template>
   </div>
+  </TooltipProvider>
 </template>
 
 <style scoped>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ArrowDown } from 'lucide-vue-next'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useLanguage } from '@/composables/useLanguage'
 
 interface ChannelInfo {
   index: number
@@ -27,6 +29,8 @@ const emit = defineEmits<{
   demote: [index: number]
 }>()
 
+const { t } = useLanguage()
+
 function isDemoted(index: number): boolean {
   return props.overrideActive && index >= props.channels.length - 1
 }
@@ -37,6 +41,16 @@ function badgeClass(channel: ChannelInfo): string {
     return props.nextChannelCircuitOpen ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
   }
   return 'border border-border bg-muted/30 text-muted-foreground'
+}
+
+function getMoveToTopTooltip(channel: ChannelInfo, index: number): string {
+  if (index === 0 && channel.status !== 'suspended' && !channel.circuitOpen) return t('cockpit.tooltip.channelAlreadyFirst', { name: channel.name })
+  return t('cockpit.tooltip.moveChannelToTop', { name: channel.name })
+}
+
+function getDemoteTooltip(channel: ChannelInfo, index: number): string {
+  if (index === props.channels.length - 1) return t('cockpit.tooltip.demoteChannelDisabled')
+  return t('cockpit.tooltip.demoteChannel', { name: channel.name })
 }
 </script>
 
@@ -51,47 +65,86 @@ function badgeClass(channel: ChannelInfo): string {
     >
       <span class="seq-num">{{ String(index + 1).padStart(2, '0') }}</span>
       <span class="seq-arrow">→</span>
-      <button
-        type="button"
-        class="channel-name min-w-0 flex-1 truncate text-left text-xs"
-        @click.stop="emit('moveToTop', channel, index)"
-      >
-        {{ channel.name }}
-      </button>
-      <span
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="channel-name min-w-0 flex-1 truncate text-left text-xs"
+            @click.stop="emit('moveToTop', channel, index)"
+          >
+            {{ channel.name }}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ getMoveToTopTooltip(channel, index) }}</TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-if="channel.index === currentChannel"
-        class="sequence-badge"
-        :class="badgeClass(channel)"
       >
-        CURRENT
-      </span>
-      <span
+        <TooltipTrigger as-child>
+          <span
+            class="sequence-badge"
+            :class="badgeClass(channel)"
+          >
+            CURRENT
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ t('cockpit.tooltip.currentChannel') }}</TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-else-if="channel.index === nextChannel"
-        class="sequence-badge next-channel-badge"
-        :class="badgeClass(channel)"
       >
-        {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
-      </span>
-      <span
+        <TooltipTrigger as-child>
+          <span
+            class="sequence-badge next-channel-badge"
+            :class="badgeClass(channel)"
+          >
+            {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          {{ nextChannelCircuitOpen ? t('cockpit.tooltip.nextChannelTripped') : t('cockpit.tooltip.nextChannel') }}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-if="channel.status === 'suspended'"
-        class="sequence-badge fused-chip text-white"
       >
-        PAUSED
-      </span>
-      <span
+        <TooltipTrigger as-child>
+          <span
+            class="sequence-badge fused-chip text-white"
+          >
+            PAUSED
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ t('cockpit.tooltip.pausedChannel') }}</TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-if="channel.circuitOpen"
-        class="sequence-badge bg-red-500 text-white"
       >
-        TRIPPED
-      </span>
-      <button
-        type="button"
-        class="sequence-action"
-        :disabled="index === channels.length - 1"
-        @click.stop="emit('demote', index)"
-      >
-        <ArrowDown class="h-3.5 w-3.5" />
-      </button>
+        <TooltipTrigger as-child>
+          <span
+            class="sequence-badge bg-red-500 text-white"
+          >
+            TRIPPED
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ t('cockpit.tooltip.circuitOpen') }}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="sequence-action-wrapper">
+            <button
+              type="button"
+              class="sequence-action"
+              :disabled="index === channels.length - 1"
+              :aria-label="getDemoteTooltip(channel, index)"
+              @click.stop="emit('demote', index)"
+            >
+              <ArrowDown class="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ getDemoteTooltip(channel, index) }}</TooltipContent>
+      </Tooltip>
     </div>
   </div>
 </template>
@@ -169,6 +222,13 @@ function badgeClass(channel: ChannelInfo): string {
   color: var(--color-foreground);
   cursor: pointer;
   opacity: 0.55;
+}
+
+.sequence-action-wrapper {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 }
 
 .sequence-action:hover:not(:disabled) {

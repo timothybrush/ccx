@@ -122,6 +122,9 @@ const tooltipText = computed(() => props.conversation.title || props.conversatio
 const childConversationCount = computed(() => props.conversation.childConversationIds?.length ?? 0)
 const firstChildConversationId = computed(() => props.conversation.childConversationIds?.[0])
 const parentThreadLabel = computed(() => props.conversation.parentThreadId ? shortId(props.conversation.parentThreadId) : '')
+const parentConversationTooltip = computed(() => t('cockpit.tooltip.parentConversation', { id: props.relatedParentTitle || props.conversation.parentConversationId || '' }))
+const parentThreadTooltip = computed(() => t('cockpit.tooltip.parentThread', { id: props.conversation.parentThreadId || '' }))
+const childConversationTooltip = computed(() => t('cockpit.tooltip.childConversation', { id: firstChildConversationId.value || '' }))
 
 const duration = computed(() => {
   const start = new Date(props.conversation.createdAt).getTime()
@@ -131,6 +134,19 @@ const duration = computed(() => {
   if (mins < 60) return `${mins}m`
   return `${Math.floor(mins / 60)}h${mins % 60}m`
 })
+
+const statusTooltip = computed(() => {
+  switch (props.conversation.status) {
+    case 'streaming': return t('cockpit.tooltip.statusStreaming')
+    case 'active': return t('cockpit.tooltip.statusActive')
+    case 'idle': return t('cockpit.tooltip.statusIdle')
+    default: return t('cockpit.tooltip.statusUnknown')
+  }
+})
+const kindTooltip = computed(() => t('cockpit.tooltip.kind', { kind: kindLabel.value }))
+const requestCountTooltip = computed(() => t('cockpit.tooltip.requests', { count: String(props.conversation.requestCount) }))
+const durationTooltip = computed(() => t('cockpit.tooltip.duration', { duration: duration.value }))
+const subagentCountTooltip = computed(() => t('cockpit.tooltip.subagents', { count: String(displaySubagentCount.value) }))
 
 const mainDetailRows = computed(() => [
   { label: t('cockpit.detail.requests'), value: `${props.conversation.requestCount}x` },
@@ -285,6 +301,8 @@ const visibleChannels = computed(() => {
 })
 
 const hiddenCount = computed(() => Math.max(0, channelSequence.value.length - visibleChannels.value.length))
+const hiddenChannelsTooltip = computed(() => t('cockpit.tooltip.hiddenChannels', { count: String(hiddenCount.value) }))
+const moreSubagentsTooltip = computed(() => t('cockpit.tooltip.moreSubagents', { count: String(subagents.value.length - visibleSubagents.value.length) }))
 
 // subagent 渠道序列：优先用 override.subagentSequence，否则 fallback 到主序列
 const subagentSequence = computed((): ChannelInfo[] => {
@@ -336,10 +354,10 @@ function buildSequence(channels: ChannelInfo[]): ChannelSequenceEntry[] {
 }
 
 function getChannelTooltip(channel: ChannelInfo): string {
-  if (channel.index === props.conversation.currentChannel && !hasOverride.value) return 'Current channel'
-  if (channel.index === nextChannel.value) return 'Next override target'
-  if (channel.status === 'suspended' || channel.circuitOpen) return 'Click to resume and set as next'
-  return 'Click to set as next'
+  if (channel.index === props.conversation.currentChannel && !hasOverride.value) return t('cockpit.tooltip.quickCurrentChannel')
+  if (channel.index === nextChannel.value) return t('cockpit.tooltip.quickNextOverride')
+  if (channel.status === 'suspended' || channel.circuitOpen) return t('cockpit.tooltip.quickResumeAndSetNext')
+  return t('cockpit.tooltip.quickSetNext')
 }
 
 function channelChipClass(channel: ChannelInfo): string {
@@ -432,21 +450,45 @@ function shortId(value: string): string {
   >
     <!-- Row 1: LED + Kind + Title/User + Stats -->
     <div class="mb-3 flex min-w-0 items-center gap-2">
-      <span class="status-led" :class="`status-led--${conversation.status}`" />
-      <span class="kind-chip border px-1 py-0.5 text-[9px] font-bold tracking-[0.08em]" :class="kindStyle.chip">
-        {{ kindLabel }}
-      </span>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="status-led" :class="`status-led--${conversation.status}`" />
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ statusTooltip }}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="kind-chip border px-1 py-0.5 text-[9px] font-bold tracking-[0.08em]" :class="kindStyle.chip">
+            {{ kindLabel }}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ kindTooltip }}</TooltipContent>
+      </Tooltip>
       <span class="display-label min-w-0 flex-1 font-mono text-xs text-muted-foreground" :title="tooltipText">
         <span class="display-label-text" :class="{ 'display-label-text--expanded': expanded }">{{ displayLabel }}</span>
       </span>
-      <span class="shrink-0 text-xs text-muted-foreground">{{ conversation.requestCount }}x</span>
-      <span class="shrink-0 text-xs text-muted-foreground">{{ duration }}</span>
-      <span
-        v-if="hasSubagentActivity"
-        class="inline-flex shrink-0 items-center border border-amber-500/50 bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-500"
-      >
-        SA {{ displaySubagentCount }}
-      </span>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="shrink-0 text-xs text-muted-foreground">{{ conversation.requestCount }}x</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ requestCountTooltip }}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="shrink-0 text-xs text-muted-foreground">{{ duration }}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ durationTooltip }}</TooltipContent>
+      </Tooltip>
+      <Tooltip v-if="hasSubagentActivity">
+        <TooltipTrigger as-child>
+          <span
+            class="inline-flex shrink-0 items-center border border-amber-500/50 bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-500"
+          >
+            SA {{ displaySubagentCount }}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ subagentCountTooltip }}</TooltipContent>
+      </Tooltip>
     </div>
 
     <div
@@ -454,35 +496,50 @@ function shortId(value: string): string {
       class="relation-row mb-3 flex flex-wrap items-center gap-1.5"
       @click.stop
     >
-      <button
+      <Tooltip
         v-if="conversation.parentConversationId"
-        type="button"
-        class="relation-chip border border-sky-500/50 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 dark:text-sky-400"
-        :title="relatedParentTitle || conversation.parentConversationId"
-        @click="navigateConversation(conversation.parentConversationId)"
-      >
-        <CornerUpLeft class="h-3 w-3" />
-        <span>{{ t('cockpit.relation.parent') }}</span>
-      </button>
-      <span
+        >
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="relation-chip border border-sky-500/50 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 dark:text-sky-400"
+            @click="navigateConversation(conversation.parentConversationId)"
+          >
+            <CornerUpLeft class="h-3 w-3" />
+            <span>{{ t('cockpit.relation.parent') }}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ parentConversationTooltip }}</TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-else-if="conversation.parentThreadId"
-        class="relation-chip border border-border bg-muted/30 text-muted-foreground"
-        :title="conversation.parentThreadId"
       >
-        <CornerUpLeft class="h-3 w-3" />
-        <span>{{ t('cockpit.relation.parentThread', { id: parentThreadLabel }) }}</span>
-      </span>
+        <TooltipTrigger as-child>
+          <span
+            class="relation-chip border border-border bg-muted/30 text-muted-foreground"
+          >
+            <CornerUpLeft class="h-3 w-3" />
+            <span>{{ t('cockpit.relation.parentThread', { id: parentThreadLabel }) }}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ parentThreadTooltip }}</TooltipContent>
+      </Tooltip>
 
-      <button
+      <Tooltip
         v-if="!expanded && childConversationCount > 0 && firstChildConversationId"
-        type="button"
-        class="relation-chip border border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
-        :title="firstChildConversationId"
-        @click="navigateConversation(firstChildConversationId)"
       >
-        <GitBranch class="h-3 w-3" />
-        <span>{{ t('cockpit.relation.children', { count: String(childConversationCount) }) }}</span>
-      </button>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="relation-chip border border-amber-500/50 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+            @click="navigateConversation(firstChildConversationId)"
+          >
+            <GitBranch class="h-3 w-3" />
+            <span>{{ t('cockpit.relation.children', { count: String(childConversationCount) }) }}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ childConversationTooltip }}</TooltipContent>
+      </Tooltip>
     </div>
 
     <div v-if="expanded" class="main-conversation-detail mb-3 border border-border bg-background/60 p-2.5">
@@ -513,29 +570,40 @@ function shortId(value: string): string {
     <!-- Row 2: Model + Channel chips (collapsed) -->
     <div v-if="!expanded" class="flex flex-wrap items-center gap-2">
       <span class="mr-2 min-w-0 max-w-full truncate text-sm font-medium">{{ conversation.lastModel }}</span>
-      <button
+      <Tooltip
         v-for="channel in visibleChannels"
         :key="channel.index"
-        type="button"
-        :title="getChannelTooltip(channel)"
-        class="channel-chip inline-flex max-w-[160px] items-center gap-1 truncate border px-2 py-0.5 text-[10px] font-medium transition-colors"
-        :class="channelChipClass(channel)"
-        @click.stop="handleQuickOverride(channel)"
       >
-        <span class="truncate">{{ channel.name }}</span>
-        <Check v-if="channel.index === conversation.currentChannel" class="h-2.5 w-2.5 shrink-0" />
-        <span v-else-if="channel.index === nextChannel" class="next-label shrink-0">
-          | {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
-        </span>
-      </button>
-      <button
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="channel-chip inline-flex max-w-[160px] items-center gap-1 truncate border px-2 py-0.5 text-[10px] font-medium transition-colors"
+            :class="channelChipClass(channel)"
+            @click.stop="handleQuickOverride(channel)"
+          >
+            <span class="truncate">{{ channel.name }}</span>
+            <Check v-if="channel.index === conversation.currentChannel" class="h-2.5 w-2.5 shrink-0" />
+            <span v-else-if="channel.index === nextChannel" class="next-label shrink-0">
+              | {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ getChannelTooltip(channel) }}</TooltipContent>
+      </Tooltip>
+      <Tooltip
         v-if="hiddenCount > 0"
-        type="button"
-        class="px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-        @click.stop="emit('toggleExpand')"
       >
-        +{{ hiddenCount }}
-      </button>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            @click.stop="emit('toggleExpand')"
+          >
+            +{{ hiddenCount }}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ hiddenChannelsTooltip }}</TooltipContent>
+      </Tooltip>
     </div>
 
     <!-- Expanded: Override alert -->
@@ -548,9 +616,14 @@ function shortId(value: string): string {
           {{ t('cockpit.overrideActive', { time: remainingTime }) }}
         </span>
         <div class="flex-1" />
-        <Button variant="ghost" size="sm" class="h-6 px-2 text-xs" @click.stop="emit('removeOverride', conversation.id)">
-          {{ t('cockpit.restoreDefault') }}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="sm" class="h-6 px-2 text-xs" @click.stop="emit('removeOverride', conversation.id)">
+              {{ t('cockpit.restoreDefault') }}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{{ t('cockpit.tooltip.restoreDefault') }}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
 
@@ -586,14 +659,20 @@ function shortId(value: string): string {
           </div>
           <span class="border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{{ agent.status }}</span>
         </div>
-        <button
+        <Tooltip
           v-if="subagents.length > visibleSubagents.length"
-          type="button"
-          class="w-full px-2 py-1 text-left text-[10px] text-muted-foreground hover:text-foreground"
-          @click.stop="emit('toggleExpand')"
         >
-          +{{ subagents.length - visibleSubagents.length }} more
-        </button>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              class="w-full px-2 py-1 text-left text-[10px] text-muted-foreground hover:text-foreground"
+              @click.stop="emit('toggleExpand')"
+            >
+              +{{ subagents.length - visibleSubagents.length }} more
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{{ moreSubagentsTooltip }}</TooltipContent>
+        </Tooltip>
       </div>
 
       <!-- Subagent Routing：为主对话与 subagent 分别指定渠道 -->
@@ -603,9 +682,14 @@ function shortId(value: string): string {
           <span v-if="hasSubagentOverride" class="ml-2 text-xs text-amber-500">[{{ t('cockpit.subagentOverride') }}]</span>
           <span v-else class="ml-2 text-xs text-muted-foreground">[{{ t('cockpit.subagentFollowMain') }}]</span>
           <span class="flex-1" />
-          <Button v-if="hasSubagentOverride" variant="ghost" size="sm" class="h-6 px-2 text-xs" @click.stop="handleClearSubagentOverride">
-            {{ t('cockpit.subagentClearOverride') }}
-          </Button>
+          <Tooltip v-if="hasSubagentOverride">
+            <TooltipTrigger as-child>
+              <Button variant="ghost" size="sm" class="h-6 px-2 text-xs" @click.stop="handleClearSubagentOverride">
+                {{ t('cockpit.subagentClearOverride') }}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{{ t('cockpit.tooltip.clearSubagentOverride') }}</TooltipContent>
+          </Tooltip>
         </div>
         <ConversationChannelSequence
           :channels="subagentSequence"
@@ -621,13 +705,18 @@ function shortId(value: string): string {
 
     <!-- Row 3: Raw User ID -->
     <div v-if="conversation.rawUserId" class="raw-user-id mt-2 flex items-center gap-1 border-t border-dashed border-border pt-2">
-      <button
-        type="button"
-        class="raw-user-id-text min-w-0 flex-1 truncate text-left font-mono text-xs text-muted-foreground"
-        @click.stop="copyRawUserId"
-      >
-        {{ conversation.rawUserId }}
-      </button>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="raw-user-id-text min-w-0 flex-1 truncate text-left font-mono text-xs text-muted-foreground"
+            @click.stop="copyRawUserId"
+          >
+            {{ conversation.rawUserId }}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ t('cockpit.copyRawUserId') }}</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger as-child>
           <Button variant="ghost" size="icon-sm" class="copy-btn h-6 w-6" :aria-label="t('cockpit.copyRawUserId')" @click.stop="copyRawUserId">

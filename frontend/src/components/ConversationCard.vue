@@ -12,16 +12,36 @@
   >
     <v-card-text class="pa-4">
       <div class="task-card-title-row">
-        <span :class="['status-led', `status-led--${conversation.status}`]"></span>
-        <span :class="['kind-chip', `kind-chip--${conversation.kind}`]">{{ kindLabel }}</span>
+        <v-tooltip :text="statusTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" :class="['status-led', `status-led--${conversation.status}`]"></span>
+          </template>
+        </v-tooltip>
+        <v-tooltip :text="kindTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" :class="['kind-chip', `kind-chip--${conversation.kind}`]">{{ kindLabel }}</span>
+          </template>
+        </v-tooltip>
         <span class="task-card-title" :title="tooltipText">
           <span :class="['display-label-text', { 'display-label-text--expanded': expanded }]">{{ displayLabel }}</span>
         </span>
-        <span class="task-meta-item task-title-stat">{{ conversation.requestCount }}x</span>
-        <span class="task-meta-item task-title-stat">{{ duration }}</span>
-        <span v-if="hasSubagentActivity" class="task-subagent-chip">
-          SA {{ displaySubagentCount }}
-        </span>
+        <v-tooltip :text="requestCountTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" class="task-meta-item task-title-stat">{{ conversation.requestCount }}x</span>
+          </template>
+        </v-tooltip>
+        <v-tooltip :text="durationTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" class="task-meta-item task-title-stat">{{ duration }}</span>
+          </template>
+        </v-tooltip>
+        <v-tooltip v-if="hasSubagentActivity" :text="subagentCountTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" class="task-subagent-chip">
+              SA {{ displaySubagentCount }}
+            </span>
+          </template>
+        </v-tooltip>
       </div>
 
       <div
@@ -29,35 +49,62 @@
         class="relation-row"
         @click.stop
       >
-        <button
+        <v-tooltip
           v-if="conversation.parentConversationId"
-          type="button"
-          class="relation-chip relation-chip--parent"
-          :title="relatedParentTitle || conversation.parentConversationId"
-          @click="navigateConversation(conversation.parentConversationId)"
+          :text="parentConversationTooltip"
+          location="top"
+          :open-delay="150"
+          content-class="ccx-tooltip"
         >
-          <v-icon size="12">mdi-arrow-left</v-icon>
-          <span>{{ t('cockpit.relation.parent') }}</span>
-        </button>
-        <span
+          <template #activator="{ props: tooltipProps }">
+            <button
+              v-bind="tooltipProps"
+              type="button"
+              class="relation-chip relation-chip--parent"
+              @click="navigateConversation(conversation.parentConversationId)"
+            >
+              <v-icon size="12">mdi-arrow-left</v-icon>
+              <span>{{ t('cockpit.relation.parent') }}</span>
+            </button>
+          </template>
+        </v-tooltip>
+        <v-tooltip
           v-else-if="conversation.parentThreadId"
-          class="relation-chip relation-chip--thread"
-          :title="conversation.parentThreadId"
+          :text="parentThreadTooltip"
+          location="top"
+          :open-delay="150"
+          content-class="ccx-tooltip"
         >
-          <v-icon size="12">mdi-arrow-left</v-icon>
-          <span>{{ t('cockpit.relation.parentThread', { id: parentThreadLabel }) }}</span>
-        </span>
+          <template #activator="{ props: tooltipProps }">
+            <span
+              v-bind="tooltipProps"
+              class="relation-chip relation-chip--thread"
+            >
+              <v-icon size="12">mdi-arrow-left</v-icon>
+              <span>{{ t('cockpit.relation.parentThread', { id: parentThreadLabel }) }}</span>
+            </span>
+          </template>
+        </v-tooltip>
 
-        <button
+        <v-tooltip
           v-if="!expanded && childConversationCount > 0 && firstChildConversationId"
-          type="button"
-          class="relation-chip relation-chip--children"
-          :title="firstChildConversationId"
-          @click="navigateConversation(firstChildConversationId)"
+          :text="childConversationTooltip"
+          location="top"
+          :open-delay="150"
+          content-class="ccx-tooltip"
         >
-          <v-icon size="12">mdi-source-branch</v-icon>
-          <span>{{ t('cockpit.relation.children', { count: String(childConversationCount) }) }}</span>
-        </button>
+          <template #activator="{ props: tooltipProps }">
+            <button
+              v-bind="tooltipProps"
+              type="button"
+              class="relation-chip relation-chip--children"
+              @click="navigateConversation(firstChildConversationId)"
+            >
+              <v-icon size="12">mdi-source-branch</v-icon>
+              <span>{{ t('cockpit.relation.children', { count: String(childConversationCount) }) }}</span>
+            </button>
+          </template>
+        </v-tooltip>
       </div>
 
       <div class="task-card-notes">
@@ -112,7 +159,11 @@
             </v-chip>
           </template>
         </v-tooltip>
-        <v-chip v-if="hiddenCount > 0" size="x-small" variant="text" @click.stop="$emit('toggleExpand')">+{{ hiddenCount }}</v-chip>
+        <v-tooltip v-if="hiddenCount > 0" :text="hiddenChannelsTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <v-chip v-bind="tooltipProps" size="x-small" variant="text" @click.stop="$emit('toggleExpand')">+{{ hiddenCount }}</v-chip>
+          </template>
+        </v-tooltip>
       </div>
 
       <!-- Expanded: Override alert -->
@@ -121,7 +172,11 @@
           <span v-if="override?.isPerpetual" class="text-caption">{{ t('cockpit.overrideActivePerpetual') }}</span>
           <span v-else class="text-caption">{{ t('cockpit.overrideActive', { time: remainingTime }) }}</span>
           <v-spacer />
-          <v-btn size="x-small" variant="text" @click.stop="$emit('removeOverride', conversation.id)">{{ t('cockpit.restoreDefault') }}</v-btn>
+          <v-tooltip :text="t('cockpit.tooltip.restoreDefault')" location="top" :open-delay="150" content-class="ccx-tooltip">
+            <template #activator="{ props: tooltipProps }">
+              <v-btn v-bind="tooltipProps" size="x-small" variant="text" @click.stop="$emit('removeOverride', conversation.id)">{{ t('cockpit.restoreDefault') }}</v-btn>
+            </template>
+          </v-tooltip>
         </div>
       </v-alert>
 
@@ -155,9 +210,13 @@
               {{ agent.status }}
             </v-chip>
           </div>
-          <button v-if="subagents.length > visibleSubagents.length" type="button" class="subagent-more" @click.stop="$emit('toggleExpand')">
-            +{{ subagents.length - visibleSubagents.length }} more
-          </button>
+          <v-tooltip v-if="subagents.length > visibleSubagents.length" :text="moreSubagentsTooltip" location="top" :open-delay="150" content-class="ccx-tooltip">
+            <template #activator="{ props: tooltipProps }">
+              <button v-bind="tooltipProps" type="button" class="subagent-more" @click.stop="$emit('toggleExpand')">
+                +{{ subagents.length - visibleSubagents.length }} more
+              </button>
+            </template>
+          </v-tooltip>
         </div>
 
         <!-- Subagent Routing：为主对话与 subagent 分别指定渠道 -->
@@ -167,7 +226,11 @@
             <span v-if="hasSubagentOverride" class="text-caption text-warning ml-2">[{{ t('cockpit.subagentOverride') }}]</span>
             <span v-else class="text-caption text-medium-emphasis ml-2">[{{ t('cockpit.subagentFollowMain') }}]</span>
             <v-spacer />
-            <v-btn v-if="hasSubagentOverride" size="x-small" variant="text" @click.stop="handleClearSubagentOverride">{{ t('cockpit.subagentClearOverride') }}</v-btn>
+            <v-tooltip v-if="hasSubagentOverride" :text="t('cockpit.tooltip.clearSubagentOverride')" location="top" :open-delay="150" content-class="ccx-tooltip">
+              <template #activator="{ props: tooltipProps }">
+                <v-btn v-bind="tooltipProps" size="x-small" variant="text" @click.stop="handleClearSubagentOverride">{{ t('cockpit.subagentClearOverride') }}</v-btn>
+              </template>
+            </v-tooltip>
           </div>
           <ConversationChannelSequence
             :channels="subagentSequence"
@@ -183,7 +246,11 @@
 
       <!-- Row 3: Raw User ID -->
       <div v-if="conversation.rawUserId" class="raw-user-id mt-2 d-flex align-center">
-        <span class="text-caption text-medium-emphasis font-weight-mono raw-user-id-text" @click.stop="copyRawUserId">{{ conversation.rawUserId }}</span>
+        <v-tooltip :text="t('cockpit.copyRawUserId')" location="top" :open-delay="150" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <span v-bind="tooltipProps" class="text-caption text-medium-emphasis font-weight-mono raw-user-id-text" @click.stop="copyRawUserId">{{ conversation.rawUserId }}</span>
+          </template>
+        </v-tooltip>
         <v-tooltip :text="t('cockpit.copyRawUserId')" location="top" :open-delay="150" content-class="ccx-tooltip">
           <template #activator="{ props: tooltipProps }">
             <v-btn v-bind="tooltipProps" icon size="x-small" variant="text" class="copy-btn" :aria-label="t('cockpit.copyRawUserId')" @click.stop="copyRawUserId">
@@ -322,6 +389,9 @@ const mainConversationTurns = computed(() => {
 const childConversationCount = computed(() => props.conversation.childConversationIds?.length ?? 0)
 const firstChildConversationId = computed(() => props.conversation.childConversationIds?.[0])
 const parentThreadLabel = computed(() => props.conversation.parentThreadId ? shortId(props.conversation.parentThreadId) : '')
+const parentConversationTooltip = computed(() => t('cockpit.tooltip.parentConversation', { id: props.relatedParentTitle || props.conversation.parentConversationId || '' }))
+const parentThreadTooltip = computed(() => t('cockpit.tooltip.parentThread', { id: props.conversation.parentThreadId || '' }))
+const childConversationTooltip = computed(() => t('cockpit.tooltip.childConversation', { id: firstChildConversationId.value || '' }))
 
 const tooltipText = computed(() => {
   if (props.conversation.title) return props.conversation.title
@@ -336,6 +406,19 @@ const duration = computed(() => {
   if (mins < 60) return `${mins}m`
   return `${Math.floor(mins / 60)}h${mins % 60}m`
 })
+
+const statusTooltip = computed(() => {
+  switch (props.conversation.status) {
+    case 'streaming': return t('cockpit.tooltip.statusStreaming')
+    case 'active': return t('cockpit.tooltip.statusActive')
+    case 'idle': return t('cockpit.tooltip.statusIdle')
+    default: return t('cockpit.tooltip.statusUnknown')
+  }
+})
+const kindTooltip = computed(() => t('cockpit.tooltip.kind', { kind: kindLabel.value }))
+const requestCountTooltip = computed(() => t('cockpit.tooltip.requests', { count: props.conversation.requestCount }))
+const durationTooltip = computed(() => t('cockpit.tooltip.duration', { duration: duration.value }))
+const subagentCountTooltip = computed(() => t('cockpit.tooltip.subagents', { count: displaySubagentCount.value }))
 
 const mainDetailRows = computed(() => [
   { label: t('cockpit.detail.requests'), value: `${props.conversation.requestCount}x` },
@@ -483,15 +566,17 @@ const visibleChannels = computed(() => {
 })
 
 const hiddenCount = computed(() => Math.max(0, channelSequence.value.length - visibleChannels.value.length))
+const hiddenChannelsTooltip = computed(() => t('cockpit.tooltip.hiddenChannels', { count: hiddenCount.value }))
+const moreSubagentsTooltip = computed(() => t('cockpit.tooltip.moreSubagents', { count: subagents.value.length - visibleSubagents.value.length }))
 
 function buildSequence(channels: ChannelInfo[]): ChannelSequenceEntry[] {
   return channels.map(ch => ({ channelIndex: ch.index, channelName: ch.name }))
 }
 
 function getChannelTooltip(ch: ChannelInfo): string {
-  if (ch.index === props.conversation.currentChannel && !hasOverride.value) return 'Current channel'
-  if (ch.index === nextChannel.value) return 'Next override target'
-  return 'Click to set as next'
+  if (ch.index === props.conversation.currentChannel && !hasOverride.value) return t('cockpit.tooltip.quickCurrentChannel')
+  if (ch.index === nextChannel.value) return t('cockpit.tooltip.quickNextOverride')
+  return t('cockpit.tooltip.quickSetNext')
 }
 
 function handleQuickOverride(ch: ChannelInfo) {

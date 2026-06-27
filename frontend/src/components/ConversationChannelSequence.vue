@@ -8,38 +8,75 @@
     >
       <span class="seq-num">{{ String(i + 1).padStart(2, '0') }}</span>
       <span class="seq-arrow">&rarr;</span>
-      <span class="text-caption flex-grow-1 channel-name" @click.stop="emit('moveToTop', ch, i)">{{ ch.name }}</span>
-      <v-chip v-if="ch.index === currentChannel" size="x-small" color="primary" variant="flat" class="mr-1">CURRENT</v-chip>
-      <v-chip
+      <v-tooltip :text="getMoveToTopTooltip(ch, i)" location="top" :open-delay="150" content-class="ccx-tooltip">
+        <template #activator="{ props: tooltipProps }">
+          <span v-bind="tooltipProps" class="text-caption flex-grow-1 channel-name" @click.stop="emit('moveToTop', ch, i)">{{ ch.name }}</span>
+        </template>
+      </v-tooltip>
+      <v-tooltip v-if="ch.index === currentChannel" :text="t('cockpit.tooltip.currentChannel')" location="top" :open-delay="150" content-class="ccx-tooltip">
+        <template #activator="{ props: tooltipProps }">
+          <v-chip v-bind="tooltipProps" size="x-small" color="primary" variant="flat" class="mr-1">CURRENT</v-chip>
+        </template>
+      </v-tooltip>
+      <v-tooltip
         v-else-if="ch.index === nextChannel"
-        size="x-small"
-        :color="nextChannelCircuitOpen ? 'error' : 'success'"
-        variant="flat"
-        class="next-channel-chip mr-1"
+        :text="nextChannelCircuitOpen ? t('cockpit.tooltip.nextChannelTripped') : t('cockpit.tooltip.nextChannel')"
+        location="top"
+        :open-delay="150"
+        content-class="ccx-tooltip"
       >
-        {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
-      </v-chip>
-      <v-chip v-if="ch.status === 'suspended'" size="x-small" variant="flat" class="fused-chip mr-1">PAUSED</v-chip>
-      <v-chip v-if="ch.circuitOpen" size="x-small" color="error" variant="tonal" class="mr-1">TRIPPED</v-chip>
-      <button
-        type="button"
-        class="sequence-action"
-        :disabled="i === channels.length - 1"
-        @click.stop="emit('demote', i)"
-      >
-        <v-icon size="14">mdi-arrow-down</v-icon>
-      </button>
+        <template #activator="{ props: tooltipProps }">
+          <v-chip
+            v-bind="tooltipProps"
+            size="x-small"
+            :color="nextChannelCircuitOpen ? 'error' : 'success'"
+            variant="flat"
+            class="next-channel-chip mr-1"
+          >
+            {{ nextChannelCircuitOpen ? 'TRIPPED' : 'NEXT' }}
+          </v-chip>
+        </template>
+      </v-tooltip>
+      <v-tooltip v-if="ch.status === 'suspended'" :text="t('cockpit.tooltip.pausedChannel')" location="top" :open-delay="150" content-class="ccx-tooltip">
+        <template #activator="{ props: tooltipProps }">
+          <v-chip v-bind="tooltipProps" size="x-small" variant="flat" class="fused-chip mr-1">PAUSED</v-chip>
+        </template>
+      </v-tooltip>
+      <v-tooltip v-if="ch.circuitOpen" :text="t('cockpit.tooltip.circuitOpen')" location="top" :open-delay="150" content-class="ccx-tooltip">
+        <template #activator="{ props: tooltipProps }">
+          <v-chip v-bind="tooltipProps" size="x-small" color="error" variant="tonal" class="mr-1">TRIPPED</v-chip>
+        </template>
+      </v-tooltip>
+      <v-tooltip :text="getDemoteTooltip(ch, i)" location="top" :open-delay="150" content-class="ccx-tooltip">
+        <template #activator="{ props: tooltipProps }">
+          <span v-bind="tooltipProps" class="sequence-action-wrapper">
+            <button
+              type="button"
+              class="sequence-action"
+              :disabled="i === channels.length - 1"
+              :aria-label="getDemoteTooltip(ch, i)"
+              @click.stop="emit('demote', i)"
+            >
+              <v-icon size="14">mdi-arrow-down</v-icon>
+            </button>
+          </span>
+        </template>
+      </v-tooltip>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
+
 interface ChannelInfo {
   index: number
   name: string
   status: string
   circuitOpen?: boolean
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   channels: ChannelInfo[]
@@ -61,6 +98,16 @@ const emit = defineEmits<{
 
 function isDemoted(index: number): boolean {
   return props.overrideActive && index >= props.channels.length - 1
+}
+
+function getMoveToTopTooltip(ch: ChannelInfo, index: number): string {
+  if (index === 0) return t('cockpit.tooltip.channelAlreadyFirst', { name: ch.name })
+  return t('cockpit.tooltip.moveChannelToTop', { name: ch.name })
+}
+
+function getDemoteTooltip(ch: ChannelInfo, index: number): string {
+  if (index === props.channels.length - 1) return t('cockpit.tooltip.demoteChannelDisabled')
+  return t('cockpit.tooltip.demoteChannel', { name: ch.name })
 }
 </script>
 
@@ -154,6 +201,13 @@ function isDemoted(index: number): boolean {
   background: transparent;
   color: rgba(var(--v-theme-on-surface), 0.68);
   cursor: pointer;
+}
+
+.sequence-action-wrapper {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 }
 
 .sequence-action:hover:not(:disabled) {
