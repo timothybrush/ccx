@@ -1240,6 +1240,8 @@ func shouldDropResponsesToolObject(tool map[string]interface{}) bool {
 }
 
 func normalizeResponsesInputForPassthrough(reqMap map[string]interface{}) {
+	delete(reqMap, "internal_chat_message_metadata_passthrough")
+
 	input, ok := reqMap["input"].([]interface{})
 	if !ok {
 		return
@@ -1257,6 +1259,7 @@ func normalizeResponsesInputForPassthrough(reqMap map[string]interface{}) {
 			continue
 		}
 
+		stripResponsesClientOnlyInputMetadata(item)
 		delete(item, "status")
 
 		if toString(item["type"]) != "message" {
@@ -1281,6 +1284,10 @@ func normalizeResponsesInputForPassthrough(reqMap map[string]interface{}) {
 			}
 		}
 	}
+}
+
+func stripResponsesClientOnlyInputMetadata(item map[string]interface{}) {
+	delete(item, "internal_chat_message_metadata_passthrough")
 }
 
 func normalizeStatelessResponsesToolHistory(input []interface{}) []interface{} {
