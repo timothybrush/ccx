@@ -663,7 +663,7 @@ func TestResponsesProviderCodexToolCompatDiffersFromNativePassthroughForOpenAI(t
 			t.Fatalf("buildProviderRequestBody 失败: %v", err)
 		}
 		reqMap := providerReq.(map[string]interface{})
-		tools := reqMap["tools"].([]map[string]interface{})
+		tools := decodeToolMaps(t, reqMap["tools"])
 		if len(tools) != 2 {
 			t.Fatalf("工具数量=%d，期望 2", len(tools))
 		}
@@ -693,7 +693,7 @@ func TestResponsesProviderCodexToolCompatDiffersFromNativePassthroughForOpenAI(t
 			t.Fatalf("buildProviderRequestBody 失败: %v", err)
 		}
 		reqMap := providerReq.(map[string]interface{})
-		tools := reqMap["tools"].([]map[string]interface{})
+		tools := decodeToolMaps(t, reqMap["tools"])
 		if len(tools) != 1 {
 			t.Fatalf("工具数量=%d，期望 1；codexNativeToolPassthrough 不应启用 Chat proxy", len(tools))
 		}
@@ -701,4 +701,22 @@ func TestResponsesProviderCodexToolCompatDiffersFromNativePassthroughForOpenAI(t
 			t.Fatalf("保留工具=%v，期望 do_thing", got)
 		}
 	})
+}
+
+func decodeToolMaps(t *testing.T, raw interface{}) []map[string]interface{} {
+	t.Helper()
+
+	if tools, ok := raw.([]map[string]interface{}); ok {
+		return tools
+	}
+
+	b, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("tools marshal err: %v", err)
+	}
+	var tools []map[string]interface{}
+	if err := json.Unmarshal(b, &tools); err != nil {
+		t.Fatalf("tools decode err: %v", err)
+	}
+	return tools
 }

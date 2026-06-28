@@ -19,6 +19,7 @@ func TestResponsesHandler_DeepSeekChatAndMessagesThinkingMatrix(t *testing.T) {
 		name           string
 		serviceType    string
 		responseBody   string
+		configure      func(*config.UpstreamConfig)
 		wantUpstream   func(t *testing.T, body []byte)
 		wantDownstream func(t *testing.T, body []byte)
 	}{
@@ -83,6 +84,9 @@ func TestResponsesHandler_DeepSeekChatAndMessagesThinkingMatrix(t *testing.T) {
 			name:         "responses_to_deepseek_messages",
 			serviceType:  "claude",
 			responseBody: `{"id":"msg_ds","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"messages thinking","signature":"sig_ds"},{"type":"text","text":"messages text"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":2}}`,
+			configure: func(upstream *config.UpstreamConfig) {
+				upstream.PassbackThinkingBlocks = true
+			},
 			wantUpstream: func(t *testing.T, body []byte) {
 				var req struct {
 					Messages []struct {
@@ -127,13 +131,17 @@ func TestResponsesHandler_DeepSeekChatAndMessagesThinkingMatrix(t *testing.T) {
 			}))
 			defer upstream.Close()
 
-			router := newResponsesTestRouter(t, config.UpstreamConfig{
+			upstreamConfig := config.UpstreamConfig{
 				Name:        tt.name,
 				BaseURL:     upstream.URL,
 				APIKeys:     []string{"sk-test"},
 				ServiceType: tt.serviceType,
 				Status:      "active",
-			}, sessionManager)
+			}
+			if tt.configure != nil {
+				tt.configure(&upstreamConfig)
+			}
+			router := newResponsesTestRouter(t, upstreamConfig, sessionManager)
 
 			reqBody := `{"model":"deepseek-v4-pro","input":[{"type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"previous reasoning"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"previous text"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"store":false}`
 			w := performResponsesHandlerRequest(t, router, reqBody)
