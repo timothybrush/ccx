@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### 修复
+
+- **适配 Kimi-K2.7-Code 输出与思考限制** - model-registry/backend: 将 Kimi-K2.7-Code 最大输出与推荐输出修正为 32768，发送上游前按模型能力自动下调超限 `max_tokens`，并让能力测试为强制思考模型自动携带 thinking/reasoning 参数，避免火山方舟/百炼等平台返回参数错误或能力误判
+
 ## [v2.9.20] - 2026-06-27
 
 ### 新增

@@ -352,9 +352,9 @@
       "displayName": "Kimi K2.7 Code",
       "description": "Kimi coding model with text, image and video input plus thinking mode. kimi-for-coding token plan alias falls back to this model.",
       "contextWindowTokens": 262144,
-      "maxOutputTokens": 262144,
+      "maxOutputTokens": 32768,
       "defaultOutputTokens": 32768,
-      "recommendedOutputTokens": 262144,
+      "recommendedOutputTokens": 32768,
       "thinkingMode": "thinking",
       "reasoningEfforts": ["high", "max"],
       "capabilities": {

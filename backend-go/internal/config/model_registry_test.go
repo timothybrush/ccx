@@ -122,17 +122,20 @@ func TestResolveUpstreamCapability_KimiK27Builtin(t *testing.T) {
 	if resolved.Capability.ContextWindowTokens != 262144 {
 		t.Fatalf("ContextWindowTokens = %d, want 262144", resolved.Capability.ContextWindowTokens)
 	}
-	if resolved.Capability.MaxOutputTokens != 262144 {
-		t.Fatalf("MaxOutputTokens = %d, want 262144", resolved.Capability.MaxOutputTokens)
+	if resolved.Capability.MaxOutputTokens != 32768 {
+		t.Fatalf("MaxOutputTokens = %d, want 32768", resolved.Capability.MaxOutputTokens)
 	}
 	if resolved.Capability.DefaultOutputTokens != 32768 {
 		t.Fatalf("DefaultOutputTokens = %d, want 32768", resolved.Capability.DefaultOutputTokens)
 	}
-	if resolved.Capability.RecommendedOutputTokens != 262144 {
-		t.Fatalf("RecommendedOutputTokens = %d, want 262144", resolved.Capability.RecommendedOutputTokens)
+	if resolved.Capability.RecommendedOutputTokens != 32768 {
+		t.Fatalf("RecommendedOutputTokens = %d, want 32768", resolved.Capability.RecommendedOutputTokens)
+	}
+	if resolved.Capability.ThinkingMode != "thinking" {
+		t.Fatalf("ThinkingMode = %q, want thinking", resolved.Capability.ThinkingMode)
 	}
 	if resolved.Capability.Pricing == nil || resolved.Capability.Pricing.OutputPrice == nil || *resolved.Capability.Pricing.OutputPrice != 4 {
-		t.Fatalf("Pricing.OutputPrice = %#v, want 8", resolved.Capability.Pricing)
+		t.Fatalf("Pricing.OutputPrice = %#v, want 4", resolved.Capability.Pricing)
 	}
 }
 
