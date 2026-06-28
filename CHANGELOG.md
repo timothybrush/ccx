@@ -1,3 +1,15 @@
+## [v2.9.22] - 2026-06-28
+
+### 修复
+
+- **剥离不支持的 Claude thinking blocks** - responses: strip unsupported Claude thinking blocks
+- **优化 Claude 兼容性诊断** - compat: refine Claude compatibility diagnosis
+- **刷新熔断窗口近期历史** - metrics: refresh breaker windows from recent history
+
+### 其他
+
+- **延长 macOS 公证超时时间** - release: extend macOS notarization timeout
+
 ## [v2.9.21] - 2026-06-28
 
 ### 新增
