@@ -94,7 +94,10 @@
           <div v-show="matchesSearch(element)" class="channel-item-wrapper">
             <div
               class="channel-row"
-              :class="getChannelRowClass(element)"
+              :class="[
+                getChannelRowClass(element),
+                { 'has-open-menu': isChannelMenuOpen('active', element.index) },
+              ]"
               @click="toggleChannelChart(element.index)"
             >
               <!-- SVG activity waveform bar chart background -->
@@ -354,7 +357,15 @@
                 <v-icon size="small">mdi-history</v-icon>
               </v-btn>
 
-              <v-menu>
+              <v-menu
+                :model-value="isChannelMenuOpen('active', element.index)"
+                location="bottom end"
+                origin="top end"
+                location-strategy="connected"
+                scroll-strategy="reposition"
+                :offset="6"
+                @update:model-value="open => handleChannelMenuUpdate('active', element.index, open)"
+              >
                 <template #activator="{ props: menuProps }">
                   <v-btn
                     icon
@@ -488,7 +499,12 @@
       </div>
 
       <div v-if="filteredInactiveChannels.length > 0" class="inactive-pool">
-        <div v-for="channel in filteredInactiveChannels" :key="channel.index" class="inactive-channel-row">
+        <div
+          v-for="channel in filteredInactiveChannels"
+          :key="channel.index"
+          class="inactive-channel-row"
+          :class="{ 'has-open-menu': isChannelMenuOpen('inactive', channel.index) }"
+        >
           <!-- Channel information -->
           <div class="channel-info">
             <div class="channel-info-main">
@@ -530,7 +546,15 @@
               {{ t('orchestration.enable') }}
             </v-btn>
 
-            <v-menu>
+            <v-menu
+              :model-value="isChannelMenuOpen('inactive', channel.index)"
+              location="bottom end"
+              origin="top end"
+              location-strategy="connected"
+              scroll-strategy="reposition"
+              :offset="6"
+              @update:model-value="open => handleChannelMenuUpdate('inactive', channel.index, open)"
+            >
               <template #activator="{ props: menuProps }">
                 <v-btn
                   icon
@@ -596,7 +620,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, nextTick } from 'vue'
 import draggable from 'vuedraggable'
 import { api, type Channel, type ChannelMetrics, type ChannelStatus, type TimeWindowStats, type ChannelRecentActivity, type SchedulerStatsResponse } from '../services/api'
 import { getChannelTypeApi } from '../utils/channelTypeApi'
@@ -680,6 +704,54 @@ const hoveredMetricsChannel = ref<number | null>(null)
 // Channel config copy state
 const copiedChannelIndex = ref<number | null>(null)
 let copyTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+type ChannelMenuScope = 'active' | 'inactive'
+type ChannelMenuKey = `${ChannelMenuScope}:${number}`
+const openChannelMenuKey = ref<ChannelMenuKey | null>(null)
+let channelMenuRepositionTimer: ReturnType<typeof setTimeout> | null = null
+
+const getChannelMenuKey = (scope: ChannelMenuScope, channelIndex: number): ChannelMenuKey =>
+  `${scope}:${channelIndex}`
+
+const isChannelMenuOpen = (scope: ChannelMenuScope, channelIndex: number): boolean =>
+  openChannelMenuKey.value === getChannelMenuKey(scope, channelIndex)
+
+const dispatchOverlayResize = () => {
+  window.dispatchEvent(new Event('resize'))
+}
+
+const scheduleChannelMenuReposition = () => {
+  nextTick(() => {
+    requestAnimationFrame(dispatchOverlayResize)
+
+    if (channelMenuRepositionTimer) {
+      clearTimeout(channelMenuRepositionTimer)
+    }
+
+    channelMenuRepositionTimer = setTimeout(() => {
+      dispatchOverlayResize()
+      channelMenuRepositionTimer = null
+    }, 50)
+  })
+}
+
+const handleChannelMenuUpdate = (
+  scope: ChannelMenuScope,
+  channelIndex: number,
+  open: boolean,
+) => {
+  const key = getChannelMenuKey(scope, channelIndex)
+
+  if (open) {
+    openChannelMenuKey.value = key
+    scheduleChannelMenuReposition()
+    return
+  }
+
+  if (openChannelMenuKey.value === key) {
+    openChannelMenuKey.value = null
+  }
+}
 
 // Toggle channel chart expansion/collapse
 const toggleChannelChart = (channelIndex: number) => {
@@ -1237,6 +1309,10 @@ onUnmounted(() => {
   if (copyTimeoutId) {
     clearTimeout(copyTimeoutId)
     copyTimeoutId = null
+  }
+  if (channelMenuRepositionTimer) {
+    clearTimeout(channelMenuRepositionTimer)
+    channelMenuRepositionTimer = null
   }
 })
 

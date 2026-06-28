@@ -91,6 +91,13 @@
   box-shadow: none;
 }
 
+.channel-row.has-open-menu:hover,
+.channel-row.has-open-menu:active,
+.inactive-channel-row.has-open-menu:hover,
+.inactive-channel-row.has-open-menu:active {
+  transform: none;
+}
+
 .v-theme--dark .channel-row {
   background: rgb(var(--v-theme-surface));
   border-color: rgba(255, 255, 255, 0.7);
