@@ -297,7 +297,7 @@ function updateTextVerbosity(value: string) {
             </div>
             <Switch :model-value="form.stripEmptyTextBlocks" @update:model-value="updateField('stripEmptyTextBlocks', $event)" />
           </div>
-          <div v-if="channelType === 'messages' || channelType === 'chat'" class="flex items-center justify-between gap-3">
+          <div v-if="channelType !== 'images'" class="flex items-center justify-between gap-3">
             <div class="min-w-0 flex-1 space-y-0.5">
               <Label class="text-xs font-medium">{{ t('channelEditor.compat.historicalImageLimit.label') }}</Label>
               <p class="text-[10px] leading-4 text-muted-foreground">{{ t('channelEditor.compat.historicalImageLimit.hint') }}</p>
@@ -306,6 +306,7 @@ function updateTextVerbosity(value: string) {
               :model-value="form.historicalImageTurnLimit"
               type="number"
               min="0"
+              max="10"
               class="h-8 w-[120px] text-xs"
               @update:model-value="updateField('historicalImageTurnLimit', Number($event))"
             />

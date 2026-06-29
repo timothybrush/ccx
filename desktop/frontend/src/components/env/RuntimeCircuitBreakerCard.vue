@@ -43,9 +43,6 @@ const presets = [
   { key: 'custom', labelKey: 'env.runtimeCbPresetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, requestTimeoutMs: 120000, responseHeaderTimeoutMs: 60000, streamFirstContentTimeoutMs: streamTimeoutPresets.balanced.firstContentMs, streamInactivityTimeoutMs: streamTimeoutPresets.balanced.inactivityMs, streamToolCallIdleTimeoutMs: streamTimeoutPresets.balanced.toolCallIdleMs },
 ]
 
-// 历史图片轮次限制
-const historicalImageLimit = ref(0)
-
 const matchPreset = () => {
   for (const p of presets) {
     if (p.key === 'custom') continue
@@ -145,27 +142,8 @@ const fetchConfig = async () => {
   }
 }
 
-const fetchHistoricalImageLimit = async () => {
-  const url = await buildApiUrl('/api/settings/historical-image-turn-limit')
-  if (!url) return
-
-  try {
-    const adminKey = await GetAdminAccessKey()
-    const resp = await fetch(url, {
-      headers: { 'x-api-key': adminKey },
-    })
-    if (resp.ok) {
-      const data = await resp.json()
-      historicalImageLimit.value = data.historicalImageTurnLimit ?? 0
-    }
-  } catch {
-    // 非关键功能，静默忽略
-  }
-}
-
 const saveConfig = async () => {
   const cbUrl = await buildApiUrl('/api/settings/circuit-breaker')
-  const imgUrl = await buildApiUrl('/api/settings/historical-image-turn-limit')
   if (!cbUrl) {
     showMessage(t('env.runtimeCbNoBackend'), 'error')
     return
@@ -175,37 +153,23 @@ const saveConfig = async () => {
   clearMessages()
   try {
     const adminKey = await GetAdminAccessKey()
-    const promises: Promise<Response>[] = [
-      fetch(cbUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
-        body: JSON.stringify({
-          windowSize: form.windowSize,
-          failureThreshold: form.failureThreshold,
-          consecutiveFailuresThreshold: form.consecutiveFailuresThreshold,
-          requestTimeoutMs: form.requestTimeoutMs,
-          responseHeaderTimeoutMs: form.responseHeaderTimeoutMs,
-          streamFirstContentTimeoutMs: form.streamFirstContentTimeoutMs,
-          streamInactivityTimeoutMs: form.streamInactivityTimeoutMs,
-          streamToolCallIdleTimeoutMs: form.streamToolCallIdleTimeoutMs,
-        }),
+    const resp = await fetch(cbUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
+      body: JSON.stringify({
+        windowSize: form.windowSize,
+        failureThreshold: form.failureThreshold,
+        consecutiveFailuresThreshold: form.consecutiveFailuresThreshold,
+        requestTimeoutMs: form.requestTimeoutMs,
+        responseHeaderTimeoutMs: form.responseHeaderTimeoutMs,
+        streamFirstContentTimeoutMs: form.streamFirstContentTimeoutMs,
+        streamInactivityTimeoutMs: form.streamInactivityTimeoutMs,
+        streamToolCallIdleTimeoutMs: form.streamToolCallIdleTimeoutMs,
       }),
-    ]
-    if (imgUrl) {
-      promises.push(
-        fetch(imgUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
-          body: JSON.stringify({ limit: historicalImageLimit.value }),
-        }),
-      )
-    }
-    const results = await Promise.all(promises)
-    for (const resp of results) {
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}))
-        throw new Error(body.error || `HTTP ${resp.status}`)
-      }
+    })
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}))
+      throw new Error(body.error || `HTTP ${resp.status}`)
     }
     showMessage(t('env.runtimeCbSaved'), 'success')
   } catch (e) {
@@ -218,7 +182,6 @@ const saveConfig = async () => {
 onMounted(() => {
   if (status.value.running) {
     fetchConfig()
-    fetchHistoricalImageLimit()
   }
 })
 </script>
@@ -515,25 +478,6 @@ onMounted(() => {
         </Button>
       </div>
 
-      <!-- 历史图片轮次限制 -->
-      <div class="border-t border-border pt-4 mt-4">
-        <div class="flex items-center justify-between mb-2">
-          <div>
-            <p class="text-sm font-medium">{{ t('env.historicalImageTurnLimitTitle') }}</p>
-            <p class="text-xs text-muted-foreground mt-0.5">{{ t('env.historicalImageTurnLimitHint') }}</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted-foreground">{{ t('env.historicalImageTurnLimitLabel') }}</span>
-            <input
-              v-model.number="historicalImageLimit"
-              type="number"
-              min="0"
-              class="w-20 h-8 rounded border border-input bg-background px-2 text-sm text-center"
-              :disabled="!status.running"
-            />
-          </div>
-        </div>
-      </div>
     </CardContent>
   </Card>
 </template>

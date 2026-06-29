@@ -229,7 +229,7 @@
       </div>
 
       <!-- Historical Image Turn Limit -->
-      <div v-if="channelType === 'messages' || channelType === 'chat'" class="d-flex align-center justify-space-between">
+      <div v-if="channelType !== 'images'" class="d-flex align-center justify-space-between">
         <div class="d-flex align-center ga-2">
           <v-icon color="primary">mdi-image-multiple</v-icon>
           <div>
@@ -241,6 +241,7 @@
           :model-value="form.historicalImageTurnLimit"
           type="number"
           min="0"
+          max="10"
           variant="outlined"
           density="comfortable"
           hide-details

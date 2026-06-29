@@ -484,19 +484,6 @@ export class ApiService {
 
   // ============== 熔断器配置 API ==============
 
-  // 获取历史图片轮次限制
-  async getHistoricalImageTurnLimit(): Promise<{ historicalImageTurnLimit: number }> {
-    return this.request('/settings/historical-image-turn-limit')
-  }
-
-  // 设置历史图片轮次限制
-  async setHistoricalImageTurnLimit(limit: number): Promise<void> {
-    await this.request('/settings/historical-image-turn-limit', {
-      method: 'PUT',
-      body: JSON.stringify({ limit })
-    })
-  }
-
   // 获取熔断器运行时配置
   async getCircuitBreaker(): Promise<{ windowSize: number; failureThreshold: number; consecutiveFailuresThreshold: number; requestTimeoutMs: number; responseHeaderTimeoutMs: number; streamFirstContentTimeoutMs: number; streamInactivityTimeoutMs: number; streamToolCallIdleTimeoutMs: number }> {
     return this.request('/settings/circuit-breaker')

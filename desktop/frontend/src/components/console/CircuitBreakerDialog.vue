@@ -50,9 +50,6 @@ const presets = [
   { key: 'custom', labelKey: 'env.runtimeCbPresetCustom' as const, windowSize: 10, failureThreshold: 0.50, consecutiveFailuresThreshold: 3, requestTimeoutMs: 120000, responseHeaderTimeoutMs: 60000, streamFirstContentTimeoutMs: streamTimeoutPresets.balanced.firstContentMs, streamInactivityTimeoutMs: streamTimeoutPresets.balanced.inactivityMs, streamToolCallIdleTimeoutMs: streamTimeoutPresets.balanced.toolCallIdleMs },
 ]
 
-// 历史图片轮次限制
-const historicalImageLimit = ref(0)
-
 const matchPreset = () => {
   for (const p of presets) {
     if (p.key === 'custom') continue
@@ -136,24 +133,8 @@ const fetchConfig = async () => {
   }
 }
 
-const fetchHistoricalImageLimit = async () => {
-  const url = await buildApiUrl('/api/settings/historical-image-turn-limit')
-  if (!url) return
-  try {
-    const adminKey = await GetAdminAccessKey()
-    const resp = await fetch(url, { headers: { 'x-api-key': adminKey } })
-    if (resp.ok) {
-      const data = await resp.json()
-      historicalImageLimit.value = data.historicalImageTurnLimit ?? 0
-    }
-  } catch {
-    // 非关键功能，静默忽略
-  }
-}
-
 const saveConfig = async () => {
   const cbUrl = await buildApiUrl('/api/settings/circuit-breaker')
-  const imgUrl = await buildApiUrl('/api/settings/historical-image-turn-limit')
   if (!cbUrl) {
     error.value = t('env.runtimeCbNoBackend')
     return
@@ -163,37 +144,23 @@ const saveConfig = async () => {
   clearMessages()
   try {
     const adminKey = await GetAdminAccessKey()
-    const promises: Promise<Response>[] = [
-      fetch(cbUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
-        body: JSON.stringify({
-          windowSize: form.windowSize,
-          failureThreshold: form.failureThreshold,
-          consecutiveFailuresThreshold: form.consecutiveFailuresThreshold,
-          requestTimeoutMs: form.requestTimeoutMs,
-          responseHeaderTimeoutMs: form.responseHeaderTimeoutMs,
-          streamFirstContentTimeoutMs: form.streamFirstContentTimeoutMs,
-          streamInactivityTimeoutMs: form.streamInactivityTimeoutMs,
-          streamToolCallIdleTimeoutMs: form.streamToolCallIdleTimeoutMs,
-        }),
+    const resp = await fetch(cbUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
+      body: JSON.stringify({
+        windowSize: form.windowSize,
+        failureThreshold: form.failureThreshold,
+        consecutiveFailuresThreshold: form.consecutiveFailuresThreshold,
+        requestTimeoutMs: form.requestTimeoutMs,
+        responseHeaderTimeoutMs: form.responseHeaderTimeoutMs,
+        streamFirstContentTimeoutMs: form.streamFirstContentTimeoutMs,
+        streamInactivityTimeoutMs: form.streamInactivityTimeoutMs,
+        streamToolCallIdleTimeoutMs: form.streamToolCallIdleTimeoutMs,
       }),
-    ]
-    if (imgUrl) {
-      promises.push(
-        fetch(imgUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
-          body: JSON.stringify({ limit: historicalImageLimit.value }),
-        }),
-      )
-    }
-    const results = await Promise.all(promises)
-    for (const resp of results) {
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}))
-        throw new Error(body.error || `HTTP ${resp.status}`)
-      }
+    })
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}))
+      throw new Error(body.error || `HTTP ${resp.status}`)
     }
     success.value = t('env.runtimeCbSaved')
     setTimeout(() => { success.value = '' }, 3000)
@@ -231,7 +198,6 @@ onBeforeUnmount(() => {
 const loadOnOpen = async () => {
   if (props.open && status.value.running) {
     await fetchConfig()
-    await fetchHistoricalImageLimit()
   }
 }
 
@@ -250,11 +216,11 @@ watch(() => props.open, (isOpen) => {
       >
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="emit('close')" />
 
-        <div class="cb-dialog-shell relative z-10 h-[85vh] max-h-[85vh] w-[560px] max-w-[90vw] overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card/95 to-card/85 shadow-2xl backdrop-blur-md">
+        <div class="cb-dialog-shell relative z-10 w-[560px] max-w-[90vw] overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card/95 to-card/85 shadow-2xl backdrop-blur-md">
           <div class="absolute inset-0 z-0">
             <!-- Body -->
             <ScrollArea type="auto" class="h-full w-full">
-              <div class="space-y-5 px-5 pt-[72px] pb-[72px]">
+              <div class="space-y-4 px-4 pt-[64px] pb-[60px]">
                 <Alert v-if="error" variant="destructive" class="shadow-sm">
                   <p class="text-xs">{{ error }}</p>
                 </Alert>
@@ -263,8 +229,8 @@ watch(() => props.open, (isOpen) => {
                 </Alert>
 
                 <!-- 基础参数：三列 -->
-                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-4 shadow-sm backdrop-blur-sm">
-                  <div class="mb-3 flex items-center gap-1.5 border-b border-border/40 pb-2">
+                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-3 shadow-sm backdrop-blur-sm">
+                  <div class="mb-2 flex items-center gap-1.5 border-b border-border/40 pb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-primary">Circuit Breaker</span>
                   </div>
@@ -353,8 +319,8 @@ watch(() => props.open, (isOpen) => {
                 </div>
 
                 <!-- 请求生命周期超时：两列 -->
-                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-4 shadow-sm backdrop-blur-sm">
-                  <div class="mb-3 flex items-center gap-1.5 border-b border-border/40 pb-2">
+                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-3 shadow-sm backdrop-blur-sm">
+                  <div class="mb-2 flex items-center gap-1.5 border-b border-border/40 pb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a6 6 0 1 1-8 0"/><path d="M12 14v-4"/></svg>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-primary">Request Timeout</span>
                   </div>
@@ -416,8 +382,8 @@ watch(() => props.open, (isOpen) => {
                 </div>
 
                 <!-- 流式超时：三列 -->
-                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-4 shadow-sm backdrop-blur-sm">
-                  <div class="mb-3 flex items-center gap-1.5 border-b border-border/40 pb-2">
+                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-3 shadow-sm backdrop-blur-sm">
+                  <div class="mb-2 flex items-center gap-1.5 border-b border-border/40 pb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-primary">Stream Timeout</span>
                   </div>
@@ -520,31 +486,13 @@ watch(() => props.open, (isOpen) => {
                   </Button>
                 </div>
 
-                <!-- 历史图片轮次限制 -->
-                <div class="rounded-xl border border-border/60 bg-gradient-to-br from-background/60 to-background/40 p-4 shadow-sm backdrop-blur-sm">
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <div class="flex items-center gap-1.5 mb-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                        <p class="text-xs font-semibold">{{ t('env.historicalImageTurnLimitTitle') }}</p>
-                      </div>
-                      <p class="text-[11px] text-muted-foreground">{{ t('env.historicalImageTurnLimitHint') }}</p>
-                    </div>
-                    <input
-                      v-model.number="historicalImageLimit"
-                      type="number"
-                      min="0"
-                      class="w-20 h-8 rounded-lg border border-input/80 bg-background/80 px-3 text-xs text-center font-mono shadow-sm transition-all hover:border-input focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
               </div>
             </ScrollArea>
           </div>
 
           <!-- Header -->
           <div class="pointer-events-none absolute inset-x-0 top-0 z-20 border-b border-border/60 bg-background shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
-            <div class="pointer-events-auto flex shrink-0 items-center justify-between px-5 py-4">
+            <div class="pointer-events-auto flex shrink-0 items-center justify-between px-5 py-3">
               <div class="flex items-center gap-2.5">
                 <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
                   <Zap class="h-4 w-4 fill-primary/20 text-primary" />
@@ -556,7 +504,7 @@ watch(() => props.open, (isOpen) => {
 
           <!-- Footer -->
           <div class="cb-dialog-glass cb-dialog-glass-bottom pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-border/60">
-            <div class="pointer-events-auto flex shrink-0 items-center justify-end gap-2.5 p-4">
+            <div class="pointer-events-auto flex shrink-0 items-center justify-end gap-2.5 p-3">
               <Button variant="outline" size="sm" class="text-xs shadow-sm hover:shadow-md transition-all" @click="emit('close')">
                 {{ t('common.cancel') }}
                 <span class="ml-1.5 text-xs opacity-60">Esc</span>
@@ -579,6 +527,8 @@ watch(() => props.open, (isOpen) => {
   --cb-dialog-glass-bg: rgb(255 255 255 / 0.08);
   --cb-dialog-glass-shadow: rgb(15 23 42 / 0.06);
   --cb-dialog-glass-highlight: rgb(255 255 255 / 0.14);
+  height: min(78vh, 780px);
+  max-height: calc(100vh - 48px);
 }
 
 :global(.dark) .cb-dialog-shell {

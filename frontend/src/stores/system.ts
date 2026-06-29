@@ -35,10 +35,6 @@ export const useSystemStore = defineStore('system', () => {
   const fuzzyModeLoading = ref(false)
   const fuzzyModeLoadError = ref(false)
 
-  // 历史图片轮次限制加载状态
-  const historicalImageTurnLimitLoading = ref(false)
-  const historicalImageTurnLimitLoadError = ref(false)
-
   // 更新对话框
   const updateDialogOpen = ref(false)
 
@@ -88,20 +84,6 @@ export const useSystemStore = defineStore('system', () => {
     fuzzyModeLoadError.value = error
   }
 
-  /**
-   * 设置历史图片轮次限制加载状态
-   */
-  function setHistoricalImageTurnLimitLoading(loading: boolean) {
-    historicalImageTurnLimitLoading.value = loading
-  }
-
-  /**
-   * 设置历史图片轮次限制加载错误状态
-   */
-  function setHistoricalImageTurnLimitLoadError(error: boolean) {
-    historicalImageTurnLimitLoadError.value = error
-  }
-
   function setUpdateDialogOpen(open: boolean) {
     updateDialogOpen.value = open
   }
@@ -123,8 +105,6 @@ export const useSystemStore = defineStore('system', () => {
     isCheckingVersion.value = false
     fuzzyModeLoading.value = false
     fuzzyModeLoadError.value = false
-    historicalImageTurnLimitLoading.value = false
-    historicalImageTurnLimitLoadError.value = false
     updateDialogOpen.value = false
   }
 
@@ -135,8 +115,6 @@ export const useSystemStore = defineStore('system', () => {
     isCheckingVersion,
     fuzzyModeLoading,
     fuzzyModeLoadError,
-    historicalImageTurnLimitLoading,
-    historicalImageTurnLimitLoadError,
     updateDialogOpen,
 
     // 计算属性
@@ -148,8 +126,6 @@ export const useSystemStore = defineStore('system', () => {
     setCheckingVersion,
     setFuzzyModeLoading,
     setFuzzyModeLoadError,
-    setHistoricalImageTurnLimitLoading,
-    setHistoricalImageTurnLimitLoadError,
     setUpdateDialogOpen,
     resetSystemState,
   }

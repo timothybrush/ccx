@@ -614,27 +614,6 @@
             </v-btn>
           </div>
 
-          <!-- 历史图片轮次限制 -->
-          <v-divider class="my-3" />
-          <div class="cb-hl-section">
-            <div class="cb-hl-copy">
-              <div class="cb-hl-header">
-                <v-icon size="18" class="cb-hl-icon">mdi-image-sync</v-icon>
-                <span class="cb-hl-title">{{ t('dialog.historicalImageTurnLimit.title') }}</span>
-              </div>
-              <p class="cb-hl-hint">{{ t('dialog.historicalImageTurnLimit.hint') }}</p>
-            </div>
-            <v-text-field
-              v-model.number="historicalImageForm.limit"
-              :label="t('dialog.historicalImageTurnLimit.label')"
-              type="number"
-              min="3"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="cb-hl-input"
-            />
-          </div>
         </v-card-text>
         <v-divider />
         <v-card-actions class="cb-dialog-actions">
@@ -1072,21 +1051,6 @@ const toggleFuzzyMode = async () => {
   }
 }
 
-// 历史图片轮次限制（已合并到熔断器对话框中）
-const historicalImageForm = ref({ limit: 0 })
-
-const loadHistoricalImageTurnLimit = async () => {
-  systemStore.setHistoricalImageTurnLimitLoadError(false)
-  try {
-    const { historicalImageTurnLimit: limit } = await api.getHistoricalImageTurnLimit()
-    preferencesStore.setHistoricalImageTurnLimit(limit)
-  } catch (e) {
-    console.error('Failed to load historical image turn limit:', e)
-    systemStore.setHistoricalImageTurnLimitLoadError(true)
-    showToast(t('toast.loadHistoricalImageTurnLimitFailed'), 'warning')
-  }
-}
-
 // 新用户指引
 const showGuide = ref(false)
 
@@ -1180,7 +1144,6 @@ const onSliderChange = (field: string, event: Event) => {
 }
 
 const openCircuitBreakerDialog = async () => {
-  historicalImageForm.value.limit = preferencesStore.historicalImageTurnLimit
   try {
     const params = await api.getCircuitBreaker()
     cbForm.windowSize = params.windowSize
@@ -1201,20 +1164,16 @@ const openCircuitBreakerDialog = async () => {
 const saveCircuitBreaker = async () => {
   cbSaving.value = true
   try {
-    await Promise.all([
-      api.setCircuitBreaker({
-        windowSize: cbForm.windowSize,
-        failureThreshold: cbForm.failureThreshold,
-        consecutiveFailuresThreshold: cbForm.consecutiveFailuresThreshold,
-        requestTimeoutMs: cbForm.requestTimeoutMs,
-        responseHeaderTimeoutMs: cbForm.responseHeaderTimeoutMs,
-        streamFirstContentTimeoutMs: cbForm.streamFirstContentTimeoutMs,
-        streamInactivityTimeoutMs: cbForm.streamInactivityTimeoutMs,
-        streamToolCallIdleTimeoutMs: cbForm.streamToolCallIdleTimeoutMs,
-      }),
-      api.setHistoricalImageTurnLimit(historicalImageForm.value.limit),
-    ])
-    preferencesStore.setHistoricalImageTurnLimit(historicalImageForm.value.limit)
+    await api.setCircuitBreaker({
+      windowSize: cbForm.windowSize,
+      failureThreshold: cbForm.failureThreshold,
+      consecutiveFailuresThreshold: cbForm.consecutiveFailuresThreshold,
+      requestTimeoutMs: cbForm.requestTimeoutMs,
+      responseHeaderTimeoutMs: cbForm.responseHeaderTimeoutMs,
+      streamFirstContentTimeoutMs: cbForm.streamFirstContentTimeoutMs,
+      streamInactivityTimeoutMs: cbForm.streamInactivityTimeoutMs,
+      streamToolCallIdleTimeoutMs: cbForm.streamToolCallIdleTimeoutMs,
+    })
     circuitBreakerDialogOpen.value = false
     showToast(t('toast.circuitBreakerSaved'), 'success')
   } catch (e) {
@@ -1607,8 +1566,6 @@ onMounted(async () => {
     await refreshChannels()
     // 加载 Fuzzy 模式状态
     await loadFuzzyModeStatus()
-    // 加载历史图片轮次限制状态
-    await loadHistoricalImageTurnLimit()
     // 启动自动刷新
     startAutoRefresh()
     // 初始化完成后根据最新刷新结果设置系统状态
