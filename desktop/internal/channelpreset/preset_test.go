@@ -436,7 +436,7 @@ func TestBuildPayload(t *testing.T) {
 		{
 			name:                "volc-ark messages (anthropic endpoint)",
 			req:                 CreateChannelRequest{Provider: ProviderVolcArk, Target: TargetMessages, APIKey: "ark-test"},
-			wantBaseURL:         "https://ark.cn-beijing.volces.com/api/coding#",
+			wantBaseURL:         "https://ark.cn-beijing.volces.com/api/coding",
 			wantService:         "claude",
 			wantPassback:        true,
 			wantNormalizeSystem: true,
