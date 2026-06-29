@@ -50,6 +50,21 @@
               />
             </section>
 
+            <!-- 身份认证 -->
+            <section :ref="(el: any) => setSectionRef('auth', el)" data-section-id="auth" class="pa-6 scroll-mt-4">
+              <ApiKeyManagementSection
+                :api-keys="form.apiKeys"
+                :disabled-keys="disabledKeys"
+                :key-models-status="keyModelsStatus"
+                :is-editing="isEditing"
+                :restoring-key="restoringKey"
+                :service-type="form.serviceType"
+                :channel-id="props.channel?.index"
+                @update:api-keys="form.apiKeys = $event"
+                @restore-key="restoreDisabledKey"
+              />
+            </section>
+
             <!-- 模型重定向（模型映射 + Vision 回退 + 模型过滤） -->
             <section :ref="(el: any) => setSectionRef('redirect', el)" data-section-id="redirect" class="pa-6 scroll-mt-4">
               <ModelMappingSection
@@ -137,21 +152,6 @@
                   @menu-update="onMenuUpdate"
                 />
               </div>
-            </section>
-
-            <!-- 身份认证 -->
-            <section :ref="(el: any) => setSectionRef('auth', el)" data-section-id="auth" class="pa-6 scroll-mt-4">
-              <ApiKeyManagementSection
-                :api-keys="form.apiKeys"
-                :disabled-keys="disabledKeys"
-                :key-models-status="keyModelsStatus"
-                :is-editing="isEditing"
-                :restoring-key="restoringKey"
-                :service-type="form.serviceType"
-                :channel-id="props.channel?.index"
-                @update:api-keys="form.apiKeys = $event"
-                @restore-key="restoreDisabledKey"
-              />
             </section>
 
             <!-- 高级选项 -->
@@ -313,8 +313,8 @@ function detachScrollListener() {
 // 导航 section 定义（与桌面端保持一致）
 const sections = [
   { id: 'basic', label: t('channelEditor.nav.basic') },
-  { id: 'redirect', label: t('channelEditor.nav.redirect') },
   { id: 'auth', label: t('channelEditor.nav.auth') },
+  { id: 'redirect', label: t('channelEditor.nav.redirect') },
   { id: 'advanced', label: t('channelEditor.nav.advanced') },
   { id: 'custom', label: t('channelEditor.nav.custom') },
 ]
