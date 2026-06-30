@@ -165,7 +165,8 @@
                       class="font-mono"
                       eager
                       @update:model-value="updateTarget(index, $event)"
-                      @focus="$emit('sync-upstream')"
+                      @focus="$emit('target-edit-start'); $emit('sync-upstream')"
+                      @blur="$emit('target-edit-end')"
                       @update:menu="$emit('menu-update', $event)"
                     />
                   </div>
@@ -265,7 +266,8 @@
               class="flex-grow-1 font-mono"
               clearable
               eager
-              @focus="$emit('sync-upstream')"
+              @focus="$emit('target-edit-start'); $emit('sync-upstream')"
+              @blur="$emit('target-edit-end')"
               @update:menu="$emit('menu-update', $event)"
               @keyup.enter="handleAddMapping"
             />
@@ -354,6 +356,8 @@ const emit = defineEmits<{
   'sync-upstream': []
   'apply-preset': [string]
   'menu-update': [boolean]
+  'target-edit-start': []
+  'target-edit-end': []
 }>()
 
 const { t } = useI18n()
@@ -387,6 +391,7 @@ const handleAddMapping = () => {
   }
 
   emit('update:mappingRows', [...normalizeMappingRows(props.mappingRows), row])
+  emit('target-edit-end')
 
   // 重置输入
   newMapping.value = {

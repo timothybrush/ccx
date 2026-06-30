@@ -87,6 +87,8 @@
                 @sync-upstream="syncUpstreamModels"
                 @apply-preset="applyPreset"
                 @menu-update="onMenuUpdate"
+                @target-edit-start="startMappingTargetEdit"
+                @target-edit-end="finishMappingTargetEdit"
               >
                 <template #vision-fallback>
                   <div v-if="hasNoVisionRows" class="mt-6">
@@ -104,7 +106,8 @@
                           variant="outlined"
                           density="comfortable"
                           eager
-                          @focus="ensureTargetModelsLoaded"
+                          @focus="startMappingTargetEdit(); ensureTargetModelsLoaded()"
+                          @blur="finishMappingTargetEdit"
                           @update:menu="onMenuUpdate"
                         />
                       </v-col>
@@ -732,6 +735,8 @@ const modelMappingRows = ref<ModelMappingRow[]>([])
 let capabilityRowIdCounter = 0
 const nextCapabilityRowId = () => ++capabilityRowIdCounter
 
+const incompleteMappedTargetSuffix = /[._:/-]$/
+const isCompleteMappedTargetModel = (model: string) => !!model && !incompleteMappedTargetSuffix.test(model)
 const hasNoVisionRows = computed(() => modelMappingRows.value.some(row => row.noVision && row.target.trim()))
 const mappedTargetModels = computed(() => {
   const seen = new Set<string>()
@@ -742,11 +747,13 @@ const mappedTargetModels = computed(() => {
 
   return models.filter(model => {
     const key = model.toLowerCase()
-    if (!model || seen.has(key)) return false
+    if (!isCompleteMappedTargetModel(model) || seen.has(key)) return false
     seen.add(key)
     return true
   })
 })
+const isMappingTargetEditing = ref(false)
+const hasPendingModelCapabilitySync = ref(false)
 
 function resetTransientUiState() {
   sourceMappingError.value = ''
@@ -926,6 +933,7 @@ const syncModelCapabilitiesFromMapping = () => {
       .filter(Boolean)
   )
   const rowsToAdd = mappedTargetModels.value
+    .filter(isCompleteMappedTargetModel)
     .filter(model => !existingModels.has(model.toLowerCase()))
     .map(model => {
       const builtin = resolveBuiltinUpstreamModelCapability(model)
@@ -939,6 +947,27 @@ const syncModelCapabilitiesFromMapping = () => {
     })
   if (!rowsToAdd.length) return
   form.modelCapabilityRows = [...form.modelCapabilityRows, ...rowsToAdd]
+}
+
+const syncModelCapabilitiesFromMappingWhenIdle = () => {
+  if (isMappingTargetEditing.value) {
+    hasPendingModelCapabilitySync.value = true
+    return
+  }
+  hasPendingModelCapabilitySync.value = false
+  syncModelCapabilitiesFromMapping()
+}
+
+const startMappingTargetEdit = () => {
+  isMappingTargetEditing.value = true
+}
+
+const finishMappingTargetEdit = () => {
+  if (!isMappingTargetEditing.value) return
+  isMappingTargetEditing.value = false
+  if (!hasPendingModelCapabilitySync.value) return
+  hasPendingModelCapabilitySync.value = false
+  nextTick(syncModelCapabilitiesFromMapping)
 }
 
 // 动态header样式
@@ -1500,6 +1529,8 @@ const applyPreset = (presetName: string) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
 
+  syncModelCapabilitiesFromMapping()
+
   const { valid } = await formRef.value.validate()
   if (!valid) return
   if (modelCapabilitiesError.value) return
@@ -1544,6 +1575,7 @@ const handleTestCapability = async () => {
   }
 
   if (!formRef.value) return
+  syncModelCapabilitiesFromMapping()
   const { valid } = await formRef.value.validate()
   if (!valid) return
   if (modelCapabilitiesError.value) return
@@ -1669,7 +1701,7 @@ watch(
 watch(
   mappedTargetModels,
   () => {
-    syncModelCapabilitiesFromMapping()
+    syncModelCapabilitiesFromMappingWhenIdle()
   }
 )
 

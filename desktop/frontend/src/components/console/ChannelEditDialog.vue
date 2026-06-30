@@ -261,6 +261,8 @@ function updateActiveSectionFromScroll() {
 }
 const modelMappingRows = ref<ModelMappingRow[]>([])
 const modelCapabilityRows = ref<ModelCapabilityRow[]>([])
+const incompleteMappedTargetSuffix = /[._:/-]$/
+const isCompleteMappedTargetModel = (model: string) => !!model && !incompleteMappedTargetSuffix.test(model)
 const mappedTargetModels = computed(() => {
   const seen = new Set<string>()
   const models = [
@@ -270,11 +272,13 @@ const mappedTargetModels = computed(() => {
 
   return models.filter(model => {
     const key = model.toLowerCase()
-    if (!model || seen.has(key)) return false
+    if (!isCompleteMappedTargetModel(model) || seen.has(key)) return false
     seen.add(key)
     return true
   })
 })
+const isMappingTargetEditing = ref(false)
+const hasPendingModelCapabilitySync = ref(false)
 const newModelMapping = reactive<ModelMappingRow>({ id: 0, source: '', target: '', reasoning: '', noVision: false })
 const headerRows = ref<HeaderRow[]>([])
 const newHeader = reactive<HeaderRow>({ id: 0, key: '', value: '' })
@@ -334,6 +338,7 @@ function showTargetDropdown(inputId: string, currentValue: string) {
 function hideTargetDropdown() {
   showTargetSuggestions.value = false
   activeTargetInputId.value = null
+  finishMappingTargetEdit()
 }
 
 function handlePointerDown(e: PointerEvent) {
@@ -407,6 +412,7 @@ function selectTargetModel(inputId: string, model: string) {
   // 立即隐藏（不使用延迟）
   showTargetSuggestions.value = false
   activeTargetInputId.value = null
+  finishMappingTargetEdit()
 }
 
 const reasoningParamStyleOptions = [
@@ -861,6 +867,8 @@ function buildSubmitPayload() {
 }
 
 async function persistCurrentDraft(options: { notifyParent?: boolean; close?: boolean } = {}) {
+  syncModelCapabilitiesFromMapping()
+
   if (!isValid.value) {
     error.value = Object.values(errors.value)[0] || ''
     return false
@@ -1080,6 +1088,7 @@ function addModelMappingRow() {
   newModelMapping.target = ''
   newModelMapping.reasoning = ''
   newModelMapping.noVision = false
+  finishMappingTargetEdit()
 }
 
 function removeModelMappingRow(id: number) {
@@ -1566,6 +1575,7 @@ function syncModelCapabilitiesFromMapping() {
       .filter(Boolean)
   )
   const rowsToAdd = mappedTargetModels.value
+    .filter(isCompleteMappedTargetModel)
     .filter(model => !existingModels.has(model.toLowerCase()))
     .map(model => {
       const builtin = resolveBuiltinUpstreamModelCapability(model)
@@ -1581,8 +1591,29 @@ function syncModelCapabilitiesFromMapping() {
   updateModelCapabilityRows([...modelCapabilityRows.value, ...rowsToAdd])
 }
 
-watch(mappedTargetModels, () => {
+function syncModelCapabilitiesFromMappingWhenIdle() {
+  if (isMappingTargetEditing.value) {
+    hasPendingModelCapabilitySync.value = true
+    return
+  }
+  hasPendingModelCapabilitySync.value = false
   syncModelCapabilitiesFromMapping()
+}
+
+function startMappingTargetEdit() {
+  isMappingTargetEditing.value = true
+}
+
+function finishMappingTargetEdit() {
+  if (!isMappingTargetEditing.value) return
+  isMappingTargetEditing.value = false
+  if (!hasPendingModelCapabilitySync.value) return
+  hasPendingModelCapabilitySync.value = false
+  nextTick(syncModelCapabilitiesFromMapping)
+}
+
+watch(mappedTargetModels, () => {
+  syncModelCapabilitiesFromMappingWhenIdle()
 })
 
 // ── Custom Headers 行操作 ──
@@ -1924,6 +1955,8 @@ void toggleSupportedModelFilter
                         @hide-target-dropdown="hideTargetDropdown"
                         @select-target-model="selectTargetModel"
                         @handle-target-focus="handleTargetFocus"
+                        @target-edit-start="startMappingTargetEdit"
+                        @target-edit-end="finishMappingTargetEdit"
                         @show-source-dropdown="showSourceDropdown"
                         @hide-source-dropdown="hideSourceDropdown"
                         @select-source-model="selectSourceModel"

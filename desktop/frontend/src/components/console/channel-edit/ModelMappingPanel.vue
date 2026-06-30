@@ -63,6 +63,8 @@ const emit = defineEmits<{
   'hideTargetDropdown': []
   'selectTargetModel': [inputId: string, model: string]
   'handleTargetFocus': []
+  'target-edit-start': []
+  'target-edit-end': []
   'appendSupportedModelFilter': [filter: string]
   'showSourceDropdown': [inputId: string, currentValue: string]
   'hideSourceDropdown': []
@@ -243,7 +245,8 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
               ]"
               placeholder="target-model"
               @update:model-value="(val) => { emit('updateMappingRow', row.id, 'target', val as string); emit('showTargetDropdown', `row-${index}`, val as string) }"
-              @focus="emit('handleTargetFocus'); emit('showTargetDropdown', `row-${index}`, row.target)"
+              @focus="emit('target-edit-start'); emit('handleTargetFocus'); emit('showTargetDropdown', `row-${index}`, row.target)"
+              @blur="emit('target-edit-end')"
             />
             <div
               v-if="showTargetSuggestions && activeTargetInputId === `row-${index}` && filteredTargetModels.length"
@@ -321,7 +324,8 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
               :class="['h-9 w-full font-mono text-xs', stableInputFocusClass]"
               :placeholder="t('addChannel.visionFallbackPlaceholder')"
               @update:model-value="(val) => { emit('update:visionFallbackModel', val as string); emit('showTargetDropdown', 'vision-fallback', val as string) }"
-              @focus="emit('handleTargetFocus'); emit('showTargetDropdown', 'vision-fallback', visionFallbackModel)"
+              @focus="emit('target-edit-start'); emit('handleTargetFocus'); emit('showTargetDropdown', 'vision-fallback', visionFallbackModel)"
+              @blur="emit('target-edit-end')"
             />
             <div
               v-if="showTargetSuggestions && activeTargetInputId === 'vision-fallback' && filteredTargetModels.length"
@@ -416,7 +420,8 @@ function fromSelectValue(value: string): ReasoningEffort | '' {
             ]"
             :placeholder="targetModelPlaceholder"
             @update:model-value="(val) => { emit('update:newModelMapping', { target: val as string }); emit('showTargetDropdown', 'new', val as string) }"
-            @focus="emit('handleTargetFocus'); emit('showTargetDropdown', 'new', newModelMapping.target)"
+            @focus="emit('target-edit-start'); emit('handleTargetFocus'); emit('showTargetDropdown', 'new', newModelMapping.target)"
+            @blur="emit('target-edit-end')"
           />
           <div
             v-if="showTargetSuggestions && activeTargetInputId === 'new' && filteredTargetModels.length"
