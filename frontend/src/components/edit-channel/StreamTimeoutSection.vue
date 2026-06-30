@@ -1,8 +1,74 @@
 <template>
   <div class="stream-timeout-section">
-    <!-- 流式超时覆盖 -->
     <v-row dense>
       <v-col cols="12">
+        <div class="d-flex align-center justify-space-between flex-wrap ga-2 mb-2">
+          <span class="section-title">{{ t('channelEditor.timeout.title') }}</span>
+          <span class="text-caption text-medium-emphasis">{{ t('channelEditor.timeout.hint') }}</span>
+        </div>
+
+        <div class="timeout-control-grid timeout-control-grid--two mb-4">
+          <div class="timeout-control" :class="{ 'timeout-control--disabled': !requestTimeoutEnabled }">
+            <div class="timeout-control-header">
+              <span class="timeout-label">{{ t('channelEditor.transport.requestTimeout.label') }}</span>
+              <div class="timeout-header-actions">
+                <span class="timeout-value">{{ requestTimeoutEnabled ? `${requestTimeoutSeconds}s` : t('addChannel.streamTimeoutStrategyInherit') }}</span>
+                <v-switch
+                  :model-value="requestTimeoutEnabled"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  @update:model-value="setRequestTimeoutEnabled(Boolean($event))"
+                />
+              </div>
+            </div>
+            <input
+              :value="requestTimeoutSeconds"
+              type="range"
+              min="1"
+              max="300"
+              step="1"
+              class="timeout-slider"
+              :disabled="!requestTimeoutEnabled"
+              @input="emitSeconds('update:requestTimeoutMs', $event)"
+            />
+            <div class="timeout-range">
+              <span>1s</span><span>300s</span>
+            </div>
+          </div>
+
+          <div class="timeout-control" :class="{ 'timeout-control--disabled': !responseHeaderTimeoutEnabled }">
+            <div class="timeout-control-header">
+              <span class="timeout-label">{{ t('channelEditor.transport.responseHeaderTimeout.label') }}</span>
+              <div class="timeout-header-actions">
+                <span class="timeout-value">{{ responseHeaderTimeoutEnabled ? `${responseHeaderTimeoutSeconds}s` : t('addChannel.streamTimeoutStrategyInherit') }}</span>
+                <v-switch
+                  :model-value="responseHeaderTimeoutEnabled"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  @update:model-value="setResponseHeaderTimeoutEnabled(Boolean($event))"
+                />
+              </div>
+            </div>
+            <input
+              :value="responseHeaderTimeoutSeconds"
+              type="range"
+              min="1"
+              max="300"
+              step="1"
+              class="timeout-slider"
+              :disabled="!responseHeaderTimeoutEnabled"
+              @input="emitSeconds('update:responseHeaderTimeoutMs', $event)"
+            />
+            <div class="timeout-range">
+              <span>1s</span><span>300s</span>
+            </div>
+          </div>
+        </div>
+
         <div class="d-flex align-center justify-space-between flex-wrap ga-2 mb-2">
           <span class="section-title">{{ t('addChannel.streamTimeoutStrategyLabel') }}</span>
           <span class="text-caption text-medium-emphasis">
@@ -95,9 +161,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '../../i18n'
 
+const DEFAULT_OPTIONAL_TIMEOUT_MS = 60_000
+
 interface Props {
+  requestTimeoutMs?: string | number | null
+  responseHeaderTimeoutMs?: string | number | null
   selectedStrategy: string
   firstContentEnabled: boolean
   firstContentMs: number
@@ -107,9 +178,11 @@ interface Props {
   toolCallIdleMs: number
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
+  'update:requestTimeoutMs': [string | number | null]
+  'update:responseHeaderTimeoutMs': [string | number | null]
   'apply-strategy': [string]
   'update:firstContentMs': [number]
   'update:inactivityMs': [number]
@@ -117,6 +190,44 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const isOptionalTimeoutEnabled = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined || value === '') return false
+  return Number(value) > 0
+}
+
+const timeoutSeconds = (value: string | number | null | undefined, fallbackMs = DEFAULT_OPTIONAL_TIMEOUT_MS) => {
+  const ms = Number(value)
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : fallbackMs
+  return Math.min(300, Math.max(1, Math.round(safeMs / 1000)))
+}
+
+const requestTimeoutEnabled = computed(() => isOptionalTimeoutEnabled(props.requestTimeoutMs))
+const responseHeaderTimeoutEnabled = computed(() => isOptionalTimeoutEnabled(props.responseHeaderTimeoutMs))
+const requestTimeoutSeconds = computed(() => timeoutSeconds(props.requestTimeoutMs))
+const responseHeaderTimeoutSeconds = computed(() => timeoutSeconds(props.responseHeaderTimeoutMs))
+
+const setRequestTimeoutEnabled = (enabled: boolean) => {
+  emit('update:requestTimeoutMs', enabled ? DEFAULT_OPTIONAL_TIMEOUT_MS : null)
+}
+
+const setResponseHeaderTimeoutEnabled = (enabled: boolean) => {
+  emit('update:responseHeaderTimeoutMs', enabled ? DEFAULT_OPTIONAL_TIMEOUT_MS : null)
+}
+
+const emitSeconds = (
+  eventName: 'update:requestTimeoutMs' | 'update:responseHeaderTimeoutMs',
+  event: Event,
+) => {
+  const target = event.target
+  if (!(target instanceof window.HTMLInputElement)) return
+  const value = Number(target.value) * 1000
+  if (eventName === 'update:requestTimeoutMs') {
+    emit('update:requestTimeoutMs', value)
+  } else {
+    emit('update:responseHeaderTimeoutMs', value)
+  }
+}
 
 const emitNumber = (
   eventName: 'update:firstContentMs' | 'update:inactivityMs' | 'update:toolCallIdleMs',
@@ -163,6 +274,10 @@ const emitNumber = (
   background: rgb(var(--v-theme-surface));
 }
 
+.timeout-control-grid--two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .v-theme--dark .timeout-control-grid {
   border-color: rgba(255, 255, 255, 0.6);
 }
@@ -198,6 +313,17 @@ const emitNumber = (
   justify-content: space-between;
   margin-bottom: 8px;
   gap: 6px;
+}
+
+.timeout-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.timeout-header-actions :deep(.v-switch) {
+  flex: 0 0 auto;
 }
 
 .timeout-label {

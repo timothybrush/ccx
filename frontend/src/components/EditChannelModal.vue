@@ -178,23 +178,27 @@
               />
 
               <div class="mt-6">
-                <TransportConfigGroup :form="form" :rules="rules" @update:field="(field, value) => updateForm({ [field]: value })">
-                  <template #stream-timeout>
-                    <StreamTimeoutSection
-                      :selected-strategy="selectedStreamTimeoutStrategy"
-                      :first-content-enabled="form.streamFirstContentTimeoutEnabled"
-                      :first-content-ms="form.streamFirstContentTimeoutMs"
-                      :inactivity-enabled="form.streamInactivityTimeoutEnabled"
-                      :inactivity-ms="form.streamInactivityTimeoutMs"
-                      :tool-call-idle-enabled="form.streamToolCallIdleTimeoutEnabled"
-                      :tool-call-idle-ms="form.streamToolCallIdleTimeoutMs"
-                      @apply-strategy="applyStreamTimeoutStrategy"
-                      @update:first-content-ms="form.streamFirstContentTimeoutMs = $event"
-                      @update:inactivity-ms="form.streamInactivityTimeoutMs = $event"
-                      @update:tool-call-idle-ms="form.streamToolCallIdleTimeoutMs = $event"
-                    />
-                  </template>
-                </TransportConfigGroup>
+                <TransportConfigGroup :form="form" @update:field="(field, value) => updateForm({ [field]: value })" />
+              </div>
+
+              <div class="mt-6">
+                <StreamTimeoutSection
+                  :request-timeout-ms="form.requestTimeoutMs"
+                  :response-header-timeout-ms="form.responseHeaderTimeoutMs"
+                  :selected-strategy="selectedStreamTimeoutStrategy"
+                  :first-content-enabled="form.streamFirstContentTimeoutEnabled"
+                  :first-content-ms="form.streamFirstContentTimeoutMs"
+                  :inactivity-enabled="form.streamInactivityTimeoutEnabled"
+                  :inactivity-ms="form.streamInactivityTimeoutMs"
+                  :tool-call-idle-enabled="form.streamToolCallIdleTimeoutEnabled"
+                  :tool-call-idle-ms="form.streamToolCallIdleTimeoutMs"
+                  @update:request-timeout-ms="form.requestTimeoutMs = $event"
+                  @update:response-header-timeout-ms="form.responseHeaderTimeoutMs = $event"
+                  @apply-strategy="applyStreamTimeoutStrategy"
+                  @update:first-content-ms="form.streamFirstContentTimeoutMs = $event"
+                  @update:inactivity-ms="form.streamInactivityTimeoutMs = $event"
+                  @update:tool-call-idle-ms="form.streamToolCallIdleTimeoutMs = $event"
+                />
               </div>
 
               <div class="mt-6">

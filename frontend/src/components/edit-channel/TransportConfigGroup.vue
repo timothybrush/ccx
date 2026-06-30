@@ -22,49 +22,6 @@
         />
       </v-col>
 
-      <!-- 请求超时 -->
-      <v-col cols="12">
-        <v-text-field
-          :model-value="form.requestTimeoutMs"
-          :label="t('channelEditor.transport.requestTimeout.label')"
-          :placeholder="t('channelEditor.transport.requestTimeout.placeholder')"
-          prepend-inner-icon="mdi-timer-sand"
-          :hint="t('channelEditor.transport.requestTimeout.hint')"
-          :rules="[rules.requestTimeoutMs]"
-          persistent-hint
-          clearable
-          variant="outlined"
-          density="comfortable"
-          type="number"
-          min="1000"
-          max="300000"
-          step="1000"
-          @update:model-value="updateField('requestTimeoutMs', $event)"
-        />
-      </v-col>
-
-      <v-col cols="12">
-        <v-text-field
-          :model-value="form.responseHeaderTimeoutMs"
-          :label="t('channelEditor.transport.responseHeaderTimeout.label')"
-          :placeholder="t('channelEditor.transport.responseHeaderTimeout.placeholder')"
-          prepend-inner-icon="mdi-timer-outline"
-          :hint="t('channelEditor.transport.responseHeaderTimeout.hint')"
-          :rules="[rules.responseHeaderTimeoutMs]"
-          persistent-hint
-          clearable
-          variant="outlined"
-          density="comfortable"
-          type="number"
-          min="1000"
-          max="300000"
-          step="1000"
-          @update:model-value="updateField('responseHeaderTimeoutMs', $event)"
-        />
-      </v-col>
-
-      <slot name="stream-timeout" ></slot>
-
       <!-- 路由前缀 -->
       <v-col cols="12">
         <v-text-field
@@ -89,17 +46,11 @@ import { useI18n } from '../../i18n'
 
 interface FormData {
   proxyUrl: string
-  requestTimeoutMs: string | number | null
-  responseHeaderTimeoutMs: string | number | null
   routePrefix?: string
 }
 
 interface Props {
   form: FormData
-  rules: {
-    requestTimeoutMs: (_value: string | number | null) => boolean | string
-    responseHeaderTimeoutMs: (_value: string | number | null) => boolean | string
-  }
 }
 
 defineProps<Props>()

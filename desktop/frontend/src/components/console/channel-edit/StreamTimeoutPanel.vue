@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { useLanguage } from '@/composables/useLanguage'
 import { streamTimeoutPresets } from '@/utils/stream-timeout-presets'
 
+const DEFAULT_OPTIONAL_TIMEOUT_MS = 60_000
+
 interface FormData {
+  requestTimeoutMs: string | number
+  responseHeaderTimeoutMs: string | number
   streamFirstContentTimeoutEnabled: boolean
   streamFirstContentTimeoutMs: number
   streamInactivityTimeoutEnabled: boolean
@@ -25,6 +30,36 @@ const { t } = useLanguage()
 
 function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
   emit('update:form', { [key]: value } as Partial<FormData>)
+}
+
+function isOptionalTimeoutEnabled(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') return false
+  return Number(value) > 0
+}
+
+function timeoutSeconds(value: string | number | null | undefined, fallbackMs = DEFAULT_OPTIONAL_TIMEOUT_MS) {
+  const ms = Number(value)
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : fallbackMs
+  return Math.min(300, Math.max(1, Math.round(safeMs / 1000)))
+}
+
+const requestTimeoutEnabled = computed(() => isOptionalTimeoutEnabled(props.form.requestTimeoutMs))
+const responseHeaderTimeoutEnabled = computed(() => isOptionalTimeoutEnabled(props.form.responseHeaderTimeoutMs))
+const requestTimeoutSeconds = computed(() => timeoutSeconds(props.form.requestTimeoutMs))
+const responseHeaderTimeoutSeconds = computed(() => timeoutSeconds(props.form.responseHeaderTimeoutMs))
+
+function setRequestTimeoutEnabled(enabled: boolean) {
+  updateField('requestTimeoutMs', (enabled ? DEFAULT_OPTIONAL_TIMEOUT_MS : '') as FormData['requestTimeoutMs'])
+}
+
+function setResponseHeaderTimeoutEnabled(enabled: boolean) {
+  updateField('responseHeaderTimeoutMs', (enabled ? DEFAULT_OPTIONAL_TIMEOUT_MS : '') as FormData['responseHeaderTimeoutMs'])
+}
+
+function updateTimeoutSeconds(key: 'requestTimeoutMs' | 'responseHeaderTimeoutMs', event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) return
+  updateField(key, (Number(target.value) * 1000) as FormData[typeof key])
 }
 
 function applyStreamTimeoutPreset(presetKey: 'gentle' | 'balanced' | 'aggressive') {
@@ -73,6 +108,83 @@ const selectedStrategy = computed(() => {
 
 <template>
   <div class="rounded-xl border border-border/60 bg-card/40 p-4 shadow-xs space-y-4">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-wider text-primary">
+          {{ t('channelEditor.timeout.title') }}
+        </div>
+        <div class="text-[10px] leading-4 text-muted-foreground">
+          {{ t('channelEditor.timeout.hint') }}
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-hidden rounded-xl border border-border/60 bg-background/60">
+      <div class="grid gap-0 md:grid-cols-2">
+        <div class="space-y-2.5 p-4" :class="{ 'opacity-50': !requestTimeoutEnabled }">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              {{ t('channelEditor.transport.requestTimeout.label') }}
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-semibold text-primary">
+                {{ requestTimeoutEnabled ? `${requestTimeoutSeconds}s` : t('addChannel.streamTimeoutStrategyInherit') }}
+              </span>
+              <Switch
+                :model-value="requestTimeoutEnabled"
+                @update:model-value="setRequestTimeoutEnabled(Boolean($event))"
+              />
+            </div>
+          </div>
+          <input
+            :value="requestTimeoutSeconds"
+            type="range"
+            min="1"
+            max="300"
+            step="1"
+            class="h-1 w-full cursor-pointer appearance-none rounded-lg bg-muted accent-primary"
+            :disabled="!requestTimeoutEnabled"
+            @input="updateTimeoutSeconds('requestTimeoutMs', $event)"
+          />
+          <div class="flex justify-between text-[10px] text-muted-foreground/70">
+            <span>1s</span>
+            <span>300s</span>
+          </div>
+        </div>
+
+        <div class="space-y-2.5 border-t border-border/60 p-4 md:border-l md:border-t-0" :class="{ 'opacity-50': !responseHeaderTimeoutEnabled }">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              {{ t('channelEditor.transport.responseHeaderTimeout.label') }}
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-semibold text-primary">
+                {{ responseHeaderTimeoutEnabled ? `${responseHeaderTimeoutSeconds}s` : t('addChannel.streamTimeoutStrategyInherit') }}
+              </span>
+              <Switch
+                :model-value="responseHeaderTimeoutEnabled"
+                @update:model-value="setResponseHeaderTimeoutEnabled(Boolean($event))"
+              />
+            </div>
+          </div>
+          <input
+            :value="responseHeaderTimeoutSeconds"
+            type="range"
+            min="1"
+            max="300"
+            step="1"
+            class="h-1 w-full cursor-pointer appearance-none rounded-lg bg-muted accent-primary"
+            :disabled="!responseHeaderTimeoutEnabled"
+            @input="updateTimeoutSeconds('responseHeaderTimeoutMs', $event)"
+          />
+          <div class="flex justify-between text-[10px] text-muted-foreground/70">
+            <span>1s</span>
+            <span>300s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-wider text-primary">
