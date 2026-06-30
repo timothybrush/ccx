@@ -42,7 +42,7 @@ func buildChatCompletionRequestBody(
 	upstream *config.UpstreamConfig,
 	includeAdvancedOptions bool,
 ) ([]byte, error) {
-	needsRewrite := includeAdvancedOptions || mappedModel != model || upstream.NormalizeNonstandardChatRoles
+	needsRewrite := includeAdvancedOptions || mappedModel != model || upstream.NormalizeNonstandardChatRoles || upstream.StripImageGenerationTool
 	if !needsRewrite {
 		return bodyBytes, nil
 	}

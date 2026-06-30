@@ -23,7 +23,10 @@ import (
 
 // ============== 缓存 ==============
 
-const compatDiagnoseCacheTTL = 10 * time.Minute
+const (
+	compatDiagnoseCacheTTL          = 10 * time.Minute
+	compatDiagnoseResponseBodyLimit = 64 * 1024
+)
 
 type compatDiagnoseCacheEntry struct {
 	result    CompatDiagnoseResult
@@ -103,7 +106,7 @@ func DiagnoseChannelCompat(cfgManager *config.ConfigManager, channelKind string)
 			return
 		}
 
-		cacheKey := fmt.Sprintf("compat:%s:%s:%s", baseURL, apiKey, channel.ServiceType)
+		cacheKey := fmt.Sprintf("compat:%s:%s:%s:%s", channelKind, baseURL, apiKey, channel.ServiceType)
 		if cached, ok := getCompatDiagnoseCache(cacheKey); ok {
 			cached.Cached = true
 			c.JSON(http.StatusOK, cached)
@@ -138,6 +141,7 @@ func runCompatDiagnose(channel *config.UpstreamConfig, channelKind, apiKey, base
 	default:
 		log.Printf("[CompatDiagnose] serviceType %q: no diagnose rules", channel.ServiceType)
 	}
+	diagnoseImageGenerationTool(channel, channelKind, apiKey, baseURL, recs, evid)
 
 	return CompatDiagnoseResult{Recommendations: recs, URLRecommendations: urlRec, Evidence: evid}
 }
@@ -313,6 +317,80 @@ func compatProbeProtocol(channel *config.UpstreamConfig, channelKind string) str
 		}
 	}
 	return channelKind
+}
+
+func shouldProbeImageGenerationTool(channel *config.UpstreamConfig, channelKind string) string {
+	if channelKind == "responses" {
+		switch channel.ServiceType {
+		case "responses", "copilot":
+			return "responses"
+		}
+		return ""
+	}
+	if channelKind == "chat" {
+		switch channel.ServiceType {
+		case "", "openai", "chat", "gemini":
+			return "chat"
+		}
+		return ""
+	}
+	return ""
+}
+
+func diagnoseImageGenerationTool(channel *config.UpstreamConfig, channelKind, apiKey, baseURL string, recs map[string]bool, evid map[string]string) {
+	protocol := shouldProbeImageGenerationTool(channel, channelKind)
+	if protocol == "" {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var (
+		req *http.Request
+		err error
+	)
+	switch protocol {
+	case "responses":
+		req, err = buildResponsesCompatRequest(baseURL, buildResponsesImageGenerationToolProbeBody(), channel, apiKey)
+	case "chat":
+		req, err = buildOpenAIChatCompatRequest(baseURL, buildOpenAIChatImageGenerationToolProbeBody(), channel, apiKey)
+	default:
+		return
+	}
+	if err != nil {
+		log.Printf("[CompatDiagnose] build image_generation probe: %v", err)
+		return
+	}
+
+	events, statusCode, body, sendErr := sendCompatProbe(ctx, req, channel)
+	if isCompatProbeTimeout(sendErr, ctx) {
+		log.Printf("[CompatDiagnose] image_generation probe timeout")
+		return
+	}
+	if sendErr == nil && statusCode >= 200 && statusCode < 300 {
+		if hasMeaningfulCompatSSE(events, protocol) {
+			recs["stripImageGenerationTool"] = false
+			evid["stripImageGenerationTool"] = "upstream accepted image_generation tool"
+			return
+		}
+		if isImageGenerationToolUnsupported(statusCode, strings.Join(events, "\n")) {
+			recs["stripImageGenerationTool"] = true
+			evid["stripImageGenerationTool"] = fmt.Sprintf("upstream rejected image_generation tool (HTTP %d)", statusCode)
+		}
+		return
+	}
+
+	diagnostic := strings.TrimSpace(body)
+	if sendErr != nil && diagnostic == "" {
+		diagnostic = sendErr.Error()
+	}
+	if isImageGenerationToolUnsupported(statusCode, diagnostic) {
+		recs["stripImageGenerationTool"] = true
+		evid["stripImageGenerationTool"] = fmt.Sprintf("upstream rejected image_generation tool (HTTP %d)", statusCode)
+		return
+	}
+	log.Printf("[CompatDiagnose] image_generation probe inconclusive (status=%d): %v", statusCode, sendErr)
 }
 
 // diagnoseClaudeChannel 探测 Claude 兼容渠道
@@ -595,6 +673,22 @@ func buildOpenAIChatCompatProbeBody() []byte {
 	return body
 }
 
+func buildOpenAIChatImageGenerationToolProbeBody() []byte {
+	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": "gpt-5.4-mini",
+		"messages": []map[string]string{
+			{"role": "user", "content": "Reply with ok. Nonce: " + nonce},
+		},
+		"max_tokens": 16,
+		"stream":     true,
+		"tools": []map[string]string{
+			{"type": "image_generation"},
+		},
+	})
+	return body
+}
+
 func buildResponsesCompatProbeBody() []byte {
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 	body, _ := json.Marshal(map[string]interface{}{
@@ -606,21 +700,40 @@ func buildResponsesCompatProbeBody() []byte {
 	return body
 }
 
+func buildResponsesImageGenerationToolProbeBody() []byte {
+	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
+	body, _ := json.Marshal(map[string]interface{}{
+		"model":             "gpt-5.4-mini",
+		"input":             "Reply with ok. Nonce: " + nonce,
+		"max_output_tokens": 16,
+		"stream":            true,
+		"tools": []map[string]string{
+			{"type": "image_generation"},
+		},
+	})
+	return body
+}
+
 // ============== SSE 读取与分析 ==============
 
 // sendAndReadSSE 发送请求并读取完整 SSE 流，返回所有 data: 行内容
 func sendAndReadSSE(ctx context.Context, req *http.Request, channel *config.UpstreamConfig) ([]string, int, error) {
+	lines, statusCode, _, err := sendCompatProbe(ctx, req, channel)
+	return lines, statusCode, err
+}
+
+func sendCompatProbe(ctx context.Context, req *http.Request, channel *config.UpstreamConfig) ([]string, int, string, error) {
 	envCfg := config.NewEnvConfig()
 	req = req.WithContext(ctx)
 	resp, err := common.SendRequest(req, channel, envCfg, true, "Messages")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
-		return nil, resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, compatDiagnoseResponseBodyLimit))
+		return nil, resp.StatusCode, string(bodyBytes), fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	var lines []string
@@ -632,11 +745,11 @@ func sendAndReadSSE(ctx context.Context, req *http.Request, channel *config.Upst
 	}
 	if err := scanner.Err(); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return lines, resp.StatusCode, ctxErr
+			return lines, resp.StatusCode, "", ctxErr
 		}
-		return lines, resp.StatusCode, err
+		return lines, resp.StatusCode, "", err
 	}
-	return lines, resp.StatusCode, nil
+	return lines, resp.StatusCode, "", nil
 }
 
 func isCompatProbeTimeout(sendErr error, ctx context.Context) bool {
@@ -648,6 +761,33 @@ func isCompatProbeTimeout(sendErr error, ctx context.Context) bool {
 	}
 	var timeoutErr interface{ Timeout() bool }
 	return errors.As(sendErr, &timeoutErr) && timeoutErr.Timeout()
+}
+
+func isImageGenerationToolUnsupported(statusCode int, diagnostic string) bool {
+	text := strings.ToLower(strings.TrimSpace(diagnostic))
+	if text == "" {
+		return false
+	}
+	if !strings.Contains(text, "image_generation") && !strings.Contains(text, "image generation") {
+		return false
+	}
+
+	if containsAnyCompatKeyword(text, []string{
+		"not enabled",
+		"not allowed",
+		"permission",
+		"requires",
+		"unsupported",
+		"not supported",
+		"unknown tool",
+		"invalid tool",
+		"unrecognized tool",
+		"tool is not",
+	}) {
+		return true
+	}
+
+	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity
 }
 
 func hasMeaningfulCompatSSE(lines []string, channelKind string) bool {

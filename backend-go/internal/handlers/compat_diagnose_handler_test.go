@@ -345,6 +345,146 @@ func TestDiagnoseBaseURLHashRejectsCandidateEmptyStream(t *testing.T) {
 	}
 }
 
+func TestDiagnoseResponsesImageGenerationToolRecommendsStripWhenRejected(t *testing.T) {
+	var probeSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if strings.Contains(string(body), `"type":"image_generation"`) {
+			probeSeen = true
+			http.Error(w, `{"error":{"message":"image_generation tool is not enabled"}}`, http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"type":"response.output_text.delta","delta":"ok"}` + "\n\n"))
+	}))
+	defer server.Close()
+
+	channel := &config.UpstreamConfig{ServiceType: "responses"}
+	result := runCompatDiagnose(channel, "responses", "sk-test", server.URL)
+	if !probeSeen {
+		t.Fatal("image_generation probe was not sent")
+	}
+	if got := result.Recommendations["stripImageGenerationTool"]; got != true {
+		t.Fatalf("stripImageGenerationTool = %v, want true; evidence=%q", got, result.Evidence["stripImageGenerationTool"])
+	}
+}
+
+func TestDiagnoseResponsesImageGenerationToolDisablesStripWhenAccepted(t *testing.T) {
+	var probeSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if strings.Contains(string(body), `"type":"image_generation"`) {
+			probeSeen = true
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"type":"response.output_text.delta","delta":"ok"}` + "\n\n"))
+	}))
+	defer server.Close()
+
+	channel := &config.UpstreamConfig{ServiceType: "responses"}
+	result := runCompatDiagnose(channel, "responses", "sk-test", server.URL)
+	if !probeSeen {
+		t.Fatal("image_generation probe was not sent")
+	}
+	if got := result.Recommendations["stripImageGenerationTool"]; got != false {
+		t.Fatalf("stripImageGenerationTool = %v, want false; evidence=%q", got, result.Evidence["stripImageGenerationTool"])
+	}
+}
+
+func TestDiagnoseChatImageGenerationToolRecommendsStripWhenRejected(t *testing.T) {
+	var probeSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if strings.Contains(string(body), `"type":"image_generation"`) {
+			probeSeen = true
+			http.Error(w, `{"error":{"message":"unsupported image_generation tool"}}`, http.StatusUnprocessableEntity)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"ok"}}]}` + "\n\n"))
+	}))
+	defer server.Close()
+
+	channel := &config.UpstreamConfig{ServiceType: "openai"}
+	result := runCompatDiagnose(channel, "chat", "sk-test", server.URL)
+	if !probeSeen {
+		t.Fatal("image_generation probe was not sent")
+	}
+	if got := result.Recommendations["stripImageGenerationTool"]; got != true {
+		t.Fatalf("stripImageGenerationTool = %v, want true; evidence=%q", got, result.Evidence["stripImageGenerationTool"])
+	}
+}
+
+func TestDiagnoseImageGenerationToolRecommendsStripFromErrorSSE(t *testing.T) {
+	var probeSeen bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if strings.Contains(string(body), `"type":"image_generation"`) {
+			probeSeen = true
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte(`data: {"error":{"message":"image_generation tool is not supported"}}` + "\n\n"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"ok"}}]}` + "\n\n"))
+	}))
+	defer server.Close()
+
+	channel := &config.UpstreamConfig{ServiceType: "chat"}
+	result := runCompatDiagnose(channel, "chat", "sk-test", server.URL)
+	if !probeSeen {
+		t.Fatal("image_generation probe was not sent")
+	}
+	if got := result.Recommendations["stripImageGenerationTool"]; got != true {
+		t.Fatalf("stripImageGenerationTool = %v, want true; evidence=%q", got, result.Evidence["stripImageGenerationTool"])
+	}
+}
+
+func TestDiagnoseImageGenerationToolSkipsGenericAuthError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":{"message":"invalid api key"}}`, http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	channel := &config.UpstreamConfig{ServiceType: "responses"}
+	result := runCompatDiagnose(channel, "responses", "sk-test", server.URL)
+	if _, ok := result.Recommendations["stripImageGenerationTool"]; ok {
+		t.Fatalf("stripImageGenerationTool recommendation should be absent; got %#v", result.Recommendations)
+	}
+}
+
 func TestHasMeaningfulCompatSSE(t *testing.T) {
 	tests := []struct {
 		name        string
