@@ -796,10 +796,10 @@ func main() {
 	r.POST("/v1/responses", responsesHandler)
 	r.POST("/:routePrefix/v1/responses", responsesHandler)
 
-	// Responses WebSocket fallback: 返回 426 让 Codex 回退到 HTTP POST。
-	// Codex 内置 openai provider 优先尝试 WebSocket，收到 426 后应回退。
-	r.GET("/v1/responses", responsesWebSocketFallback)
-	r.GET("/:routePrefix/v1/responses", responsesWebSocketFallback)
+	// Responses WebSocket: 支持 Codex 原生 response.create over WebSocket。
+	responsesWebSocketHandler := responses.WebSocketHandler(envCfg, cfgManager, sessionManager, channelScheduler)
+	r.GET("/v1/responses", responsesWebSocketHandler)
+	r.GET("/:routePrefix/v1/responses", responsesWebSocketHandler)
 
 	compactHandler := responses.CompactHandler(envCfg, cfgManager, sessionManager, channelScheduler)
 	r.POST("/v1/responses/compact", compactHandler)
@@ -965,15 +965,6 @@ func main() {
 	case <-time.After(15 * time.Second):
 		log.Println("[Server-Shutdown] 警告: 等待关闭超时")
 	}
-}
-
-func responsesWebSocketFallback(c *gin.Context) {
-	if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
-		c.Status(http.StatusUpgradeRequired)
-		return
-	}
-
-	c.Status(http.StatusMethodNotAllowed)
 }
 
 // maskKey 对密钥进行脱密处理，保留首尾部分字符，中间用 * 遮蔽

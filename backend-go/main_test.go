@@ -5,43 +5,31 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/BenedictKing/ccx/internal/handlers/responses"
 	"github.com/gin-gonic/gin"
 )
 
-func TestResponsesWebSocketFallback(t *testing.T) {
+func TestResponsesWebSocketPlainGetReturns405(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/v1/responses", responsesWebSocketFallback)
-	router.GET("/:routePrefix/v1/responses", responsesWebSocketFallback)
+	handler := responses.WebSocketHandler(nil, nil, nil, nil)
+	router.GET("/v1/responses", handler)
+	router.GET("/:routePrefix/v1/responses", handler)
 
 	tests := []struct {
 		name       string
 		path       string
-		upgrade    string
 		wantStatus int
 	}{
 		{
-			name:       "websocket_upgrade_returns_426",
+			name:       "root_plain_get_returns_405",
 			path:       "/v1/responses",
-			upgrade:    "websocket",
-			wantStatus: http.StatusUpgradeRequired,
+			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
-			name:       "websocket_upgrade_is_case_insensitive",
-			path:       "/v1/responses",
-			upgrade:    "WebSocket",
-			wantStatus: http.StatusUpgradeRequired,
-		},
-		{
-			name:       "prefixed_websocket_upgrade_returns_426",
+			name:       "prefixed_plain_get_returns_405",
 			path:       "/minimax/v1/responses",
-			upgrade:    "websocket",
-			wantStatus: http.StatusUpgradeRequired,
-		},
-		{
-			name:       "plain_get_returns_405",
-			path:       "/v1/responses",
 			wantStatus: http.StatusMethodNotAllowed,
 		},
 	}
@@ -49,9 +37,6 @@ func TestResponsesWebSocketFallback(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			if tt.upgrade != "" {
-				req.Header.Set("Upgrade", tt.upgrade)
-			}
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
