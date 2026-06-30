@@ -20,7 +20,7 @@ const result = ref<CreateChannelResult | null>(null)
 
 const keysByProvider = computed(() => {
   return keyAssets.value.reduce<Record<string, ProviderKeyAsset>>((acc, item) => {
-    if (item.provider) acc[item.provider] = item
+    if (item.provider && !acc[item.provider]) acc[item.provider] = item
     return acc
   }, {})
 })
