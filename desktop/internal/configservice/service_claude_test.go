@@ -348,4 +348,45 @@ func TestSaveAndLoadProviderKeys(t *testing.T) {
 	}
 }
 
+func TestProviderKeyAssetsKeepPlanScopedKeys(t *testing.T) {
+	svc := newTestService(t)
+
+	if err := svc.SaveProviderKeyAsset(ProviderKeyAsset{
+		Provider: ProviderMiMo,
+		APIKey:   "tp-openai-key",
+		PlanID:   "openai-chat",
+	}); err != nil {
+		t.Fatalf("SaveProviderKeyAsset openai-chat failed: %v", err)
+	}
+	if err := svc.SaveProviderKeyAsset(ProviderKeyAsset{
+		Provider: ProviderMiMo,
+		APIKey:   "tp-anthropic-key",
+		PlanID:   "anthropic",
+	}); err != nil {
+		t.Fatalf("SaveProviderKeyAsset anthropic failed: %v", err)
+	}
+
+	assets := svc.GetProviderKeyAssets()
+	if len(assets) != 2 {
+		t.Fatalf("assets len = %d", len(assets))
+	}
+	if assets[0].PlanID != "anthropic" || assets[0].APIKey != "tp-anthropic-key" {
+		t.Fatalf("first asset = %+v", assets[0])
+	}
+	if assets[1].PlanID != "openai-chat" || assets[1].APIKey != "tp-openai-key" {
+		t.Fatalf("second asset = %+v", assets[1])
+	}
+
+	keys := svc.GetSavedProviderKeys()
+	if keys[PlatformClaude+":"+ProviderMiMo+":anthropic"] != "tp-anthropic-key" {
+		t.Fatalf("anthropic saved key = %q", keys[PlatformClaude+":"+ProviderMiMo+":anthropic"])
+	}
+	if keys[PlatformClaude+":"+ProviderMiMo+":openai-chat"] != "tp-openai-key" {
+		t.Fatalf("openai-chat saved key = %q", keys[PlatformClaude+":"+ProviderMiMo+":openai-chat"])
+	}
+	if keys["channel:"+ProviderMiMo] != "" {
+		t.Fatalf("plan-scoped save should not overwrite provider channel key, got %q", keys["channel:"+ProviderMiMo])
+	}
+}
+
 // ── P1 回归: Codex 第三方 provider 状态识别 ──

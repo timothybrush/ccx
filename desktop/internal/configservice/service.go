@@ -272,21 +272,28 @@ func (s *Service) GetSavedProviderKeys() map[string]string {
 		}
 		provider := asset.Provider
 		planID := asset.PlanID
-		keys["channel:"+provider] = asset.APIKey
 		switch provider {
 		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderUnity2, ProviderXFyun:
 			if planID != "" {
 				keys[PlatformClaude+":"+provider+":"+planID] = asset.APIKey
+				continue
 			}
+			keys["channel:"+provider] = asset.APIKey
 			if legacyCandidates[PlatformClaude+":"+provider] == "" {
 				legacyCandidates[PlatformClaude+":"+provider] = asset.APIKey
 			}
 		case ProviderOpenAI:
 			if planID != "" {
 				keys[PlatformCodex+":"+provider+":"+planID] = asset.APIKey
+				continue
 			}
+			keys["channel:"+provider] = asset.APIKey
 			if legacyCandidates[PlatformCodex+":"+provider] == "" {
 				legacyCandidates[PlatformCodex+":"+provider] = asset.APIKey
+			}
+		default:
+			if planID == "" {
+				keys["channel:"+provider] = asset.APIKey
 			}
 		}
 	}
@@ -301,7 +308,13 @@ func (s *Service) GetSavedProviderKeys() map[string]string {
 func (s *Service) GetProviderKeyAssets() []ProviderKeyAsset {
 	store := s.readProviderKeyStore()
 	assets := make([]ProviderKeyAsset, 0, len(store.Assets))
-	for _, asset := range store.Assets {
+	assetKeys := make([]string, 0, len(store.Assets))
+	for assetKey := range store.Assets {
+		assetKeys = append(assetKeys, assetKey)
+	}
+	sort.Strings(assetKeys)
+	for _, assetKey := range assetKeys {
+		asset := store.Assets[assetKey]
 		if asset.Provider == "" || asset.APIKey == "" {
 			continue
 		}
@@ -331,12 +344,14 @@ func (s *Service) SaveProviderKeyAsset(asset ProviderKeyAsset) error {
 		asset.Usages = appendUniqueMany(existing.Usages, asset.Usages)
 	}
 	store.Assets[assetKey] = asset
-	store.Keys["channel:"+provider] = key
-	switch provider {
-	case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderXFyun:
-		store.Keys[PlatformClaude+":"+provider] = key
-	case ProviderOpenAI:
-		store.Keys[PlatformCodex+":"+provider] = key
+	if asset.PlanID == "" {
+		store.Keys["channel:"+provider] = key
+		switch provider {
+		case ProviderDeepSeek, ProviderMiMo, ProviderCompshare, ProviderRunAPI, ProviderXFyun:
+			store.Keys[PlatformClaude+":"+provider] = key
+		case ProviderOpenAI:
+			store.Keys[PlatformCodex+":"+provider] = key
+		}
 	}
 	return writeJSONAtomic(s.providerKeysPath(), store)
 }
