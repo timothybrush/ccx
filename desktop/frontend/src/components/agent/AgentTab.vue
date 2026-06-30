@@ -36,6 +36,8 @@ const {
   openCodeOpenAIKey,
   claudeMimoBaseUrl,
   selectedMimoPlan,
+  selectedMimoCodexPlan,
+  selectedMimoOpenCodePlan,
   selectedDashScopePlan,
   agentLabels,
   agentPlatforms,
@@ -144,6 +146,8 @@ const handleConfirm = async () => {
         :saved-provider-keys="savedProviderKeys"
         :claude-mimo-base-url="claudeMimoBaseUrl"
         :selected-mimo-plan="selectedMimoPlan"
+        :selected-mimo-codex-plan="selectedMimoCodexPlan"
+        :selected-mimo-open-code-plan="selectedMimoOpenCodePlan"
         :selected-dash-scope-plan="selectedDashScopePlan"
         :claude-provider-label="claudeProviderLabel"
         :claude-target-base-url="claudeTargetBaseUrl"
@@ -181,6 +185,8 @@ const handleConfirm = async () => {
         @update:claude-provider-keys="claudeProviderKeys = $event"
         @update:claude-mimo-base-url="claudeMimoBaseUrl = $event"
         @update:selected-mimo-plan="selectedMimoPlan = $event"
+        @update:selected-mimo-codex-plan="selectedMimoCodexPlan = $event"
+        @update:selected-mimo-open-code-plan="selectedMimoOpenCodePlan = $event"
         @update:selected-dash-scope-plan="selectedDashScopePlan = $event"
         @update:selected-codex-provider="selectedCodexProvider = $event"
         @update:codex-mode="codexMode = $event"

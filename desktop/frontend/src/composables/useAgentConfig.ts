@@ -127,6 +127,8 @@ const codexOpenAIUseOwnKey = ref(false)
 const openCodeOpenAIKey = ref('')
 const claudeMimoBaseUrl = ref('https://api.xiaomimimo.com/anthropic')
 const selectedMimoPlan = ref('https://api.xiaomimimo.com/anthropic')
+const selectedMimoCodexPlan = ref('https://api.xiaomimimo.com/v1')
+const selectedMimoOpenCodePlan = ref('https://api.xiaomimimo.com/v1')
 const selectedDashScopePlan = ref('https://dashscope.aliyuncs.com/apps/anthropic')
 const selectedCodexProvider = ref<AgentProvider>('ccx')
 const codexMode = ref<'quick' | 'plugin'>('quick')
@@ -220,7 +222,7 @@ const codexTargetBaseUrl = () => {
     case 'deepseek':
       return 'https://api.deepseek.com/v1'
     case 'mimo':
-      return 'https://api.xiaomimimo.com/v1'
+      return selectedMimoCodexPlan.value || 'https://api.xiaomimimo.com/v1'
     case 'compshare':
       return 'https://cp.compshare.cn/v1'
     case 'kimi':
@@ -263,7 +265,7 @@ const openCodeTargetBaseUrl = () => {
     case 'deepseek':
       return 'https://api.deepseek.com/v1'
     case 'mimo':
-      return 'https://api.xiaomimimo.com/v1'
+      return selectedMimoOpenCodePlan.value || 'https://api.xiaomimimo.com/v1'
     case 'compshare':
       return 'https://cp.compshare.cn/v1'
     case 'kimi':
@@ -324,6 +326,16 @@ const resolveMiMoPlan = (url: string): string => {
   return known.includes(url) ? url : ''
 }
 
+const resolveMiMoCodexPlan = (url: string): string => {
+  const known = [
+    'https://api.xiaomimimo.com/v1',
+    'https://token-plan-cn.xiaomimimo.com/v1',
+    'https://token-plan-sgp.xiaomimimo.com/v1',
+    'https://token-plan-ams.xiaomimimo.com/v1',
+  ]
+  return known.includes(url) ? url : ''
+}
+
 const resolveDashScopePlan = (url: string): string => {
   const known = [
     'https://dashscope.aliyuncs.com/apps/anthropic',
@@ -360,6 +372,9 @@ const loadAgentStatuses = async () => {
     } else {
       selectedCodexProvider.value = 'ccx'
     }
+    if (codex.provider === 'mimo' && codex.currentBaseUrl) {
+      selectedMimoCodexPlan.value = resolveMiMoCodexPlan(codex.currentBaseUrl) || 'https://api.xiaomimimo.com/v1'
+    }
     // 恢复所有支持 mode 切换的 provider 的 mode 状态
     if (codex.provider === 'ccx' || codex.provider === 'dashscope' || codex.provider === 'runapi' || codex.provider === 'opencode-zen' || codex.provider === 'opencode-go') {
       codexMode.value = codex.mode === 'plugin' ? 'plugin' : 'quick'
@@ -368,6 +383,9 @@ const loadAgentStatuses = async () => {
       selectedOpenCodeProvider.value = opencode.provider as AgentProvider
     } else {
       selectedOpenCodeProvider.value = 'ccx'
+    }
+    if (opencode.provider === 'mimo' && opencode.currentBaseUrl) {
+      selectedMimoOpenCodePlan.value = resolveMiMoCodexPlan(opencode.currentBaseUrl) || 'https://api.xiaomimimo.com/v1'
     }
   } catch (error) {
     // error is handled by caller
@@ -451,12 +469,18 @@ const applyAgent = async (platform: AgentPlatform) => {
         const inputKey = codexOpenAIKey.value.trim()
         request.apiKey = inputKey || savedProviderKeys.value[`codex:${selectedCodexProvider.value}`] || ''
       }
+      if (selectedCodexProvider.value === 'mimo') {
+        request.baseUrl = selectedMimoCodexPlan.value.trim()
+      }
     }
     if (platform === 'opencode') {
       request.provider = selectedOpenCodeProvider.value
       if (selectedOpenCodeProvider.value !== 'ccx') {
         const inputKey = openCodeOpenAIKey.value.trim()
         request.apiKey = inputKey || savedProviderKeys.value[`codex:${selectedOpenCodeProvider.value}`] || ''
+      }
+      if (selectedOpenCodeProvider.value === 'mimo') {
+        request.baseUrl = selectedMimoOpenCodePlan.value.trim()
       }
     }
     await ApplyAgentConfig(request)
@@ -493,12 +517,18 @@ const showApplyPreview = async (platform: AgentPlatform) => {
       const inputKey = codexOpenAIKey.value.trim()
       request.apiKey = inputKey || savedProviderKeys.value[`codex:${selectedCodexProvider.value}`] || ''
     }
+    if (selectedCodexProvider.value === 'mimo') {
+      request.baseUrl = selectedMimoCodexPlan.value.trim()
+    }
   }
   if (platform === 'opencode') {
     request.provider = selectedOpenCodeProvider.value
     if (selectedOpenCodeProvider.value !== 'ccx') {
       const inputKey = openCodeOpenAIKey.value.trim()
       request.apiKey = inputKey || savedProviderKeys.value[`codex:${selectedOpenCodeProvider.value}`] || ''
+    }
+    if (selectedOpenCodeProvider.value === 'mimo') {
+      request.baseUrl = selectedMimoOpenCodePlan.value.trim()
     }
   }
   // 检测模式切换，显示会话迁移警告
@@ -611,6 +641,8 @@ export function useAgentConfig() {
     openCodeOpenAIKey,
     claudeMimoBaseUrl,
     selectedMimoPlan,
+    selectedMimoCodexPlan,
+    selectedMimoOpenCodePlan,
     selectedDashScopePlan,
     agentLabels,
     claudeProviderLabels,

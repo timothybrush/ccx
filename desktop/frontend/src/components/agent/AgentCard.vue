@@ -27,6 +27,8 @@ const props = defineProps<{
   savedProviderKeys?: Record<string, string>
   claudeMimoBaseUrl?: string
   selectedMimoPlan?: string
+  selectedMimoCodexPlan?: string
+  selectedMimoOpenCodePlan?: string
   selectedDashScopePlan?: string
   claudeProviderLabel?: (value?: string) => string
   claudeTargetBaseUrl?: () => string
@@ -67,6 +69,8 @@ const emit = defineEmits<{
   'update:claudeProviderKeys': [value: Record<AgentProvider, string>]
   'update:claudeMimoBaseUrl': [value: string]
   'update:selectedMimoPlan': [value: string]
+  'update:selectedMimoCodexPlan': [value: string]
+  'update:selectedMimoOpenCodePlan': [value: string]
   'update:selectedDashScopePlan': [value: string]
   'update:selectedCodexProvider': [value: AgentProvider]
   'update:codexMode': [value: 'quick' | 'plugin']
@@ -76,8 +80,17 @@ const emit = defineEmits<{
   'update:openCodeOpenAIKey': [value: string]
 }>()
 
+const { t } = useLanguage()
+
 // OpenAI 直连「我有自己的 API Key」勾选状态（受控，默认不显示输入框）
 const showCodexOwnKey = computed(() => props.codexOpenAIUseOwnKey ?? false)
+
+const mimoCodexPlanOptions = [
+  { label: t('agent.planPayAsYouGo'), value: 'https://api.xiaomimimo.com/v1' },
+  { label: t('agent.planChina'), value: 'https://token-plan-cn.xiaomimimo.com/v1' },
+  { label: t('agent.planSingapore'), value: 'https://token-plan-sgp.xiaomimimo.com/v1' },
+  { label: t('agent.planEurope'), value: 'https://token-plan-ams.xiaomimimo.com/v1' },
+]
 
 const codexKeyRequired = computed(() => {
   const p = props.selectedCodexProvider
@@ -107,8 +120,6 @@ const codexHasMode = computed(() => {
   const p = props.selectedCodexProvider
   return p === 'ccx' || p === 'deepseek' || p === 'mimo' || p === 'compshare' || p === 'dashscope' || p === 'runapi' || p === 'kimi' || p === 'glm' || p === 'minimax' || p === 'opencode-zen' || p === 'opencode-go' || p === 'xfyun' || p === 'tencent-lkeap' || p === 'volc-ark' || p === 'qianfan' || p === 'modelscope' || p === 'openrouter'
 })
-
-const { t } = useLanguage()
 
 const badgeClass = computed(() => {
   if (props.agentStatusClass === 'running') return 'bg-accent text-accent-foreground border-0'
@@ -260,6 +271,22 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             <option value="qianfan">{{ t('agent.provider.qianfanDirect') }}</option>
           </select>
         </div>
+        <div v-if="selectedCodexProvider === 'mimo'" class="space-y-1.5">
+          <Label class="text-xs text-muted-foreground">{{ t('agent.billingModeMiMo') }}</Label>
+          <select
+            :value="selectedMimoCodexPlan || 'https://api.xiaomimimo.com/v1'"
+            class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            @change="emit('update:selectedMimoCodexPlan', ($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="opt in mimoCodexPlanOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
         <div v-if="codexHasMode" class="space-y-2">
           <Label class="text-xs text-muted-foreground">{{ t('agent.codexMode') }}</Label>
           <div class="grid grid-cols-2 gap-2 rounded-lg bg-secondary/40 p-1">
@@ -347,6 +374,22 @@ const openFileInEditor = async (editorPath: string, filePath: string) => {
             <option value="tencent-lkeap">{{ t('agent.provider.tencentLkeapDirect') }}</option>
             <option value="volc-ark">{{ t('agent.provider.volcArkDirect') }}</option>
             <option value="qianfan">{{ t('agent.provider.qianfanDirect') }}</option>
+          </select>
+        </div>
+        <div v-if="selectedOpenCodeProvider === 'mimo'" class="space-y-1.5">
+          <Label class="text-xs text-muted-foreground">{{ t('agent.billingModeMiMo') }}</Label>
+          <select
+            :value="selectedMimoOpenCodePlan || 'https://api.xiaomimimo.com/v1'"
+            class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            @change="emit('update:selectedMimoOpenCodePlan', ($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="opt in mimoCodexPlanOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </option>
           </select>
         </div>
         <button
