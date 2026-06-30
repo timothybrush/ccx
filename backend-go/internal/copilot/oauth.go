@@ -107,7 +107,7 @@ func (c *OAuthClient) VerifyUser(ctx context.Context, token string) (*User, erro
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GitHub 用户验证请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -139,7 +139,7 @@ func (c *OAuthClient) postJSON(ctx context.Context, url string, payload interfac
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("GitHub OAuth 请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
