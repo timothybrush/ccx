@@ -206,6 +206,12 @@ func TestIsResponsesResponseEmpty(t *testing.T) {
 				map[string]interface{}{"type": "summary_text", "text": ""},
 			}},
 		}}, false},
+		{"compaction with encrypted content", &types.ResponsesResponse{Output: []types.ResponsesItem{
+			{Type: "compaction", EncryptedContent: "summary payload"},
+		}}, false},
+		{"compaction without encrypted content", &types.ResponsesResponse{Output: []types.ResponsesItem{
+			{Type: "compaction"},
+		}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

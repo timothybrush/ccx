@@ -43,10 +43,31 @@ func TestHasResponsesSemanticContent(t *testing.T) {
 		}
 	})
 
+	t.Run("compaction item done", func(t *testing.T) {
+		event := "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\",\"encrypted_content\":\"summary payload\"}}\n\n"
+		if !common.HasResponsesSemanticContent(event) {
+			t.Fatal("expected compaction output_item to be treated as semantic content")
+		}
+	})
+
+	t.Run("empty compaction item done", func(t *testing.T) {
+		event := "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\"}}\n\n"
+		if common.HasResponsesSemanticContent(event) {
+			t.Fatal("did not expect compaction output_item without encrypted_content to be treated as semantic content")
+		}
+	})
+
 	t.Run("plain empty completed", func(t *testing.T) {
 		event := "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"output\":[]}}\n\n"
 		if common.HasResponsesSemanticContent(event) {
 			t.Fatal("did not expect empty completed event to be treated as non-text content")
+		}
+	})
+
+	t.Run("completed event with compaction output", func(t *testing.T) {
+		event := "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"compaction\",\"encrypted_content\":\"summary payload\"}]}}\n\n"
+		if !common.HasResponsesSemanticContent(event) {
+			t.Fatal("expected completed event with compaction output to be treated as semantic content")
 		}
 	})
 

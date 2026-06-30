@@ -218,6 +218,10 @@ func isResponsesUsageOnlyEvent(event string) bool {
 	return false
 }
 
+func isCompactionV2UsageOnlyStream(isCompactionV2, seenCompleted, seenUsageOnly bool) bool {
+	return isCompactionV2 && seenCompleted && seenUsageOnly
+}
+
 func firstUnknownResponsesEventType(event string) (string, bool) {
 	knownTypes := map[string]struct{}{
 		"response.created": {}, "response.in_progress": {}, "response.incomplete": {},

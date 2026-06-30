@@ -43,6 +43,7 @@ func handleStreamSuccess(
 
 	needConvert := upstreamType != "responses"
 	var converterState any
+	isCompactionV2Stream := originalReq != nil && hasCompactionTrigger(originalReq.Input)
 
 	scanner := bufio.NewScanner(resp.Body)
 	buf := make([]byte, 0, 64*1024)
@@ -135,6 +136,9 @@ func handleStreamSuccess(
 					preflightEmpty = false
 				} else {
 					preflightEmpty = common.IsEffectivelyEmptyStreamText(preflightTextBuf.String())
+					if preflightEmpty && isCompactionV2UsageOnlyStream(isCompactionV2Stream, seenCompletedEvent, seenUsageOnlyEvent) {
+						preflightEmpty = false
+					}
 				}
 				preflightDiagnostic = buildResponsesPreflightDiagnostic(seenConvertedEvent, seenCompletedEvent, seenUsageOnlyEvent, seenUnknownEvent, unknownEventType, preflightTextBuf.String())
 				preflightDone = true
@@ -271,6 +275,9 @@ func handleStreamSuccess(
 					preflightEmpty = !preflightHasNonTextContent && common.IsEffectivelyEmptyStreamText(preflightTextBuf.String())
 					// 如果有工具调用，不算空响应
 					if preflightEmpty && hasResponsesFunctionCall(event) {
+						preflightEmpty = false
+					}
+					if preflightEmpty && isCompactionV2UsageOnlyStream(isCompactionV2Stream, true, seenUsageOnlyEvent) {
 						preflightEmpty = false
 					}
 					preflightDiagnostic = buildResponsesPreflightDiagnostic(seenConvertedEvent, true, seenUsageOnlyEvent, seenUnknownEvent, unknownEventType, preflightTextBuf.String())

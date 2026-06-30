@@ -414,3 +414,57 @@ func TestResponsesHandler_CompactionTriggerUsesLocalCompactForOpenAINonStream(t 
 		t.Fatalf("unexpected compaction output: %#v", resp.Output[0])
 	}
 }
+
+func TestResponsesHandler_NativeCompactionTriggerAllowsUsageOnlyCompletedStream(t *testing.T) {
+	sessionManager := session.NewSessionManager(time.Hour, 100, 100000)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("event: response.completed\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_compact_usage_only\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":12,\"output_tokens\":0,\"total_tokens\":12}}}\n\n"))
+	}))
+	defer upstream.Close()
+
+	router := newResponsesTestRouter(t, config.UpstreamConfig{
+		Name:        "responses-compact-usage-only",
+		BaseURL:     upstream.URL,
+		APIKeys:     []string{"sk-test"},
+		ServiceType: "responses",
+		Status:      "active",
+	}, sessionManager)
+
+	body := `{"model":"gpt-5","stream":true,"input":[{"type":"message","role":"user","content":"Need compact"},{"type":"compaction_trigger"}]}`
+	w := performResponsesHandlerRequest(t, router, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte(`event: response.completed`)) {
+		t.Fatalf("response should forward completed event: %s", w.Body.String())
+	}
+}
+
+func TestResponsesHandler_NativeUsageOnlyCompletedStreamFailsForNormalTurn(t *testing.T) {
+	sessionManager := session.NewSessionManager(time.Hour, 100, 100000)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("event: response.completed\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_empty\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":12,\"output_tokens\":0,\"total_tokens\":12}}}\n\n"))
+	}))
+	defer upstream.Close()
+
+	router := newResponsesTestRouter(t, config.UpstreamConfig{
+		Name:        "responses-normal-usage-only",
+		BaseURL:     upstream.URL,
+		APIKeys:     []string{"sk-test"},
+		ServiceType: "responses",
+		Status:      "active",
+	}, sessionManager)
+
+	w := performResponsesHandlerRequest(t, router, `{"model":"gpt-5","stream":true,"input":"hello"}`)
+	if w.Code == http.StatusOK {
+		t.Fatalf("status = 200, want failure for normal usage-only stream, body=%s", w.Body.String())
+	}
+}

@@ -365,6 +365,9 @@ func HasClaudeSemanticContent(event string) bool {
 func responseItemCarriesSemanticContent(item map[string]interface{}) bool {
 	itemType, _ := item["type"].(string)
 	switch itemType {
+	case "compaction", "compaction_summary":
+		encryptedContent, _ := item["encrypted_content"].(string)
+		return strings.TrimSpace(encryptedContent) != ""
 	case "function_call", "reasoning", "tool_search_call", "tool_search_output":
 		return true
 	}

@@ -164,6 +164,8 @@ func IsResponsesResponseEmpty(resp *types.ResponsesResponse) bool {
 func isResponsesItemEmpty(item types.ResponsesItem) bool {
 	itemType := item.Type
 	switch itemType {
+	case "compaction", "compaction_summary":
+		return strings.TrimSpace(item.EncryptedContent) == ""
 	case "function_call":
 		return isMalformedNamedToolArguments(item.Name, firstNonEmptyString(item.Arguments, item.Input))
 	case "custom_tool_call":
