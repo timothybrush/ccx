@@ -56,7 +56,7 @@ func shouldNormalizeMetadataUserID(kind scheduler.ChannelKind, upstream *config.
 	if upstream == nil {
 		return false
 	}
-	if kind != scheduler.ChannelKindMessages && kind != scheduler.ChannelKindResponses {
+	if kind != scheduler.ChannelKindMessages {
 		return false
 	}
 	return upstream.IsNormalizeMetadataUserIDEnabled()

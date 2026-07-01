@@ -56,7 +56,7 @@ type UpstreamConfig struct {
 	LowQuality     bool       `json:"lowQuality,omitempty"`     // 低质量渠道标记：启用后强制本地估算 token，偏差>5%时使用本地值
 	// 自动拉黑开关
 	AutoBlacklistBalance *bool `json:"autoBlacklistBalance,omitempty"` // 余额不足时自动拉黑 Key（默认 true）
-	// metadata.user_id 规范化开关
+	// Claude Messages metadata.user_id 规范化开关
 	NormalizeMetadataUserID *bool `json:"normalizeMetadataUserId,omitempty"` // 规范化 metadata.user_id（默认 true）
 	// Messages 渠道级移除计费头：转发前从 system 数组移除 cch=xxx; 计费参数（默认关闭）
 	StripBillingHeader *bool `json:"stripBillingHeader,omitempty"`
