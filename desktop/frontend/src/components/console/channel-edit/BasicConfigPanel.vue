@@ -74,7 +74,7 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
       </div>
     </div>
 
-    <div class="space-y-1.5">
+    <div v-if="form.serviceType !== 'copilot'" class="space-y-1.5">
       <div class="flex items-center justify-between gap-3">
         <Label class="text-xs font-semibold text-muted-foreground">
           {{ t('channelEditor.basic.baseUrl.label') }} <span class="text-destructive">*</span>

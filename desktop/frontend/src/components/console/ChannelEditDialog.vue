@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   CheckCircle2,
@@ -229,6 +230,7 @@ const {
                         :restoring-key="restoringKey"
                         :local-restored-keys="localRestoredKeys"
                         :key-models-status="keyModelsStatus"
+                        :service-type="form.serviceType"
                         :errors="errors"
                         @update:new-api-keys-text="newApiKeysText = $event; clearDuplicateKeyHighlight()"
                         @add-new-api-keys="addNewApiKeys"
@@ -242,6 +244,20 @@ const {
                       <!-- GitHub Copilot OAuth 登录（仅 copilot 渠道显示） -->
                       <div v-if="form.serviceType === 'copilot'" class="mt-4 rounded-xl border border-border/60 bg-card/40 p-5 space-y-3">
                         <h4 class="text-xs font-bold uppercase tracking-wider text-primary">GitHub Copilot</h4>
+                        <div class="space-y-1.5">
+                          <label class="text-[10px] font-semibold text-muted-foreground">
+                            {{ t('channelEditor.transport.proxyUrl.label') }}
+                          </label>
+                          <Input
+                            :model-value="form.proxyUrl"
+                            class="h-9 font-mono text-xs"
+                            :placeholder="t('channelEditor.transport.proxyUrl.placeholder')"
+                            @update:model-value="(val) => form.proxyUrl = val as string"
+                          />
+                          <p class="text-[10px] leading-4 text-muted-foreground">
+                            {{ t('channelEditor.transport.proxyUrl.hint') }}
+                          </p>
+                        </div>
                         <div v-if="copilotUserCode" class="flex items-center gap-2 text-sm">
                           <span class="text-muted-foreground">{{ t('copilotOAuth.userCode') }}</span>
                           <code class="px-2 py-0.5 rounded bg-muted font-mono text-xs">{{ copilotUserCode }}</code>
@@ -266,7 +282,7 @@ const {
                             :disabled="copilotOAuthLoading || copilotPolling"
                             @click="startCopilotOAuth"
                           >
-                            <span v-if="copilotOAuthLoading || copilotPolling" class="animate-spin">⏳</span>
+                            <Loader2 v-if="copilotOAuthLoading || copilotPolling" class="h-3.5 w-3.5 animate-spin" />
                             {{ t('copilotOAuth.button') }}
                           </button>
                           <span v-if="copilotPolling" class="text-xs text-muted-foreground">{{ t('copilotOAuth.waiting') }}</span>

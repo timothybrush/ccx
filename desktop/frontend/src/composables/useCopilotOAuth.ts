@@ -10,7 +10,7 @@ import { openExternalLink } from '@/lib/external-link'
 
 type Translator = (key: string, params?: Record<string, string>) => string
 
-export function useCopilotOAuth(existingApiKeys: Ref<string[]>, t: Translator) {
+export function useCopilotOAuth(existingApiKeys: Ref<string[]>, t: Translator, getProxyUrl: () => string = () => '') {
   const adminApi = useAdminApi()
   const copilotOAuthLoading = ref(false)
   const copilotPolling = ref(false)
@@ -65,7 +65,10 @@ export function useCopilotOAuth(existingApiKeys: Ref<string[]>, t: Translator) {
     if (!copilotDeviceCode.value) return
     copilotPolling.value = true
     try {
-      const token = await adminApi.post<CopilotTokenResponse>(COPILOT_OAUTH_TOKEN_PATH, { deviceCode: copilotDeviceCode.value })
+      const token = await adminApi.post<CopilotTokenResponse>(COPILOT_OAUTH_TOKEN_PATH, {
+        deviceCode: copilotDeviceCode.value,
+        proxyUrl: getProxyUrl().trim() || undefined,
+      })
       if (token.accessToken) {
         if (!existingApiKeys.value.includes(token.accessToken)) existingApiKeys.value.push(token.accessToken)
         copilotOAuthSuccess.value = true
@@ -107,7 +110,9 @@ export function useCopilotOAuth(existingApiKeys: Ref<string[]>, t: Translator) {
     copilotOAuthError.value = ''
     copilotOAuthSuccess.value = false
     try {
-      const device = await adminApi.post<CopilotDeviceCodeResponse>(COPILOT_OAUTH_DEVICE_CODE_PATH)
+      const device = await adminApi.post<CopilotDeviceCodeResponse>(COPILOT_OAUTH_DEVICE_CODE_PATH, {
+        proxyUrl: getProxyUrl().trim() || undefined,
+      })
       copilotDeviceCode.value = device.deviceCode
       copilotUserCode.value = device.userCode
       copilotVerificationUri.value = device.verificationUri

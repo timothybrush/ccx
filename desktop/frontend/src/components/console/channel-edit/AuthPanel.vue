@@ -42,6 +42,7 @@ const props = defineProps<{
   restoringKey: string
   localRestoredKeys: Set<string>
   keyModelsStatus: Map<string, KeyModelsStatus>
+  serviceType: string
   errors: { apiKeys?: string }
 }>()
 
@@ -88,7 +89,7 @@ const visibleDisabledKeys = computed(() => {
   <section class="space-y-4 rounded-xl border bg-card/40 p-5 shadow-xs" :class="errors.apiKeys ? 'border-destructive/40' : 'border-border/60'">
     <div class="flex items-center justify-between gap-3 border-b border-border/40 pb-2">
       <h4 class="text-xs font-bold uppercase tracking-wider text-primary">
-        {{ t('channelCard.apiKeyManagement') }} *
+        {{ t('channelCard.apiKeyManagement') }}<span v-if="serviceType !== 'copilot'"> *</span>
       </h4>
       <span class="text-[10px] bg-primary/10 border border-primary/20 text-primary font-semibold px-2 py-0.5 rounded-full">
         {{ t('addChannel.apiKeyLoadBalance') }}

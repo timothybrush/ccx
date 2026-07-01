@@ -46,6 +46,7 @@ export class CreateChannelRequest {
     "apiKey": string;
     "name": string;
     "description": string;
+    "proxyUrl": string;
 
     /** Creates a new CreateChannelRequest instance. */
     constructor($$source: Partial<CreateChannelRequest> = {}) {
@@ -69,6 +70,9 @@ export class CreateChannelRequest {
         }
         if (!("description" in $$source)) {
             this["description"] = "";
+        }
+        if (!("proxyUrl" in $$source)) {
+            this["proxyUrl"] = "";
         }
 
         Object.assign(this, $$source);

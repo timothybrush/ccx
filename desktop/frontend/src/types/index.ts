@@ -74,7 +74,7 @@ export type MigrateCodexSessionsResult = {
   sqliteError?: string
 }
 
-export type TabValue = 'status' | 'agent' | 'env' | 'channels' | 'cockpit' | 'dashboard'
+export type TabValue = 'status' | 'agent' | 'env' | 'channels' | 'subscriptions' | 'cockpit' | 'dashboard'
 
 export type ProviderPlan = {
   id: string
@@ -122,6 +122,7 @@ export type CreateChannelRequest = {
   apiKey?: string
   name?: string
   description?: string
+  proxyUrl?: string
 }
 
 export type CreateChannelResult = {

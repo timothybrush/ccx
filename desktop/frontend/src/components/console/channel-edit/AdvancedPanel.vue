@@ -186,7 +186,7 @@ function updateTextVerbosity(value: string) {
             </div>
             <Switch :model-value="form.normalizeSystemRoleToTopLevel" @update:model-value="updateField('normalizeSystemRoleToTopLevel', $event)" />
           </div>
-          <div v-if="['messages','responses'].includes(channelType)" class="flex items-center justify-between gap-3">
+          <div v-if="channelType === 'messages'" class="flex items-center justify-between gap-3">
             <div class="min-w-0 space-y-0.5">
               <Label class="text-xs font-medium">{{ t('channelEditor.compat.normalizeUserId.label') }}</Label>
               <p class="text-[10px] leading-4 text-muted-foreground">{{ t('channelEditor.compat.normalizeUserId.hint') }}</p>

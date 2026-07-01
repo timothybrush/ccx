@@ -42,7 +42,7 @@ const loadChannelPresets = async (target?: string) => {
   }
 }
 
-const createChannel = async (request: CreateChannelRequest) => {
+const createChannel = async (request: CreateChannelRequest, options: { reloadPresets?: boolean } = {}) => {
   creating.value = true
   error.value = ''
   result.value = null
@@ -55,8 +55,11 @@ const createChannel = async (request: CreateChannelRequest) => {
       apiKey: request.apiKey || '',
       name: request.name || '',
       description: request.description || '',
+      proxyUrl: request.proxyUrl || '',
     }) as CreateChannelResult
-    await loadChannelPresets(request.target)
+    if (options.reloadPresets !== false) {
+      await loadChannelPresets(request.target)
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
     throw err

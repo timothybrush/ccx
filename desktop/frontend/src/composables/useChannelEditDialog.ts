@@ -50,7 +50,7 @@ const { t } = useLanguage()
   const quickInput = ref('')
   const quickServiceTypeTouched = ref(false)
   const copilotDefaultBaseUrl = 'https://api.githubcopilot.com'
-  const defaultNormalizeMetadataUserId = () => props.channelType !== 'responses'
+  const defaultNormalizeMetadataUserId = () => props.channelType === 'messages'
   const disabledApiKeys = computed<DisabledKeyInfo[]>(() => props.channel?.disabledApiKeys ?? [])
   const historicalApiKeys = computed(() => props.channel?.historicalApiKeys ?? [])
   const {
@@ -93,7 +93,7 @@ const { t } = useLanguage()
     copyCopilotUserCode,
     startCopilotOAuth,
     openCopilotAuthorization,
-  } = useCopilotOAuth(existingApiKeys, t)
+  } = useCopilotOAuth(existingApiKeys, t, () => form.proxyUrl)
 
   const keyModelsStatus = ref<Map<string, KeyModelsStatus>>(new Map())
   
@@ -480,7 +480,7 @@ const { t } = useLanguage()
     if (isEditMode.value && !form.name.trim()) errs.name = t('channelEditor.basic.name.required')
     if (!isEditMode.value && !generatedChannelName.value.trim()) errs.name = t('channelEditor.basic.name.required')
     if (!form.serviceType) errs.serviceType = t('channelEditor.basic.serviceType.required')
-    if (!form.baseUrlsText.trim()) errs.baseUrl = t('channelEditor.basic.baseUrl.required')
+    if (form.serviceType !== 'copilot' && !form.baseUrlsText.trim()) errs.baseUrl = t('channelEditor.basic.baseUrl.required')
     // copilot 渠道通过 OAuth 登录，apiKeys 由登录流程填充，此处豁免必填校验
     if (!hasConfigurableKeys.value && form.serviceType !== 'copilot') errs.apiKeys = t('channelEditor.auth.apiKeyRequired')
     if (String(form.requestTimeoutMs).trim()) {
@@ -597,7 +597,7 @@ const { t } = useLanguage()
           noVisionModels: getNoVisionModelsFromRows(),
           visionFallbackModel: form.visionFallbackModel,
           historicalImageTurnLimit: form.historicalImageTurnLimit,
-        })
+        }, { channelType: props.channelType })
   
     applyVisionFallbackReasoning(payload)
   
@@ -863,7 +863,7 @@ const { t } = useLanguage()
       noVisionModels: getNoVisionModelsFromRows(),
       visionFallbackModel: form.visionFallbackModel,
       historicalImageTurnLimit: form.historicalImageTurnLimit,
-    })
+    }, { channelType: props.channelType })
   }
   
   return {
