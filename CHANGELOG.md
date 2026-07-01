@@ -1,3 +1,70 @@
+## [v2.9.26] - 2026-07-01
+
+### 新增
+
+- **Copilot 代理支持** - copilot: OAuth 流程支持代理地址并优化超时处理，支持通过代理进行 Copilot token 交换，新增 Copilot 渠道默认 BaseURL 自动回填
+- **Copilot 订阅中心** - desktop: 新增订阅中心页面，将 Copilot OAuth 从渠道创建移至独立 Tab，支持多账号 key 池管理、多渠道目标与诊断结果展示
+- **Copilot 预设与前端适配** - desktop/preset: 新增 GitHub Copilot 预设并支持 proxyUrl 字段；web/frontend: Copilot 渠道支持代理地址输入，channelPayload 支持 Copilot 默认 BaseURL
+- **订阅 Tab 账号展示增强** - desktop: 增强订阅 Tab 账号展示与 Copilot 模型获取，支持国际化
+- **Claude Sonnet 5 注册** - models: 注册 Claude Sonnet 5 模型
+- **模型元数据增强** - models: 丰富模型元数据，支持 Anthropic 家族分类，优化模型发现机制并添加缓存降级与 keypool 集成
+- **Claude Desktop 连接探测** - messages: 内置 Claude Desktop 连接探测响应
+- **本地 HTTPS 自签名证书** - tls: 支持本地 HTTPS 自签名证书
+- **Codex 原生 WebSocket 协议** - responses: 支持 Codex 原生 WebSocket 协议
+- **商汤日日新接入** - sensenova: 新增商汤日日新 LLM 平台接入
+- **讯飞 Coding Plan 迁移** - preset: 讯飞 Coding Plan 迁移并支持 serviceType 配置
+- **MiMo 计划选择器** - ui: 为 Codex 和 OpenCode 添加 MiMo 计划选择器
+- **超时控件优化** - ui: 将超时控件暴露为秒级显示
+- **macOS 应用内更新** - desktop: 新增 macOS 应用内更新打包支持
+- **会话预览** - ui: 添加可展开的会话预览功能
+- **渠道 Key 复用显示** - desktop: 渠道 Key 复用时显示当前值
+- **image_generation 探测** - diagnose: 探测上游 image_generation tool 支持
+- **渠道编辑交互优化** - channel-editor: 优化渠道编辑交互体验
+
+### 修复
+
+- **copilot serviceType 映射** - capability: 修复 copilot serviceType 映射到 responses 协议
+- **Copilot 订阅 token 复用** - desktop: 修复 Copilot 订阅保存 token 复用与渠道状态管理
+- **copilot BaseURL 清空** - desktop: 修复 copilot 渠道 BaseURL 因空版本前缀被错误清空的问题
+- **normalizeMetadataUserId 协议限制** - config: 将 normalizeMetadataUserId 限定为仅 Messages 协议生效
+- **TLS 证书路径提示** - tls: 证书路径为相对路径时增加绝对路径提示
+- **responses 渠道 normalizeMetadataUserId** - channel-editor: responses 渠道默认关闭 normalizeMetadataUserId
+- **Copilot OAuth 超时上下文** - copilot: 补充 OAuth 请求超时与错误上下文
+- **模型点击排队** - capability-tests: 修复桌面端模型点击排队问题
+- **provider key 资产匹配** - channel: currentAsset 按 planID 精确匹配 provider key 资产
+- **keysByProvider 去重** - preset: keysByProvider 去重保留首个 asset
+- **plan-scoped key 存储** - configservice: plan-scoped key 存储不覆盖 provider channel key
+- **Responses URL 重复拼接** - api: Responses URL 末尾已含 endpoint 时避免重复拼接
+- **MiMo reasoning effort** - api: 规范化 MiMo Responses reasoning effort 上限
+- **Codex tool_search 剥离** - api: 剥离 Codex tool_search 工具调用
+- **compaction 流** - api: 允许 compaction 仅含 usage 的流式响应
+- **MiMo token plans** - desktop: 允许 MiMo token plans 用于 responses 协议
+- **brew deprecated syntax** - brew: 替换已废弃的 `depends_on` 字符串语法
+- **模型能力同步延迟** - ui: 编辑期间延迟模型能力同步
+- **thinking reasoning 参数** - api: 规范化 thinking reasoning 参数
+- **MiMo thinking style** - channel: MiMo 预设使用 thinking style
+- **渠道高级选项布局** - ui: 改善渠道高级选项布局
+
+### 重构
+
+- **ResolveTokenWithProxy** - handlers: 全量替换 Copilot ResolveToken 为 ResolveTokenWithProxy
+- **渠道编辑器 composables 拆分** - channel-editor: 接入 useEditChannelModal 主 composable，提取禁用 Key 恢复/模型获取/Payload 构建、表单选项/派生计算/预设/工具函数、UI 辅助 composables
+- **应用 composables 提取** - app: 提取 useToasts + useAppController composable，提取 savedProviderKeyForPlan 按 planID 匹配资产 key
+- **ChannelEditDialog composables** - desktop: 提取 ChannelEditDialog composables
+- **configservice 瘦身** - configservice: service.go 瘦身为纯调度层，提取 Provider Key 管理、预览/试运行、OpenCode 配置、Codex 配置与会话迁移、路径解析与 Claude 配置、file/toml/jsonc 格式辅助函数
+- **渠道自定义参数面板分离** - ui: 将渠道自定义参数面板拆分为独立组件
+
+### 文档
+
+- 补充桌面端与环境变量文档
+- 清理已完成的上游版本评估条目
+- 添加 Claude Code 2.1.196 上游版本审查
+- 澄清快速模式使用成本说明
+
+### 测试
+
+- 覆盖 Codex tool_search 剥离测试
+
 ## [v2.9.25] - 2026-06-29
 
 ### 新增
