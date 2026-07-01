@@ -102,6 +102,41 @@ func TestOpenAIProvider_HandleStreamResponse_AcceptsNoSpaceDataLines(t *testing.
 	}
 }
 
+func TestClaudeProvider_HandleStreamResponse_WrapsBareJSONLines(t *testing.T) {
+	body := strings.Join([]string{
+		`{}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+
+	provider := &ClaudeProvider{}
+	eventChan, errChan, err := provider.HandleStreamResponse(io.NopCloser(strings.NewReader(body)))
+	if err != nil {
+		t.Fatalf("HandleStreamResponse returned error: %v", err)
+	}
+
+	events := collectStreamEvents(eventChan)
+	select {
+	case streamErr := <-errChan:
+		if streamErr != nil {
+			t.Fatalf("unexpected stream error: %v", streamErr)
+		}
+	default:
+	}
+
+	foundTextDelta := false
+	for _, event := range events {
+		if strings.Contains(event, `data: {"type":"content_block_delta"`) && strings.Contains(event, `"text":"hello"`) {
+			foundTextDelta = true
+			break
+		}
+	}
+	if !foundTextDelta {
+		t.Fatalf("expected bare JSON line to be wrapped as SSE data, got %v", events)
+	}
+}
+
 func TestOpenAIProvider_HandleStreamResponse_MapsReasoningContentToThinkingDelta(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"id":"chatcmpl-1","model":"deepseek-v4-pro","choices":[{"delta":{"reasoning_content":"think"},"finish_reason":null}]}`,

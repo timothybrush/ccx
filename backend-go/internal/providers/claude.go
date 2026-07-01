@@ -826,6 +826,9 @@ func (p *ClaudeProvider) HandleStreamResponse(body io.ReadCloser) (<-chan string
 
 		for scanner.Scan() {
 			line := normalizeSSEFieldLine(scanner.Text())
+			if strings.HasPrefix(strings.TrimSpace(line), "{") {
+				line = "data: " + strings.TrimSpace(line)
+			}
 
 			// 检测是否发送了 tool_use 相关的 stop_reason（通常在 data 行中）
 			if strings.Contains(line, `"stop_reason":"tool_use"`) ||
