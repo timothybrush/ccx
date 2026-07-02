@@ -1,3 +1,22 @@
+## [v2.9.28] - 2026-07-02
+
+### 新增
+
+- **BIND_HOST 环境变量支持** - server: 新增 BIND_HOST 环境变量以绑定指定网络接口
+- **Claude thinking 回填缓存** - thinkingcache: 新增 Claude thinking 回填缓存模块
+- **子代理精确识别** - agent: 通过 X-Claude-Code-Agent-Id 精确识别子代理
+- **统一配置管理与 CLI 选项** - thinkingcache: 统一 thinking 缓存配置管理与 CLI 选项
+- **DeepSeek Claude thinking 缓存诊断** - compat-diagnose: DeepSeek Claude 渠道启用 thinking 缓存诊断
+- **DeepSeek Claude 预设 thinking 缓存模式** - preset: DeepSeek Claude 预设切换到 thinking 缓存模式
+
+### 修复
+
+- **stop_reason 仅事件误判** - stream: stop_reason 仅事件不再误判为语义内容
+
+### 重构
+
+- **override 日志增强** - scheduler: 增强 override 日志输出
+
 ## [v2.9.27] - 2026-07-02
 
 ### 新增
