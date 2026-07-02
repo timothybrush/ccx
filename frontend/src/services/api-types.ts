@@ -426,6 +426,7 @@ export interface KeyHistoryDataPoint {
   outputTokens: number
   cacheCreationTokens: number
   cacheReadTokens: number
+  costUSD?: number
 }
 
 // 单个 Key 的历史数据
@@ -457,6 +458,7 @@ export interface GlobalHistoryDataPoint {
   outputTokens: number
   cacheCreationTokens: number
   cacheReadTokens: number
+  costUSD?: number
 }
 
 // 全局统计汇总
@@ -468,6 +470,7 @@ export interface GlobalStatsSummary {
   totalOutputTokens: number
   totalCacheCreationTokens: number
   totalCacheReadTokens: number
+  totalCostUSD?: number
   avgSuccessRate: number
   duration: string
   intervalSeconds?: number
@@ -490,6 +493,7 @@ export interface ModelHistoryDataPoint {
   outputTokens: number
   cacheCreationTokens: number
   cacheReadTokens: number
+  costUSD?: number
 }
 
 export interface ModelStatsHistoryResponse {
