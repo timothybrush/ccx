@@ -184,6 +184,38 @@ type ContextRoutingConfig struct {
 	UnknownSafeWindowTokens    int   `json:"unknownSafeWindowTokens,omitempty"`
 }
 
+const (
+	ThinkingCacheDefaultTTLHours = 48
+	ThinkingCacheMinTTLHours     = 1
+	ThinkingCacheMaxTTLHours     = 24 * 30
+)
+
+// ThinkingCacheConfig 控制 Claude thinking 回填缓存。
+type ThinkingCacheConfig struct {
+	TTLHours int `json:"ttlHours,omitempty"`
+}
+
+func NormalizeThinkingCacheTTLHours(value int) int {
+	if value == 0 {
+		return ThinkingCacheDefaultTTLHours
+	}
+	if value < ThinkingCacheMinTTLHours {
+		return ThinkingCacheMinTTLHours
+	}
+	if value > ThinkingCacheMaxTTLHours {
+		return ThinkingCacheMaxTTLHours
+	}
+	return value
+}
+
+func (c ThinkingCacheConfig) EffectiveTTLHours() int {
+	return NormalizeThinkingCacheTTLHours(c.TTLHours)
+}
+
+func (c ThinkingCacheConfig) EffectiveTTL() time.Duration {
+	return time.Duration(c.EffectiveTTLHours()) * time.Hour
+}
+
 // IsAutoRecoverableDisabledReason 判断是否属于可自动恢复的拉黑原因。
 func normalizeAPIKeyConfigs(apiKeys []string, configs []APIKeyConfig) []APIKeyConfig {
 	keys := deduplicateStrings(apiKeys)
@@ -469,6 +501,9 @@ type Config struct {
 
 	// 驾驶舱 override 默认有效期（分钟，1-1440；0 或未设置时使用环境变量 OVERRIDE_TTL_MINUTES）
 	OverrideTTLMinutes int `json:"overrideTtlMinutes,omitempty"`
+
+	// Claude thinking 回填缓存配置
+	ThinkingCache ThinkingCacheConfig `json:"thinkingCache,omitempty"`
 
 	// 熔断器运行时配置（可选，nil 使用环境变量或代码默认值）
 	CircuitBreaker *CircuitBreakerConfig `json:"circuitBreaker,omitempty"`

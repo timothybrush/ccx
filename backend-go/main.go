@@ -30,6 +30,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
+	"github.com/BenedictKing/ccx/internal/thinkingcache"
 	"github.com/BenedictKing/ccx/internal/warmup"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -50,6 +51,7 @@ const (
 	defaultConfigPath              = ".config/config.json"
 	defaultStateDir                = ".config"
 	metricsDBFile                  = "metrics.db"
+	thinkingCacheDBFile            = "thinking_cache.db"
 	conversationStateFile          = "conversation_state.json"
 	scheduledRecoveryStateFileName = "scheduled_recovery_state.json"
 )
@@ -66,6 +68,7 @@ type runtimePaths struct {
 	ConfigPath                 string
 	StateDir                   string
 	MetricsDBPath              string
+	ThinkingCacheDBPath        string
 	ConversationStatePath      string
 	ScheduledRecoveryStatePath string
 	LogDir                     string
@@ -134,7 +137,7 @@ func writeCLIHelp(out io.Writer) {
 
 说明:
   --config 只改变配置文件位置。
-  --statedir 会让 metrics.db、conversation_state.json、scheduled_recovery_state.json
+  --statedir 会让 metrics.db、thinking_cache.db、conversation_state.json、scheduled_recovery_state.json
   写入指定目录；不指定时保持默认 .config。
   --logdir 只影响日志目录。使用 none 或 null 可禁用日志文件写入，适合 systemd/journald 等环境。
 	  --backupdir 只影响配置备份目录，不指定时默认为配置文件同级目录下的 backups。
@@ -221,6 +224,7 @@ func resolveRuntimePaths(opts cliOptions, envCfg *config.EnvConfig) (runtimePath
 		ConfigPath:                 configPath,
 		StateDir:                   stateDir,
 		MetricsDBPath:              filepath.Join(stateDir, metricsDBFile),
+		ThinkingCacheDBPath:        filepath.Join(stateDir, thinkingCacheDBFile),
 		ConversationStatePath:      filepath.Join(stateDir, conversationStateFile),
 		ScheduledRecoveryStatePath: filepath.Join(stateDir, scheduledRecoveryStateFileName),
 		LogDir:                     logDir,
@@ -279,6 +283,18 @@ func main() {
 		log.Fatalf("初始化配置管理器失败: %v", err)
 	}
 	defer cfgManager.Close()
+
+	applyThinkingCacheConfig := func(cfg config.Config) {
+		if err := thinkingcache.Configure(thinkingcache.Config{
+			DBPath: paths.ThinkingCacheDBPath,
+			TTL:    cfg.ThinkingCache.EffectiveTTL(),
+		}); err != nil {
+			log.Printf("[ThinkingCache-Init] 警告: 初始化 Claude thinking 缓存失败: %v，将使用内存缓存", err)
+		}
+	}
+	applyThinkingCacheConfig(cfgManager.GetConfig())
+	cfgManager.RegisterOnConfigChange(applyThinkingCacheConfig)
+	defer thinkingcache.Close()
 
 	// 初始化会话管理器（Responses API 专用）
 	sessionManager := session.NewSessionManager(

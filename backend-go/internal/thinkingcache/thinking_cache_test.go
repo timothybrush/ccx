@@ -1,8 +1,10 @@
 package thinkingcache
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
 )
@@ -93,6 +95,38 @@ func TestInjectCachedClaudeThinkingMissLeavesBodyUnchanged(t *testing.T) {
 	}
 	if string(got) != string(body) {
 		t.Fatalf("body changed on cache miss:\ngot:  %s\nwant: %s", string(got), string(body))
+	}
+}
+
+func TestSQLitePersistenceSurvivesReset(t *testing.T) {
+	ResetForTest()
+	dbPath := filepath.Join(t.TempDir(), "thinking_cache.db")
+
+	if err := Configure(Config{DBPath: dbPath, TTL: time.Hour}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+
+	content := []interface{}{map[string]interface{}{
+		"type":  "tool_use",
+		"id":    "toolu_persist",
+		"name":  "Bash",
+		"input": map[string]interface{}{"command": "pwd"},
+	}}
+	if !StoreClaudeThinkingForContent("session-persist", content, "persisted reasoning") {
+		t.Fatal("expected store to succeed")
+	}
+
+	ResetForTest()
+	if err := Configure(Config{DBPath: dbPath, TTL: time.Hour}); err != nil {
+		t.Fatalf("Configure() after reset error = %v", err)
+	}
+
+	got, ok := LookupClaudeThinkingForContent("session-persist", content)
+	if !ok {
+		t.Fatal("expected persisted thinking cache lookup to hit")
+	}
+	if got != "persisted reasoning" {
+		t.Fatalf("persisted thinking = %q, want persisted reasoning", got)
 	}
 }
 
