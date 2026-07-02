@@ -471,6 +471,9 @@ function collectActiveJobIds(job: CapabilityTestJob | null): string[] {
       if (jobId) seen.add(jobId)
     }
   }
+  if (seen.size === 0 && job.jobId && job.tests.some(test => test.lifecycle === 'active' || test.lifecycle === 'pending')) {
+    seen.add(job.jobId)
+  }
   return Array.from(seen)
 }
 
@@ -514,13 +517,9 @@ export function useCapabilityTests() {
       if (resp.jobId) {
         startPolling(channelType, channelId, resp.jobId)
       }
-      // 也为协议子 job 启动轮询
-      const job = resp.job
-      if (job?.protocolJobRefs) {
-        for (const [, ref] of Object.entries(job.protocolJobRefs)) {
-          if (ref.jobId && ref.jobId !== resp.jobId) {
-            startPolling(channelType, channelId, ref.jobId)
-          }
+      if (activeJob.value && !isCapabilityJobTerminal(activeJob.value)) {
+        for (const activeJobId of collectActiveJobIds(activeJob.value)) {
+          startPolling(channelType, channelId, activeJobId)
         }
       }
       return resp
@@ -583,10 +582,15 @@ export function useCapabilityTests() {
     const job = await api.get<CapabilityTestJob>(
       `/api/${channelType}/channels/${channelId}/capability-test/${jobId}`,
     )
-    const baseJob = activeJob.value && activeJob.value.channelId === channelId
+    const baseJob = activeJob.value && activeJob.value.channelId === channelId && activeJob.value.channelKind === job.channelKind
       ? activeJob.value
       : buildCapabilityIdleJob(channelType, channelId, job.channelName || '')
     activeJob.value = mergeCapabilityJob(baseJob, job)
+    if (activeJob.value && !isCapabilityJobTerminal(activeJob.value)) {
+      for (const activeJobId of collectActiveJobIds(activeJob.value)) {
+        startPolling(channelType, channelId, activeJobId)
+      }
+    }
     if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
       stopPoller(jobId)
     }
@@ -598,15 +602,22 @@ export function useCapabilityTests() {
   function startPolling(channelType: string, channelId: number, jobId: string) {
     if (pollers.has(jobId)) return
     polling.value = true
-    const timer = setInterval(async () => {
+    let inFlight = false
+    const pollOnce = async () => {
+      if (inFlight || !pollers.has(jobId)) return
+      inFlight = true
       try {
         await fetchJobStatus(channelType, channelId, jobId)
       } catch (e) {
         stopPoller(jobId)
         error.value = e instanceof Error ? e.message : String(e)
+      } finally {
+        inFlight = false
       }
-    }, POLL_INTERVAL)
+    }
+    const timer = setInterval(pollOnce, POLL_INTERVAL)
     pollers.set(jobId, timer)
+    void pollOnce()
   }
 
   function stopPoller(jobId: string) {
@@ -647,15 +658,10 @@ export function useCapabilityTests() {
       // 重取快照
       await fetchSnapshot(channelType, channelId, channelType)
       // 检查是否有其他活跃 job 需要继续轮询
-      if (snapshot.value?.protocolJobRefs) {
-        for (const [, ref] of Object.entries(snapshot.value.protocolJobRefs)) {
-          if (ref.jobId && ref.jobId !== jobId) {
-            const job = await api.get<CapabilityTestJob>(
-              `/api/${channelType}/channels/${channelId}/capability-test/${ref.jobId}`,
-            )
-            if (job.status === 'running' || job.status === 'queued') {
-              startPolling(channelType, channelId, ref.jobId)
-            }
+      if (activeJob.value) {
+        for (const activeJobId of collectActiveJobIds(activeJob.value)) {
+          if (activeJobId !== jobId) {
+            startPolling(channelType, channelId, activeJobId)
           }
         }
       }

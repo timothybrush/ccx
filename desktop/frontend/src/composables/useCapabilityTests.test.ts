@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { AdminApiError } from '@/composables/useAdminApi'
 import { useCapabilityTests } from './useCapabilityTests'
@@ -29,6 +29,45 @@ describe('useCapabilityTests', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useCapabilityTests().reset()
+  })
+
+  afterEach(() => {
+    useCapabilityTests().reset()
+  })
+
+  it('polls job status immediately after starting a protocol test', async () => {
+    const capability = useCapabilityTests()
+    capability.prepareChannelSession('messages', 1, 'channel')
+
+    apiPost.mockResolvedValueOnce({
+      jobId: 'job-1',
+      job: buildJob('job-1', [
+        {
+          model: 'claude-a',
+          status: 'queued',
+          lifecycle: 'pending',
+          outcome: 'unknown',
+          success: false,
+          latency: 0,
+          streamingSupported: false,
+        },
+      ], 'queued', 'pending'),
+    })
+    apiGet.mockResolvedValueOnce(buildJob('job-1', [
+      {
+        model: 'claude-a',
+        status: 'running',
+        lifecycle: 'active',
+        outcome: 'unknown',
+        success: false,
+        latency: 0,
+        streamingSupported: false,
+      },
+    ], 'running', 'active'))
+
+    await capability.startProtocolTest('messages', 1, 'messages', undefined, 10)
+
+    expect(apiGet).toHaveBeenCalledWith('/api/messages/channels/1/capability-test/job-1')
   })
 
   it('falls back to a single-model protocol test when retry job does not contain that model', async () => {
@@ -230,6 +269,16 @@ function buildJob(
   channelKind: string = 'messages',
   protocol: string = 'messages',
 ): CapabilityTestJob {
+  const protocolStatus = status === 'queued'
+    ? 'queued'
+    : status === 'running'
+      ? 'running'
+      : status === 'completed'
+        ? 'completed'
+        : 'failed'
+  const jobOutcome = lifecycle === 'done'
+    ? status === 'completed' ? 'failed' : 'unknown'
+    : 'unknown'
   return {
     jobId,
     channelId: 1,
@@ -238,11 +287,11 @@ function buildJob(
     sourceType: channelKind,
     status,
     lifecycle,
-    outcome: status === 'completed' ? 'failed' : 'unknown',
+    outcome: jobOutcome,
     runMode: 'fresh',
     tests: [{
       protocol,
-      status: status === 'queued' ? 'queued' : 'failed',
+      status: protocolStatus,
       lifecycle,
       outcome: status === 'completed' ? 'failed' : 'unknown',
       success: false,
