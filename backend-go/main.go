@@ -456,6 +456,9 @@ func main() {
 	overrideManager := conversation.NewOverrideManager(overrideTTL)
 	channelScheduler.SetConversationComponents(conversationTracker, overrideManager)
 
+	// 启动 loadShed 后台 reaper（30s 推进到期状态）
+	channelScheduler.Start()
+
 	scheduledRecoveryStop := make(chan struct{})
 	go func() {
 		runScheduledRecovery := func(now time.Time, missedSlot time.Time) bool {
@@ -970,6 +973,12 @@ func main() {
 		// 关闭对话追踪器（flush 持久化状态）
 		conversationTracker.Stop()
 		log.Println("[Conversation-Shutdown] 对话追踪器已安全关闭")
+
+		// 停止调度器后台 reaper
+		channelScheduler.Stop()
+
+		// 停止限速器后台清理协程
+		rateLimitManager.Stop()
 
 		close(scheduledRecoveryStop)
 		close(shutdownDone)

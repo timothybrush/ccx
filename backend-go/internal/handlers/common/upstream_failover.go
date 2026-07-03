@@ -602,7 +602,7 @@ func selectAttemptAPIKey(channelScheduler *scheduler.ChannelScheduler, kind sche
 		}
 		if channelScheduler != nil && selection.LimiterScope != "" {
 			cfg := keypool.ConfigForCandidate(*upstream, selection.Config)
-			deferForLoad, _ := channelScheduler.ShouldDeferForRateLimit(kind, channelIndex, selection.LimiterScope, cfg, time.Now())
+			deferForLoad, _, _ := channelScheduler.ShouldDeferForRateLimit(kind, channelIndex, selection.LimiterScope, cfg, time.Now())
 			if deferForLoad {
 				deferred = append(deferred, selection)
 				continue

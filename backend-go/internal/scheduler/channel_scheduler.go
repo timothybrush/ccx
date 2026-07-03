@@ -33,6 +33,7 @@ type ChannelScheduler struct {
 	rateLimitManager         *ratelimit.Manager
 	loadShedMu               sync.Mutex
 	loadShedStates           map[string]rateLimitLoadShedState
+	loadShedStopCh           chan struct{}
 	lastSelectedMu           sync.RWMutex
 	lastSelectedChannels     map[ChannelKind]int
 }
@@ -77,6 +78,7 @@ func NewChannelScheduler(
 		imagesChannelLogStore:    metrics.NewChannelLogStore(),
 		conversationTracker:      nil,
 		loadShedStates:           make(map[string]rateLimitLoadShedState),
+		loadShedStopCh:           make(chan struct{}),
 		lastSelectedChannels:     make(map[ChannelKind]int),
 	}
 }
