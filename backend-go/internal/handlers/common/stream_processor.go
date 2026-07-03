@@ -1257,6 +1257,7 @@ func HandleStreamResponse(
 	// 空响应：Header 未发送，可安全重试
 	if preflight.IsEmpty {
 		RequestLogf(c, "[Messages-EmptyResponse] 上游返回空响应 (缓冲事件数: %d, 诊断: %s)，触发重试", len(preflight.BufferedEvents), preflight.Diagnostic)
+		RequestLogf(c, "[Messages-EmptyResponse-Debug] %s", buildStreamPreflightDetail(preflight))
 		drainChannels(eventChan, errChan)
 		// 如果同时检测到拉黑条件，优先返回拉黑错误
 		if preflight.BlacklistReason != "" {
