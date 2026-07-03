@@ -1,3 +1,20 @@
+## [v2.9.34] - 2026-07-04
+
+### 新增
+
+- **注册 mdiCash 图标** - ui: 注册 mdiCash 图标，补充前端图标资源
+- **5xx + Retry-After 也触发限速 cooldown** - ratelimit: 上游返回 5xx 或 Retry-After 头时同样触发限速 cooldown
+- **上游临时过载检测与渠道冷却机制** - failover: 新增上游临时过载检测与渠道冷却机制，提升故障转移鲁棒性
+
+### 修复
+
+- **单模型渠道 CostUSD 不显示** - metrics: 修复单模型渠道 CostUSD 不显示的问题
+- **限速窗口单位语义修正** - ratelimit: 修正限速窗口单位语义，字段值直接以秒为单位
+
+### 其他
+
+- **Serena 本地记忆目录加入忽略列表** - chore: 将 Serena 本地记忆目录加入 gitignore
+
 ## [v2.9.33] - 2026-07-04
 
 ### 修复
