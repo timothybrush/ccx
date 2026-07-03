@@ -1,3 +1,9 @@
+## [v2.9.33] - 2026-07-04
+
+### 修复
+
+- **DeepSeek context_management 不兼容导致 400** - providers: 过滤 DeepSeek Claude 兼容端点不支持的 `context_management.clear_thinking_20251015` 编辑和 `context-management-2025-06-27` beta header，修复 Claude Code 首轮/recap 请求的 thinking 回传 400
+
 ## [v2.9.32] - 2026-07-03
 
 ### 修复
