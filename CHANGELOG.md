@@ -1,3 +1,21 @@
+## [v2.9.35] - 2026-07-04
+
+### 新增
+
+- **展开态当前渠道点击支持固定与取消固定切换** - cockpit: 展开态当前渠道点击支持固定与取消固定切换
+- **快捷渠道覆盖支持固定与取消固定** - cockpit: 快捷渠道覆盖支持固定与取消固定
+- **发布成功后自动调用 store-update** - github-release: 发布成功后自动调用 store-update
+
+### 修复
+
+- **拦截 Claude Code 模型切换探针避免空响应误判** - messages: 拦截 Claude Code 模型切换探针避免空响应误判
+- **修复 copilot 渠道 /v1/models 代理返回 404** - models: 修复 copilot 渠道 /v1/models 代理返回 404
+- **修正 gitignore 规则并添加 git 代理自动检测** - store-update: 修正 gitignore 规则并添加 git 代理自动检测
+
+### 其他
+
+- **同步 skill 更新到 .agents/skills/** - chore: 同步 skill 更新到 .agents/skills/
+
 ## [v2.9.34] - 2026-07-04
 
 ### 新增
