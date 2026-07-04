@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildConversationTurnMiddlePreview, buildConversationTurnPreview } from './conversationPreview'
+import { buildConversationTurnMiddlePreview, buildConversationTurnPreview, normalizeConversationTurnSources } from './conversationPreview'
 
 describe('buildConversationTurnPreview', () => {
   it('limits a single turn to five rendered lines', () => {
@@ -14,6 +14,18 @@ describe('buildConversationTurnPreview', () => {
     const lines = preview.split('\n')
     expect(lines).toHaveLength(5)
     expect(lines[4]).toBe('eeee…')
+  })
+})
+
+describe('normalizeConversationTurnSources', () => {
+  it('does not split fallback text on slash or pipe characters', () => {
+    const text = 'Base directory: /private/tmp/project\n| CLI | terminal | type command |'
+
+    expect(normalizeConversationTurnSources(text)).toEqual([text])
+  })
+
+  it('uses structured turns when provided', () => {
+    expect(normalizeConversationTurnSources('one / two', ['one', 'two'])).toEqual(['one', 'two'])
   })
 })
 

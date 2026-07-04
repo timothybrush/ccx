@@ -70,3 +70,27 @@ func TestExtractLastResponsesUserInputJoinsShortInputs(t *testing.T) {
 		t.Fatalf("countResponsesUserMessages() = %d, want 2", got)
 	}
 }
+
+func TestExtractRecentResponsesUserInputsKeepsOneItemWithDelimiters(t *testing.T) {
+	input := []interface{}{
+		map[string]interface{}{
+			"role": "user",
+			"content": []interface{}{
+				map[string]interface{}{"type": "input_text", "text": "Base directory for this skill: /private/tmp/skill"},
+				map[string]interface{}{"type": "input_text", "text": "| API | socket | send the request |"},
+			},
+		},
+	}
+
+	want := "Base directory for this skill: /private/tmp/skill\n| API | socket | send the request |"
+	got := extractRecentResponsesUserInputs(input)
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("extractRecentResponsesUserInputs() = %#v, want []string{%q}", got, want)
+	}
+	if last := extractLastResponsesUserInput(input); last != want {
+		t.Fatalf("extractLastResponsesUserInput() = %q, want %q", last, want)
+	}
+	if count := countResponsesUserMessages(input); count != 1 {
+		t.Fatalf("countResponsesUserMessages() = %d, want 1", count)
+	}
+}

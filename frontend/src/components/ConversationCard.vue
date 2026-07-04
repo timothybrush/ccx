@@ -299,7 +299,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ConversationInfo, SequenceOverrideInfo, ChannelSequenceEntry } from '@/services/api'
 import type { SubagentSummary } from '@/utils/conversationDashboard'
 import { useI18n } from '@/i18n'
-import { buildConversationTurnMiddlePreview, getConversationTurnFont } from '@/utils/conversationPreview'
+import { buildConversationTurnMiddlePreview, getConversationTurnFont, normalizeConversationTurnSources } from '@/utils/conversationPreview'
 import ConversationChannelSequence from './ConversationChannelSequence.vue'
 
 const { t } = useI18n()
@@ -362,15 +362,6 @@ function subagentStatusColor(status: ConversationInfo['status']): string {
   }
 }
 
-function splitConversationTurns(text: string): string[] {
-  const turns = text
-    .split(/\s+\/\s+/)
-    .map((turn) => turn.trim())
-    .filter(Boolean)
-
-  return turns.length > 0 ? turns : [text]
-}
-
 async function syncMainConversationTurnsWidth() {
   await nextTick()
   const element = mainConversationTurnsRef.value
@@ -409,10 +400,8 @@ const mainConversationTurnsRef = ref<HTMLElement | null>(null)
 const mainConversationTurnsWidth = ref(0)
 const expandedMainConversationTurnIndexes = ref<Set<number>>(new Set())
 let mainConversationTurnsObserver: ResizeObserver | null = null
-const isSingleMainConversation = computed(() => props.conversation.requestCount <= 1)
 const sourceMainConversationTurns = computed(() => {
-  if (!isSingleMainConversation.value) return splitConversationTurns(mainConversationText.value)
-  return [mainConversationText.value]
+  return normalizeConversationTurnSources(mainConversationText.value, props.conversation.lastUserMessages)
 })
 const mainConversationTurns = computed<MainConversationTurn[]>(() => {
   const element = mainConversationTurnsRef.value

@@ -111,7 +111,7 @@ func TestConversationTracker_PersistAndRestore(t *testing.T) {
 	path := dir + "/state.json"
 
 	ct := NewConversationTracker(1*time.Hour, 2*time.Hour, path)
-	ct.Track("messages", "user-abc", "claude-opus-4-7", 0, "primary", "", "你好世界", 1, "")
+	ct.TrackWithMessages("messages", "user-abc", "claude-opus-4-7", 0, "primary", "", "你好世界", []string{"你好世界"}, 1, "")
 	ct.UpdateTitle("messages", "user-abc", "确认驾驶舱对话卡片保存时长")
 	ct.UpdateRecap("messages", "user-abc", "已完成保存逻辑，下一步验证重启恢复。")
 	ct.Stop()
@@ -131,6 +131,9 @@ func TestConversationTracker_PersistAndRestore(t *testing.T) {
 	}
 	if convs[0].LastRecap != "已完成保存逻辑，下一步验证重启恢复。" {
 		t.Errorf("expected restored recap, got %q", convs[0].LastRecap)
+	}
+	if len(convs[0].LastUserMessages) != 1 || convs[0].LastUserMessages[0] != "你好世界" {
+		t.Errorf("expected restored structured messages, got %#v", convs[0].LastUserMessages)
 	}
 	if convs[0].LastRecapAt == nil || convs[0].LastRecapAt.IsZero() {
 		t.Error("expected restored LastRecapAt")

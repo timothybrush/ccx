@@ -656,6 +656,8 @@ func trackStreamingConversation(c *gin.Context, channelScheduler *scheduler.Chan
 
 	lastUserMsg, _ := c.Get("lastUserMessage")
 	lastUserMsgStr, _ := lastUserMsg.(string)
+	lastUserMsgs, _ := c.Get("lastUserMessages")
+	lastUserMessages, _ := lastUserMsgs.([]string)
 	userMsgCount, _ := c.Get("userMessageCount")
 	userMsgCountInt, _ := userMsgCount.(int)
 	if lastUserMsgStr == "" && userMsgCountInt == 0 {
@@ -670,6 +672,6 @@ func trackStreamingConversation(c *gin.Context, channelScheduler *scheduler.Chan
 		agentRole = agentCtx.AgentRole
 	}
 
-	channelScheduler.TrackConversationWithStatus(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, userMsgCountInt, agentRole, "streaming", AgentContextFromGin(c))
+	channelScheduler.TrackConversationWithStatusAndMessages(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, lastUserMessages, userMsgCountInt, agentRole, "streaming", AgentContextFromGin(c))
 	return userID
 }

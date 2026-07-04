@@ -84,7 +84,9 @@ func Handler(envCfg *config.EnvConfig, cfgManager *config.ConfigManager, channel
 
 		// 提取用户最后一条消息用于对话标题 fallback
 		if !isTitleRequest && !isRecapRequest {
-			c.Set("lastUserMessage", extractLastUserMessage(claudeReq.Messages))
+			lastUserMessages := extractRecentUserMessages(claudeReq.Messages)
+			c.Set("lastUserMessages", lastUserMessages)
+			c.Set("lastUserMessage", strings.Join(lastUserMessages, " / "))
 			c.Set("userMessageCount", countUserMessages(claudeReq.Messages))
 		}
 
@@ -337,7 +339,8 @@ func handleSingleChannel(
 		isTitleRequest := isClaudeCodeTitleRequest(bodyBytes)
 		isRecapRequest := isClaudeCodeRecapRequest(bodyBytes)
 		if !isTitleRequest && !isRecapRequest {
-			lastUserMessage := extractLastUserMessage(claudeReq.Messages)
+			lastUserMessages := extractRecentUserMessages(claudeReq.Messages)
+			lastUserMessage := strings.Join(lastUserMessages, " / ")
 			userMessageCount := countUserMessages(claudeReq.Messages)
 			agentRole := ""
 			affinityUserID := userID
@@ -349,7 +352,7 @@ func handleSingleChannel(
 				}
 			}
 			channelScheduler.SetTraceAffinityForRequirement(affinityUserID, channelIndex, scheduler.ChannelKindMessages, contextRequirement)
-			channelScheduler.TrackConversation(scheduler.ChannelKindMessages, userID, claudeReq.Model, channelIndex, upstream.Name, "", lastUserMessage, userMessageCount, agentRole, agentCtx)
+			channelScheduler.TrackConversationWithMessages(scheduler.ChannelKindMessages, userID, claudeReq.Model, channelIndex, upstream.Name, "", lastUserMessage, lastUserMessages, userMessageCount, agentRole, agentCtx)
 			if envCfg.ShouldLog("debug") {
 				common.RequestLogf(c, "[Messages-Conversation-Debug] 已追踪单渠道对话: user=%s, model=%s, channel=%d, userMessages=%d, hasFallbackTitle=%t",
 					scheduler.MaskUserIDForLog(userID), claudeReq.Model, channelIndex, userMessageCount, lastUserMessage != "")
@@ -889,6 +892,10 @@ func countUserMessages(messages []types.ClaudeMessage) int {
 }
 
 func extractLastUserMessage(messages []types.ClaudeMessage) string {
+	return strings.Join(extractRecentUserMessages(messages), " / ")
+}
+
+func extractRecentUserMessages(messages []types.ClaudeMessage) []string {
 	const maxLen = 80
 	var parts []string
 	totalLen := 0
@@ -898,26 +905,28 @@ func extractLastUserMessage(messages []types.ClaudeMessage) string {
 			continue
 		}
 		texts := extractUserTextBlocks(messages[i])
-		for j := len(texts) - 1; j >= 0; j-- {
-			parts = append(parts, texts[j])
-			totalLen += len([]rune(texts[j]))
-			if totalLen >= maxLen {
-				break
-			}
+		if len(texts) == 0 {
+			continue
 		}
+		messageText := strings.TrimSpace(strings.Join(texts, "\n"))
+		if messageText == "" {
+			continue
+		}
+		parts = append(parts, messageText)
+		totalLen += len([]rune(messageText))
 		if totalLen >= maxLen {
 			break
 		}
 	}
 
 	if len(parts) == 0 {
-		return ""
+		return nil
 	}
 
 	for left, right := 0, len(parts)-1; left < right; left, right = left+1, right-1 {
 		parts[left], parts[right] = parts[right], parts[left]
 	}
-	return strings.Join(parts, " / ")
+	return parts
 }
 
 func isClaudeCodeRecapRequest(bodyBytes []byte) bool {

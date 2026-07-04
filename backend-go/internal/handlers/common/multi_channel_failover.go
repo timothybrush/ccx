@@ -156,6 +156,8 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 		if result.Handled {
 			lastUserMsg, _ := c.Get("lastUserMessage")
 			lastUserMsgStr, _ := lastUserMsg.(string)
+			lastUserMsgs, _ := c.Get("lastUserMessages")
+			lastUserMessages, _ := lastUserMsgs.([]string)
 			userMsgCount, _ := c.Get("userMessageCount")
 			userMsgCountInt, _ := userMsgCount.(int)
 
@@ -174,7 +176,7 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 				if upstream != nil {
 					channelName = upstream.Name
 				}
-				channelScheduler.TrackConversation(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, userMsgCountInt, agentRole, AgentContextFromGin(c))
+				channelScheduler.TrackConversationWithMessages(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, lastUserMessages, userMsgCountInt, agentRole, AgentContextFromGin(c))
 				if envCfg.ShouldLog("debug") {
 					RequestLogf(c, "[%s-Conversation-Debug] 已追踪对话: kind=%s, user=%s, model=%s, channel=%d, userMessages=%d, hasFallbackTitle=%t",
 						apiType, kind, scheduler.MaskUserIDForLog(userID), model, channelIndex, userMsgCountInt, lastUserMsgStr != "")

@@ -57,15 +57,25 @@ func (s *ChannelScheduler) UpdateTraceAffinity(userID string, kind ChannelKind) 
 
 // TrackConversation 追踪对话（请求成功后调用）
 func (s *ChannelScheduler) TrackConversation(kind ChannelKind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole string, agentCtx *types.AgentContext) {
+	s.TrackConversationWithMessages(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, nil, userMessageCount, agentRole, agentCtx)
+}
+
+// TrackConversationWithMessages 追踪对话，并保存结构化用户轮次用于驾驶舱展示。
+func (s *ChannelScheduler) TrackConversationWithMessages(kind ChannelKind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, lastUserMessages []string, userMessageCount int, agentRole string, agentCtx *types.AgentContext) {
 	if s.conversationTracker != nil && userID != "" {
-		s.conversationTracker.Track(string(kind), userID, model, channelIndex, channelName, sessionID, lastUserMessage, userMessageCount, agentRole, agentCtx)
+		s.conversationTracker.TrackWithMessages(string(kind), userID, model, channelIndex, channelName, sessionID, lastUserMessage, lastUserMessages, userMessageCount, agentRole, agentCtx)
 	}
 }
 
 // TrackConversationWithStatus 追踪对话并指定状态，主要用于流式请求的进行中展示。
 func (s *ChannelScheduler) TrackConversationWithStatus(kind ChannelKind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole, status string, agentCtx *types.AgentContext) {
+	s.TrackConversationWithStatusAndMessages(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, nil, userMessageCount, agentRole, status, agentCtx)
+}
+
+// TrackConversationWithStatusAndMessages 追踪流式对话状态，并保存结构化用户轮次。
+func (s *ChannelScheduler) TrackConversationWithStatusAndMessages(kind ChannelKind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, lastUserMessages []string, userMessageCount int, agentRole, status string, agentCtx *types.AgentContext) {
 	if s.conversationTracker != nil && userID != "" {
-		s.conversationTracker.TrackWithStatus(string(kind), userID, model, channelIndex, channelName, sessionID, lastUserMessage, userMessageCount, agentRole, status, agentCtx)
+		s.conversationTracker.TrackWithStatusAndMessages(string(kind), userID, model, channelIndex, channelName, sessionID, lastUserMessage, lastUserMessages, userMessageCount, agentRole, status, agentCtx)
 	}
 }
 

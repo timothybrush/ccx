@@ -48,6 +48,17 @@ export function buildConversationTurnPreview(text: string, options: Conversation
   return lines.join('\n')
 }
 
+export function normalizeConversationTurnSources(text: string, structuredTurns?: string[]): string[] {
+  const turns = structuredTurns
+    ?.map(normalizeConversationSourceText)
+    .filter(Boolean)
+
+  if (turns && turns.length > 0) return turns
+
+  const normalized = normalizeConversationSourceText(text)
+  return normalized ? [normalized] : []
+}
+
 export function buildConversationTurnMiddlePreview(
   text: string,
   options: ConversationTurnPreviewOptions & { edgeLines?: number },
@@ -87,6 +98,10 @@ function defaultMeasureText(text: string, font: string): number {
   if (!context) return Math.max(0, text.length * 8)
   context.font = font
   return context.measureText(text).width
+}
+
+function normalizeConversationSourceText(text: string): string {
+  return text.replace(/\r/g, '').trim()
 }
 
 function wrapConversationParagraph(

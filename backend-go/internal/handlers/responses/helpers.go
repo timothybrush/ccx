@@ -13,21 +13,25 @@ func parseInputToItems(input interface{}) ([]types.ResponsesItem, error) {
 }
 
 func countResponsesUserMessages(input interface{}) int {
-	return len(extractResponsesUserInputTexts(input))
+	return len(extractResponsesUserInputMessages(input))
 }
 
 func extractLastResponsesUserInput(input interface{}) string {
+	return strings.Join(extractRecentResponsesUserInputs(input), " / ")
+}
+
+func extractRecentResponsesUserInputs(input interface{}) []string {
 	const maxLen = 80
-	texts := extractResponsesUserInputTexts(input)
-	if len(texts) == 0 {
-		return ""
+	messages := extractResponsesUserInputMessages(input)
+	if len(messages) == 0 {
+		return nil
 	}
 
 	var parts []string
 	totalLen := 0
-	for i := len(texts) - 1; i >= 0; i-- {
-		parts = append(parts, texts[i])
-		totalLen += len([]rune(texts[i]))
+	for i := len(messages) - 1; i >= 0; i-- {
+		parts = append(parts, messages[i])
+		totalLen += len([]rune(messages[i]))
 		if totalLen >= maxLen {
 			break
 		}
@@ -35,10 +39,10 @@ func extractLastResponsesUserInput(input interface{}) string {
 	for left, right := 0, len(parts)-1; left < right; left, right = left+1, right-1 {
 		parts[left], parts[right] = parts[right], parts[left]
 	}
-	return strings.Join(parts, " / ")
+	return parts
 }
 
-func extractResponsesUserInputTexts(input interface{}) []string {
+func extractResponsesUserInputMessages(input interface{}) []string {
 	switch v := input.(type) {
 	case string:
 		if cleaned := cleanResponsesUserText(v); cleaned != "" {
@@ -52,7 +56,13 @@ func extractResponsesUserInputTexts(input interface{}) []string {
 			if !ok || m["role"] != "user" {
 				continue
 			}
-			texts = append(texts, extractResponsesContentTexts(m["content"])...)
+			contentTexts := extractResponsesContentTexts(m["content"])
+			if len(contentTexts) == 0 {
+				continue
+			}
+			if text := strings.TrimSpace(strings.Join(contentTexts, "\n")); text != "" {
+				texts = append(texts, text)
+			}
 		}
 		return texts
 	}

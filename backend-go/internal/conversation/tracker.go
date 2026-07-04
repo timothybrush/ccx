@@ -34,6 +34,7 @@ type Conversation struct {
 	LastModel            string     `json:"lastModel"`
 	LastRequestID        string     `json:"lastRequestId"`
 	LastUserMessage      string     `json:"lastUserMessage,omitempty"`
+	LastUserMessages     []string   `json:"lastUserMessages,omitempty"`
 	LastRecap            string     `json:"lastRecap,omitempty"`
 	LastRecapAt          *time.Time `json:"lastRecapAt,omitempty"`
 
@@ -107,11 +108,19 @@ func NewConversationTracker(idleTTL, expireTTL time.Duration, persistPath ...str
 }
 
 func (ct *ConversationTracker) Track(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole string, agentCtx ...*types.AgentContext) {
-	ct.TrackWithStatus(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, userMessageCount, agentRole, "active", agentCtx...)
+	ct.TrackWithMessages(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, nil, userMessageCount, agentRole, agentCtx...)
+}
+
+func (ct *ConversationTracker) TrackWithMessages(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, lastUserMessages []string, userMessageCount int, agentRole string, agentCtx ...*types.AgentContext) {
+	ct.TrackWithStatusAndMessages(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, lastUserMessages, userMessageCount, agentRole, "active", agentCtx...)
 }
 
 // TrackWithStatus 追踪对话并写入指定状态，用于流式请求开始时让驾驶舱立即可见。
 func (ct *ConversationTracker) TrackWithStatus(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, userMessageCount int, agentRole, status string, agentCtx ...*types.AgentContext) {
+	ct.TrackWithStatusAndMessages(kind, userID, model, channelIndex, channelName, sessionID, lastUserMessage, nil, userMessageCount, agentRole, status, agentCtx...)
+}
+
+func (ct *ConversationTracker) TrackWithStatusAndMessages(kind, userID, model string, channelIndex int, channelName, sessionID, lastUserMessage string, lastUserMessages []string, userMessageCount int, agentRole, status string, agentCtx ...*types.AgentContext) {
 	if userID == "" {
 		return
 	}
@@ -184,9 +193,21 @@ func (ct *ConversationTracker) TrackWithStatus(kind, userID, model string, chann
 		conv.Models = append(conv.Models, model)
 	}
 
-	if fullMessage := normalizeConversationContent(lastUserMessage); fullMessage != "" {
+	fullMessage := normalizeConversationContent(lastUserMessage)
+	normalizedMessages := normalizeConversationMessages(lastUserMessages)
+	if fullMessage != "" {
+		if len(normalizedMessages) == 0 {
+			normalizedMessages = []string{truncateConversationContent(fullMessage)}
+		}
 		conv.LastUserMessage = truncateConversationContent(fullMessage)
+		conv.LastUserMessages = normalizedMessages
 		conv.FallbackTitle = truncateTitle(fullMessage)
+		conv.recomputeTitle()
+	} else if len(normalizedMessages) > 0 {
+		joinedMessage := strings.Join(normalizedMessages, " / ")
+		conv.LastUserMessage = truncateConversationContent(joinedMessage)
+		conv.LastUserMessages = normalizedMessages
+		conv.FallbackTitle = truncateTitle(joinedMessage)
 		conv.recomputeTitle()
 	}
 
@@ -416,6 +437,7 @@ func (ct *ConversationTracker) loadFromDisk() {
 			LastModel:            item.LastModel,
 			LastRequestID:        item.LastRequestID,
 			LastUserMessage:      item.LastUserMessage,
+			LastUserMessages:     append([]string(nil), item.LastUserMessages...),
 			LastRecap:            item.LastRecap,
 			LastRecapAt:          cloneTimePtr(item.LastRecapAt),
 			HasSubagents:         item.HasSubagents,
@@ -469,6 +491,10 @@ func (ct *ConversationTracker) flushToDisk() {
 		if len(conv.ChildConversationIDs) > 0 {
 			c.ChildConversationIDs = make([]string, len(conv.ChildConversationIDs))
 			copy(c.ChildConversationIDs, conv.ChildConversationIDs)
+		}
+		if len(conv.LastUserMessages) > 0 {
+			c.LastUserMessages = make([]string, len(conv.LastUserMessages))
+			copy(c.LastUserMessages, conv.LastUserMessages)
 		}
 		snapshot[id] = &c
 	}
@@ -716,6 +742,23 @@ func truncateConversationContent(content string) string {
 		return string(runes[:maxContentRunes]) + "..."
 	}
 	return content
+}
+
+func normalizeConversationMessages(messages []string) []string {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(messages))
+	for _, message := range messages {
+		if normalized := truncateConversationContent(normalizeConversationContent(message)); normalized != "" {
+			result = append(result, normalized)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func composeTitleWithFallback(title, fallback string) string {

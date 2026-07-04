@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
@@ -59,7 +60,9 @@ func Handler(
 		c.Set("agentContext", agentCtx)
 
 		// 统计 user 输入用于驾驶舱标题与轮数
-		c.Set("lastUserMessage", extractLastResponsesUserInput(responsesReq.Input))
+		lastUserMessages := extractRecentResponsesUserInputs(responsesReq.Input)
+		c.Set("lastUserMessages", lastUserMessages)
+		c.Set("lastUserMessage", strings.Join(lastUserMessages, " / "))
 		c.Set("userMessageCount", countResponsesUserMessages(responsesReq.Input))
 		common.SetRequestLogContextWithAgent(c, userID, countResponsesUserMessages(responsesReq.Input), agentCtx)
 
@@ -337,6 +340,8 @@ func handleSingleChannel(
 	if handled && successKey != "" {
 		lastUserMsg, _ := c.Get("lastUserMessage")
 		lastUserMsgStr, _ := lastUserMsg.(string)
+		lastUserMsgs, _ := c.Get("lastUserMessages")
+		lastUserMessages, _ := lastUserMsgs.([]string)
 		userMsgCount, _ := c.Get("userMessageCount")
 		userMsgCountInt, _ := userMsgCount.(int)
 
@@ -350,7 +355,7 @@ func handleSingleChannel(
 			if agentCtx != nil {
 				agentRole = agentCtx.AgentRole
 			}
-			channelScheduler.TrackConversation(
+			channelScheduler.TrackConversationWithMessages(
 				scheduler.ChannelKindResponses,
 				userID,
 				responsesReq.Model,
@@ -358,6 +363,7 @@ func handleSingleChannel(
 				channelName,
 				"",
 				lastUserMsgStr,
+				lastUserMessages,
 				userMsgCountInt,
 				agentRole,
 				agentCtx,

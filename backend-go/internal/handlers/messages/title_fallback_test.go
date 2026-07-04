@@ -128,6 +128,25 @@ func TestExtractLastUserMessageJoinsRecentShortInputs(t *testing.T) {
 	}
 }
 
+func TestExtractRecentUserMessagesKeepsOneMessageWithDelimiters(t *testing.T) {
+	messages := []types.ClaudeMessage{{
+		Role: "user",
+		Content: []interface{}{
+			map[string]interface{}{"type": "text", "text": "Base directory for this skill: /private/tmp/skill"},
+			map[string]interface{}{"type": "text", "text": "| CLI | terminal | type the command |"},
+		},
+	}}
+
+	got := extractRecentUserMessages(messages)
+	want := "Base directory for this skill: /private/tmp/skill\n| CLI | terminal | type the command |"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("extractRecentUserMessages() = %#v, want []string{%q}", got, want)
+	}
+	if last := extractLastUserMessage(messages); last != want {
+		t.Fatalf("extractLastUserMessage() = %q, want %q", last, want)
+	}
+}
+
 func TestCountUserMessagesIgnoresToolResults(t *testing.T) {
 	messages := []types.ClaudeMessage{
 		{Role: "user", Content: []interface{}{map[string]interface{}{"type": "text", "text": "用户问题"}}},
