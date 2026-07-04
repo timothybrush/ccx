@@ -270,6 +270,9 @@ func buildEmbeddingsRequestBody(bodyBytes []byte, model string, redirectedModel 
 	if reqMap == nil {
 		reqMap = make(map[string]interface{})
 	}
+	// OpenAI Embeddings API 不支持流式，剥离客户端误带的 "stream" 字段，
+	// 避免上游返回 SSE 导致 validateEmbeddingsResponse JSON 解析失败触发无意义 failover。
+	delete(reqMap, "stream")
 	if strings.TrimSpace(model) != "" && strings.TrimSpace(redirectedModel) != "" {
 		reqMap["model"] = redirectedModel
 	}

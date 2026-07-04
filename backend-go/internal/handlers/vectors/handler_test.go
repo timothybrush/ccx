@@ -1262,6 +1262,89 @@ func TestGetChannelModelsFailureLogDoesNotLeakTemporaryBaseURL(t *testing.T) {
 	}
 }
 
+func TestBuildEmbeddingsRequestBodyStripsClientStreamField(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStream bool
+	}{
+		{name: "stream true", body: `{"model":"text-embedding-3-small","input":"hello","stream":true}`, wantStream: false},
+		{name: "stream false", body: `{"model":"text-embedding-3-small","input":"hello","stream":false}`, wantStream: false},
+		{name: "no stream field", body: `{"model":"text-embedding-3-small","input":"hello"}`, wantStream: false},
+		{name: "stream string", body: `{"model":"text-embedding-3-small","input":"hello","stream":"true"}`, wantStream: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := buildEmbeddingsRequestBody([]byte(tt.body), "text-embedding-3-small", "text-embedding-3-small")
+			if err != nil {
+				t.Fatalf("buildEmbeddingsRequestBody() error = %v", err)
+			}
+			var payload map[string]interface{}
+			if err := json.Unmarshal(out, &payload); err != nil {
+				t.Fatalf("unmarshal output: %v", err)
+			}
+			if _, exists := payload["stream"]; exists != tt.wantStream {
+				t.Fatalf("stream field exists = %v, want %v, body=%s", exists, tt.wantStream, string(out))
+			}
+			if got := payload["model"]; got != "text-embedding-3-small" {
+				t.Fatalf("model = %v, want text-embedding-3-small", got)
+			}
+			if got := payload["input"]; got != "hello" {
+				t.Fatalf("input = %v, want hello", got)
+			}
+		})
+	}
+}
+
+func TestHandlerStripsStreamFieldBeforeForwardingToUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfgManager := newVectorsTestConfigManager(t)
+	defer cfgManager.Close()
+
+	var upstreamBody []byte
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read upstream body: %v", err)
+			return
+		}
+		upstreamBody = body
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"object":"embedding","embedding":[0.1],"index":0}],"usage":{"prompt_tokens":1,"total_tokens":1}}`))
+	}))
+	defer upstreamServer.Close()
+
+	if err := cfgManager.AddVectorsUpstream(config.UpstreamConfig{
+		Name:        "openai-vectors",
+		ServiceType: "openai",
+		BaseURL:     upstreamServer.URL,
+		APIKeys:     []string{"sk-openai"},
+	}); err != nil {
+		t.Fatalf("AddVectorsUpstream() error = %v", err)
+	}
+
+	sch := newVectorsTestScheduler(cfgManager, metrics.NewMetricsManager())
+	w := serveVectorsEmbeddingRequest(cfgManager, sch, `{"model":"text-embedding-3-small","input":"hello","stream":true}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+	var forwarded map[string]interface{}
+	if err := json.Unmarshal(upstreamBody, &forwarded); err != nil {
+		t.Fatalf("unmarshal forwarded body: %v", err)
+	}
+	if _, exists := forwarded["stream"]; exists {
+		t.Fatalf("upstream body should not contain stream field, got: %s", string(upstreamBody))
+	}
+	if got := forwarded["model"]; got != "text-embedding-3-small" {
+		t.Fatalf("upstream model = %v, want text-embedding-3-small", got)
+	}
+	if got := forwarded["input"]; got != "hello" {
+		t.Fatalf("upstream input = %v, want hello", got)
+	}
+}
+
 func BenchmarkEmbeddingCompatibilityFilter(b *testing.B) {
 	b.Run("all_available_same_space_64", func(b *testing.B) {
 		benchmarkEmbeddingCompatibilityFilter(b, 64, false, false)
