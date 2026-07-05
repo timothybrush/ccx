@@ -35,7 +35,15 @@ python3 .agents/skills/store-update/scripts/download_store_msix.py --download-di
 5. 校验 sha256（如果 release 中存在 `.sha256`）。
 6. 输出下载结果摘要、文件路径和手动操作指引。
 
-### 2. 输出手动操作指引
+### 2. 打开下载目录
+
+下载并校验完成后，用系统命令打开下载目录，便于用户直接拖拽上传：
+
+```bash
+open ./store-msix
+```
+
+### 3. 输出手动操作指引
 
 下载完成后，向用户输出以下信息：
 
