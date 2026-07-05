@@ -528,6 +528,20 @@ func buildStreamPreflightDetail(preflight *StreamPreflightResult) string {
 	return b.String()
 }
 
+func buildStreamPreflightRawLog(events []string) string {
+	if len(events) == 0 {
+		return ""
+	}
+	logBuffer := NewLimitedLogBuffer(MaxUpstreamResponseLogBytes)
+	for _, event := range events {
+		logBuffer.WriteString(event)
+		if !strings.HasSuffix(event, "\n") {
+			logBuffer.WriteString("\n")
+		}
+	}
+	return logBuffer.String()
+}
+
 func inspectStreamPreflightEvent(event string) streamPreflightEventInspection {
 	var textBuf bytes.Buffer
 	var thinkingBuf bytes.Buffer

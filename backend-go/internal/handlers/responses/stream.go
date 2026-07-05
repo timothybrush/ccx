@@ -324,6 +324,9 @@ func handleStreamSuccess(
 	// 空响应：Header 未发送，可安全重试
 	if preflightEmpty {
 		common.RequestLogf(c, "[Responses-EmptyResponse] 上游返回空响应 (缓冲行数: %d, 诊断: %s)，触发重试", len(bufferedLines), preflightDiagnostic)
+		if rawLog := buildResponsesPreflightRawLog(bufferedLines); rawLog != "" {
+			common.RequestLogf(c, "[Responses-EmptyResponse-Raw] 上游流式响应原始内容:\n%s", rawLog)
+		}
 		close(scanDone) // 通知 scanner goroutine 退出
 		if blacklistReason != "" {
 			return nil, &common.ErrBlacklistKey{Reason: blacklistReason, Message: blacklistMessage}
@@ -798,46 +801,111 @@ func extractResponsesTextFromEvent(event string, buf *bytes.Buffer) {
 
 		// 处理各种 delta 类型
 		switch eventType {
-		case "response.output_text.delta":
-			if delta, ok := data["delta"].(string); ok {
-				buf.WriteString(delta)
-			}
+		case "response.output_text.delta", "response.output_text.done":
+			writeFirstStringField(buf, data, "delta", "text")
 		case "response.function_call_arguments.delta":
 			if delta, ok := data["delta"].(string); ok {
 				buf.WriteString(delta)
 			}
-		case "response.reasoning_summary_text.delta":
-			if text, ok := data["text"].(string); ok {
-				buf.WriteString(text)
-			}
-		case "response.output_json.delta":
+		case "response.reasoning_summary_text.delta", "response.reasoning_summary_text.done", "response.reasoning_text.delta":
+			writeFirstStringField(buf, data, "delta", "text")
+		case "response.output_json.delta", "response.output_json.done":
 			// JSON 输出增量
-			if delta, ok := data["delta"].(string); ok {
-				buf.WriteString(delta)
-			}
-		case "response.content_part.delta":
+			writeFirstStringField(buf, data, "delta", "text")
+		case "response.content_part.added", "response.content_part.delta", "response.content_part.done":
 			// 内容块增量（通用）
-			if delta, ok := data["delta"].(string); ok {
-				buf.WriteString(delta)
-			} else if text, ok := data["text"].(string); ok {
-				buf.WriteString(text)
+			if !writeFirstStringField(buf, data, "delta", "text") {
+				if part, ok := data["part"].(map[string]interface{}); ok {
+					writeFirstStringField(buf, part, "text", "delta", "transcript")
+				}
 			}
-		case "response.audio.delta", "response.audio_transcript.delta":
+		case "response.audio_transcript.delta", "response.audio_transcript.done":
 			// 音频转录增量
-			if delta, ok := data["delta"].(string); ok {
-				buf.WriteString(delta)
+			writeFirstStringField(buf, data, "delta", "text", "transcript")
+		case "response.output_item.done":
+			if item, ok := data["item"].(map[string]interface{}); ok {
+				itemType, _ := item["type"].(string)
+				if itemType == "message" || itemType == "text" {
+					writeResponsesContentText(buf, item["content"])
+				} else if itemType == "reasoning" {
+					writeResponsesContentText(buf, item["summary"])
+				}
+			}
+		case "response.completed":
+			if response, ok := data["response"].(map[string]interface{}); ok {
+				writeResponsesOutputText(buf, response["output"])
 			}
 		default:
 			// 未知事件类型兜底：上游新增 response.*.delta / response.*.done 事件时，
 			// 尝试提取通用 delta/text 字段，避免文本提取不到被 preflight 误判为空流
 			if strings.HasPrefix(eventType, "response.") &&
 				(strings.HasSuffix(eventType, ".delta") || strings.HasSuffix(eventType, ".done")) {
-				if delta, ok := data["delta"].(string); ok {
-					buf.WriteString(delta)
-				} else if text, ok := data["text"].(string); ok {
-					buf.WriteString(text)
-				}
+				writeFirstStringField(buf, data, "delta", "text", "transcript")
 			}
+		}
+	}
+}
+
+func buildResponsesPreflightRawLog(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	logBuffer := common.NewLimitedLogBuffer(common.MaxUpstreamResponseLogBytes)
+	for _, line := range lines {
+		logBuffer.WriteString(line)
+		if !strings.HasSuffix(line, "\n") {
+			logBuffer.WriteString("\n")
+		}
+	}
+	return logBuffer.String()
+}
+
+func writeFirstStringField(buf *bytes.Buffer, data map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		if value, ok := data[key].(string); ok && value != "" {
+			buf.WriteString(value)
+			return true
+		}
+	}
+	return false
+}
+
+func writeResponsesOutputText(buf *bytes.Buffer, output interface{}) {
+	items, ok := output.([]interface{})
+	if !ok {
+		return
+	}
+	for _, rawItem := range items {
+		item, ok := rawItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		itemType, _ := item["type"].(string)
+		if itemType == "message" || itemType == "text" {
+			writeResponsesContentText(buf, item["content"])
+		} else if itemType == "reasoning" {
+			writeResponsesContentText(buf, item["summary"])
+		}
+	}
+}
+
+func writeResponsesContentText(buf *bytes.Buffer, content interface{}) {
+	switch v := content.(type) {
+	case string:
+		buf.WriteString(v)
+	case []interface{}:
+		for _, rawPart := range v {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if !writeFirstStringField(buf, part, "text", "delta", "transcript") {
+				writeResponsesContentText(buf, part["content"])
+			}
+		}
+	case map[string]interface{}:
+		if !writeFirstStringField(buf, v, "text", "delta", "transcript") {
+			writeResponsesContentText(buf, v["content"])
 		}
 	}
 }

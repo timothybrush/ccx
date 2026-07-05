@@ -2,6 +2,7 @@ package responses
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/handlers/common"
@@ -117,6 +118,21 @@ func TestExtractResponsesTextFromEventUnknownTypes(t *testing.T) {
 			want:  "summary text",
 		},
 		{
+			name:  "output text done",
+			event: "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"text\":\"final text\"}\n\n",
+			want:  "final text",
+		},
+		{
+			name:  "content part done",
+			event: "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"part\":{\"type\":\"output_text\",\"text\":\"part text\"}}\n\n",
+			want:  "part text",
+		},
+		{
+			name:  "completed output text",
+			event: "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"completed text\"}]}]}}\n\n",
+			want:  "completed text",
+		},
+		{
 			name:  "unknown non delta/done type ignored",
 			event: "event: response.heartbeat\ndata: {\"type\":\"response.heartbeat\",\"text\":\"should not extract\"}\n\n",
 			want:  "",
@@ -136,6 +152,19 @@ func TestExtractResponsesTextFromEventUnknownTypes(t *testing.T) {
 				t.Fatalf("extractResponsesTextFromEvent() buf = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestBuildResponsesPreflightRawLog(t *testing.T) {
+	raw := buildResponsesPreflightRawLog([]string{
+		"event: response.created",
+		"data: {\"type\":\"response.created\"}\n",
+	})
+	if !strings.Contains(raw, "event: response.created\n") {
+		t.Fatalf("raw log should preserve event line with newline, got %q", raw)
+	}
+	if !strings.Contains(raw, "data: {\"type\":\"response.created\"}\n") {
+		t.Fatalf("raw log should preserve data line, got %q", raw)
 	}
 }
 

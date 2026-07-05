@@ -770,6 +770,22 @@ func TestBuildStreamPreflightDetail_IncludesEventShapeAndRedactsSecrets(t *testi
 	}
 }
 
+func TestBuildStreamPreflightRawLog_PreservesOriginalEvents(t *testing.T) {
+	raw := buildStreamPreflightRawLog([]string{
+		"event: message_start\ndata: {\"type\":\"message_start\"}\n\n",
+		"event: error\ndata: {\"type\":\"error\",\"api_key\":\"sk-test-secret-1234567890\"}\n\n",
+	})
+	for _, want := range []string{
+		"event: message_start",
+		`"type":"message_start"`,
+		"sk-test-secret-1234567890",
+	} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("raw log missing %q:\n%s", want, raw)
+		}
+	}
+}
+
 func TestPreflightStreamEvents_ContentBlockStopWithoutPendingStillEmpty(t *testing.T) {
 	events := []string{
 		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":0}}}\n\n",

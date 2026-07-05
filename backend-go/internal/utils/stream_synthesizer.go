@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +15,8 @@ type StreamSynthesizer struct {
 	parseFailed         bool
 
 	// responses专用累积器
-	responsesText map[int]*strings.Builder
+	responsesText      map[int]*strings.Builder
+	responsesReasoning map[int]*strings.Builder
 }
 
 // ToolCall 工具调用累积器
@@ -32,6 +32,7 @@ func NewStreamSynthesizer(serviceType string) *StreamSynthesizer {
 		serviceType:         serviceType,
 		toolCallAccumulator: make(map[int]*ToolCall),
 		responsesText:       make(map[int]*strings.Builder),
+		responsesReasoning:  make(map[int]*strings.Builder),
 	}
 }
 
@@ -42,14 +43,11 @@ func (s *StreamSynthesizer) ProcessLine(line string) {
 		return
 	}
 
-	// 使用正则匹配SSE data字段
-	dataRegex := regexp.MustCompile(`^data:\s*(.*)$`)
-	matches := dataRegex.FindStringSubmatch(trimmedLine)
-	if len(matches) < 2 {
+	if !strings.HasPrefix(trimmedLine, "data:") {
 		return
 	}
 
-	jsonStr := strings.TrimSpace(matches[1])
+	jsonStr := strings.TrimSpace(strings.TrimPrefix(trimmedLine, "data:"))
 	if jsonStr == "[DONE]" || jsonStr == "" {
 		return
 	}
@@ -87,91 +85,55 @@ func (s *StreamSynthesizer) ProcessLine(line string) {
 func (s *StreamSynthesizer) processResponses(data map[string]interface{}) {
 	typeStr, _ := data["type"].(string)
 
-	// 辅助方法：获取对应 output_index 的 builder
-	getBuilder := func(index int) *strings.Builder {
-		if s.responsesText[index] == nil {
-			s.responsesText[index] = &strings.Builder{}
-		}
-		return s.responsesText[index]
-	}
-
-	// 获取 output_index
-	getIndex := func() int {
-		if idx, ok := data["output_index"].(float64); ok {
-			return int(idx)
-		}
-		return 0
-	}
-
 	switch typeStr {
 	case "response.output_text.delta":
 		if delta, ok := data["delta"].(string); ok {
-			builder := getBuilder(getIndex())
-			builder.WriteString(delta)
+			s.appendResponsesText(responseOutputIndex(data), delta)
 		}
-	case "response.output_text.done":
-		builder := getBuilder(getIndex())
+	case "response.output_text.done", "response.output_json.done":
 		if text, ok := data["text"].(string); ok && text != "" {
-			builder.Reset()
-			builder.WriteString(text)
+			s.setResponsesText(responseOutputIndex(data), text)
+		}
+	case "response.output_json.delta", "response.content_part.delta", "response.audio_transcript.delta":
+		s.appendResponsesText(responseOutputIndex(data), firstResponsesString(data, "delta", "text", "transcript"))
+	case "response.audio.delta":
+		if delta, ok := data["delta"].(string); ok && delta != "" {
+			s.appendSynthesizedLine("[Audio delta omitted]")
+		}
+	case "response.content_part.added", "response.content_part.done":
+		if part, ok := data["part"].(map[string]interface{}); ok {
+			if text := responsesContentText(part); text != "" {
+				if typeStr == "response.content_part.done" {
+					s.setResponsesText(responseOutputIndex(data), text)
+				} else {
+					s.appendResponsesText(responseOutputIndex(data), text)
+				}
+			}
+		}
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
+		s.appendResponsesReasoning(responseOutputIndex(data), firstResponsesString(data, "delta", "text"))
+	case "response.reasoning_summary_text.done":
+		if text := firstResponsesString(data, "text"); text != "" {
+			s.setResponsesReasoning(responseOutputIndex(data), text)
+		}
+	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		if part, ok := data["part"].(map[string]interface{}); ok {
+			if text := responsesContentText(part); text != "" {
+				if typeStr == "response.reasoning_summary_part.done" {
+					s.setResponsesReasoning(responseOutputIndex(data), text)
+				} else {
+					s.appendResponsesReasoning(responseOutputIndex(data), text)
+				}
+			}
 		}
 	case "response.completed":
-		// 兜底：从最终响应提取文本
-		if respObj, ok := data["response"].(map[string]interface{}); ok {
-			if outputArr, ok := respObj["output"].([]interface{}); ok {
-				for i, item := range outputArr {
-					itemMap, ok := item.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if itemMap["type"] != "message" {
-						continue
-					}
-					contentArr, ok := itemMap["content"].([]interface{})
-					if !ok {
-						continue
-					}
-					for _, c := range contentArr {
-						cm, ok := c.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						if cm["type"] != "output_text" {
-							continue
-						}
-						if text, ok := cm["text"].(string); ok && text != "" {
-							builder := getBuilder(i)
-							builder.Reset()
-							builder.WriteString(text)
-							break
-						}
-					}
-				}
-			}
-		}
+		s.processResponsesOutput(data, true)
 	case "response.output_item.added":
-		// 记录函数调用元数据（用于后续拼接日志）
 		if item, ok := data["item"].(map[string]interface{}); ok {
-			if itemType, _ := item["type"].(string); itemType == "function_call" {
-				index := getIndex()
-				if s.toolCallAccumulator[index] == nil {
-					s.toolCallAccumulator[index] = &ToolCall{}
-				}
-				acc := s.toolCallAccumulator[index]
-				if id, ok := item["id"].(string); ok && id != "" {
-					acc.ID = id
-				}
-				if name, ok := item["name"].(string); ok && name != "" {
-					acc.Name = name
-				}
-			}
+			s.processResponsesItem(responseOutputIndex(data), item, false)
 		}
 	case "response.function_call_arguments.delta":
-		index := getIndex()
-		if s.toolCallAccumulator[index] == nil {
-			s.toolCallAccumulator[index] = &ToolCall{}
-		}
-		acc := s.toolCallAccumulator[index]
+		acc := s.getToolCall(responseOutputIndex(data))
 		if id, ok := data["item_id"].(string); ok && id != "" {
 			acc.ID = id
 		}
@@ -179,11 +141,7 @@ func (s *StreamSynthesizer) processResponses(data map[string]interface{}) {
 			acc.Arguments += delta
 		}
 	case "response.function_call_arguments.done":
-		index := getIndex()
-		if s.toolCallAccumulator[index] == nil {
-			s.toolCallAccumulator[index] = &ToolCall{}
-		}
-		acc := s.toolCallAccumulator[index]
+		acc := s.getToolCall(responseOutputIndex(data))
 		if id, ok := data["item_id"].(string); ok && id != "" {
 			acc.ID = id
 		}
@@ -195,7 +153,326 @@ func (s *StreamSynthesizer) processResponses(data map[string]interface{}) {
 				acc.Name = name
 			}
 		}
+	case "response.custom_tool_call_input.delta":
+		acc := s.getToolCall(responseOutputIndex(data))
+		if id, ok := data["item_id"].(string); ok && id != "" {
+			acc.ID = id
+		}
+		if delta, ok := data["delta"].(string); ok {
+			acc.Arguments += delta
+		}
+	case "response.custom_tool_call_input.done":
+		acc := s.getToolCall(responseOutputIndex(data))
+		if id, ok := data["item_id"].(string); ok && id != "" {
+			acc.ID = id
+		}
+		if input, ok := data["input"].(string); ok && input != "" {
+			acc.Arguments = input
+		}
+	case "response.output_item.done":
+		if item, ok := data["item"].(map[string]interface{}); ok {
+			s.processResponsesItem(responseOutputIndex(data), item, true)
+		}
+	case "response.error", "response.failed", "error":
+		s.appendResponsesError(data)
+	default:
+		s.processGenericResponsesEvent(typeStr, data)
 	}
+}
+
+func responseOutputIndex(data map[string]interface{}) int {
+	if idx, ok := data["output_index"].(float64); ok {
+		return int(idx)
+	}
+	return 0
+}
+
+func (s *StreamSynthesizer) responseTextBuilder(index int) *strings.Builder {
+	if s.responsesText[index] == nil {
+		s.responsesText[index] = &strings.Builder{}
+	}
+	return s.responsesText[index]
+}
+
+func (s *StreamSynthesizer) responseReasoningBuilder(index int) *strings.Builder {
+	if s.responsesReasoning[index] == nil {
+		s.responsesReasoning[index] = &strings.Builder{}
+	}
+	return s.responsesReasoning[index]
+}
+
+func (s *StreamSynthesizer) appendResponsesText(index int, text string) {
+	if text == "" {
+		return
+	}
+	s.responseTextBuilder(index).WriteString(text)
+}
+
+func (s *StreamSynthesizer) setResponsesText(index int, text string) {
+	if text == "" {
+		return
+	}
+	builder := s.responseTextBuilder(index)
+	builder.Reset()
+	builder.WriteString(text)
+}
+
+func (s *StreamSynthesizer) appendResponsesReasoning(index int, text string) {
+	if text == "" {
+		return
+	}
+	s.responseReasoningBuilder(index).WriteString(text)
+}
+
+func (s *StreamSynthesizer) setResponsesReasoning(index int, text string) {
+	if text == "" {
+		return
+	}
+	builder := s.responseReasoningBuilder(index)
+	builder.Reset()
+	builder.WriteString(text)
+}
+
+func (s *StreamSynthesizer) appendSynthesizedLine(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	if s.synthesizedContent.Len() > 0 {
+		s.synthesizedContent.WriteString("\n")
+	}
+	s.synthesizedContent.WriteString(line)
+}
+
+func (s *StreamSynthesizer) getToolCall(index int) *ToolCall {
+	if s.toolCallAccumulator[index] == nil {
+		s.toolCallAccumulator[index] = &ToolCall{}
+	}
+	return s.toolCallAccumulator[index]
+}
+
+func (s *StreamSynthesizer) processResponsesOutput(data map[string]interface{}, final bool) {
+	respObj, ok := data["response"].(map[string]interface{})
+	if !ok {
+		respObj = data
+	}
+	outputArr, ok := respObj["output"].([]interface{})
+	if !ok {
+		return
+	}
+	for i, item := range outputArr {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		s.processResponsesItem(i, itemMap, final)
+	}
+}
+
+func (s *StreamSynthesizer) processResponsesItem(index int, item map[string]interface{}, final bool) {
+	itemType, _ := item["type"].(string)
+	switch {
+	case itemType == "message" || itemType == "text":
+		if text := responsesContentText(item); text != "" {
+			if final {
+				s.setResponsesText(index, text)
+			} else {
+				s.appendResponsesText(index, text)
+			}
+		}
+	case itemType == "reasoning":
+		if text := responsesReasoningText(item); text != "" {
+			if final {
+				s.setResponsesReasoning(index, text)
+			} else {
+				s.appendResponsesReasoning(index, text)
+			}
+		} else if firstResponsesString(item, "encrypted_content") != "" {
+			s.setResponsesReasoning(index, "[encrypted_content omitted]")
+		}
+	case itemType == "compaction" || itemType == "compaction_summary":
+		if firstResponsesString(item, "encrypted_content") != "" {
+			s.appendSynthesizedLine("Compaction: encrypted_content omitted")
+		}
+	case isResponsesCallItemType(itemType):
+		s.upsertResponsesToolCall(index, item)
+	case isResponsesOutputItemType(itemType):
+		s.appendResponsesToolOutput(item)
+	default:
+		if text := responsesContentText(item); text != "" {
+			if final {
+				s.setResponsesText(index, text)
+			} else {
+				s.appendResponsesText(index, text)
+			}
+		}
+	}
+}
+
+func (s *StreamSynthesizer) upsertResponsesToolCall(index int, item map[string]interface{}) {
+	acc := s.getToolCall(index)
+	if id := firstResponsesString(item, "id", "call_id"); id != "" {
+		acc.ID = id
+	}
+	name := firstResponsesString(item, "name")
+	if namespace := firstResponsesString(item, "namespace"); namespace != "" && name != "" {
+		name = namespace + "." + name
+	}
+	if name == "" {
+		name = firstResponsesString(item, "type")
+	}
+	if name != "" {
+		acc.Name = name
+	}
+	if args := firstResponsesString(item, "arguments", "input", "query", "queries", "code", "action"); args != "" {
+		acc.Arguments = args
+	}
+}
+
+func (s *StreamSynthesizer) appendResponsesToolOutput(item map[string]interface{}) {
+	name := firstResponsesString(item, "name", "type")
+	id := firstResponsesString(item, "call_id", "id")
+	output := firstResponsesString(item, "output", "result", "results", "content", "text")
+	if output == "" {
+		output = firstResponsesString(item, "status")
+	}
+	var line strings.Builder
+	line.WriteString("Tool Output: ")
+	if name == "" {
+		name = "tool_output"
+	}
+	line.WriteString(name)
+	if output != "" {
+		line.WriteString("(")
+		line.WriteString(output)
+		line.WriteString(")")
+	}
+	if id != "" {
+		line.WriteString(" [ID: ")
+		line.WriteString(id)
+		line.WriteString("]")
+	}
+	s.appendSynthesizedLine(line.String())
+}
+
+func (s *StreamSynthesizer) appendResponsesError(data map[string]interface{}) {
+	if errObj, ok := data["error"].(map[string]interface{}); ok {
+		if msg := firstResponsesString(errObj, "message", "code", "type"); msg != "" {
+			s.appendSynthesizedLine("Error: " + msg)
+			return
+		}
+	}
+	if resp, ok := data["response"].(map[string]interface{}); ok {
+		if errObj, ok := resp["error"].(map[string]interface{}); ok {
+			if msg := firstResponsesString(errObj, "message", "code", "type"); msg != "" {
+				s.appendSynthesizedLine("Error: " + msg)
+				return
+			}
+		}
+	}
+	if msg := firstResponsesString(data, "message", "error"); msg != "" {
+		s.appendSynthesizedLine("Error: " + msg)
+	}
+}
+
+func (s *StreamSynthesizer) processGenericResponsesEvent(typeStr string, data map[string]interface{}) {
+	if !strings.HasPrefix(typeStr, "response.") {
+		return
+	}
+	if item, ok := data["item"].(map[string]interface{}); ok {
+		s.processResponsesItem(responseOutputIndex(data), item, strings.HasSuffix(typeStr, ".done"))
+	}
+	s.processResponsesOutput(data, strings.HasSuffix(typeStr, ".done") || typeStr == "response.completed")
+	if strings.HasSuffix(typeStr, ".delta") || strings.HasSuffix(typeStr, ".done") {
+		text := firstResponsesString(data, "delta", "text", "transcript")
+		if strings.Contains(typeStr, "reasoning") {
+			s.appendResponsesReasoning(responseOutputIndex(data), text)
+		} else {
+			s.appendResponsesText(responseOutputIndex(data), text)
+		}
+	}
+	if callID := firstResponsesString(data, "call_id"); callID != "" {
+		s.appendSynthesizedLine(typeStr + " [call_id: " + callID + "]")
+	}
+}
+
+func responsesContentText(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if text := firstResponsesString(v, "text", "delta", "transcript"); text != "" {
+			return text
+		}
+		if part, ok := v["part"].(map[string]interface{}); ok {
+			return responsesContentText(part)
+		}
+		if content, ok := v["content"]; ok {
+			return responsesContentText(content)
+		}
+	case []interface{}:
+		var builder strings.Builder
+		for _, item := range v {
+			text := responsesContentText(item)
+			if text == "" {
+				continue
+			}
+			if builder.Len() > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(text)
+		}
+		return builder.String()
+	}
+	return ""
+}
+
+func responsesReasoningText(item map[string]interface{}) string {
+	if text := firstResponsesString(item, "text", "delta"); text != "" {
+		return text
+	}
+	if summary, ok := item["summary"]; ok {
+		return responsesContentText(summary)
+	}
+	return ""
+}
+
+func firstResponsesString(data map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := data[key]; ok {
+			if text := responsesStringValue(value); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+func responsesStringValue(value interface{}) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	default:
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return ""
+		}
+		result := string(encoded)
+		if result == "null" {
+			return ""
+		}
+		return result
+	}
+}
+
+func isResponsesCallItemType(itemType string) bool {
+	return itemType == "function_call" || itemType == "custom_tool_call" || strings.HasSuffix(itemType, "_call")
+}
+
+func isResponsesOutputItemType(itemType string) bool {
+	return strings.HasSuffix(itemType, "_output")
 }
 
 // processGemini 处理Gemini格式
@@ -403,25 +680,18 @@ func (s *StreamSynthesizer) GetSynthesizedContent() string {
 	// 不再完全失败，即使有解析错误也返回部分结果
 	var result string
 
-	if s.serviceType == "responses" && len(s.responsesText) > 0 {
-		var builder strings.Builder
-		keys := make([]int, 0, len(s.responsesText))
-		for k := range s.responsesText {
-			keys = append(keys, k)
+	if s.serviceType == "responses" {
+		var parts []string
+		if content := strings.TrimSpace(s.synthesizedContent.String()); content != "" {
+			parts = append(parts, content)
 		}
-		sort.Ints(keys)
-
-		for i, k := range keys {
-			text := s.responsesText[k].String()
-			if text == "" {
-				continue
-			}
-			if i > 0 && builder.Len() > 0 {
-				builder.WriteString("\n")
-			}
-			builder.WriteString(text)
+		if reasoning := collectResponseBuilders(s.responsesReasoning); reasoning != "" {
+			parts = append(parts, "Reasoning:\n"+reasoning)
 		}
-		result = builder.String()
+		if text := collectResponseBuilders(s.responsesText); text != "" {
+			parts = append(parts, text)
+		}
+		result = strings.Join(parts, "\n")
 	} else {
 		result = s.synthesizedContent.String()
 	}
@@ -448,7 +718,7 @@ func (s *StreamSynthesizer) GetSynthesizedContent() string {
 
 			name := tool.Name
 			if name == "" {
-				name = "unknown_function"
+				name = "unknown_tool"
 			}
 
 			id := tool.ID
@@ -474,10 +744,42 @@ func (s *StreamSynthesizer) GetSynthesizedContent() string {
 			toolCallsBuilder.WriteString("]")
 		}
 
-		result += toolCallsBuilder.String()
+		toolCalls := toolCallsBuilder.String()
+		if result == "" {
+			result = strings.TrimPrefix(toolCalls, "\n")
+		} else {
+			result += toolCalls
+		}
 	}
 
 	return result
+}
+
+func collectResponseBuilders(builders map[int]*strings.Builder) string {
+	if len(builders) == 0 {
+		return ""
+	}
+	keys := make([]int, 0, len(builders))
+	for k := range builders {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	var builder strings.Builder
+	for _, k := range keys {
+		if builders[k] == nil {
+			continue
+		}
+		text := builders[k].String()
+		if text == "" {
+			continue
+		}
+		if builder.Len() > 0 {
+			builder.WriteString("\n")
+		}
+		builder.WriteString(text)
+	}
+	return builder.String()
 }
 
 // mergeSplitToolCalls 修复分裂的工具调用
