@@ -90,6 +90,13 @@ describe('syncBaseUrlsFormState', () => {
       baseUrls: []
     })
   })
+
+  it('应剔除粘贴 URL 中的 profile 与 wallet 管理后台路径', () => {
+    expect(syncBaseUrlsFormState('https://chybenzun.top/profile\nhttps://chybenzun.top/wallet', 'openai')).toEqual({
+      baseUrl: 'https://chybenzun.top',
+      baseUrls: []
+    })
+  })
 })
 
 describe('extractChannelNamePrefix', () => {

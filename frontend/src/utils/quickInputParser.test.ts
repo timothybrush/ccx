@@ -438,6 +438,17 @@ describe('综合解析场景', () => {
     expect(result.detectedBaseUrls).toEqual(['https://chybenzun.top'])
   })
 
+  it('应剔除 profile 与 wallet 管理后台路径', () => {
+    const result = parseQuickInput(`
+      https://chybenzun.top/profile
+      https://chybenzun.top/wallet
+      sk-key1234567890
+    `)
+
+    expect(result.detectedBaseUrl).toBe('https://chybenzun.top')
+    expect(result.detectedBaseUrls).toEqual(['https://chybenzun.top'])
+  })
+
 })
 
 describe('引号内容提取', () => {

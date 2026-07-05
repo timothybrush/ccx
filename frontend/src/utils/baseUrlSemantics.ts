@@ -8,6 +8,8 @@ const dashboardPathPrefixes = [
   '/keys',
   '/panel',
   '/token',
+  '/profile',
+  '/wallet',
   '/log',
   '/pricing'
 ]
