@@ -72,9 +72,21 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	model := opts.Model
 	routePrefix := opts.RoutePrefix
 	channelName := opts.ChannelName
+	trace := newSelectionTrace(opts)
+	finish := func(upstream *config.UpstreamConfig, channelIndex int, reason string) *SelectionResult {
+		result := s.selectionResult(kind, upstream, channelIndex, reason)
+		channelName := ""
+		if upstream != nil {
+			channelName = upstream.Name
+		}
+		trace.selectChannel(channelIndex, channelName, reason)
+		result.Trace = trace
+		return result
+	}
 
 	// 获取活跃渠道列表（含模型过滤）
 	activeChannels := s.getActiveChannels(kind, model)
+	trace.setStage("active_model_filter", len(activeChannels))
 	if len(activeChannels) == 0 {
 		// 区分"无活跃渠道"和"无渠道支持该模型"
 		kindName := "Messages"
@@ -110,6 +122,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			return nil, fmt.Errorf("no channels with route prefix: %s", routePrefix)
 		}
 		activeChannels = filtered
+		trace.setStage("route_prefix_filter", len(activeChannels))
 	} else {
 		// 无前缀：排除设了路由前缀的渠道（它们只能通过前缀访问）
 		var filtered []ChannelInfo
@@ -136,12 +149,14 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			return nil, fmt.Errorf("没有可用于默认路由的 %s 渠道，请使用带前缀路由访问", kindName)
 		}
 		activeChannels = filtered
+		trace.setStage("default_route_filter", len(activeChannels))
 	}
 
 	activeChannels, err := s.filterChannelsByContext(activeChannels, kind, model, opts.ContextRequirement)
 	if err != nil {
 		return nil, err
 	}
+	trace.setStage("context_filter", len(activeChannels))
 	if opts.CandidateFilter != nil {
 		activeChannels, err = opts.CandidateFilter(activeChannels, func(ch ChannelInfo) *config.UpstreamConfig {
 			return s.getUpstreamByIndex(ch.Index, kind)
@@ -154,6 +169,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 		if len(activeChannels) == 0 {
 			return nil, fmt.Errorf("没有可用的 %s 渠道满足候选过滤条件", kindDisplayName(kind))
 		}
+		trace.setStage("candidate_filter", len(activeChannels))
 	}
 
 	// 指定渠道名（X-Channel 头）：在模型、路由前缀与上下文过滤后直接定位。
@@ -169,7 +185,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 				}
 				prefix := kindSchedulerLogPrefix(kind)
 				log.Printf("[%s-Pin] 通过 X-Channel 指定渠道: [%d] %s", prefix, ch.Index, ch.Name)
-				return s.selectionResult(kind, upstream, ch.Index, "channel_pin"), nil
+				return finish(upstream, ch.Index, "channel_pin"), nil
 			}
 		}
 		return nil, fmt.Errorf("指定渠道 %q 不满足当前模型、路由前缀或上下文要求", channelName)
@@ -182,9 +198,11 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			orderedChannels := applyManualOverrideOrder(activeChannels, sequence)
 			for _, ch := range orderedChannels {
 				if failedChannels[ch.Index] {
+					trace.skipChannel(ch, "manual_override", "failed_in_request", "")
 					continue
 				}
 				if ch.Status != "active" {
+					trace.skipChannel(ch, "manual_override", "inactive_status", ch.Status)
 					continue
 				}
 				upstream := s.getUpstreamByIndex(ch.Index, kind)
@@ -192,7 +210,12 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 					log.Printf("[%s-Override] 按手动排序选择渠道: [%d] %s (user: %s, role=%s, sequenceHead=%s)", prefix, ch.Index, ch.Name, maskUserID(userID), schedulerAgentRoleForLog(opts.AgentRole), formatOverrideSequenceHead(sequence, 3))
 					// Idle 续期：对话活跃时延长 override TTL
 					s.overrideManager.RefreshOverrideForUser(string(kind), userID)
-					return s.selectionResult(kind, upstream, ch.Index, "manual_override"), nil
+					return finish(upstream, ch.Index, "manual_override"), nil
+				}
+				if upstream == nil {
+					trace.skipChannel(ch, "manual_override", "missing_upstream", "")
+				} else {
+					trace.skipChannel(ch, "manual_override", "runtime_unavailable", "")
 				}
 			}
 			log.Printf("[%s-Override] 手动排序序列中无当前可用渠道，保留排序并回退默认调度 (user: %s, role=%s, sequenceHead=%s)", prefix, maskUserID(userID), schedulerAgentRoleForLog(opts.AgentRole), formatOverrideSequenceHead(sequence, 3))
@@ -208,14 +231,16 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			failureRate := s.channelFailureRate(upstream, kind)
 			prefix := kindSchedulerLogPrefix(kind)
 			log.Printf("[%s-Promotion] 促销期优先选择渠道: [%d] %s (失败率: %.1f%%, 绕过健康检查)", prefix, promotedChannel.Index, upstream.Name, failureRate*100)
-			return s.selectionResult(kind, upstream, promotedChannel.Index, "promotion_priority"), nil
+			return finish(upstream, promotedChannel.Index, "promotion_priority"), nil
 		} else if upstream != nil {
 			prefix := kindSchedulerLogPrefix(kind)
 			log.Printf("[%s-Promotion] 警告: 促销渠道 [%d] %s 无可用密钥，跳过", prefix, promotedChannel.Index, upstream.Name)
+			trace.skipChannel(*promotedChannel, "promotion", "no_available_keys_or_cooldown", "")
 		}
 	} else if promotedChannel != nil {
 		prefix := kindSchedulerLogPrefix(kind)
 		log.Printf("[%s-Promotion] 警告: 促销渠道 [%d] %s 已在本次请求中失败，跳过", prefix, promotedChannel.Index, promotedChannel.Name)
+		trace.skipChannel(*promotedChannel, "promotion", "failed_in_request", "")
 	}
 
 	// 1. 检查 Trace 亲和性（促销渠道失败时或无促销渠道时）
@@ -229,12 +254,14 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 					if ch.Status != "active" {
 						prefix := kindSchedulerLogPrefix(kind)
 						log.Printf("[%s-Affinity] 跳过亲和渠道 [%d] %s: 状态为 %s (user: %s)", prefix, preferredIdx, ch.Name, ch.Status, maskUserID(userID))
+						trace.skipChannel(ch, "trace_affinity", "inactive_status", ch.Status)
 						continue
 					}
 					// 如果存在更高优先级且健康的候选渠道，允许优先级覆盖亲和性
 					if bestPriority >= 0 && ch.Priority > bestPriority {
 						prefix := kindSchedulerLogPrefix(kind)
 						log.Printf("[%s-Affinity] 跳过亲和渠道 [%d] %s: 存在更高优先级可用渠道 (亲和优先级: %d, 最优优先级: %d, user: %s)", prefix, preferredIdx, ch.Name, ch.Priority, bestPriority, maskUserID(userID))
+						trace.skipChannel(ch, "trace_affinity", "better_priority_available", fmt.Sprintf("affinity=%d best=%d", ch.Priority, bestPriority))
 						continue
 					}
 					// 检查渠道是否健康且未处于运行态冷却
@@ -242,7 +269,12 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 					if upstream != nil && s.channelIsRuntimeAvailable(upstream, kind, preferredIdx) {
 						prefix := kindSchedulerLogPrefix(kind)
 						log.Printf("[%s-Affinity] Trace亲和选择渠道: [%d] %s (user: %s)", prefix, preferredIdx, upstream.Name, maskUserID(userID))
-						return s.selectionResult(kind, upstream, preferredIdx, "trace_affinity"), nil
+						return finish(upstream, preferredIdx, "trace_affinity"), nil
+					}
+					if upstream == nil {
+						trace.skipChannel(ch, "trace_affinity", "missing_upstream", "")
+					} else {
+						trace.skipChannel(ch, "trace_affinity", "runtime_unavailable", "")
 					}
 				}
 			}
@@ -254,6 +286,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	for _, ch := range activeChannels {
 		// 跳过本次请求已经失败的渠道
 		if failedChannels[ch.Index] {
+			trace.skipChannel(ch, "priority_order", "failed_in_request", "")
 			continue
 		}
 
@@ -261,11 +294,13 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 		if ch.Status != "active" {
 			prefix := kindSchedulerLogPrefix(kind)
 			log.Printf("[%s-Channel] 跳过非活跃渠道: [%d] %s (状态: %s)", prefix, ch.Index, ch.Name, ch.Status)
+			trace.skipChannel(ch, "priority_order", "inactive_status", ch.Status)
 			continue
 		}
 
 		upstream := s.getUpstreamByIndex(ch.Index, kind)
 		if upstream == nil || len(upstream.APIKeys) == 0 {
+			trace.skipChannel(ch, "priority_order", "missing_upstream_or_keys", "")
 			continue
 		}
 
@@ -276,8 +311,10 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			prefix := kindSchedulerLogPrefix(kind)
 			if channelState == metrics.CircuitStateOpen {
 				log.Printf("[%s-Channel] 警告: 跳过 open 渠道: [%d] %s (失败率: %.1f%%)", prefix, ch.Index, ch.Name, failureRate*100)
+				trace.skipChannel(ch, "priority_order", "circuit_open", fmt.Sprintf("failureRate=%.1f%%", failureRate*100))
 			} else {
 				log.Printf("[%s-Channel] 警告: 跳过不健康渠道: [%d] %s (失败率: %.1f%%)", prefix, ch.Index, ch.Name, failureRate*100)
+				trace.skipChannel(ch, "priority_order", "unhealthy", fmt.Sprintf("failureRate=%.1f%%", failureRate*100))
 			}
 			continue
 		}
@@ -286,6 +323,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 		if s.channelInRuntimeCooldown(kind, ch.Index) {
 			prefix := kindSchedulerLogPrefix(kind)
 			log.Printf("[%s-Channel] 跳过运行态 cooldown 中的渠道: [%d] %s", prefix, ch.Index, ch.Name)
+			trace.skipChannel(ch, "priority_order", "runtime_cooldown", "")
 			continue
 		}
 
@@ -304,6 +342,11 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 				ratio:    ratio,
 				scope:    scope,
 			})
+			reason := "rate_limit_pressure"
+			if cooldown {
+				reason = "rate_limit_cooldown"
+			}
+			trace.skipChannel(ch, "priority_order", reason, fmt.Sprintf("scope=%s usage=%.0f%%", scope, ratio*100))
 			continue
 		}
 
@@ -311,12 +354,13 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			prefix := kindSchedulerLogPrefix(kind)
 			log.Printf("[%s-Vision] 文本请求保留可识图渠道: [%d] %s (待普通文本渠道水位 >= %.0f%% 后再作为溢出池)",
 				prefix, ch.Index, upstream.Name, rateLimitVisionReserveWatermark*100)
+			trace.skipChannel(ch, "priority_order", "vision_reserved_for_image", "")
 			continue
 		}
 
 		prefix := kindSchedulerLogPrefix(kind)
 		log.Printf("[%s-Channel] 选择渠道: [%d] %s (优先级: %d)", prefix, ch.Index, upstream.Name, ch.Priority)
-		return s.selectionResult(kind, upstream, ch.Index, "priority_order"), nil
+		return finish(upstream, ch.Index, "priority_order"), nil
 	}
 
 	for _, skipped := range softSkipped {
@@ -326,11 +370,20 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 		prefix := kindSchedulerLogPrefix(kind)
 		log.Printf("[%s-RateLimit] 所有低水位候选不可用，回退选择高水位渠道: [%d] %s scope=%s usage=%.0f%%",
 			prefix, skipped.channel.Index, skipped.upstream.Name, skipped.scope, skipped.ratio*100)
-		return s.selectionResult(kind, skipped.upstream, skipped.channel.Index, "rate_limit_pressure"), nil
+		return finish(skipped.upstream, skipped.channel.Index, "rate_limit_pressure"), nil
 	}
 
 	// 3. 所有健康渠道都失败，选择失败率最低的作为降级
-	return s.selectFallbackChannel(activeChannels, failedChannels, kind)
+	result, err := s.selectFallbackChannel(activeChannels, failedChannels, kind)
+	if result != nil {
+		channelName := ""
+		if result.Upstream != nil {
+			channelName = result.Upstream.Name
+		}
+		trace.selectChannel(result.ChannelIndex, channelName, result.Reason)
+		result.Trace = trace
+	}
+	return result, err
 }
 
 func (s *ChannelScheduler) channelAvailableForCandidateFilter(ch ChannelInfo, upstream *config.UpstreamConfig, kind ChannelKind) bool {

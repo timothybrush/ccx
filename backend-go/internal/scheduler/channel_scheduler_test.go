@@ -279,6 +279,77 @@ func TestNonPromotedChannelStillChecksHealth(t *testing.T) {
 	}
 }
 
+func TestSelectChannelTraceRecordsSelectionAndSkips(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:     "suspended-channel",
+				BaseURL:  "https://suspended.example.com",
+				APIKeys:  []string{"sk-suspended-key"},
+				Status:   "suspended",
+				Priority: 1,
+			},
+			{
+				Name:     "selected-channel",
+				BaseURL:  "https://selected.example.com",
+				APIKeys:  []string{"sk-selected-key"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	result, err := scheduler.SelectChannel(context.Background(), "test-user", map[int]bool{}, ChannelKindMessages, "", "", "")
+	if err != nil {
+		t.Fatalf("SelectChannel() error = %v", err)
+	}
+	if result.Trace == nil {
+		t.Fatal("SelectionResult.Trace = nil, want trace")
+	}
+	if result.Trace.Kind != ChannelKindMessages {
+		t.Fatalf("trace kind = %s, want %s", result.Trace.Kind, ChannelKindMessages)
+	}
+	if result.Trace.Selected == nil {
+		t.Fatal("trace selected = nil")
+	}
+	if result.Trace.Selected.ChannelIndex != 1 || result.Trace.Selected.ChannelName != "selected-channel" || result.Trace.Selected.Reason != "priority_order" {
+		t.Fatalf("trace selected = %+v, want selected-channel priority_order", result.Trace.Selected)
+	}
+	if !traceHasStage(result.Trace, "active_model_filter", 2) {
+		t.Fatalf("trace stages = %+v, want active_model_filter count 2", result.Trace.Stages)
+	}
+	if !traceHasCandidateSkip(result.Trace, 0, "priority_order", "inactive_status") {
+		t.Fatalf("trace candidates = %+v, want inactive_status skip for channel 0", result.Trace.Candidates)
+	}
+}
+
+func traceHasStage(trace *SelectionTrace, name string, count int) bool {
+	if trace == nil {
+		return false
+	}
+	for _, stage := range trace.Stages {
+		if stage.Name == name && stage.Count == count {
+			return true
+		}
+	}
+	return false
+}
+
+func traceHasCandidateSkip(trace *SelectionTrace, channelIndex int, stage, reason string) bool {
+	if trace == nil {
+		return false
+	}
+	for _, candidate := range trace.Candidates {
+		if candidate.ChannelIndex == channelIndex && candidate.Stage == stage && candidate.Reason == reason {
+			return true
+		}
+	}
+	return false
+}
+
 // TestExpiredPromotionNotBypassHealthCheck 测试过期的促销不绕过健康检查
 func TestExpiredPromotionNotBypassHealthCheck(t *testing.T) {
 	// 设置促销截止时间为过去

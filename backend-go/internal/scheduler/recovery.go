@@ -20,6 +20,7 @@ type SelectionResult struct {
 	Upstream     *config.UpstreamConfig
 	ChannelIndex int
 	Reason       string // 选择原因（用于日志）
+	Trace        *SelectionTrace
 }
 
 // ContextRequirement 描述当前请求的输入上下文与输出预算。
