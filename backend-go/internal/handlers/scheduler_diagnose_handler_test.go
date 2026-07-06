@@ -103,6 +103,51 @@ func TestDiagnoseSchedulerSelectionReturnsContextError(t *testing.T) {
 	}
 }
 
+func TestDiagnoseSchedulerSelectionReturnsModelFilterTrace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	sch, cleanup := newSchedulerDiagnoseTestScheduler(t, config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:            "claude-only",
+				BaseURL:         "https://claude.example.com",
+				APIKeys:         []string{"sk-claude"},
+				Status:          "active",
+				SupportedModels: []string{"claude-*"},
+			},
+			{
+				Name:            "disabled-gpt",
+				BaseURL:         "https://disabled.example.com",
+				APIKeys:         []string{"sk-disabled"},
+				Status:          "disabled",
+				SupportedModels: []string{"gpt-*"},
+			},
+		},
+	})
+	defer cleanup()
+
+	resp := postSchedulerDiagnose(t, sch, scheduler.ChannelKindMessages, []byte(`{"model":"gpt-test"}`))
+
+	if resp.OK {
+		t.Fatalf("ok = true, want false")
+	}
+	if !strings.Contains(resp.Error, "支持模型") {
+		t.Fatalf("error = %q, want model support error", resp.Error)
+	}
+	if !strings.Contains(resp.Summary, "claude-only@active_model_filter/unsupported_model") {
+		t.Fatalf("summary = %q, want unsupported model skip", resp.Summary)
+	}
+	if len(resp.Trace.Candidates) != 2 {
+		t.Fatalf("trace.candidates len = %d, want 2: %#v", len(resp.Trace.Candidates), resp.Trace.Candidates)
+	}
+	if resp.Trace.Candidates[0].Reason != "unsupported_model" {
+		t.Fatalf("first candidate = %#v, want unsupported_model", resp.Trace.Candidates[0])
+	}
+	if resp.Trace.Candidates[1].Reason != "disabled_status" {
+		t.Fatalf("second candidate = %#v, want disabled_status", resp.Trace.Candidates[1])
+	}
+}
+
 func TestDiagnoseSchedulerSelectionRejectsInvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

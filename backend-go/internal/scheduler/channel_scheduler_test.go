@@ -125,6 +125,62 @@ func TestSelectChannelDryRunDoesNotRecordLastSelectedChannel(t *testing.T) {
 	}
 }
 
+func TestSelectChannelTraceRecordsActiveModelFilterSkips(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:            "unsupported",
+				BaseURL:         "https://unsupported.example.com",
+				APIKeys:         []string{"sk-unsupported"},
+				Status:          "active",
+				Priority:        1,
+				SupportedModels: []string{"claude-*"},
+			},
+			{
+				Name:            "disabled",
+				BaseURL:         "https://disabled.example.com",
+				APIKeys:         []string{"sk-disabled"},
+				Status:          "disabled",
+				Priority:        2,
+				SupportedModels: []string{"gpt-*"},
+			},
+			{
+				Name:            "selected",
+				BaseURL:         "https://selected.example.com",
+				APIKeys:         []string{"sk-selected"},
+				Status:          "active",
+				Priority:        3,
+				SupportedModels: []string{"gpt-*"},
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	result, err := scheduler.SelectChannelWithOptions(context.Background(), SelectionOptions{
+		Kind:  ChannelKindMessages,
+		Model: "gpt-test",
+	})
+	if err != nil {
+		t.Fatalf("选择渠道失败: %v", err)
+	}
+	if result.ChannelIndex != 2 {
+		t.Fatalf("result channel = %d, want 2", result.ChannelIndex)
+	}
+
+	skips := result.Trace.Candidates
+	if len(skips) != 2 {
+		t.Fatalf("skips len = %d, want 2: %#v", len(skips), skips)
+	}
+	if skips[0].Reason != "unsupported_model" || skips[0].ChannelName != "unsupported" {
+		t.Fatalf("first skip = %#v, want unsupported_model for unsupported", skips[0])
+	}
+	if skips[1].Reason != "disabled_status" || skips[1].ChannelName != "disabled" {
+		t.Fatalf("second skip = %#v, want disabled_status for disabled", skips[1])
+	}
+}
+
 // TestPromotedChannelBypassesHealthCheck 测试促销渠道绕过健康检查
 func TestPromotedChannelBypassesHealthCheck(t *testing.T) {
 	// 设置促销截止时间为 5 分钟后

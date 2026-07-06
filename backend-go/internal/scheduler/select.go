@@ -88,7 +88,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	}
 
 	// 获取活跃渠道列表（含模型过滤）
-	activeChannels := s.getActiveChannels(kind, model)
+	activeChannels := s.getActiveChannelsWithTrace(kind, model, trace)
 	trace.setStage("active_model_filter", len(activeChannels))
 	if len(activeChannels) == 0 {
 		// 区分"无活跃渠道"和"无渠道支持该模型"
@@ -995,6 +995,10 @@ type ChannelInfo struct {
 
 // getActiveChannels 获取活跃渠道列表（按优先级排序）
 func (s *ChannelScheduler) getActiveChannels(kind ChannelKind, model string) []ChannelInfo {
+	return s.getActiveChannelsWithTrace(kind, model, nil)
+}
+
+func (s *ChannelScheduler) getActiveChannelsWithTrace(kind ChannelKind, model string, trace *SelectionTrace) []ChannelInfo {
 	cfg := s.configManager.GetConfig()
 
 	var upstreams []config.UpstreamConfig
@@ -1020,6 +1024,16 @@ func (s *ChannelScheduler) getActiveChannels(kind ChannelKind, model string) []C
 		if status == "" {
 			status = "active" // 默认为活跃
 		}
+		priority := upstream.Priority
+		if priority == 0 {
+			priority = i // 默认优先级为索引
+		}
+		ch := ChannelInfo{
+			Index:    i,
+			Name:     upstream.Name,
+			Priority: priority,
+			Status:   status,
+		}
 
 		// 只选择 active 状态的渠道（suspended 也算在活跃序列中，但会被健康检查过滤）
 		if status != "disabled" {
@@ -1029,21 +1043,14 @@ func (s *ChannelScheduler) getActiveChannels(kind ChannelKind, model string) []C
 				if !supported {
 					prefix := kindSchedulerLogPrefix(kind)
 					log.Printf("[%s-ModelFilter] 跳过渠道 [%d] %s: 模型 %q 不被 supportedModels 支持 (%s)", prefix, i, upstream.Name, model, reason)
+					trace.skipChannel(ch, "active_model_filter", "unsupported_model", reason)
 					continue
 				}
 			}
 
-			priority := upstream.Priority
-			if priority == 0 {
-				priority = i // 默认优先级为索引
-			}
-
-			activeChannels = append(activeChannels, ChannelInfo{
-				Index:    i,
-				Name:     upstream.Name,
-				Priority: priority,
-				Status:   status,
-			})
+			activeChannels = append(activeChannels, ch)
+		} else {
+			trace.skipChannel(ch, "active_model_filter", "disabled_status", status)
 		}
 	}
 
