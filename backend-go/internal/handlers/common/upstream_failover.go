@@ -23,10 +23,11 @@ import (
 )
 
 const (
-	upstreamAccountPoolCooldown = time.Minute
-	upstreamOverloadedCooldown  = 15 * time.Second
-	halfOpenProbeWaitTimeout    = 5 * time.Second
-	halfOpenProbePollInterval   = 100 * time.Millisecond
+	upstreamAccountPoolCooldown   = time.Minute
+	upstreamOverloadedCooldown    = 15 * time.Second
+	halfOpenProbeWaitTimeout      = 5 * time.Second
+	halfOpenProbePollInterval     = 100 * time.Millisecond
+	shortEmptyResponseRetryWindow = 10 * time.Second
 )
 
 // isClientSideError 判断错误是否由客户端明确取消（不应计入渠道失败）
@@ -187,8 +188,12 @@ func TryUpstreamWithAllKeys(
 		originalIdx := urlResult.OriginalIdx // 原始索引用于指标记录
 		failedKeys := make(map[string]bool)  // 每个 BaseURL 重置失败 Key 列表
 		maxRetries := len(upstream.APIKeys)
+		shortEmptyRetried := make(map[string]bool)
+		var retrySelection keypool.Selection
+		var retryAPIKey string
 
-		for attempt := 0; attempt < maxRetries; attempt++ {
+		for keyAttempts, attemptOrdinal := 0, 0; keyAttempts < maxRetries || retryAPIKey != ""; attemptOrdinal++ {
+			isRetryAttempt := attemptOrdinal > 0 || urlIdx > 0
 			// 释放上一轮 attempt 的并发信号量（首次为空操作）
 			if activeRateLimitRelease != nil {
 				activeRateLimitRelease()
@@ -220,10 +225,22 @@ func TryUpstreamWithAllKeys(
 			RestoreRequestBody(c, attemptBody)
 			c.Set("requestBodyBytes", attemptBody)
 
-			selection, apiKey, err := selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey)
-			if err != nil {
-				lastError = err
-				break // 当前 BaseURL 没有可用 Key，尝试下一个 BaseURL
+			var selection keypool.Selection
+			var apiKey string
+			internalRetry := retryAPIKey != ""
+			if retryAPIKey != "" {
+				selection = retrySelection
+				apiKey = retryAPIKey
+				retrySelection = keypool.Selection{}
+				retryAPIKey = ""
+			} else {
+				keyAttempts++
+				var err error
+				selection, apiKey, err = selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey)
+				if err != nil {
+					lastError = err
+					break // 当前 BaseURL 没有可用 Key，尝试下一个 BaseURL
+				}
 			}
 
 			// 检查熔断状态
@@ -255,8 +272,12 @@ func TryUpstreamWithAllKeys(
 			}
 
 			if envCfg.ShouldLog("info") {
+				displayMax := maxRetries
+				if internalRetry || len(shortEmptyRetried) > 0 {
+					displayMax++
+				}
 				RequestLogf(c, "[%s-Key] 使用API密钥: %s (BaseURL %d/%d, 尝试 %d/%d)",
-					apiType, utils.MaskAPIKey(apiKey), urlIdx+1, len(urlResults), attempt+1, maxRetries)
+					apiType, utils.MaskAPIKey(apiKey), urlIdx+1, len(urlResults), attemptOrdinal+1, displayMax)
 			}
 
 			// 使用深拷贝避免并发修改问题
@@ -332,6 +353,7 @@ func TryUpstreamWithAllKeys(
 					UpdateLogStatus(channelLogStore, metricsKey, logRequestID, metrics.StatusFirstByte)
 				},
 			}
+			attemptStartedAt := time.Now()
 			resp, err := SendRequestWithLifecycleTrace(req, upstream, envCfg, isStream, apiType, lifecycleTrace)
 			if err != nil {
 				lastError = err
@@ -341,7 +363,7 @@ func TryUpstreamWithAllKeys(
 					metricsManager.RecordRequestFinalizeClientCancel(currentBaseURL, apiKey, metricsServiceType, requestID)
 					channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 					// 完成日志记录（客户端取消）
-					CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, "client canceled", attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, "client canceled", isRetryAttempt)
 					RequestLogf(c, "[%s-Cancel] 请求已取消（SendRequest 阶段）", apiType)
 					return true, "", 0, nil, nil, err
 				}
@@ -355,7 +377,7 @@ func TryUpstreamWithAllKeys(
 				}
 				// 记录渠道日志
 				// 完成日志记录
-				CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, err.Error(), attempt > 0 || urlIdx > 0)
+				CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, err.Error(), isRetryAttempt)
 				RequestLogf(c, "[%s-Key] 警告: API密钥失败: %v", apiType, err)
 				continue
 			}
@@ -431,7 +453,7 @@ func TryUpstreamWithAllKeys(
 					if strings.EqualFold(apiType, "Vectors") {
 						channelErrorInfo = errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
 					}
-					CompleteLog(channelLogStore, metricsKey, logRequestID, resp.StatusCode, false, channelErrorInfo, attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, resp.StatusCode, false, channelErrorInfo, isRetryAttempt)
 
 					if isQuotaRelated {
 						deprioritizeCandidates[apiKey] = true
@@ -466,7 +488,7 @@ func TryUpstreamWithAllKeys(
 				metricsManager.RecordRequestFinalizeFailureWithClass(currentBaseURL, apiKey, metricsServiceType, requestID, metrics.FailureClassNonRetryable)
 				channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 				// 记录渠道日志
-				CompleteLog(channelLogStore, metricsKey, logRequestID, clientStatusCode, false, channelErrorInfo, attempt > 0 || urlIdx > 0)
+				CompleteLog(channelLogStore, metricsKey, logRequestID, clientStatusCode, false, channelErrorInfo, isRetryAttempt)
 				c.Data(clientStatusCode, "application/json", respBodyBytes)
 				return true, "", 0, nil, nil, nil
 			}
@@ -476,10 +498,6 @@ func TryUpstreamWithAllKeys(
 				for key := range deprioritizeCandidates {
 					deprioritizeKey(key)
 				}
-			}
-
-			if markURLSuccess != nil {
-				markURLSuccess(currentBaseURL)
 			}
 
 			streamingUserID := ""
@@ -503,9 +521,26 @@ func TryUpstreamWithAllKeys(
 					channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 					RequestLogf(c, "[%s-Cancel] 请求已取消，停止渠道 failover", apiType)
 					// 完成日志记录（客户端取消）
-					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, "client canceled", attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, "client canceled", isRetryAttempt)
 				} else if errors.Is(err, ErrEmptyStreamResponse) || errors.Is(err, ErrInvalidResponseBody) || errors.Is(err, ErrEmptyNonStreamResponse) || errors.Is(err, ErrStreamFirstContentTimeout) || errors.Is(err, ErrStreamStalled) {
 					// 空响应（流式 / 非流式）或无效响应体（如 HTML）或流式首字超时/断流：Header 未发送，可安全 failover
+					retryKey := currentBaseURL + "|" + apiKey
+					elapsed := time.Since(attemptStartedAt)
+					if shouldRetryShortEmptyResponse(kind, err) && !shortEmptyRetried[retryKey] && elapsed <= shortEmptyResponseRetryWindow && !c.Writer.Written() {
+						shortEmptyRetried[retryKey] = true
+						retrySelection = selection
+						retryAPIKey = apiKey
+						metricsManager.RecordRequestFinalizeIgnored(currentBaseURL, apiKey, metricsServiceType, requestID)
+						channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
+						if probeAcquired[retryKey] {
+							metricsManager.ReleaseProbe(currentBaseURL, apiKey, metricsServiceType)
+							delete(probeAcquired, retryKey)
+						}
+						CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, err.Error(), isRetryAttempt)
+						RequestLogf(c, "[%s-EmptyResponse-Retry] 上游短空响应 (Key: %s, 耗时: %dms)，同渠道同 Key 重试一次",
+							apiType, utils.MaskAPIKey(apiKey), elapsed.Milliseconds())
+						continue
+					}
 					failedKeys[apiKey] = true
 					cfgManager.MarkKeyAsFailed(apiKey, apiType)
 					metricsManager.RecordRequestFinalizeFailureWithClass(currentBaseURL, apiKey, metricsServiceType, requestID, metrics.FailureClassRetryable)
@@ -514,7 +549,7 @@ func TryUpstreamWithAllKeys(
 						markURLFailure(currentBaseURL)
 					}
 					// 记录渠道日志
-					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, err.Error(), attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, err.Error(), isRetryAttempt)
 					RequestLogf(c, "[%s-InvalidResponse] 上游返回无效响应 (Key: %s): %v，尝试下一个密钥", apiType, utils.MaskAPIKey(apiKey), err)
 					continue
 				} else if blErr, ok := err.(*ErrBlacklistKey); ok {
@@ -532,7 +567,7 @@ func TryUpstreamWithAllKeys(
 					if markURLFailure != nil {
 						markURLFailure(currentBaseURL)
 					}
-					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, fmt.Sprintf("key blacklisted: %s - %s", blErr.Reason, blErr.Message), attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, fmt.Sprintf("key blacklisted: %s - %s", blErr.Reason, blErr.Message), isRetryAttempt)
 					RequestLogf(c, "[%s-Blacklist] SSE 流内错误触发拉黑 (Key: %s, 原因: %s)，尝试下一个密钥", apiType, utils.MaskAPIKey(apiKey), blErr.Reason)
 					continue
 				} else {
@@ -541,12 +576,15 @@ func TryUpstreamWithAllKeys(
 					metricsManager.RecordRequestFinalizeFailureWithClass(currentBaseURL, apiKey, metricsServiceType, requestID, metrics.FailureClassRetryable)
 					channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 					// 记录渠道日志
-					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, err.Error(), attempt > 0 || urlIdx > 0)
+					CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, false, err.Error(), isRetryAttempt)
 					RequestLogf(c, "[%s-Key] 警告: 响应处理失败: %v", apiType, err)
 				}
 				return true, "", 0, nil, usage, err
 			}
 
+			if markURLSuccess != nil {
+				markURLSuccess(currentBaseURL)
+			}
 			metricsManager.RecordRequestFinalizeSuccess(currentBaseURL, apiKey, metricsServiceType, requestID, usage)
 			channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 			if probeKey := currentBaseURL + "|" + apiKey; probeAcquired[probeKey] {
@@ -554,7 +592,7 @@ func TryUpstreamWithAllKeys(
 				delete(probeAcquired, probeKey)
 			}
 			// 记录渠道日志
-			CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, true, "", attempt > 0 || urlIdx > 0)
+			CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, true, "", isRetryAttempt)
 			return true, apiKey, originalIdx, nil, usage, nil
 		}
 
@@ -565,6 +603,13 @@ func TryUpstreamWithAllKeys(
 	}
 
 	return false, "", 0, lastFailoverError, nil, lastError
+}
+
+func shouldRetryShortEmptyResponse(kind scheduler.ChannelKind, err error) bool {
+	if kind != scheduler.ChannelKindMessages {
+		return false
+	}
+	return errors.Is(err, ErrEmptyStreamResponse) || errors.Is(err, ErrEmptyNonStreamResponse)
 }
 
 // BuildDefaultURLResults 将 URLs 转为按原始顺序的结果列表（无动态排序）

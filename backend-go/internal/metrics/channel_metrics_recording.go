@@ -246,20 +246,46 @@ func (m *MetricsManager) RecordRequestFinalizeClientCancel(baseURL, apiKey, serv
 		return
 	}
 
-	idx, ok := metrics.pendingHistoryIdx[requestID]
-	if !ok || idx < 0 || idx >= len(metrics.requestHistory) {
+	if !m.removePendingRequestRecordLocked(metrics, requestID) {
 		return
 	}
-	delete(metrics.pendingHistoryIdx, requestID)
 
 	// 仅计入总请求数，不计入失败数
 	metrics.RequestCount++
 	// 注意：不重置 ConsecutiveFailures，客户端取消不应影响连续失败计数
+}
+
+// RecordRequestFinalizeIgnored 丢弃内部重试产生的 pending 记录。
+// 用于 Header 未写回客户端前的内部重试，不计入请求数、失败率或熔断状态。
+func (m *MetricsManager) RecordRequestFinalizeIgnored(baseURL, apiKey, serviceType string, requestID uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	metrics := m.findPendingRequestMetricsLocked(baseURL, apiKey, serviceType, requestID)
+	if metrics == nil {
+		metrics = m.getFirstMatchingMetricsLocked(baseURL, apiKey, serviceType)
+	}
+	if metrics != nil && metrics.MetricsKey != m.metricsIdentityKey(baseURL, apiKey, serviceType) {
+		metrics = m.getOrCreateKey(baseURL, apiKey, serviceType)
+	}
+	if metrics == nil {
+		return
+	}
+
+	m.removePendingRequestRecordLocked(metrics, requestID)
+}
+
+func (m *MetricsManager) removePendingRequestRecordLocked(metrics *KeyMetrics, requestID uint64) bool {
+	idx, ok := metrics.pendingHistoryIdx[requestID]
+	if !ok || idx < 0 || idx >= len(metrics.requestHistory) {
+		return false
+	}
+	delete(metrics.pendingHistoryIdx, requestID)
 
 	// 不更新滑动窗口（不影响失败率计算）
 	// 不检查熔断状态（客户端取消不应触发熔断）
 
-	// 从历史记录中移除（客户端取消不记录）
+	// 从历史记录中移除（客户端取消 / 内部重试不记录）
 	metrics.requestHistory = append(metrics.requestHistory[:idx], metrics.requestHistory[idx+1:]...)
 	// 更新后续索引
 	for rid, ridx := range metrics.pendingHistoryIdx {
@@ -267,6 +293,7 @@ func (m *MetricsManager) RecordRequestFinalizeClientCancel(baseURL, apiKey, serv
 			metrics.pendingHistoryIdx[rid] = ridx - 1
 		}
 	}
+	return true
 }
 
 // RecordRequestStart 记录请求开始（增加进行中计数）

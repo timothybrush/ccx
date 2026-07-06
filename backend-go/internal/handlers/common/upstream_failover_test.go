@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -320,4 +321,253 @@ func TestTryUpstreamWithAllKeysOverloadedOpensCircuitAndCooldown(t *testing.T) {
 	if deferred, _, cooldown := channelScheduler.ShouldDeferForRateLimit(scheduler.ChannelKindMessages, 0, "", ratelimit.Config{}, time.Now()); !deferred || !cooldown {
 		t.Fatalf("channel cooldown deferred=%v cooldown=%v, want both true", deferred, cooldown)
 	}
+}
+
+func TestTryUpstreamWithAllKeysRetriesShortEmptyResponseOnSameKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "short-empty-messages",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-empty-1", "sk-empty-2"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"glm-5.1"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+	var handleCalls int
+	usedKeys := make([]string, 0, 2)
+	urlFailures := 0
+	urlSuccesses := 0
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"glm-5.1","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		func(url string) { urlFailures++ },
+		func(url string) { urlSuccesses++ },
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			handleCalls++
+			usedKeys = append(usedKeys, apiKey)
+			if handleCalls == 1 {
+				return nil, ErrEmptyNonStreamResponse
+			}
+			return nil, nil
+		},
+		"glm-5.1",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+	)
+
+	if !handled {
+		t.Fatal("短空响应同 Key 重试成功后应处理完成")
+	}
+	if successKey != "sk-empty-1" {
+		t.Fatalf("successKey = %q, want sk-empty-1", successKey)
+	}
+	if failoverErr != nil {
+		t.Fatalf("failoverErr = %#v, want nil", failoverErr)
+	}
+	if lastErr != nil {
+		t.Fatalf("lastErr = %v, want nil", lastErr)
+	}
+	if handleCalls != 2 {
+		t.Fatalf("handleCalls = %d, want 2", handleCalls)
+	}
+	if len(usedKeys) != 2 || usedKeys[0] != "sk-empty-1" || usedKeys[1] != "sk-empty-1" {
+		t.Fatalf("usedKeys = %v, want same key retry", usedKeys)
+	}
+	if urlFailures != 0 {
+		t.Fatalf("urlFailures = %d, want 0", urlFailures)
+	}
+	if urlSuccesses != 1 {
+		t.Fatalf("urlSuccesses = %d, want 1", urlSuccesses)
+	}
+	if cfgManager.IsKeyFailed("sk-empty-1", "Messages") {
+		t.Fatal("第一次短空响应内部重试不应标记 Key 失败")
+	}
+
+	serviceType := scheduler.NormalizedMetricsServiceType(scheduler.ChannelKindMessages, upstream.ServiceType)
+	keyMetrics := messagesMetrics.GetKeyMetrics(server.URL, "sk-empty-1", serviceType)
+	if keyMetrics == nil {
+		t.Fatal("expected key metrics")
+	}
+	if keyMetrics.RequestCount != 1 || keyMetrics.SuccessCount != 1 || keyMetrics.FailureCount != 0 {
+		t.Fatalf("metrics = requests:%d success:%d failure:%d, want 1/1/0",
+			keyMetrics.RequestCount, keyMetrics.SuccessCount, keyMetrics.FailureCount)
+	}
+}
+
+func TestTryUpstreamWithAllKeysMarksKeyFailedAfterRepeatedShortEmptyResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "repeated-empty-messages",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-empty-1"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"glm-5.1"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+	handleCalls := 0
+	urlFailures := 0
+
+	handled, successKey, _, _, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"glm-5.1","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		func(url string) { urlFailures++ },
+		nil,
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			handleCalls++
+			return nil, ErrEmptyNonStreamResponse
+		},
+		"glm-5.1",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+	)
+
+	if handled {
+		t.Fatal("连续短空响应不应处理完成，应交给外层渠道 failover")
+	}
+	if successKey != "" {
+		t.Fatalf("successKey = %q, want empty", successKey)
+	}
+	if !errors.Is(lastErr, ErrEmptyNonStreamResponse) {
+		t.Fatalf("lastErr = %v, want ErrEmptyNonStreamResponse", lastErr)
+	}
+	if handleCalls != 2 {
+		t.Fatalf("handleCalls = %d, want 2", handleCalls)
+	}
+	if urlFailures != 1 {
+		t.Fatalf("urlFailures = %d, want 1", urlFailures)
+	}
+	if !cfgManager.IsKeyFailed("sk-empty-1", "Messages") {
+		t.Fatal("连续短空响应后应标记 Key 失败")
+	}
+
+	serviceType := scheduler.NormalizedMetricsServiceType(scheduler.ChannelKindMessages, upstream.ServiceType)
+	keyMetrics := messagesMetrics.GetKeyMetrics(server.URL, "sk-empty-1", serviceType)
+	if keyMetrics == nil {
+		t.Fatal("expected key metrics")
+	}
+	if keyMetrics.RequestCount != 1 || keyMetrics.SuccessCount != 0 || keyMetrics.FailureCount != 1 {
+		t.Fatalf("metrics = requests:%d success:%d failure:%d, want 1/0/1",
+			keyMetrics.RequestCount, keyMetrics.SuccessCount, keyMetrics.FailureCount)
+	}
+}
+
+func newTestFailoverDependencies(t *testing.T, upstream config.UpstreamConfig) (*config.ConfigManager, *scheduler.ChannelScheduler, *metrics.MetricsManager, func()) {
+	t.Helper()
+
+	cfg := config.Config{Upstream: []config.UpstreamConfig{upstream}}
+	tmpDir, err := os.MkdirTemp("", "upstream-failover-test-*")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.json")
+	cfgData, err := json.Marshal(cfg)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("序列化配置失败: %v", err)
+	}
+	if err := os.WriteFile(configPath, cfgData, 0644); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("写入配置失败: %v", err)
+	}
+
+	cfgManager, err := config.NewConfigManager(configPath, "")
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("创建配置管理器失败: %v", err)
+	}
+
+	messagesMetrics := metrics.NewMetricsManager()
+	responsesMetrics := metrics.NewMetricsManager()
+	geminiMetrics := metrics.NewMetricsManager()
+	chatMetrics := metrics.NewMetricsManager()
+	imagesMetrics := metrics.NewMetricsManager()
+
+	channelScheduler := scheduler.NewChannelScheduler(
+		cfgManager,
+		messagesMetrics,
+		responsesMetrics,
+		geminiMetrics,
+		chatMetrics,
+		imagesMetrics,
+		session.NewTraceAffinityManager(),
+		warmup.NewURLManager(30*time.Second, 3),
+	)
+
+	cleanup := func() {
+		cfgManager.Close()
+		messagesMetrics.Stop()
+		responsesMetrics.Stop()
+		geminiMetrics.Stop()
+		chatMetrics.Stop()
+		imagesMetrics.Stop()
+		os.RemoveAll(tmpDir)
+	}
+
+	return cfgManager, channelScheduler, messagesMetrics, cleanup
 }
