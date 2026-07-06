@@ -226,6 +226,72 @@ export interface SchedulerStatsResponse {
   circuitBackoffMax?: string
 }
 
+export type ChannelKind = 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
+
+export interface SchedulerDiagnoseContextRequirement {
+  inputTokens?: number
+  outputTokens?: number
+  requiredTokens?: number
+  minimumContextWindowTokens?: number
+  explicitOutputMax?: boolean
+  skipWindowValidation?: boolean
+}
+
+export interface SchedulerDiagnoseRequest {
+  userId?: string
+  model?: string
+  routePrefix?: string
+  channelName?: string
+  failedChannels?: number[]
+  hasImageContent?: boolean
+  agentRole?: string
+  contextRequirement?: SchedulerDiagnoseContextRequirement
+}
+
+export interface SchedulerTraceStage {
+  name: string
+  count: number
+}
+
+export interface SchedulerTraceCandidate {
+  channelIndex: number
+  channelName: string
+  stage: string
+  reason: string
+  details?: string
+}
+
+export interface SchedulerTraceSelection {
+  channelIndex: number
+  channelName: string
+  reason: string
+}
+
+export interface SchedulerSelectionTrace {
+  kind: ChannelKind
+  model?: string
+  routePrefix?: string
+  channelName?: string
+  agentRole?: string
+  stages?: SchedulerTraceStage[]
+  candidates?: SchedulerTraceCandidate[]
+  selected?: SchedulerTraceSelection
+}
+
+export interface SchedulerDiagnoseResponse {
+  ok: boolean
+  kind: ChannelKind
+  reason?: string
+  summary?: string
+  error?: string
+  selected?: {
+    channelIndex: number
+    channelName: string
+    serviceType?: string
+  }
+  trace?: SchedulerSelectionTrace
+}
+
 export interface PingResult {
   success: boolean
   latency: number

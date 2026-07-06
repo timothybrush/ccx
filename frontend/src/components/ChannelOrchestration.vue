@@ -49,6 +49,13 @@
         <v-chip v-else size="small" color="warning" variant="tonal" class="ml-3 mode-chip"> {{ t('orchestration.singleChannel') }} </v-chip>
       </div>
       <div class="d-flex align-center ga-2">
+        <v-tooltip :text="t('schedulerDiagnose.title')" location="bottom" content-class="ccx-tooltip">
+          <template #activator="{ props: tooltipProps }">
+            <v-btn icon size="small" variant="text" v-bind="tooltipProps" @click="showSchedulerDiagnoseDialog = true">
+              <v-icon size="small">mdi-routes</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
         <v-text-field
           v-model="searchQuery"
           density="compact"
@@ -616,6 +623,10 @@
       :channel-name="logsChannelName"
       :channel-type="channelType"
     />
+    <SchedulerDiagnoseDialog
+      v-model="showSchedulerDiagnoseDialog"
+      :channel-type="channelType"
+    />
   </v-card>
 </template>
 
@@ -631,6 +642,7 @@ import ChannelStatusBadge from './ChannelStatusBadge.vue'
 // Lazy-load chart components to reduce initial JS bundle size
 const KeyTrendChart = defineAsyncComponent(() => import('./KeyTrendChart.vue'))
 import ChannelLogsDialog from './ChannelLogsDialog.vue'
+import SchedulerDiagnoseDialog from './SchedulerDiagnoseDialog.vue'
 
 const props = defineProps<{
   channels: Channel[]
@@ -676,6 +688,7 @@ const matchesSearch = (channel: Channel) => {
 const schedulerStats = ref<SchedulerStatsResponse | null>(null)
 const isLoadingMetrics = ref(false)
 const isSavingOrder = ref(false)
+const showSchedulerDiagnoseDialog = ref(false)
 
 // Channel logs dialog state
 const showLogsDialog = ref(false)

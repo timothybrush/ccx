@@ -31,6 +31,8 @@ import type {
   PingResult,
   ResumeChannelResponse,
   SchedulerStatsResponse,
+  SchedulerDiagnoseRequest,
+  SchedulerDiagnoseResponse,
   StartCapabilityTestOptions,
   CompatDiagnoseResult
 } from './api-types'
@@ -544,6 +546,13 @@ export class ApiService {
 
   async getChannelLogs(type: 'messages' | 'responses' | 'gemini' | 'chat' | 'images' | 'vectors', channelId: number): Promise<ChannelLogsResponse> {
     return this.request(`/${type}/channels/${channelId}/logs`)
+  }
+
+  async diagnoseSchedulerSelection(type: 'messages' | 'responses' | 'gemini' | 'chat' | 'images' | 'vectors', payload: SchedulerDiagnoseRequest): Promise<SchedulerDiagnoseResponse> {
+    return this.request(`/${type}/channels/scheduler/diagnose`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
   }
 
   // ============== Chat 渠道管理 API ==============
