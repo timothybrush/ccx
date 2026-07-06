@@ -143,6 +143,9 @@
                   </span>
                 </template>
                 <span v-else class="text-medium-emphasis log-meta">{{ formatDurationSeconds(log.durationMs) }}</span>
+                <v-chip v-if="log.selectionReason" size="small" color="secondary" variant="tonal" :title="log.selectionReason">
+                  {{ t('channelLogs.selectionReason') }} {{ log.selectionReason }}
+                </v-chip>
                 <span v-if="log.firstContentLatencyMs" class="text-medium-emphasis log-meta">
                   {{ t('channelLogs.duration.firstContent') }} {{ formatDurationSeconds(log.firstContentLatencyMs) }}
                 </span>
@@ -154,10 +157,16 @@
                 </span>
               </v-list-item-title>
             </v-list-item>
-            <!-- 展开的错误详情 -->
+            <!-- 展开的诊断详情 -->
             <v-expand-transition>
-              <div v-if="expandedIndex === i && log.errorInfo" class="px-4 py-2 log-error-info">
-                {{ formatErrorInfo(log.errorInfo) }}
+              <div v-if="expandedIndex === i && hasLogDetails(log)" class="px-4 py-2 log-detail-info">
+                <div v-if="log.errorInfo">
+                  {{ formatErrorInfo(log.errorInfo) }}
+                </div>
+                <div v-if="log.selectionTraceSummary" :class="{ 'mt-2': log.errorInfo }">
+                  <div class="log-detail-label">{{ t('channelLogs.selectionTrace') }}</div>
+                  <code class="log-selection-trace">{{ log.selectionTraceSummary }}</code>
+                </div>
               </div>
             </v-expand-transition>
             <v-divider v-if="i < logs.length - 1" />
@@ -251,6 +260,10 @@ const copyLogEntry = async (log: ChannelLogEntry, index: number) => {
 
 const toggleExpand = (i: number) => {
   expandedIndex.value = expandedIndex.value === i ? null : i
+}
+
+const hasLogDetails = (log: ChannelLogEntry): boolean => {
+  return Boolean(log.errorInfo?.trim() || log.selectionTraceSummary?.trim())
 }
 
 const statusColor = (code: number): string => {
@@ -565,12 +578,26 @@ onUnmounted(() => {
   font-size: 0.875rem;
 }
 
-.log-error-info {
+.log-detail-info {
   background: rgba(var(--v-theme-surface-variant), 0.3);
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 0.875rem;
   line-height: 1.6;
+}
+
+.log-detail-label {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.log-selection-trace {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .bg-error-subtle {

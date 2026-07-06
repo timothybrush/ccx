@@ -54,6 +54,26 @@ type DeprioritizeKeyFunc func(apiKey string)
 // actualRequestBody 为本次实际转发给上游的请求体，可用于 usage 估算等后处理。
 type HandleSuccessFunc func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error)
 
+// TryUpstreamOption 为渠道内 BaseURL/Key 轮转补充可选行为。
+type TryUpstreamOption func(*tryUpstreamOptions)
+
+type tryUpstreamOptions struct {
+	channelLogOptions []ChannelLogOption
+}
+
+// WithSelectionTrace 将调度器的选择摘要写入后续渠道请求日志。
+func WithSelectionTrace(selection *scheduler.SelectionResult) TryUpstreamOption {
+	return func(opts *tryUpstreamOptions) {
+		if opts == nil || selection == nil {
+			return
+		}
+		opts.channelLogOptions = append(opts.channelLogOptions, WithChannelSelectionTrace(
+			selection.Reason,
+			scheduler.FormatSelectionTraceSummary(selection.Trace, 4),
+		))
+	}
+}
+
 func shouldNormalizeMetadataUserID(kind scheduler.ChannelKind, upstream *config.UpstreamConfig) bool {
 	if upstream == nil {
 		return false
@@ -104,6 +124,7 @@ func TryUpstreamWithAllKeys(
 	operation string,
 	channelIndex int,
 	channelLogStore *metrics.ChannelLogStore,
+	opts ...TryUpstreamOption,
 ) (handled bool, successKey string, successBaseURLIdx int, failoverErr *FailoverError, usage *types.Usage, lastError error) {
 	if upstream == nil || len(upstream.APIKeys) == 0 {
 		return false, "", 0, nil, nil, nil
@@ -116,6 +137,13 @@ func TryUpstreamWithAllKeys(
 	}
 	if len(urlResults) == 0 {
 		return false, "", 0, nil, nil, nil
+	}
+
+	tryOpts := tryUpstreamOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&tryOpts)
+		}
 	}
 
 	metricsServiceType := scheduler.NormalizedMetricsServiceType(kind, upstream.ServiceType)
@@ -340,7 +368,7 @@ func TryUpstreamWithAllKeys(
 			metricsKey := metrics.GenerateMetricsIdentityKey(currentBaseURL, apiKey, metricsServiceType)
 
 			// 创建 pending 状态日志（附带代理上下文与会话标识，用于 subagent 观测）
-			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, redirectedModel, originalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c))
+			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, redirectedModel, originalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c), tryOpts.channelLogOptions...)
 
 			// TCP 建连开始即计数：将活跃度统计提前到发起上游请求之前
 			requestID := metricsManager.RecordRequestConnected(currentBaseURL, apiKey, metricsServiceType, redirectedModel)

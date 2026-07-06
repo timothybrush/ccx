@@ -323,6 +323,101 @@ func TestTryUpstreamWithAllKeysOverloadedOpensCircuitAndCooldown(t *testing.T) {
 	}
 }
 
+func TestTryUpstreamWithAllKeysRecordsSelectionTrace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "trace-messages",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-trace"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"gpt-trace"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"gpt-trace","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		nil,
+		nil,
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"gpt-trace",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+		WithSelectionTrace(&scheduler.SelectionResult{
+			Reason: "priority_order",
+			Trace: &scheduler.SelectionTrace{
+				Stages: []scheduler.SelectionTraceStage{
+					{Name: "active_model_filter", Count: 1},
+				},
+				Selected: &scheduler.SelectionTraceSelection{
+					ChannelIndex: 0,
+					ChannelName:  "trace-messages",
+					Reason:       "priority_order",
+				},
+			},
+		}),
+	)
+
+	if !handled {
+		t.Fatal("successful upstream response should be handled")
+	}
+	if successKey != "sk-trace" {
+		t.Fatalf("successKey = %q, want sk-trace", successKey)
+	}
+	if failoverErr != nil {
+		t.Fatalf("failoverErr = %#v, want nil", failoverErr)
+	}
+	if lastErr != nil {
+		t.Fatalf("lastErr = %v, want nil", lastErr)
+	}
+
+	serviceType := scheduler.NormalizedMetricsServiceType(scheduler.ChannelKindMessages, upstream.ServiceType)
+	logs := channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages).Get(metrics.GenerateMetricsIdentityKey(server.URL, "sk-trace", serviceType))
+	if len(logs) != 1 {
+		t.Fatalf("logs count = %d, want 1", len(logs))
+	}
+	if logs[0].SelectionReason != "priority_order" {
+		t.Fatalf("selectionReason = %q, want priority_order", logs[0].SelectionReason)
+	}
+	if !strings.Contains(logs[0].SelectionTraceSummary, "selected=0:trace-messages/priority_order") {
+		t.Fatalf("selectionTraceSummary = %q, want selected channel summary", logs[0].SelectionTraceSummary)
+	}
+}
+
 func TestTryUpstreamWithAllKeysRetriesShortEmptyResponseOnSameKey(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

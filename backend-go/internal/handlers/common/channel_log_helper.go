@@ -19,6 +19,22 @@ func GenerateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
+// ChannelLogOption 为 pending 渠道日志补充可选观测字段。
+type ChannelLogOption func(*metrics.ChannelLog)
+
+// WithChannelSelectionTrace 记录本次渠道选择的可解释性摘要。
+func WithChannelSelectionTrace(reason, summary string) ChannelLogOption {
+	reason = strings.TrimSpace(reason)
+	summary = strings.TrimSpace(summary)
+	return func(log *metrics.ChannelLog) {
+		if log == nil {
+			return
+		}
+		log.SelectionReason = reason
+		log.SelectionTraceSummary = summary
+	}
+}
+
 // CreatePendingLog 创建 pending 状态的日志条目（请求开始时调用）
 func CreatePendingLog(
 	channelLogStore *metrics.ChannelLogStore,
@@ -31,6 +47,7 @@ func CreatePendingLog(
 	requestSource string,
 	agentCtx *types.AgentContext,
 	sessionID string,
+	opts ...ChannelLogOption,
 ) string {
 	if channelLogStore == nil || metricsKey == "" {
 		return ""
@@ -71,6 +88,12 @@ func CreatePendingLog(
 		log.AgentType = agentCtx.AgentType
 		log.ParentThreadID = agentCtx.ParentThreadID
 		log.AgentConfidence = agentCtx.Confidence
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(log)
+		}
 	}
 
 	channelLogStore.Record(metricsKey, log)

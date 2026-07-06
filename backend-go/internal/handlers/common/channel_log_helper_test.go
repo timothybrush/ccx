@@ -97,6 +97,40 @@ func TestRecordChannelLogWithSource_UsesExplicitSource(t *testing.T) {
 	}
 }
 
+func TestCreatePendingLog_WithSelectionTrace(t *testing.T) {
+	store := metrics.NewChannelLogStore()
+
+	CreatePendingLog(
+		store,
+		"test-metrics-key-selection",
+		1,
+		"trace-channel",
+		"model-a",
+		"",
+		"",
+		"",
+		"sk-test-secret",
+		"https://example.com",
+		"Messages",
+		"",
+		metrics.RequestSourceProxy,
+		nil,
+		"",
+		WithChannelSelectionTrace("priority_order", "stages=active_model_filter:1 selected=1:trace-channel/priority_order"),
+	)
+
+	logs := store.Get("test-metrics-key-selection")
+	if len(logs) != 1 {
+		t.Fatalf("logs count = %d, want 1", len(logs))
+	}
+	if logs[0].SelectionReason != "priority_order" {
+		t.Fatalf("selectionReason = %q, want priority_order", logs[0].SelectionReason)
+	}
+	if !strings.Contains(logs[0].SelectionTraceSummary, "selected=1:trace-channel/priority_order") {
+		t.Fatalf("selectionTraceSummary = %q, want selected channel summary", logs[0].SelectionTraceSummary)
+	}
+}
+
 func TestCompleteLog_MapsClientCanceledToCancelledStatus(t *testing.T) {
 	store := metrics.NewChannelLogStore()
 	requestID := CreatePendingLog(store, "test-metrics-key-3", 0, "test-channel", "model-a", "", "", "", "sk-test-secret", "https://example.com", "Responses", "edits", metrics.RequestSourceProxy, nil, "")

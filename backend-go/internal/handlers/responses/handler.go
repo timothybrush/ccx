@@ -202,6 +202,7 @@ func handleMultiChannel(
 				"",
 				selection.ChannelIndex,
 				channelScheduler.GetChannelLogStore(scheduler.ChannelKindResponses),
+				common.WithSelectionTrace(selection),
 			)
 
 			return common.MultiChannelAttemptResult{

@@ -27,6 +27,8 @@ type ChannelLog struct {
 	IsRetry                 bool      `json:"isRetry"`
 	InterfaceType           string    `json:"interfaceType"`           // 接口类型（Messages/Responses/Gemini）
 	RequestSource           string    `json:"requestSource,omitempty"` // 请求来源（proxy/capability_test）
+	SelectionReason         string    `json:"selectionReason,omitempty"`
+	SelectionTraceSummary   string    `json:"selectionTraceSummary,omitempty"`
 
 	// 请求生命周期状态
 	Status      string     `json:"status"`                // pending/connecting/first_byte/streaming/completed/failed/cancelled

@@ -179,6 +179,7 @@ func handleMultiChannel(
 				"",
 				selection.ChannelIndex,
 				channelScheduler.GetChannelLogStore(scheduler.ChannelKindChat),
+				common.WithSelectionTrace(selection),
 			)
 
 			return common.MultiChannelAttemptResult{

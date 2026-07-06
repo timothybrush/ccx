@@ -198,6 +198,7 @@ func handleVectorsFailover(
 				embeddingsOperation,
 				selection.ChannelIndex,
 				channelScheduler.GetChannelLogStore(scheduler.ChannelKindVectors),
+				common.WithSelectionTrace(selection),
 			)
 
 			return common.MultiChannelAttemptResult{

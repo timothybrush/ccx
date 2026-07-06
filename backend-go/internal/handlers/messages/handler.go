@@ -203,6 +203,7 @@ func handleMultiChannel(
 				"",
 				selection.ChannelIndex,
 				channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+				common.WithSelectionTrace(selection),
 			)
 
 			responseText, _ := c.Get("responseText")

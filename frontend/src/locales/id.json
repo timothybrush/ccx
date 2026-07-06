@@ -502,6 +502,8 @@
   "channelLogs.copiedEntry": "Log disalin",
   "channelLogs.retry": "Retry",
   "channelLogs.sourceCapabilityTest": "Tes Kemampuan",
+  "channelLogs.selectionReason": "Seleksi",
+  "channelLogs.selectionTrace": "Ringkasan seleksi",
   "channelLogs.reasoning.original": "Asli",
   "channelLogs.reasoning.actual": "Terkirim",
   "channelLogs.duration.connect": "Koneksi",

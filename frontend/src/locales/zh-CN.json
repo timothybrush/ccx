@@ -502,6 +502,8 @@
   "channelLogs.copiedEntry": "已复制日志",
   "channelLogs.retry": "重试",
   "channelLogs.sourceCapabilityTest": "能力测试",
+  "channelLogs.selectionReason": "调度",
+  "channelLogs.selectionTrace": "调度摘要",
   "channelLogs.reasoning.original": "原始",
   "channelLogs.reasoning.actual": "发出",
   "channelLogs.duration.connect": "连接",

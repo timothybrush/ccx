@@ -502,6 +502,8 @@
   "channelLogs.copiedEntry": "Log copied",
   "channelLogs.retry": "Retry",
   "channelLogs.sourceCapabilityTest": "Capability Test",
+  "channelLogs.selectionReason": "Selection",
+  "channelLogs.selectionTrace": "Selection trace",
   "channelLogs.reasoning.original": "Original",
   "channelLogs.reasoning.actual": "Sent",
   "channelLogs.duration.connect": "Connect",

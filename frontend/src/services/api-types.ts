@@ -529,6 +529,8 @@ export interface ChannelLogEntry {
   isRetry: boolean
   interfaceType?: string  // 接口类型（Messages/Responses/Gemini）
   requestSource?: string
+  selectionReason?: string
+  selectionTraceSummary?: string
 
   // 请求生命周期状态
   status: string  // pending/connecting/first_byte/streaming/completed/failed/cancelled
