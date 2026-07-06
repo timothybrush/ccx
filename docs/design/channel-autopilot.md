@@ -81,68 +81,153 @@ Active+Model过滤 → RoutePrefix过滤 → 上下文过滤 → CandidateFilter
 
 ## 3. 数据模型
 
-### 3.1 渠道画像 (ChannelProfile)
+### 3.1 粒度模型：三层架构
 
-每个渠道自动生成一份多维画像，存储在 SQLite 中，运行时缓存：
+**⚠️ 关键设计决策：画像粒度是 `(baseURL, apiKey)` 对，不是 channel**
+
+原因：
+1. 同一 channel 的不同 baseURL 可能走不同 CDN，延迟/超时/截断行为不同
+2. 同一 channel 的不同 API Key 可能属于不同分组/租户，提供不同的模型列表、协议、价格倍率
+3. Key 可能随时换分组，之前探测的模型列表会失效，需要重新检测
+4. 现有 `MetricsManager` 的 identity 已经是 `hash(baseURL + "|" + apiKey)` 粒度
+
+```text
+Channel（渠道）
+  └── KeyEndpoint（baseURL + apiKey 对）  ← 画像的最小单元
+        └── ModelProfile（该 endpoint 上的每个实际模型）
+```
+
+ChannelProfile 是 KeyEndpoint 画像的聚合视图，用于 UI 展示和调度粗筛。
+
+### 3.2 KeyEndpoint 画像 (KeyEndpointProfile)
+
+**画像的最小单元**，对应一个具体的 `baseURL + apiKey` 组合：
 
 ```go
-// backend-go/internal/autopilot/profile.go
+// backend-go/internal/autopilot/key_endpoint_profile.go
 
-type ChannelProfile struct {
-    ChannelID   int        `json:"channelId"`
-    ChannelKind string     `json:"channelKind"` // messages/chat/responses/...
-    UpdatedAt   time.Time  `json:"updatedAt"`
+type KeyEndpointProfile struct {
+    // ── 身份 ──
+    ChannelID   int    `json:"channelId"`
+    ChannelKind string `json:"channelKind"`
+    BaseURL     string `json:"baseUrl"`
+    KeyMask     string `json:"keyMask"`     // 掩码后的 key，如 sk-***abc
+    MetricsKey  string `json:"metricsKey"`  // hash(baseURL+"|"+apiKey)，与 MetricsManager 对齐
+    UpdatedAt   time.Time `json:"updatedAt"`
 
     // ── 自动推导维度 ──
-    HealthState    HealthState    `json:"healthState"`    // healthy/degraded/limited/misconfigured/dead/unknown
-    HealthConfidence float64      `json:"healthConfidence"` // 0.0-1.0
-    QualityTier    QualityTier    `json:"qualityTier"`    // low/normal/high/premium
-    StabilityTier  StabilityTier  `json:"stabilityTier"`  // unstable/normal/stable
-    SpeedTier      SpeedTier      `json:"speedTier"`      // slow/normal/fast
-    CostTier       CostTier       `json:"costTier"`       // free/cheap/normal/expensive
+    HealthState      HealthState    `json:"healthState"`
+    HealthConfidence float64        `json:"healthConfidence"`
+    QualityTier      QualityTier    `json:"qualityTier"`
+    StabilityTier    StabilityTier  `json:"stabilityTier"`
+    SpeedTier        SpeedTier      `json:"speedTier"`
+    CostTier         CostTier       `json:"costTier"`
 
-    // ── 能力标签 ──
+    // ── 能力标签（该 endpoint 特有）──
     SupportsVision     bool `json:"supportsVision"`
     SupportsToolCalls  bool `json:"supportsToolCalls"`
     SupportsReasoning  bool `json:"supportsReasoning"`
-    SupportsLongCtx    bool `json:"supportsLongCtx"` // >200K
+    SupportsLongCtx    bool `json:"supportsLongCtx"`
 
-    // ── 运行时指标快照 ──
-    SuccessRate15m   float64  `json:"successRate15m"`
-    P95LatencyMs     int64    `json:"p95LatencyMs"`
-    ConsecutiveFail  int      `json:"consecutiveFail"`
+    // ── 该 endpoint 的可用模型列表 ──
+    AvailableModels    []string `json:"availableModels"`    // 探测到的实际模型列表
+    ModelMapping       map[string]string `json:"modelMapping"` // 该 endpoint 的模型映射
+
+    // ── 运行时指标（来自 MetricsManager）──
+    SuccessRate15m   float64    `json:"successRate15m"`
+    P95LatencyMs     int64      `json:"p95LatencyMs"`
+    ConsecutiveFail  int        `json:"consecutiveFail"`
     LastSuccessAt    *time.Time `json:"lastSuccessAt,omitempty"`
     LastFailureAt    *time.Time `json:"lastFailureAt,omitempty"`
+
+    // ── 分组感知 ──
+    DetectedGroup    string    `json:"detectedGroup,omitempty"`   // 检测到的 key 分组标识
+    GroupChangedAt   *time.Time `json:"groupChangedAt,omitempty"` // 分组变更时间
+    ModelListHash    string    `json:"modelListHash,omitempty"`   // 模型列表哈希，用于检测变更
 
     // ── 诊断 ──
     HealthEvidence   []string        `json:"healthEvidence"`
     SuggestedAction  SuggestedAction `json:"suggestedAction"`
-    AvailableModels  int             `json:"availableModels"`
 
     // ── 元数据 ──
-    Source           string  `json:"source"`    // auto_probe | manual_override | runtime_update
-    Confidence       float64 `json:"confidence"` // 画像整体置信度
+    Source           string  `json:"source"`
+    Confidence       float64 `json:"confidence"`
 }
-
-type HealthState    string // "healthy" | "degraded" | "limited" | "misconfigured" | "dead" | "unknown"
-type QualityTier    string // "low" | "normal" | "high" | "premium"
-type StabilityTier  string // "unstable" | "normal" | "stable"
-type SpeedTier      string // "slow" | "normal" | "fast"
-type CostTier       string // "free" | "cheap" | "normal" | "expensive"
-type SuggestedAction string // "none" | "replace_keys" | "fix_config" | "wait_recovery" | "delete" | "observe"
 ```
 
-### 3.2 模型画像 (ModelProfile)
+### 3.3 Channel 画像 (ChannelProfile) — 聚合视图
 
-每个"渠道 + 模型"组合的画像：
+ChannelProfile 不再存储原始数据，而是从 KeyEndpoint 画像聚合而来：
+
+```go
+// backend-go/internal/autopilot/channel_profile.go
+
+type ChannelProfile struct {
+    ChannelID   int    `json:"channelId"`
+    ChannelKind string `json:"channelKind"`
+    UpdatedAt   time.Time `json:"updatedAt"`
+
+    // ── 聚合维度（取所有 endpoint 的"最差可用"或"最佳代表"）──
+    HealthState      HealthState    `json:"healthState"`     // 取最差：任一 endpoint dead → degraded
+    QualityTier      QualityTier    `json:"qualityTier"`     // 取最佳 endpoint 的质量
+    StabilityTier    StabilityTier  `json:"stabilityTier"`   // 取中位数
+    SpeedTier        SpeedTier      `json:"speedTier"`       // 取中位数
+    CostTier         CostTier       `json:"costTier"`        // 取最佳 endpoint 的成本
+
+    // ── 能力标签（取并集，但标注不一致）──
+    SupportsVision     bool `json:"supportsVision"`
+    SupportsToolCalls  bool `json:"supportsToolCalls"`
+    SupportsReasoning  bool `json:"supportsReasoning"`
+    SupportsLongCtx    bool `json:"supportsLongCtx"`
+
+    // ── 聚合指标 ──
+    TotalEndpoints     int     `json:"totalEndpoints"`
+    HealthyEndpoints   int     `json:"healthyEndpoints"`
+    TotalModels        int     `json:"totalModels"`       // 去重后的模型总数
+    SuccessRate15m     float64 `json:"successRate15m"`
+    P95LatencyMs       int64   `json:"p95LatencyMs"`
+
+    // ── 能力不一致警告 ──
+    EndpointInconsistencies []EndpointInconsistency `json:"endpointInconsistencies,omitempty"`
+
+    Source     string  `json:"source"`
+    Confidence float64 `json:"confidence"`
+}
+
+// EndpointInconsistency 记录同一 channel 内不同 endpoint 的能力差异
+type EndpointInconsistency struct {
+    Dimension  string `json:"dimension"`  // "quality" | "vision" | "models" | "latency"
+    Detail     string `json:"detail"`     // 例如 "endpoint-1: premium, endpoint-2: normal"
+    Severity   string `json:"severity"`   // "info" | "warning"
+}
+```
+
+**聚合策略**：
+
+```text
+维度        │ 策略              │ 原因
+────────────┼───────────────────┼──────────────────────────────
+HealthState │ 取最差            │ 任一 endpoint 死了，整个渠道至少 degraded
+QualityTier │ 取最佳            │ 调度时选最佳 endpoint 的质量档
+Stability   │ 取中位数          │ 避免单个坏 endpoint 拉低整个渠道
+Speed       │ 取中位数          │ 同上
+Cost        │ 取最佳            │ 便宜的 endpoint 存在就有价值
+Vision等    │ 取并集            │ 只要有一个 endpoint 支持就算支持
+```
+
+### 3.4 模型画像 (ModelProfile)
+
+每个 `(KeyEndpoint + 模型)` 组合的画像：
 
 ```go
 // backend-go/internal/autopilot/model_profile.go
 
 type ModelProfile struct {
+    // ── 锚定到 KeyEndpoint ──
     ChannelID   int    `json:"channelId"`
     ChannelKind string `json:"channelKind"`
-    ModelID     string `json:"modelId"`     // 渠道内实际模型名
+    MetricsKey  string `json:"metricsKey"`  // 精确到 baseURL+key
+    ModelID     string `json:"modelId"`     // 该 endpoint 内的实际模型名
     UpdatedAt   time.Time `json:"updatedAt"`
 
     // ── 能力 ──
@@ -200,43 +285,137 @@ const (
 )
 ```
 
-### 3.4 存储方案
+### 3.5 存储方案
 
 | 数据 | 存储 | TTL |
 |------|------|-----|
-| ChannelProfile | SQLite `channel_profiles` 表 + 内存缓存 | 持久化，运行时 5min 刷新 |
+| KeyEndpointProfile | SQLite `key_endpoint_profiles` 表 + 内存缓存 | 持久化，运行时 5min 刷新 |
+| ChannelProfile | 不持久化，运行时从 KeyEndpoint 聚合 | 内存计算 |
 | ModelProfile | SQLite `model_profiles` 表 + 内存缓存 | 持久化，运行时 10min 刷新 |
 | RequestProfile | 内存 | 请求级，不持久化 |
 | 健康证据 | SQLite `health_evidence` 表 | 7 天滚动清理 |
+| 模型列表快照 | SQLite `model_list_snapshots` 表 | 30 天滚动清理，用于检测分组变更 |
 | 画像变更日志 | SQLite `profile_changelog` 表 | 30 天滚动清理 |
 
 ```sql
-CREATE TABLE channel_profiles (
+-- 画像最小单元：baseURL + apiKey 对
+CREATE TABLE key_endpoint_profiles (
     channel_id   INTEGER NOT NULL,
     channel_kind TEXT    NOT NULL,
+    metrics_key  TEXT    NOT NULL,          -- hash(baseURL+"|"+apiKey)，与 MetricsManager 对齐
+    base_url     TEXT    NOT NULL,
+    key_mask     TEXT    NOT NULL,          -- 掩码后的 key
     profile_json TEXT    NOT NULL,
     updated_at   TEXT    NOT NULL,
-    PRIMARY KEY (channel_id, channel_kind)
+    PRIMARY KEY (channel_id, channel_kind, metrics_key)
 );
 
+-- 模型画像锚定到 endpoint
 CREATE TABLE model_profiles (
     channel_id   INTEGER NOT NULL,
     channel_kind TEXT    NOT NULL,
+    metrics_key  TEXT    NOT NULL,          -- 精确到 endpoint
     model_id     TEXT    NOT NULL,
     profile_json TEXT    NOT NULL,
     updated_at   TEXT    NOT NULL,
-    PRIMARY KEY (channel_id, channel_kind, model_id)
+    PRIMARY KEY (channel_id, channel_kind, metrics_key, model_id)
 );
+
+-- 模型列表快照，用于检测 key 换分组
+CREATE TABLE model_list_snapshots (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id   INTEGER NOT NULL,
+    metrics_key  TEXT    NOT NULL,
+    model_list   TEXT    NOT NULL,          -- JSON array of model IDs
+    list_hash    TEXT    NOT NULL,          -- SHA256 of sorted model list
+    detected_at  TEXT    NOT NULL
+);
+CREATE INDEX idx_snapshots_channel ON model_list_snapshots(channel_id, detected_at);
 
 CREATE TABLE health_evidence (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_id  INTEGER NOT NULL,
+    metrics_key TEXT    NOT NULL DEFAULT '', -- 精确到 endpoint
     kind        TEXT    NOT NULL,
     evidence    TEXT    NOT NULL,
     severity    TEXT    NOT NULL,
     created_at  TEXT    NOT NULL
 );
 CREATE INDEX idx_health_evidence_channel ON health_evidence(channel_id, created_at);
+CREATE INDEX idx_health_evidence_endpoint ON health_evidence(channel_id, metrics_key, created_at);
+```
+
+### 3.6 Key 分组变更检测
+
+当 key 换了分组，之前的模型发现结果会失效。检测机制：
+
+```go
+// backend-go/internal/autopilot/group_change_detector.go
+
+type GroupChangeDetector struct {
+    profileStore *ProfileStore
+}
+
+// CheckGroupChange 对比本次探测的模型列表与上次快照
+// 返回 (changed bool, oldHash string, newHash string, addedModels []string, removedModels []string)
+func (d *GroupChangeDetector) CheckGroupChange(
+    channelID int,
+    metricsKey string,
+    currentModels []string,
+) (bool, GroupChangeResult) {
+    // 1. 取上次快照
+    lastSnapshot := d.profileStore.GetLatestModelListSnapshot(channelID, metricsKey)
+    if lastSnapshot == nil {
+        // 首次，记录快照
+        d.profileStore.SaveModelListSnapshot(channelID, metricsKey, currentModels)
+        return false, GroupChangeResult{}
+    }
+
+    // 2. 计算当前模型列表哈希
+    currentHash := hashModelList(currentModels)
+
+    // 3. 对比
+    if currentHash == lastSnapshot.ListHash {
+        return false, GroupChangeResult{} // 无变化
+    }
+
+    // 4. 分组变更！计算差异
+    added, removed := diffModelLists(lastSnapshot.ModelList, currentModels)
+
+    // 5. 记录变更
+    now := time.Now()
+    d.profileStore.SaveModelListSnapshot(channelID, metricsKey, currentModels)
+    d.profileStore.UpdateGroupChangedAt(channelID, metricsKey, now)
+
+    return true, GroupChangeResult{
+        OldHash:      lastSnapshot.ListHash,
+        NewHash:      currentHash,
+        AddedModels:  added,
+        RemovedModels: removed,
+        ChangedAt:    now,
+    }
+}
+```
+
+**触发时机**（与 L1/L2/L3 信号结合）：
+
+```text
+场景                          │ 触发方式              │ 动作
+──────────────────────────────┼───────────────────────┼──────────────────────────────
+L1 被动：请求返回 model_not_found │ 真实请求失败         │ 触发该 endpoint 的 L2 重探测
+L2 探测：定期轻量探测           │ 每 2h 一次            │ 拉 /models 对比快照
+新 key 添加                   │ 配置变更事件          │ 立即触发 L2 探测
+用户手动「重新探测」            │ UI 按钮              │ 立即触发 L3 深度探测
+```
+
+**分组变更后的动作**：
+
+```text
+1. 标记该 endpoint 的 ModelProfile 为 stale
+2. 重新触发 L2 模型发现（拉 /models）
+3. 重新生成 ModelProfile
+4. 如果模型列表变化导致能力标签变化 → 更新 KeyEndpointProfile → 重新聚合 ChannelProfile
+5. 通知前端：endpoint 模型列表已变更
 ```
 
 ## 4. 核心组件设计
@@ -274,43 +453,70 @@ CREATE INDEX idx_health_evidence_channel ON health_evidence(channel_id, created_
 
 ### 4.2 Discovery — 协议与模型发现
 
-**职责**：渠道添加后自动探测协议、发现模型、推荐映射。
+**职责**：对每个 KeyEndpoint 独立探测协议、发现模型、推荐映射。
+
+**⚠️ 关键：探测粒度是 endpoint 级，不是 channel 级**
+
+同一 channel 的不同 key 可能属于不同分组，返回不同模型列表。必须逐 endpoint 探测。
 
 **触发时机**：
 1. 渠道首次添加（`autoManaged: true` 时）
 2. 手动触发「重新发现」
-3. 定时刷新（每天一次）
+3. 定时刷新（每天一次，但逐 endpoint 轮转，不并发）
+4. **分组变更检测触发**（model_not_found 或模型列表哈希变化）
 
 **流程**：
 
 ```text
-添加渠道(baseURL + key)
+添加渠道(baseURL + key[])
   │
-  ├─ 1. 协议探测：并发探测 messages/responses/chat/gemini
-  │     └─ 复用 capability_test_runner.executeModelTest
+  ├─ 遍历每个 (baseURL, apiKey) 对：
+  │   │
+  │   ├─ 1. 协议探测：对单个 endpoint 探测 messages/responses/chat/gemini
+  │   │     └─ 复用 capability_test_runner.executeModelTest
+  │   │
+  │   ├─ 2. 模型发现：GET /v1/models（用该 key）
+  │   │     └─ 复用 channel_discovery.discoverTransientModels
+  │   │     └─ 失败时用内置候选模型列表回退
+  │   │
+  │   ├─ 3. 分组变更检测：对比模型列表哈希
+  │   │     └─ GroupChangeDetector.CheckGroupChange
+  │   │     └─ 如果变更 → 标记 stale，重新生成 ModelProfile
+  │   │
+  │   ├─ 4. 模型选择：从发现的模型中选 Strong/Primary/Fast 三档
+  │   │     └─ 复用 channel_discovery.selectDiscoveryModels
+  │   │
+  │   ├─ 5. 能力探测：对选中模型做硬失败检测（HTTP 错误/解析失败）
+  │   │     └─ 复用 channel_discovery.runDiscoveryToolCallProbe
+  │   │     └─ 复用 channel_discovery.runDiscoveryVisionProbe
+  │   │
+  │   ├─ 6. 映射推荐：根据协议类型生成该 endpoint 的 modelMapping
+  │   │
+  │   └─ 7. 生成 KeyEndpointProfile + ModelProfile[]
   │
-  ├─ 2. 模型发现：GET /v1/models (或各协议等价端点)
-  │     └─ 复用 channel_discovery.discoverTransientModels
-  │     └─ 失败时用内置候选模型列表回退
+  └─ 8. 聚合：从所有 endpoint 画像生成 ChannelProfile
+```
+
+**endpoint 间差异处理**：
+
+```text
+场景：同一 channel 的 key-A 返回 [opus, sonnet, haiku]，key-B 返回 [gpt-5.5, gpt-5.4-mini]
   │
-  ├─ 3. 模型选择：从发现的模型中选 Strong/Primary/Fast 三档
-  │     └─ 复用 channel_discovery.selectDiscoveryModels
+  ├─ KeyEndpointProfile-A: qualityTier=premium, models=[opus, sonnet, haiku]
+  ├─ KeyEndpointProfile-B: qualityTier=premium, models=[gpt-5.5, gpt-5.4-mini]
   │
-  ├─ 4. 能力探测：对选中模型做 tool_call/vision/thinking 测试
-  │     └─ 复用 channel_discovery.runDiscoveryToolCallProbe
-  │     └─ 复用 channel_discovery.runDiscoveryVisionProbe
-  │
-  ├─ 5. 映射推荐：根据协议类型生成 modelMapping
-  │     └─ 复用 channel_discovery.buildDiscoveryMappingRecommendation
-  │
-  └─ 6. 生成 ModelProfile：写入 model_profiles 表
+  └─ ChannelProfile:
+       - qualityTier = premium（取最佳 endpoint）
+       - EndpointInconsistencies = [{"models", "key-A: Claude系列, key-B: GPT系列"}]
+       - UI 显示：⚠️ 不同 Key 提供的模型系列不同
 ```
 
 **与现有 Channel Discovery 的关系**：
 
 现有 `POST /channel-discovery` 是一个"预览"接口，返回推荐但不自动应用。Autopilot 复用其核心逻辑，但：
-- 自动写入 `modelMapping`、`supportedModels`、兼容开关
-- 自动生成 `ModelProfile` 记录
+- **逐 endpoint 探测**，而非整个 channel 一次
+- 自动写入每个 endpoint 的 `modelMapping`、`supportedModels`、兼容开关
+- 自动生成 `KeyEndpointProfile` + `ModelProfile` 记录
 - 对 `autoManaged` 渠道静默执行，对非 auto 渠道提供「建议应用」按钮
 
 ### 4.3 Profiler — 画像生成器
@@ -1202,16 +1408,17 @@ type UpstreamConfig struct {
 
 ### Phase 1：自动画像 + 健康诊断（MVP）
 
-**目标**：用户能看到渠道健康状态，系统自动推导画像。白嫖池有即时衰减保护。
+**目标**：用户能看到渠道健康状态（精确到 endpoint 级），系统自动推导画像。白嫖池有即时衰减保护。Key 换分组时自动检测。
 
 **范围**：
-- [ ] ChannelProfile / ModelProfile 数据模型 + SQLite 存储
-- [ ] Profiler 画像推导（基于现有 MetricsManager + 模型注册表，L1 被动信号为主）
-- [ ] HealthAnalyzer 健康诊断（被动优先：L1 为主，L2 仅在数据不足时触发）
-- [ ] FastDecay 快速衰减（白嫖/临时池渠道的请求级即时评分）
-- [ ] 健康中心 API（`/api/health-center/*`）
+- [ ] KeyEndpointProfile / ChannelProfile(聚合) / ModelProfile 数据模型 + SQLite 存储
+- [ ] Profiler 画像推导（基于现有 MetricsManager + 模型注册表，L1 被动信号为主，endpoint 级粒度）
+- [ ] HealthAnalyzer 健康诊断（被动优先：L1 为主，L2 仅在数据不足时触发，endpoint 级判定 + channel 级聚合）
+- [ ] FastDecay 快速衰减（白嫖/临时池渠道的 endpoint 级即时评分）
+- [ ] GroupChangeDetector 分组变更检测（模型列表哈希对比 + 自动重探测）
+- [ ] 健康中心 API（`/api/health-center/*`，支持 endpoint 级展开）
 - [ ] 前端健康中心视图
-- [ ] 渠道卡片健康 badge 增强
+- [ ] 渠道卡片健康 badge 增强（显示 endpoint 级不一致警告）
 - [ ] 标签系统（白嫖池/临时池/高智商稳定等）
 
 **不做的事**：
@@ -1279,9 +1486,12 @@ type UpstreamConfig struct {
 
 ```text
 backend-go/internal/autopilot/
-├── profile.go              # ChannelProfile / ModelProfile 类型
+├── key_endpoint_profile.go # KeyEndpointProfile 类型（画像最小单元）
+├── channel_profile.go      # ChannelProfile 聚合视图
+├── model_profile.go        # ModelProfile 类型
 ├── request_profile.go      # RequestProfile + TaskClassifier
-├── profile_store.go        # SQLite 持久化 + 内存缓存
+├── profile_store.go        # SQLite 持久化 + 内存缓存（endpoint 级）
+├── group_change_detector.go # Key 分组变更检测
 ├── profiler.go             # 画像推导逻辑（L1 被动信号为主）
 ├── health_analyzer.go      # 健康诊断逻辑（被动优先 + L2 探测补充）
 ├── fast_decay.go           # 白嫖/临时池快速衰减评分
@@ -1293,6 +1503,7 @@ backend-go/internal/autopilot/
 ├── autopilot_test.go       # 画像推导测试
 ├── health_analyzer_test.go # 健康诊断测试
 ├── fast_decay_test.go      # 快速衰减测试
+├── group_change_test.go    # 分组变更检测测试
 └── smart_router_test.go    # 路由策略测试
 
 frontend/src/components/
@@ -1309,10 +1520,11 @@ frontend/src/components/
 | 接口 | 方向 | 说明 |
 |------|------|------|
 | `CandidateFilterFunc` | autopilot → scheduler | SmartRouter 实现此接口注入调度链 |
-| `MetricsManager.GetChannelAggregatedMetrics` | autopilot ← metrics | 画像推导读取运行时指标 |
+| `MetricsManager.GetChannelAggregatedMetrics` | autopilot ← metrics | 画像推导读取运行时指标（注意：入参已是 metricsKey 粒度） |
+| `MetricsManager.GetTimeWindowStatsForKey` | autopilot ← metrics | **endpoint 级**指标查询 |
 | `config.ResolveUpstreamCapability` | autopilot ← config | 画像推导读取模型能力 |
 | `config.ResolveAgentModelProfile` | autopilot ← config | RequestProfile 推导质量需求 |
-| `channelDiscovery.*` | autopilot ← handlers | 复用探测逻辑（需抽取为可复用函数） |
+| `channelDiscovery.*` | autopilot ← handlers | 复用探测逻辑（需抽取为可复用函数，支持单 endpoint 调用） |
 | `PersistenceStore` | autopilot → metrics | 新表复用同一 SQLite 连接 |
 
 ---
@@ -1325,7 +1537,10 @@ frontend/src/components/
 | ~~健康诊断烧 quota~~ | ~~30-40 渠道主动探测成本高~~ | **已缓解**：L1 被动优先（零成本），L2 仅在数据不足时触发，每天总次数上限 `渠道数×12` |
 | ~~白嫖池状态抖动~~ | ~~渠道反复断流导致调度震荡~~ | **已缓解**：FastDecay 请求级即时衰减 + 成功快速回升 + 断流比普通失败衰减更快 |
 | ~~能力虚标误判~~ | ~~系统误关 vision/tool 标签~~ | **已缓解**：只做硬失败检测（HTTP 错误/解析失败），软质量问题留给人工 override |
-| SmartRouter 增加调度延迟 | 请求耗时增加 | 画像缓存在内存，CandidateFilter 只做内存操作（< 1ms） |
+| endpoint 级探测成本倍增 | 5 key × 3 baseURL = 15 endpoint，探测量是 channel 级的 15 倍 | endpoint 级探测轮转执行，不并发；L2 探测每日总量仍有上限；channel 级聚合结果缓存避免重复计算 |
+| Key 换分组后模型列表突变 | 调度时才发现模型不可用 | GroupChangeDetector 在 L2 探测和 model_not_found 时自动检测；分组变更立即标记 stale 并重探测 |
+| endpoint 间能力不一致导致调度混乱 | 同一 channel 有的 endpoint 支持 vision 有的不支持 | ChannelProfile 聚合时记录 EndpointInconsistencies；SmartRouter 调度时可精确到 endpoint 级选择 |
+| SmartRouter 增加调度延迟 | 请求耗时增加 | 画像缓存在内存，CandidateFilter 只做内存操作（< 1ms）；聚合视图预计算，非实时聚合 |
 | 与现有 Priority/Promotion 系统冲突 | 调度行为不一致 | SmartRouter 的 CandidateFilter 在 Priority 排序之后执行，只做"重排候选"而非"改变优先级" |
 | Phase 1 无智能调度时画像价值不明显 | 用户感知弱 | 健康中心 + 标签系统本身就有独立价值；dry-run 诊断接口提前展示"如果启用自动调度会选谁" |
 | 自动 modelMapping 覆盖用户手动配置 | 用户设置被意外覆盖 | 显式 modelMapping 始终优先，不经过下界检查；autoManaged=false 时完全不触发自动映射 |
