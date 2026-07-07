@@ -119,6 +119,31 @@ func TestBuildDiscoveryMappingRecommendationUsesStableClaudeSourceAliases(t *tes
 	}
 }
 
+// 当 messages 协议探测失败但 responses 协议成功时，
+// buildDiscoveryMappingRecommendation 应降级使用 responses 的模型，
+// 确保 Claude 别名映射仍能生成（避免发现结果空映射）。
+func TestBuildDiscoveryMappingRecommendationFallsBackWhenChannelProtocolFails(t *testing.T) {
+	selected := DiscoverySelectedModels{Strong: "gpt-5.5", Primary: "gpt-5.4", Fast: "gpt-5.4-mini"}
+	// messages 协议失败，responses 协议成功
+	successByProtocol := map[string][]string{
+		"responses": {"gpt-5.4", "gpt-5.4-mini", "gpt-5.5"},
+	}
+
+	rec := buildDiscoveryMappingRecommendation("messages", selected, successByProtocol, []string{"claude-code"})
+
+	if len(rec.ModelMapping) == 0 {
+		t.Fatal("expected non-empty modelMapping when falling back to successful protocol models; got empty")
+	}
+	for _, alias := range []string{"opus", "sonnet", "haiku", "fable"} {
+		if _, ok := rec.ModelMapping[alias]; !ok {
+			t.Fatalf("expected Claude alias %q in modelMapping; got %#v", alias, rec.ModelMapping)
+		}
+	}
+	if len(rec.SupportedModels) != 0 {
+		t.Fatalf("discovery should not set supportedModels: %#v", rec.SupportedModels)
+	}
+}
+
 func TestRecommendDiscoveryChannelKindKeepsExplicitRequestedProtocol(t *testing.T) {
 	protocols := []DiscoveryProtocolResult{
 		{Protocol: "messages", Success: false},

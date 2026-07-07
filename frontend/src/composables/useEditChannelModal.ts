@@ -595,9 +595,9 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     form.noVisionModels = [...noVisionSet]
     form.visionFallbackModel = recommendation.visionFallbackModel || ''
     form.visionFallbackReasoningEffort = ''
-    if (recommendation.supportedModels) {
-      form.supportedModels = [...recommendation.supportedModels]
-    }
+    // discovery 不再生成 supportedModels 模式；apply 时始终清空，
+    // 避免历史错误配置残留（例如把 responses 渠道的源模型过滤留在 messages 渠道里）。
+    form.supportedModels = recommendation.supportedModels ? [...recommendation.supportedModels] : []
     syncModelCapabilitiesFromMapping()
     for (const [key, value] of Object.entries(recommendation.compat || {})) {
       if (typeof value === 'boolean' && key in form) {

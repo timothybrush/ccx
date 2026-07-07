@@ -392,8 +392,21 @@ func buildDiscoveryMappingRecommendation(
 	successByProtocol map[string][]string,
 	targetClients []string,
 ) DiscoveryRecommendation {
+	// 优先使用 channelKind 自身协议探测成功的模型；
+	// 当 channelKind 由用户显式指定但该协议未探测到可用模型时（例如 messages
+	// 协议失败而 responses 协议成功），降级到其他成功协议的模型，
+	// 确保别名映射仍能生成。
+	successfulModels := successByProtocol[channelKind]
+	if len(successfulModels) == 0 {
+		for _, protocol := range []string{"responses", "messages", "chat", "gemini"} {
+			if models := successByProtocol[protocol]; len(models) > 0 {
+				successfulModels = models
+				break
+			}
+		}
+	}
 	successful := make(map[string]struct{})
-	for _, model := range successByProtocol[channelKind] {
+	for _, model := range successfulModels {
 		successful[model] = struct{}{}
 	}
 
