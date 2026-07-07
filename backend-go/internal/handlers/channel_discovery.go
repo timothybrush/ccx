@@ -166,7 +166,7 @@ func ChannelDiscoveryWithModelFetchers(cfgManager *config.ConfigManager, modelFe
 		successByProtocol := discoverySuccessModelsByProtocol(protocols)
 		recommendedKind := recommendDiscoveryChannelKind(req.ChannelKind, req.TargetClients, protocols)
 
-		recommendation := buildDiscoveryMappingRecommendation(recommendedKind, models.Selected, successByProtocol, req.TargetClients)
+		recommendation := buildDiscoveryMappingRecommendation(recommendedKind, compatProbeProtocol(channel, recommendedKind), models.Selected, successByProtocol, req.TargetClients)
 		recommendation.ServiceType = channel.ServiceType
 		recommendation.BaseURLs = append([]string(nil), channel.BaseURLs...)
 		// 实际生效的成功模型列表：当 channelKind 协议无成功模型时（已做过 fallback
@@ -397,14 +397,15 @@ func discoveryModelKeywordScore(model string, keywords []string) int {
 
 func buildDiscoveryMappingRecommendation(
 	channelKind string,
+	preferredProtocol string,
 	selected DiscoverySelectedModels,
 	successByProtocol map[string][]string,
 	targetClients []string,
 ) DiscoveryRecommendation {
 	// 当 channelKind 协议无成功模型时降级到其他成功协议，确保别名映射仍能生成。
-	// 与调用方保持一致，统一走 discoveryEffectiveSuccessModels。
+	// preferredProtocol 来自 compatProbeProtocol，反映 serviceType 对应的实际上游协议。
 	successful := make(map[string]struct{})
-	for _, model := range discoveryEffectiveSuccessModels(channelKind, "", successByProtocol) {
+	for _, model := range discoveryEffectiveSuccessModels(channelKind, preferredProtocol, successByProtocol) {
 		successful[model] = struct{}{}
 	}
 

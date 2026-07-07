@@ -7,7 +7,7 @@
 - **discovery 协议探测失败时模型映射为空** - discovery: 用户显式选定 channelKind 但该协议探测失败时，buildDiscoveryMappingRecommendation 返回空映射；降级到任意成功协议的模型重新构建别名映射
 - **thinking probe 误覆写 passbackReasoningContent** - compat: 历史 thinking block 探测返回 400/422 时错误地将 passbackReasoningContent 置为 false；此标志由独立 thinking 预算探测决定，不受历史块探测影响
 - **协议延迟统计含超时模型** - discovery: runDiscoveryProtocolProbe 对所有模型（含超时）的延迟做均值，导致有效延迟数据被拉高；改为仅统计成功模型均值
-- **gemini 渠道缺 reasoningMapping** - discovery: discoveryReasoningMapping 无 gemini case，gemini 渠道 reasoningMapping 始终为空；补充 pro=max、gemini=high、flash=medium
+- **gemini 渠道 reasoningMapping 暂不生成** - discovery: Gemini handler 目前未消费 reasoningMapping，写入配置只产生无效噪声；明确不为 gemini 渠道生成该字段，待 Gemini thinking 路径支持后再启用
 - **compat evidence 迭代顺序不稳定** - discovery: map 迭代顺序不确定导致证据列表每次不同；改为先排序 key 再遍历
 - **熔断器未将 no_available_account 计为过载** - failover: 上游返回 no_available_account 未触发熔断，新增 FailureClassOverloaded 分类
 

@@ -63,7 +63,7 @@ func TestBuildDiscoveryMappingRecommendationUsesOnlySuccessfulModels(t *testing.
 	selected := DiscoverySelectedModels{Strong: "actual-pro", Primary: "actual-main", Fast: "actual-mini"}
 	successByProtocol := map[string][]string{"responses": {"actual-main", "actual-mini"}}
 
-	rec := buildDiscoveryMappingRecommendation("responses", selected, successByProtocol, []string{"codex"})
+	rec := buildDiscoveryMappingRecommendation("responses", "", selected, successByProtocol, []string{"codex"})
 	if rec.ChannelKind != "responses" {
 		t.Fatalf("channelKind=%q", rec.ChannelKind)
 	}
@@ -91,7 +91,7 @@ func TestBuildDiscoveryMappingRecommendationUsesStableClaudeSourceAliases(t *tes
 	selected := DiscoverySelectedModels{Strong: "claude-opus-4-7", Primary: "claude-opus-4-7", Fast: "claude-opus-4-7"}
 	successByProtocol := map[string][]string{"messages": {"claude-opus-4-7"}}
 
-	rec := buildDiscoveryMappingRecommendation("messages", selected, successByProtocol, []string{"claude-code"})
+	rec := buildDiscoveryMappingRecommendation("messages", "", selected, successByProtocol, []string{"claude-code"})
 	wantSources := map[string]string{
 		"fable":  "claude-opus-4-7",
 		"haiku":  "claude-opus-4-7",
@@ -129,7 +129,7 @@ func TestBuildDiscoveryMappingRecommendationFallsBackWhenChannelProtocolFails(t 
 		"responses": {"gpt-5.4", "gpt-5.4-mini", "gpt-5.5"},
 	}
 
-	rec := buildDiscoveryMappingRecommendation("messages", selected, successByProtocol, []string{"claude-code"})
+	rec := buildDiscoveryMappingRecommendation("messages", "", selected, successByProtocol, []string{"claude-code"})
 
 	if len(rec.ModelMapping) == 0 {
 		t.Fatal("expected non-empty modelMapping when falling back to successful protocol models; got empty")
@@ -191,7 +191,7 @@ func TestDiscoveryRecommendationUsesMiMoVisionCapabilities(t *testing.T) {
 	selected := selectDiscoveryModels(models, nil)
 	successByProtocol := map[string][]string{"messages": models}
 
-	rec := buildDiscoveryMappingRecommendation("messages", selected, successByProtocol, []string{"claude-code"})
+	rec := buildDiscoveryMappingRecommendation("messages", "", selected, successByProtocol, []string{"claude-code"})
 	applyDiscoveryModelCapabilityRecommendations(&rec, models, successByProtocol["messages"], nil)
 
 	for source, target := range rec.ModelMapping {
