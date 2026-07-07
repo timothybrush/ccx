@@ -1903,27 +1903,68 @@ Score = w_quality * qualityScore
 type ModelFamily string
 
 const (
-    ModelFamilyClaude    ModelFamily = "claude"    // claude-*
-    ModelFamilyOpenAI    ModelFamily = "openai"    // gpt-*, o1-*, o3-*, codex-*
-    ModelFamilyGemini    ModelFamily = "gemini"    // gemini-*
-    ModelFamilyDeepSeek  ModelFamily = "deepseek"  // deepseek-*
-    ModelFamilyQwen      ModelFamily = "qwen"      // qwen-*
-    ModelFamilyGLM       ModelFamily = "glm"       // glm-*, chatglm-*
-    ModelFamilyMiniMax   ModelFamily = "minimax"   // abab-*, minimax-*
-    ModelFamilyKimi      ModelFamily = "kimi"      // moonshot-*, kimi-*
-    ModelFamilyMistral   ModelFamily = "mistral"   // mistral-*, mixtral-*
-    ModelFamilyLocal     ModelFamily = "local"     // ollama/lmstudio/llama-server
+    // ── 国际主流 ──
+    ModelFamilyClaude    ModelFamily = "claude"     // claude-*，Anthropic
+    ModelFamilyOpenAI    ModelFamily = "openai"     // gpt-*, o*, codex-*，OpenAI / Amazon Bedrock
+    ModelFamilyGemini    ModelFamily = "gemini"     // gemini-*，Google
+    ModelFamilyMistral   ModelFamily = "mistral"    // mistral-*, mixtral-*，Mistral AI
+
+    // ── 国产主流 ──
+    ModelFamilyDeepSeek  ModelFamily = "deepseek"   // DeepSeek V3/V4，DeepSeek
+    ModelFamilyQwen      ModelFamily = "qwen"       // qwen3-*，通义千问，DashScope
+    ModelFamilyGLM       ModelFamily = "glm"        // glm-5-*，智谱 AI
+    ModelFamilyKimi      ModelFamily = "kimi"       // kimi-k2-*，月之暗面 Moonshot
+    ModelFamilyMiMo      ModelFamily = "mimo"       // mimo-v2-*，小米
+    ModelFamilyERNIE     ModelFamily = "ernie"      // ernie-4.5，百度
+    ModelFamilyDoubao    ModelFamily = "doubao"     // doubao-seed-*，字节豆包 Volcengine
+    ModelFamilyMiniMax   ModelFamily = "minimax"    // minimax-m*，MiniMax
+    ModelFamilyYi        ModelFamily = "yi"         // yi-*，零一万物 01.ai
+    ModelFamilyBaichuan  ModelFamily = "baichuan"   // baichuan-m*，百川智能
+    ModelFamilyStep      ModelFamily = "step"       // step-3.*，阶跃星辰 StepFun
+    ModelFamilySenseNova ModelFamily = "sensenova"  // sensenova-6.*，商汤 SenseTime
+    ModelFamilyAgnes     ModelFamily = "agnes"      // agnes-2.*，Xiaomi 独立系列
+    ModelFamilyLongCat   ModelFamily = "longcat"    // longcat-2.*，京东
+
+    // ── 特殊 ──
+    ModelFamilyLocal     ModelFamily = "local"      // ollama/lmstudio/llama-server 本地运行时
     ModelFamilyUnknown   ModelFamily = "unknown"
 )
 
-// InferModelFamily 从模型 ID 前缀推导派系，注册表显式标注优先
-func InferModelFamily(modelID string) ModelFamily {
-    // 优先从 BuiltinUpstreamModelCapabilities 的 Family 字段读取
-    // 回退到前缀匹配：claude-* → claude，gpt-*/o*-* → openai，以此类推
+// InferModelFamily 从模型注册表 Provider 字段推导派系，注册表显式标注优先
+// 同时按生成的 ModelProfile.ModelFamily 写入画像
+func InferModelFamily(modelID string, registryCapabilities map[string]UpstreamModelCapability) ModelFamily {
+    // 优先从 BuiltinUpstreamModelCapabilities 的 Provider 字段精确映射
+    // Provider→ModelFamily 映射表（从 generated_model_registry.go 提取）：
+    //   anthropic → claude
+    //   openai / amazon-bedrock → openai
+    //   dashscope → qwen
+    //   volcengine → doubao
+    //   xiaomi → mimo 或 agnes（按前缀细分）
+    //   baidu → ernie
+    //   01-ai → yi
+    //   moonshot → kimi
+    //   zai → glm
+    //   其余 Provider 直接映射同名 family
+    // 回退到模型 ID 前缀匹配（兜底未知模型）
 }
 ```
 
-`ModelFamily` 写入 `ModelProfile.ModelFamily`，从模型注册表推导，无需额外探测。
+**⚠️ 派系偏好不覆盖版本差异**：同一个 ModelFamily 内不同模型版本的 QualityTier 和能力可能完全不同。
+
+```text
+示例：familyPreferenceOrder = ["claude", "openai"]
+
+Claude Opus 4.8 (claude, premium) vs Claude Haiku 4.5 (claude, normal)
+  → 同一派系，但QualityTier 不同 → QualityTier 决定优先级，与派系偏好无关
+
+Claude Opus 4.8 (claude, premium) vs GPT-5.4 (openai, premium)
+  → 不同派系，同 QualityTier → familyPreferenceScore 决定，claude 得分更高
+
+Claude Haiku 4.5 (claude, normal) vs GPT-5.4 (openai, premium)
+  → 不同派系，不同 QualityTier → qualityScore 差距 > familyPreferenceScore → GPT-5.4 胜出
+```
+
+因此 `w_family × max_score ≤ 0.6`，而 `w_quality × (premium − normal) = 3.0`，版本间的质量差异总是压倒派系偏好。派系偏好只在同版本档次（同QualityTier）内打破平局。
 
 #### 5.5.2 familyPreferenceScore 计算
 
@@ -1941,14 +1982,14 @@ func CalcFamilyPreferenceScore(family ModelFamily, prefs []ModelFamily) float64 
 }
 ```
 
-**示例**：偏好顺序 `["claude", "openai", "gemini"]`（n=3）
+**示例**：偏好顺序 `["claude", "openai", "deepseek"]`（n=3）
 
 | 派系 | familyPreferenceScore | × w_family=0.2 | 对总分影响 |
 |------|----------------------|----------------|-----------|
 | claude | 3 | +0.6 | 同等条件下最优先 |
 | openai | 2 | +0.4 | 次优先 |
-| gemini | 1 | +0.2 | 再次 |
-| deepseek / 其他 | 0 | +0.0 | 无偏好加成 |
+| deepseek | 1 | +0.2 | 再次 |
+| qwen / kimi / glm / doubao / mimo / er 等其余 13 个派系 | 0 | +0.0 | 无偏好加成 |
 
 当两个 stable 的 premium 渠道并列，claude 比 openai 多 +0.2，决定顺序；但 stable openai 比 unstable claude 多 2.0 - 0.6 = +1.4，稳定性压倒派系偏好。
 
@@ -2807,12 +2848,15 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
     "modelFamilyPreference": {
       "enabled": true,
       "weight": 0.2,
-      "globalOrder": ["claude", "openai", "gemini"],
+      "globalOrder": ["claude", "openai", "deepseek", "gemini", "qwen", "kimi", "glm"],
       "perTaskClass": {
-        "supervisor":  ["claude", "openai"],
-        "worker":      ["openai", "claude", "gemini", "deepseek"],
-        "lightweight": ["openai", "gemini", "claude"],
-        "vision":      ["claude", "openai", "gemini"]
+        "supervisor":      ["claude", "openai"],
+        "worker":          ["openai", "deepseek", "claude", "qwen", "kimi", "glm"],
+        "lightweight":     ["openai", "deepseek", "qwen", "gemini", "claude"],
+        "vision":          ["claude", "openai", "gemini"],
+        "long_context":    ["claude", "openai", "deepseek", "qwen"],
+        "image_generation": ["openai", "agnes", "volcengine"],
+        "embedding":       ["openai", "qwen"]
       }
     },
 
