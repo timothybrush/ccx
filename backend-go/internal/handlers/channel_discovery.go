@@ -433,7 +433,6 @@ func buildDiscoveryMappingRecommendation(
 		ChannelKind:      channelKind,
 		ModelMapping:     modelMapping,
 		ReasoningMapping: reasoningMapping,
-		SupportedModels:  discoverySupportedModelPatterns(modelMapping, targetClients),
 		Evidence:         evidence,
 	}
 }
@@ -469,15 +468,6 @@ func discoveryReasoningMapping(channelKind string, modelMapping map[string]strin
 		return nil
 	}
 	return reasoning
-}
-
-func discoverySupportedModelPatterns(modelMapping map[string]string, targetClients []string) []string {
-	patterns := make([]string, 0, len(modelMapping))
-	for alias := range modelMapping {
-		patterns = append(patterns, "*"+alias+"*")
-	}
-	sort.Strings(patterns)
-	return patterns
 }
 
 func applyDiscoveryModelCapabilityRecommendations(

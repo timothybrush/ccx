@@ -79,9 +79,8 @@ func TestBuildDiscoveryMappingRecommendationUsesOnlySuccessfulModels(t *testing.
 	if rec.ReasoningMapping["gpt"] != "max" || rec.ReasoningMapping["mini"] != "high" || rec.ReasoningMapping["codex"] != "high" {
 		t.Fatalf("unexpected reasoning mapping: %#v", rec.ReasoningMapping)
 	}
-	wantSupportedModels := []string{"*codex*", "*gpt*", "*mini*"}
-	if !sameStringSet(rec.SupportedModels, wantSupportedModels) {
-		t.Fatalf("supportedModels=%#v, want %#v", rec.SupportedModels, wantSupportedModels)
+	if len(rec.SupportedModels) != 0 {
+		t.Fatalf("discovery should not set supportedModels: %#v", rec.SupportedModels)
 	}
 	if len(rec.Evidence) != 1 || rec.Evidence[0].Type != "reasoning" || !strings.Contains(rec.Evidence[0].Message, "验证工具调用与思考回传") {
 		t.Fatalf("reasoning evidence should explain follow-up capability probes: %#v", rec.Evidence)
@@ -115,9 +114,8 @@ func TestBuildDiscoveryMappingRecommendationUsesStableClaudeSourceAliases(t *tes
 	if rec.ReasoningMapping["opus"] != "max" || rec.ReasoningMapping["sonnet"] != "max" || rec.ReasoningMapping["haiku"] != "high" || rec.ReasoningMapping["fable"] != "max" {
 		t.Fatalf("unexpected Claude reasoning mapping: %#v", rec.ReasoningMapping)
 	}
-	wantSupportedModels := []string{"*fable*", "*haiku*", "*opus*", "*sonnet*"}
-	if !sameStringSet(rec.SupportedModels, wantSupportedModels) {
-		t.Fatalf("supportedModels=%#v, want %#v", rec.SupportedModels, wantSupportedModels)
+	if len(rec.SupportedModels) != 0 {
+		t.Fatalf("discovery should not set supportedModels: %#v", rec.SupportedModels)
 	}
 }
 
