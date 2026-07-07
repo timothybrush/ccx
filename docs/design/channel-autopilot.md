@@ -27,6 +27,7 @@
 - **AI 路由判定只走可信执行面**：会读取用户内容的 AI 判定只能使用一等官方 API/token plan 或本地模型；中转站和公益站的信任等级不足以承担隐私敏感判定
 - **人工意图优先但有边界**：用户可以短期试模型/渠道；系统必须限制 TTL、预算和作用范围，并保留硬约束与自动回退
 - **本地模型只做有边界的辅助**：本地弱模型可以处理低风险任务和生成路由 hint，但不能作为“哪些任务只有 Fable 能做”的通用裁判
+- **Images/Vectors 原生调度优先**：生图和 embedding 作为一等调度类型接入上游原生端点；MVP 不做 chat prompt → image API 的协议转换
 
 ---
 
@@ -67,6 +68,12 @@ Active+Model过滤 → RoutePrefix过滤 → 上下文过滤 → CandidateFilter
 - 能力探测：工具调用、视觉、thinking passback 测试
 
 `capability_test_runner.go` 提供完整的多模型轮询测试框架。
+
+Images / vectors 需要单独处理：
+- `/v1/images/*` 和 `/v1/embeddings` 进入 Autopilot 调度，但只做原生端点选择、健康画像、成本画像和限速保护。
+- 不复用 chat/messages 的复杂能力测试；MVP 只做最小探测：鉴权、协议路径、模型列表/默认模型、一次小尺寸生图或短文本 embedding（受探测预算限制）。
+- 不做 chat 画图协议转换，也不把“文本对话请求里让模型画图”的 prompt 自动改写为 images API 请求。
+- vectors 的 embedding 维度、模型名和协议字段仍由现有 handler 硬约束过滤；Autopilot 只负责在满足硬约束后排序 endpoint。
 
 ### 2.4 模型注册表
 
@@ -224,11 +231,19 @@ type CostProfile struct {
     // 基于模型注册表 Pricing × EffectiveCostMultiplier 得到的估算价格。
     EffectiveInputCostPerMTok  float64 `json:"effectiveInputCostPerMTok,omitempty"`
     EffectiveOutputCostPerMTok float64 `json:"effectiveOutputCostPerMTok,omitempty"`
+    EffectiveEmbeddingCostPerMTok float64 `json:"effectiveEmbeddingCostPerMTok,omitempty"`
+    EffectiveImageUnitCost        float64 `json:"effectiveImageUnitCost,omitempty"`
 
     Source     string  `json:"source"`     // manual | default | inferred
     Confidence float64 `json:"confidence"` // 手动配置为 1.0
 }
 ```
+
+成本规则：
+- 文本类请求使用 input/output token 价格。
+- vectors 使用 embedding token 价格；如果模型注册表缺少 embedding 价格，只做 shadow 展示，不参与强排序。
+- images 使用按张/尺寸/质量/operation 的 unit price；不要用 chat token 价格估算生图成本。
+- `EffectiveImageUnitCost` 可以是按当前请求参数计算后的请求级值；ProfileStore 只缓存默认尺寸/质量的代表值。
 
 ```go
 // SubscriptionProfile 描述渠道背后的套餐/余额/价格来源。
@@ -428,6 +443,8 @@ type ModelProfile struct {
 type RequestProfile struct {
     // ── 来自请求 ──
     Model       string // 请求的目标模型
+    ChannelKind string // messages | chat | responses | gemini | images | vectors
+    Operation   string // completion | image_generation | image_edit | image_variation | embedding
     AgentRole   string // "main" | "subagent"
     AgentType   string // "codex_subagent" | "claude_code_subagent"
     HasImage    bool   // 是否包含图片
@@ -437,11 +454,14 @@ type RequestProfile struct {
     QualityNeed   QualityTier   // 该模型对应的质量需求
     ContextNeed   int           // 最小上下文窗口
     VisionNeed    bool          // 是否需要识图
+    ImageGenNeed  bool          // 是否需要原生生图端点
+    EmbeddingNeed bool          // 是否需要原生 embedding 端点
     ToolUseNeed   bool          // 是否需要工具调用
     ReasoningNeed bool          // 是否需要推理
+    EmbeddingDimension int      // vectors handler 的硬约束；未知时为 0
 
     // ── 任务分类 ──
-    TaskClass TaskClass // supervisor | worker | lightweight | vision | long_context
+    TaskClass TaskClass // supervisor | worker | lightweight | vision | long_context | image_generation | embedding
 }
 
 type TaskClass string
@@ -451,6 +471,8 @@ const (
     TaskClassLightweight  TaskClass = "lightweight"    // 轻任务（摘要/标题）
     TaskClassVision       TaskClass = "vision"         // 识图任务
     TaskClassLongContext  TaskClass = "long_context"   // 长上下文任务
+    TaskClassImageGen     TaskClass = "image_generation" // 原生生图任务
+    TaskClassEmbedding    TaskClass = "embedding"      // 原生向量/embedding 任务
 )
 ```
 
@@ -1537,23 +1559,38 @@ type TrustedRoutingHint struct {
 // backend-go/internal/autopilot/task_classifier.go
 
 func ClassifyRequest(profile *RequestProfile) TaskClass {
-    // 1. 识图任务优先判定
+    // 1. 原生生图端点优先判定；不做 chat → images 协议转换
+    if profile.ChannelKind == "images" || profile.ImageGenNeed {
+        return TaskClassImageGen
+    }
+
+    // 2. 原生 embedding / vectors 端点优先判定
+    if profile.ChannelKind == "vectors" || profile.EmbeddingNeed {
+        return TaskClassEmbedding
+    }
+
+    // 3. 识图理解任务
     if profile.HasImage && profile.VisionNeed {
         return TaskClassVision
     }
 
-    // 2. 长上下文任务
+    // 4. 长上下文任务
     if profile.ContextNeed > 200_000 {
         return TaskClassLongContext
     }
 
-    // 3. 主代理/监工
+    // 5. 明确的低风险轻任务
+    if isLightweightRequest(profile) {
+        return TaskClassLightweight
+    }
+
+    // 6. 主代理/监工
     if profile.AgentRole == "main" || profile.AgentRole == "" {
         // 主代理默认走 Supervisor 策略
         return TaskClassSupervisor
     }
 
-    // 4. 子代理
+    // 7. 子代理
     if profile.AgentRole == "subagent" {
         // 子代理默认走 Worker 策略
         return TaskClassWorker
@@ -1563,10 +1600,10 @@ func ClassifyRequest(profile *RequestProfile) TaskClass {
 }
 ```
 
-**轻任务识别**（可选，Phase 2+）：
-- 模型名包含 `haiku` / `mini` / `flash`
-- 上下文 < 10K 且无图片
-- 请求类型为 `count_tokens` / 简单分类
+`isLightweightRequest` 必须是确定性规则，不能让 advisor 自己发明分类：
+- `Operation=count_tokens`、标题/分类/格式转换等已知模板。
+- 上下文 < 10K、无图片、无工具调用、无 reasoning 需求。
+- 模型名包含 `haiku` / `mini` / `flash` 只能作为弱信号，不能单独决定 lightweight。
 
 ### 5.2 调度策略矩阵
 
@@ -1614,6 +1651,30 @@ func ClassifyRequest(profile *RequestProfile) TaskClass {
 同档排序：estimatedRequestCost 从低到高，但不牺牲 vision/tool 硬约束
 降级    ：当所有 vision 渠道不可用时，尝试 visionFallbackModel
 禁止    ：SupportsVision=false 的渠道
+```
+
+#### ImageGeneration（原生生图任务）
+
+```text
+硬过滤  ：channelKind=images，支持请求的 operation（generation/edit/variation）和 model
+优先级 1：healthState=healthy + stabilityTier>=normal + estimatedRequestCost 最低
+优先级 2：speedTier=fast + costTier=cheap|normal
+优先级 3：qualityTier=normal|high + 最近 15m 成功率高
+参数处理：透传 images API 原生参数；只做必要校验和脱敏日志
+禁止    ：把 chat/messages/responses 文本请求自动转换为 images 请求
+```
+
+MVP 不做“聊天模型画图”协议转换。用户如果要用某个上游的生图服务，应把它作为 `images` 类型渠道添加，Autopilot 负责发现、健康画像、限速和 endpoint 排序。
+
+#### Embedding（原生向量任务）
+
+```text
+硬过滤  ：channelKind=vectors，支持请求模型和 handler 要求的 embedding 维度/格式
+优先级 1：healthState=healthy + estimatedRequestCost 最低
+优先级 2：stabilityTier=stable + p95LatencyMs 低
+优先级 3：同模型/同维度历史成功率高
+参数处理：透传 embeddings API 原生参数；不改写 input，不跨模型猜测维度
+禁止    ：把 chat/messages/responses 文本请求自动转换为 embeddings 请求
 ```
 
 #### LongContext（长上下文）
@@ -1677,10 +1738,12 @@ Score = w_quality * qualityScore
   Worker:     w_quality=1, w_stability=1, w_speed=2, w_cost=2, w_savings=3
   Lightweight:w_quality=0, w_stability=1, w_speed=3, w_cost=2, w_savings=3
   Vision:     w_quality=2, w_stability=2, w_speed=1, w_cost=1, w_savings=1
+  ImageGeneration: w_quality=1, w_stability=2, w_speed=1, w_cost=2, w_savings=2
+  Embedding:  w_quality=0, w_stability=2, w_speed=2, w_cost=3, w_savings=3
   LongContext: w_quality=2, w_stability=2, w_speed=1, w_cost=0, w_savings=1
 ```
 
-`estimatedRequestCost` 使用请求级 token 估算：
+文本类请求的 `estimatedRequestCost` 使用请求级 token 估算：
 
 ```text
 estimatedRequestCost =
@@ -1692,6 +1755,23 @@ estimatedRequestCost =
 - supervisor/long_context 使用模型推荐输出上限的保守比例；
 - worker/lightweight 使用最近同类请求的 p50 输出 token；
 - 如果仍无数据，只使用输入成本做 tie-breaker，不做强排序。
+
+Images / vectors 使用各自原生计价，不强行换算成 chat token：
+
+```text
+image_generation:
+  estimatedRequestCost =
+    imageUnitPrice(model, size, quality, operation) * n * effectiveCostMultiplier
+
+embedding:
+  estimatedRequestCost =
+    estimatedInputTokens * effectiveEmbeddingCostPerMTok / 1_000_000
+```
+
+如果上游没有公开 image/vector 价格：
+- 用户手动配置的 `GroupMultipliers` / `RechargeMultiplier` 仍生效。
+- 成本置信度低于阈值时只做展示，不参与强排序。
+- vectors 可用最近同模型/同维度请求均价作为 shadow 估算；images 不用 chat token 价格替代生图价格。
 
 ### 5.4 模型自动映射 (ModelResolver)
 
@@ -2112,6 +2192,7 @@ GET  /api/smart-routing/intents/{uid}/result → 查看试用结果摘要
 | `GET /{kind}/channels/dashboard` | 增加 `healthState`、`qualityTier`、`originTier`、`subscriptionUid` 字段 |
 | `X-Channel` / manual override / promotion | 保留；新增 `ManualRoutingIntent` 在产品层表达短期试用，不替代底层显式控制 |
 | 本地 OpenAI-compatible runtime | 可作为普通 channel，也可注册为 `LocalModelRuntimeProfile`；如角色包含 `routing_advisor`，可被 `TrustedRoutingAdvisor` 选择 |
+| `/v1/images/*` / `/v1/embeddings` | 纳入原生 endpoint 调度；MVP 不做 chat 画图转换，只做健康/成本/RPM/endpoint 排序 |
 
 ### 7.3 WebSocket 推送
 
@@ -2530,6 +2611,18 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
         "preferCost": ["free", "cheap"],
         "preferSpeed": ["fast"],
         "excludeQuality": ["premium"]
+      },
+      "image_generation": {
+        "preferHealth": ["healthy"],
+        "preferCost": ["cheap", "normal"],
+        "requireNativeImagesEndpoint": true,
+        "forbidChatToImageConversion": true
+      },
+      "embedding": {
+        "preferCost": ["free", "cheap"],
+        "preferSpeed": ["fast"],
+        "requireNativeEmbeddingsEndpoint": true,
+        "preserveEmbeddingDimension": true
       }
     }
   }
@@ -2684,6 +2777,7 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 - [ ] ManualRoutingIntent 数据模型 + 试用结果存储（shadow/read-only，不改变真实调度）
 - [ ] Profiler 画像推导（基于现有 MetricsManager + 模型注册表，L1 被动信号为主，endpoint 级粒度）
 - [ ] CostProfile shadow 计算（key 级分组倍率/充值倍率 → endpoint 有效成本，仅展示）
+- [ ] Images/Vectors 原生画像：仅记录健康、延迟、模型/维度/operation、成本和 RPM，不做 chat 协议转换
 - [ ] HealthAnalyzer 健康诊断（被动优先：L1 为主，endpoint 级判定 + channel 级聚合）
 - [ ] FastDecay shadow score（只展示/诊断，不参与调度）
 - [ ] RateLimitDiscoverer shadow profile（解析响应头和 429 模式，只展示建议 RPM，不改 limiter）
@@ -2722,11 +2816,12 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 - [ ] FastDecay 从 shadow score 切换为 endpoint 调度降权
 - [ ] RateLimitDiscoverer 对未显式设置 RPM 的 endpoint 应用 runtime limiter
 - [ ] L2 轻量探测 worker + 每日预算 + 探测队列
-- [ ] TaskClassifier + 五种任务策略
+- [ ] TaskClassifier + 七种任务策略（supervisor/worker/lightweight/vision/long_context/image_generation/embedding）
 - [ ] 智能路由诊断 API（dry-run）
 - [ ] ManualRoutingIntent 执行：model_trial/channel_trial/endpoint_trial/session_pin
 - [ ] TrustedRoutingAdvisor 只对 lightweight/worker 低风险请求提供真实路由 hint
 - [ ] 本地 candidate_model 可进入 endpoint 候选，但必须满足硬约束和 shadow 门槛
+- [ ] `/v1/images/*` 和 `/v1/embeddings` 接入 endpoint 排序；只选择原生上游，不做 chat 画图转换
 - [ ] 前端自动托管指示器 + 快速添加 UI
 
 **预估工期**：3-4 周
@@ -2775,10 +2870,11 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 | `ratelimit/hints.go` | `ApplyUpstreamHints` | 复用现有限流响应头解析；补充 limit/window 信号输出给 RateLimitDiscoverer |
 | `ratelimit/limiter.go` | `ChannelLimiter` | 支持从 discovered runtime config 更新 RPM，但不覆盖手动配置 |
 | `metrics/channel_metrics.go` | `MetricsManager` | 新增画像相关查询方法 |
-| `metrics/cost.go` | 成本估算 | 支持 CostProfile 的 effective multiplier，不只使用模型官价 |
+| `metrics/cost.go` | 成本估算 | 支持 CostProfile 的 effective multiplier、embedding token price 和 image unit price，不只使用模型官价 |
 | `providers/` | 本地 provider adapter | 增加 Ollama native、LM Studio、llama-server/OpenAI-compatible adapter |
 | `handlers/channel_discovery.go` | 全文 | Profiler 复用其探测逻辑 |
 | `handlers/capability_test_runner.go` | `runCapabilityTestJob` | 测试结果写入 ModelProfile |
+| `handlers/images_*` / `handlers/vectors_*` | 原生 images/vectors handlers | 构建 RequestProfile，保留 handler 硬约束，接入 SmartRouter endpoint 排序 |
 | `services/api.ts` / `api-types.ts` | 前端 API 类型 | 增加 SubscriptionProfile、origin 字段、dashboard 聚合字段 |
 | `router/index.ts` / `App.vue` | 前端导航 | 增加订阅中心、管理面板、驾驶舱入口 |
 
@@ -2816,6 +2912,7 @@ backend-go/internal/autopilot/
 ├── autopilot_test.go          # 画像推导测试
 ├── health_analyzer_test.go    # 健康诊断测试
 ├── cost_resolver_test.go      # 倍率继承、模型组匹配、有效成本计算测试
+├── native_media_routing_test.go # images/vectors 原生调度、禁止 chat 协议转换测试
 ├── origin_policy_test.go      # 信任等级不参与质量推导、仅 tie-breaker 测试
 ├── subscription_profile_test.go # 套餐继承、渠道绑定、倍率回退测试
 ├── local_model_runtime_test.go # 本地 runtime 探测、OpenAI-compatible adapter 测试
@@ -2855,6 +2952,7 @@ frontend/src/components/
 | `ModelSupportResolver` | autopilot → scheduler | 在 active model filter 阶段判断 autoManaged 渠道是否可 request-scoped 映射 |
 | `RateLimitDiscoverer` | autopilot → ratelimit | 未显式配置 RPM 时提供 endpoint/key/quota scope 的 runtime limiter 建议 |
 | `CostResolver` | autopilot → scheduler/common failover | 在满足质量和能力下界后，为 endpoint 排序提供 `estimatedRequestCost` |
+| `NativeEndpointPolicy` | autopilot → images/vectors handlers | 对原生生图和 embedding 请求只做 endpoint 排序，不改写请求协议或业务参数 |
 | `OriginPolicy` | autopilot → scheduler/frontend | 信任等级只用于隐私/治理展示和同分 tie-breaker，不参与 QualityTier |
 | `SubscriptionStore` | autopilot/frontend → config | 订阅中心维护套餐、余额、倍率和渠道绑定 |
 | `TrustedRoutingAdvisor` | autopilot → scheduler | 一等官方 API 或本地模型只产出 bounded RoutingHint，不直接决定最终路由 |
@@ -2887,6 +2985,9 @@ frontend/src/components/
 | 未知模型污染全局映射 | 测试新模型时把错误映射写入所有请求 | `model_trial` 只做 request-scoped 透传/映射；结果标记 `manual_trial`，用户显式保存后才进入 `modelMapping` |
 | 隐私内容被发给低信任上游做判定 | 中转站/公益站接触额外 prompt、系统提示或 metadata | routing advisor 只允许 `OriginTier=first|local`；second/third/unknown 只可作为候选执行上游，不可做隐私敏感 classifier/evaluator |
 | 成本倍率配置错误 | 用户看到的具体费用不准，调度可能选错 key | 倍率必须显式展示来源和公式；低置信度成本只做 tie-breaker；UI 提供按 key 的有效价格预览 |
+| 生图成本被误按 chat token 估算 | images 调度选错上游或显示错误节省 | image_generation 使用 image unit price；缺价格时只 shadow 展示，不用 chat token 价格替代 |
+| chat 画图被误转成 images 请求 | 用户原本想走对话模型，系统改写协议导致行为变化 | MVP 禁止 chat/messages/responses → images 自动转换；只有显式 `/v1/images/*` 请求进入 image_generation 调度 |
+| embedding 维度/格式被自动改写 | 向量库写入不兼容或召回质量异常 | vectors handler 的维度/格式是硬约束；Autopilot 只排序满足约束的 endpoint，不跨模型猜测维度 |
 | 为省钱牺牲质量 | supervisor/vision/long-context 被路由到低质量或能力不足 endpoint | 成本排序只在 `CapabilityFloor`、`MinQualityTier`、上下文和能力硬约束通过后执行 |
 | 自动 RPM 发现过于激进 | 误把免费/低配额上游打到 429 或封禁 | 只在未显式设置时启用；优先 header；无 header 用保守 AIMD；不主动压测；`maxAutoRPM` 封顶 |
 | 自动 RPM 覆盖用户意图 | 用户手动设置被 runtime 学习值覆盖 | 手动 channel/key `RateLimitRPM` 永远优先；自动值只展示或用于未设置场景的 runtime limiter |
