@@ -2054,7 +2054,77 @@ func CalcFamilyPreferenceScore(family ModelFamily, prefs []ModelFamily) float64 
 - `perTaskClass` 中存在的 TaskClass 使用其专属顺序；否则回退 `globalOrder`。
 - `enabled=false` 时 `familyPreferenceScore` 恒为 0，评分退化为原有公式。
 - `weight` 覆盖全局 `w_family`；可在管理面板调整（建议范围 0.1 ~ 0.5）。
-- Embedding / ImageGeneration 默认 `w_family=0.0`（上游原生端点选择优先技术兼容性，派系偏好意义不大）。 `estimatedRequestCost` 使用请求级 token 估算：
+- Embedding / ImageGeneration 默认 `w_family=0.0`（上游原生端点选择优先技术兼容性，派系偏好意义不大）。
+
+### 5.6 用户价格偏向 (Cost Preference)
+
+同一模型在不同供应商的价格差异显著（官方 opus vs AWS Bedrock vs kiro 中转），且质量与价格通常正相关。系统不应替用户决定"质量优先还是省钱优先"——这是用户的权利。
+
+#### 5.6.1 三档预设 + 自定义
+
+```json
+"costPreference": {
+  "mode": "balanced",
+  "perTaskClass": {
+    "supervisor": "quality_first",
+    "worker": "cost_first",
+    "lightweight": "cost_first"
+  },
+  "custom": {
+    "savingsMultiplier": 1.0,
+    "providerQualityMultiplier": 1.0
+  }
+}
+```
+
+| 模式 | savingsMultiplier | providerQualityMultiplier | 语义 |
+|------|-------------------|---------------------------|------|
+| `quality_first` | 0.3 | 1.5 | 质量优先：官方 opus 胜过便宜的 kiro，即使贵 3 倍 |
+| `balanced` | 1.0 | 1.0 | 默认：按各 TaskClass 原始权重 |
+| `cost_first` | 2.0 | 0.5 | 省钱优先：kiro 的 opus 在满足硬约束后优先胜出 |
+| `custom` | 用户自定义 | 用户自定义 | 高级用户微调，范围 0.0 ~ 3.0 |
+
+生效方式是权重乘数，不改公式结构：
+
+```text
+effective_w_savings          = w_savings          × savingsMultiplier
+effective_w_provider_quality = w_provider_quality × providerQualityMultiplier
+```
+
+#### 5.6.2 不可突破的边界
+
+价格偏向是软偏好，以下边界任何模式都不能突破：
+
+```text
+1. CapabilityFloor / MinQualityTier：cost_first 也不能把 supervisor 降到不满足质量下界的模型
+2. 稳定性优先：cost_first 下 stable 贵渠道仍胜过 unstable 便宜渠道
+   （w_stability × 2.0 > effective_w_savings × normalizeCheapest 的分差上限需在实现时校验钳制）
+3. vision/tool/reasoning/上下文硬约束：不因省钱跳过
+4. 成本置信度 < requireCostConfidence 时，savingsMultiplier 不生效（无价格数据不能假装省钱）
+5. quality_first 不豁免限速/熔断：官方渠道被限流时仍然 failover 到次选
+```
+
+#### 5.6.3 典型场景
+
+```text
+场景：用户有官方 Anthropic（$15/$75，providerQuality=0.95）、
+      AWS Bedrock（$15/$75，providerQuality=0.85）、
+      kiro 中转（0.4x 折扣，providerQuality=0.70），三者都 stable
+
+quality_first（supervisor 默认）：
+  官方 > Bedrock > kiro —— 质量差距被放大 1.5 倍，价格几乎不影响
+
+balanced：
+  官方 > kiro ≈ Bedrock —— kiro 靠 0.4x 价格追平 Bedrock 的质量优势
+
+cost_first（worker 默认）：
+  kiro > 官方 ≈ Bedrock —— 省钱权重放大 2 倍，质量差距缩小一半；
+  但若 kiro 变 unstable，立即让位给官方/Bedrock
+```
+
+UI 要求：驾驶舱和渠道中心显示当前生效模式；当 quality_first 用户的请求因限流 failover 到低质量供应商时，显示「已临时降级到 kiro（原因：官方限流中）」。
+
+文本类请求的 `estimatedRequestCost` 使用请求级 token 估算：
 
 ```text
 estimatedRequestCost =
@@ -2896,6 +2966,19 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
         "long_context":    ["claude", "openai", "deepseek", "qwen"],
         "image_generation": ["openai", "agnes", "volcengine"],
         "embedding":       ["openai", "qwen"]
+      }
+    },
+
+    "costPreference": {
+      "mode": "balanced",
+      "perTaskClass": {
+        "supervisor": "quality_first",
+        "worker": "cost_first",
+        "lightweight": "cost_first"
+      },
+      "custom": {
+        "savingsMultiplier": 1.0,
+        "providerQualityMultiplier": 1.0
       }
     },
 
