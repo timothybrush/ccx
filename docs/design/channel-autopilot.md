@@ -416,12 +416,19 @@ type ModelProfile struct {
 
     // ── 能力 ──
     ModelFamily    ModelFamily `json:"modelFamily"`   // 派系：claude/openai/gemini/deepseek/…，从注册表推导
-    QualityTier   QualityTier `json:"qualityTier"`
+    QualityTier   QualityTier `json:"qualityTier"`    // 基于模型族的质量档（premium/high/normal/low）
     SpeedTier     SpeedTier   `json:"speedTier"`
     ContextTokens int         `json:"contextTokens"`
     SupportsVision    bool    `json:"supportsVision"`
     SupportsToolCalls bool    `json:"supportsToolCalls"`
     SupportsReasoning bool    `json:"supportsReasoning"`
+
+    // ── 上游供应商质量（同模型在不同上游的质量差异）──
+    // 解决问题：同一 claude-opus-4-8，官方 Anthropic vs AWS Bedrock vs kiro 中转的质量可能差异很大
+    // 与 QualityTier 的区别：QualityTier 基于模型族（opus=premium），ProviderQuality 区分同族内的上游差异
+    ProviderQualityScore float64 `json:"providerQualityScore,omitempty"` // 0.0-1.0，该endpoint对该模型的实际实现质量
+    ProviderQualitySource string `json:"providerQualitySource,omitempty"` // probe | user_feedback | inferred | default
+    ProviderQualityConfidence float64 `json:"providerQualityConfidence,omitempty"` // 置信度
 
     // ── 探测结果 ──
     ProbeSuccess    bool      `json:"probeSuccess"`
@@ -1866,6 +1873,7 @@ Score = w_quality * qualityScore
       + w_savings * savingsScore
       + w_tier_match * tierMatchBonus
       + w_family * familyPreferenceScore   // 新增：模型派系偏好软约束
+      + w_provider_quality * providerQualityScore  // 新增：同模型上游供应商质量差异
       - penalty
 
 其中：
@@ -1875,21 +1883,52 @@ Score = w_quality * qualityScore
   costScore:             expensive=0, normal=1, cheap=2, free=3
   savingsScore:          normalizeCheapest(estimatedRequestCost)，越便宜越高，仅在满足硬约束后参与
   familyPreferenceScore: 见下方"模型派系偏好"章节
+  providerQualityScore:  该endpoint对该模型的实现质量，0.0-1.0（1.0=最优实现）
 
   tierMatchBonus: 渠道画像标签匹配策略优先标签时 +10
   penalty:        healthState=degraded 时 -5, limited 时 -20
 
-  权重根据 TaskClass 不同（w_family 统一为 0.2，确保稳定性差异始终覆盖派系偏好）：
-  Supervisor:      w_quality=3, w_stability=2, w_speed=1, w_cost=0, w_savings=0.5, w_family=0.2
-  Worker:          w_quality=1, w_stability=1, w_speed=2, w_cost=2, w_savings=3,   w_family=0.2
-  Lightweight:     w_quality=0, w_stability=1, w_speed=3, w_cost=2, w_savings=3,   w_family=0.1
-  Vision:          w_quality=2, w_stability=2, w_speed=1, w_cost=1, w_savings=1,   w_family=0.2
-  ImageGeneration: w_quality=1, w_stability=2, w_speed=1, w_cost=2, w_savings=2,   w_family=0.1
-  Embedding:       w_quality=0, w_stability=2, w_speed=2, w_cost=3, w_savings=3,   w_family=0.0
-  LongContext:     w_quality=2, w_stability=2, w_speed=1, w_cost=0, w_savings=1,   w_family=0.2
+  权重根据 TaskClass 不同（w_family 统一为 0.2，w_provider_quality 统一为 1.0）：
+  Supervisor:      w_quality=3, w_stability=2, w_speed=1, w_cost=0, w_savings=0.5, w_family=0.2, w_provider_quality=1.0
+  Worker:          w_quality=1, w_stability=1, w_speed=2, w_cost=2, w_savings=3,   w_family=0.2, w_provider_quality=0.8
+  Lightweight:     w_quality=0, w_stability=1, w_speed=3, w_cost=2, w_savings=3,   w_family=0.1, w_provider_quality=0.5
+  Vision:          w_quality=2, w_stability=2, w_speed=1, w_cost=1, w_savings=1,   w_family=0.2, w_provider_quality=1.0
+  ImageGeneration: w_quality=1, w_stability=2, w_speed=1, w_cost=2, w_savings=2,   w_family=0.1, w_provider_quality=0.3
+  Embedding:       w_quality=0, w_stability=2, w_speed=2, w_cost=3, w_savings=3,   w_family=0.0, w_provider_quality=0.0
+  LongContext:     w_quality=2, w_stability=2, w_speed=1, w_cost=0, w_savings=1,   w_family=0.2, w_provider_quality=1.0
 ```
 
 **w_family 权重约束验证**：`w_stability × (stable=2 − unstable=0) = 2.0`，而 `w_family × max(familyPreferenceScore) ≤ 0.2 × 3 = 0.6`。因此 stable 的非偏好派系（+2.0）始终胜过 unstable 的偏好派系（+0.6），派系偏好只在同等稳定性下才决定顺序。
+
+**w_provider_quality 权重约束验证**：`w_provider_quality × (1.0 − 0.0) = 1.0`，而 `w_stability × 2.0 = 2.0`。因此 stable 的低供应商质量实现仍优于 unstable 的高质量实现，供应商质量只在同等稳定性内打破平局。
+
+**ProviderQualityScore 推导规则**：
+
+```text
+L3 深度探测（默认来源）：
+  探测 prompt：同一测试用例（固定长度、固定语言、固定复杂度）
+  评分维度：
+    响应完整性  40%：输出 token 数 vs 预期（完整回答 vs 截断）
+    语义一致性  30%：与基线响应的语义相似度（cosine similarity 或 LLM-as-judge）
+    格式正确性  15%：tool_use block 是否合法、reasoning block 是否存在
+    首token延迟 15%：响应开始速度
+  providerQualityScore = weighted_average(各维度得分)
+
+用户反馈（高优先级 override）：
+  用户在 UI 标记某个 endpoint 的某个模型"质量好"或"质量差"
+  providerQualityScore = clamp(userScore, 0.0, 1.0)
+  ProviderQualitySource = "user_feedback"，confidence = 0.9
+
+启发式推导（低置信度兜底）：
+  基于 OriginTier + 历史成功响应的平均长度/完整度
+  official_api 默认 0.95，relay 默认 0.7，community 默认 0.5，unknown 默认 0.6
+  ProviderQualitySource = "inferred"，confidence = 0.4
+
+约束：
+  - 置信度 < 0.5 时 providerQualityScore 不参与评分（视为0分）
+  - 用户反馈覆盖探测结果，但用户反馈 TTL 为 30 天，过期后回退探测
+  - 不同模型族的 ProviderQualityScore 独立评估（opus 在kiro的质量不等于sonnet在kiro的质量）
+```
 
 ### 5.5 模型派系偏好 (Model Family Preference)
 
