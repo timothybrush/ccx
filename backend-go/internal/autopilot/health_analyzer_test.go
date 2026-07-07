@@ -187,7 +187,22 @@ func TestHealthAnalyzer_Diagnose(t *testing.T) {
 		},
 		// ── Misconfigured ──
 		{
-			name: "配置错误-全部404",
+			name: "配置错误-全部404样本不足",
+			signals: EndpointSignals{
+				TotalRequests1h:  4,
+				NotFoundCount:    4,
+				SuccessCount1h:   0,
+				FailureCount1h:   4,
+				TotalRequests15m: 1,
+				Now:              now,
+			},
+			// 样本 < 5 不触发软死成功率规则，全部404触发 Misconfigured
+			wantState:   HealthStateMisconfigured,
+			wantDeath:   DeathTypeModel,
+			wantMinConf: 0.85,
+		},
+		{
+			name: "配置错误-全部404但Dead优先",
 			signals: EndpointSignals{
 				TotalRequests1h:  5,
 				NotFoundCount:    5,
@@ -196,9 +211,10 @@ func TestHealthAnalyzer_Diagnose(t *testing.T) {
 				TotalRequests15m: 2,
 				Now:              now,
 			},
-			wantState:   HealthStateMisconfigured,
-			wantDeath:   DeathTypeModel,
-			wantMinConf: 0.85,
+			// Dead 规则优先于 Misconfigured：成功率 0%（样本 >= 5）触发软死。
+			wantState:   HealthStateDead,
+			wantDeath:   DeathTypeSoft,
+			wantMinConf: 0.80,
 		},
 		{
 			name: "配置错误-501协议不支持",
@@ -344,16 +360,15 @@ func TestHealthAnalyzer_Diagnose(t *testing.T) {
 			name: "边界-连续失败14次不死",
 			signals: EndpointSignals{
 				ConsecutiveFail:  14,
-				TotalRequests1h:  14,
+				TotalRequests1h:  4,
 				SuccessCount1h:   0,
-				FailureCount1h:   14,
-				TotalRequests15m: 3,
+				FailureCount1h:   4,
+				TotalRequests15m: 1,
 				Now:              now,
 			},
 			// 14 连续失败不足 15，不会硬死；
-			// 无成功且全部失败，但 24h 数据不足判断软死；
+			// 成功率为 0 但样本 = 4 < 5，不满足软死成功率条件；
 			// 无 429/quota/404/501 等特殊错误；
-			// 成功率为 0 但样本 < 5，不满足软死条件；
 			// 最终落到 unknown
 			wantState:   HealthStateUnknown,
 			wantDeath:   DeathTypeUnknown,
@@ -369,10 +384,10 @@ func TestHealthAnalyzer_Diagnose(t *testing.T) {
 				TotalRequests15m: 3,
 				Now:              now,
 			},
-			// 成功率 10% 不低于 10%，不触发软死
-			wantState:   HealthStateHealthy,
+			// 成功率恰好 10%：不满足 < 10% 软死条件，也不满足 >= 80% 健康条件
+			wantState:   HealthStateUnknown,
 			wantDeath:   DeathTypeUnknown,
-			wantMinConf: 0.80,
+			wantMinConf: 0.0,
 		},
 		{
 			name: "优先级-Dead高于Limited",
