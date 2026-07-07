@@ -1245,9 +1245,9 @@ Key 健康       → DisabledAPIKeys 数量 vs 总 Key 数量
 
 **诊断逻辑**（见第 6 章详细设计）。
 
-### 4.5 RateLimitDiscoverer — 上游 RPM 自动发现
+### 4.5 RateLimitDiscoverer — 上游限额自动发现
 
-**职责**：在用户未显式配置 `rateLimitRpm` / key 级 `rateLimitRpm` 时，为 endpoint 推导一个保守的运行态 RPM 限额，减少 429 和上游账号池冷却。
+**职责**：在用户未显式配置 `rateLimitRpm` / key 级 `rateLimitRpm` 等限额时，为 endpoint 推导保守的运行态 RPM/TPM/RPD/并发限额，减少 429 和上游账号池冷却。
 
 核心原则：
 - **显式配置永远优先**：只要 channel 或 `APIKeyConfig` 设置了 `RateLimitRPM`，自动发现只做展示，不覆盖 limiter。
@@ -1261,15 +1261,17 @@ Key 健康       → DisabledAPIKeys 数量 vs 总 Key 数量
 优先级 │ 来源                         │ 动作
 ───────┼──────────────────────────────┼────────────────────────────────────
 1      │ 用户显式 RateLimitRPM        │ 直接使用，自动发现不覆盖
-2      │ x-ratelimit-limit-requests   │ 计算窗口内请求上限，换算 RPM
-3      │ x-ratelimit-remaining/reset  │ 估算当前消耗速度与重置窗口
-4      │ anthropic-ratelimit-*        │ 同上，按 reset 时间换算
-5      │ Retry-After + 429/5xx        │ 进入 cooldown，并降低估算 RPM
-6      │ 无 header 的 429 比率        │ AIMD 降低估算 RPM
-7      │ 长时间成功且低延迟           │ AIMD 缓慢提高估算 RPM
+2      │ x-ratelimit-limit-requests   │ 计算窗口内请求上限，换算 RPM/RPD
+3      │ x-ratelimit-limit-tokens     │ 计算窗口内 token 上限，换算 TPM
+4      │ x-ratelimit-remaining/reset  │ 估算当前消耗速度与重置窗口
+5      │ anthropic-ratelimit-*        │ 同上，按 reset 时间换算 request/token limit
+6      │ 并发/队列/断流信号            │ 降低 MaxConcurrent，再观察 RPM/TPM
+7      │ Retry-After + 429/5xx        │ 进入 cooldown，并降低估算 limit
+8      │ 无 header 的 429 比率        │ AIMD 降低估算 limit
+9      │ 长时间成功且低延迟           │ AIMD 缓慢提高估算 limit
 ```
 
-现有 `ratelimit.ChannelLimiter.ApplyUpstreamHints` 已能解析 `Retry-After`、Anthropic remaining/reset、OpenAI remaining/reset 并施加 cooldown。Autopilot 在此基础上新增“可解释的 RPM 推导”，不要复制现有 cooldown 逻辑。
+现有 `ratelimit.ChannelLimiter.ApplyUpstreamHints` 已能解析 `Retry-After`、Anthropic remaining/reset、OpenAI remaining/reset 并施加 cooldown。Autopilot 在此基础上新增“可解释的运行限额推导”，不要复制现有 cooldown 逻辑。
 
 #### 4.5.2 学习状态
 
@@ -1282,6 +1284,8 @@ type RateLimitProfile struct {
     MetricsKey   string    `json:"metricsKey"`
     Scope        string    `json:"scope"` // channel | key:<id> | quota:<id>
     EstimatedRPM int       `json:"estimatedRpm"`
+    EstimatedTPM int       `json:"estimatedTpm,omitempty"`
+    EstimatedRPD int       `json:"estimatedRpd,omitempty"`
     WindowSeconds int      `json:"windowSeconds"`
     MaxConcurrent int      `json:"maxConcurrent,omitempty"`
     Source       string    `json:"source"` // manual | header | passive_aimd
@@ -1323,15 +1327,16 @@ header 明确给 limit:
 默认边界：
 - `minRPM=1`，防止估算为 0 后永久不可用。
 - `maxAutoRPM` 默认不超过 120，除非 header 明确给出更高 limit；避免自动学习把免费站打爆。
+- `maxAutoTPM`、`maxAutoRPD`、`maxAutoConcurrent` 也是硬上限；没有明确 header 时不能超过配置上限。
 - 对流式请求同时学习 `MaxConcurrent`：若出现频繁排队、断流或 429，先降并发，再降 RPM。
 
 #### 4.5.4 应用到运行态 limiter
 
 ```text
-if manual channel/key RateLimitRPM > 0:
+if manual channel/key RateLimitRPM/TPM/RPD/MaxConcurrent > 0:
     使用手动配置；profile 只展示 header/passive 发现值
 else if discovered EstimatedRPM > 0 and confidence >= threshold:
-    将 discovered RPM 作为 runtime limiter 配置
+    将 discovered RPM/TPM/RPD/MaxConcurrent 作为 runtime limiter 配置
 else:
     保持现有默认；只依赖 Retry-After cooldown 和负载软跳过
 ```
@@ -2497,6 +2502,7 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
   "smartRouting": {
     "enabled": true,
     "mode": "auto",
+    "killSwitch": false,
 
     "defaultAutoManaged": true,
     "autoDiscoveryOnAdd": true,
@@ -2534,6 +2540,9 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
       "passiveAimdEnabled": true,
       "minRpm": 1,
       "maxAutoRpm": 120,
+      "maxAutoTpm": 200000,
+      "maxAutoRpd": 5000,
+      "maxAutoConcurrent": 8,
       "confidenceThreshold": 0.6,
       "increaseIntervalMinutes": 10,
       "increaseStepPercent": 10,
@@ -2551,6 +2560,11 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
       "enabled": true,
       "applyAfterQualityFloor": true,
       "requireCostConfidence": 0.6,
+      "includeCachePricing": true,
+      "includeImageUnitPricing": true,
+      "includeEmbeddingPricing": true,
+      "currency": "USD",
+      "exchangeRateSource": "manual",
       "preferLowerEffectiveCost": true,
       "supervisorSavingsWeight": 0.5,
       "workerSavingsWeight": 3
@@ -2584,11 +2598,17 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
       "advisorTimeoutMs": 1200,
       "maxAdvisorPromptTokens": 1200,
       "minAdvisorConfidence": 0.85,
+      "minShadowSamples": 500,
       "minShadowAccuracy": 0.90,
+      "maxCriticalMisrouteRate": 0.01,
+      "maxFalseDemotionRate": 0.03,
+      "promotionMode": "manual",
       "neverDemoteTaskClasses": ["supervisor", "vision", "long_context"],
       "forbidAutoDecomposeAndMerge": true,
       "redactSensitiveMetadata": true,
       "recordOnlyHashedPrompt": true,
+      "retainDecisionRecordsDays": 7,
+      "autoRollbackOnSloRegression": true,
       "failOpenOnAdvisorError": true
     },
 
@@ -2598,7 +2618,11 @@ SmartRouter：按任务类型、硬约束、实时质量和有效成本排序
       "allowLocalForTaskClasses": ["lightweight", "worker"],
       "neverDemoteTaskClasses": ["supervisor", "vision", "long_context"],
       "forbidAutoDecomposeAndMerge": true,
-      "maxLocalCandidateLatencyMs": 3000
+      "maxLocalCandidateLatencyMs": 3000,
+      "maxLocalConcurrent": 2,
+      "maxLocalPromptTokens": 32000,
+      "remoteLocalRuntimeAllowed": false,
+      "requireLocalRuntimeAuth": true
     },
 
     "taskStrategies": {
@@ -2896,6 +2920,8 @@ backend-go/internal/autopilot/
 ├── subscription_profile.go    # 订阅/套餐/来源画像
 ├── local_model_runtime.go     # Ollama/LM Studio/llama-server 运行时画像
 ├── trusted_routing_advisor.go # 一等官方/本地模型结构化 RoutingHint 生成与 shadow 评估
+├── advisor_decision_store.go  # AdvisorDecisionRecord、准入/回滚统计和隐私保留策略
+├── routing_trace.go           # RoutingDecisionTrace、过滤原因和脱敏输出
 ├── origin_policy.go           # 信任等级解析、来源混杂检测、tie-breaker 策略
 ├── manual_routing_intent.go   # 模型/渠道/endpoint/session 短期试用意图
 ├── manual_intent_store.go     # TTL、预算、命中结果存储
@@ -2917,6 +2943,8 @@ backend-go/internal/autopilot/
 ├── subscription_profile_test.go # 套餐继承、渠道绑定、倍率回退测试
 ├── local_model_runtime_test.go # 本地 runtime 探测、OpenAI-compatible adapter 测试
 ├── trusted_routing_advisor_test.go # shadow 准确率、超时、不可降级约束测试
+├── advisor_privacy_test.go    # AdvisorInput 白名单、低信任上游禁止、trace 脱敏测试
+├── routing_priority_test.go   # kill switch、manual override、advisor、成本和信任 tie-breaker 顺序测试
 ├── manual_routing_intent_test.go # TTL、预算、fallback、硬约束测试
 ├── fast_decay_test.go         # 快速衰减测试
 ├── rate_limit_discovery_test.go # RPM header 解析与 AIMD 收敛测试
@@ -2967,7 +2995,233 @@ frontend/src/components/
 
 ---
 
-## 12. 风险与缓解
+## 12. P0/P1/P2 落地契约与验收标准
+
+本节是实现前的阻断清单。P0 未完成时不得让 Autopilot 影响真实调度；P1 未完成时不得默认开启自动模式；P2 可作为体验增强分批交付。
+
+### 12.1 P0：必须先锁死
+
+#### P0.1 Trusted advisor 准入、退出与回滚
+
+`TrustedRoutingAdvisor` 必须先 shadow，再进入候选影响，最后才允许真实影响路由：
+
+```text
+disabled
+  → shadow：只记录 hint，不影响路由
+  → candidate：满足样本/准确率门槛，仍需用户或配置显式允许
+  → active：只对 lightweight/worker 低风险请求生效
+  → rolled_back：SLO 恶化、误判超阈值、advisor 不可用或用户关闭
+```
+
+准入门槛：
+- `minShadowSamples >= 500`。
+- `minShadowAccuracy >= 0.90`。
+- `maxCriticalMisrouteRate <= 0.01`。
+- `maxFalseDemotionRate <= 0.03`。
+- `advisor p95 latency <= advisorTimeoutMs`，超时按 fail-open 处理。
+- 只允许 `OriginTier=first|local`；配置错误时直接降为 `disabled`。
+
+退出条件：
+- 任意 15 分钟窗口内 critical misroute 超阈值。
+- active 后成功率、fallback 率、p95 latency 或用户 override 率相对 shadow baseline 明显恶化。
+- advisor 连续超时、返回无效 JSON 或违反 `NeverDemote`。
+- 全局 `smartRouting.killSwitch=true`。
+
+```go
+type AdvisorDecisionRecord struct {
+    DecisionUID string `json:"decisionUid"`
+    RequestUID  string `json:"requestUid,omitempty"`
+
+    AdvisorUID        string `json:"advisorUid"`
+    AdvisorOriginTier string `json:"advisorOriginTier"` // first | local
+    Mode              string `json:"mode"`              // shadow | candidate | active
+
+    TaskClass TaskClass `json:"taskClass"`
+    PromptHash string `json:"promptHash,omitempty"` // 不存明文 prompt
+    InputTokenBucket string `json:"inputTokenBucket"` // <1k | 1-10k | 10-50k | 50k+
+
+    Hint TrustedRoutingHint `json:"hint"`
+    DefaultPlanHash string `json:"defaultPlanHash"`
+    Applied bool `json:"applied"`
+
+    Outcome string `json:"outcome"` // matched | fallback | user_override | upstream_error | timeout
+    MisrouteSeverity string `json:"misrouteSeverity,omitempty"` // none | minor | major | critical
+    LatencyMs int64 `json:"latencyMs"`
+    EstimatedAdvisorCost float64 `json:"estimatedAdvisorCost,omitempty"`
+    CreatedAt time.Time `json:"createdAt"`
+}
+```
+
+记录保留：
+- `AdvisorDecisionRecord` 默认保留 7 天。
+- 只保存 hash、bucket、结构化特征和结果，不保存 prompt 明文、文件内容、Authorization 或 API Key。
+- 用户导出诊断时仍要二次脱敏。
+
+#### P0.2 Advisor 输入与隐私白名单
+
+`AdvisorInput` 必须是显式白名单，而不是把请求对象整体序列化：
+
+```go
+type AdvisorInput struct {
+    RequestKind string `json:"requestKind"` // messages | chat | responses | gemini
+    Operation string `json:"operation,omitempty"`
+    RequestedModel string `json:"requestedModel,omitempty"`
+    AgentRole string `json:"agentRole,omitempty"`
+
+    InputTokenBucket string `json:"inputTokenBucket"`
+    HasImage bool `json:"hasImage"`
+    NeedsToolUse bool `json:"needsToolUse"`
+    NeedsReasoning bool `json:"needsReasoning"`
+    NeedsLongContext bool `json:"needsLongContext"`
+
+    RedactedTaskSummary string `json:"redactedTaskSummary,omitempty"`
+    CandidateTaskClasses []TaskClass `json:"candidateTaskClasses"`
+}
+```
+
+隐私规则：
+- `RedactedTaskSummary` 只能由本地模型、一等官方 advisor 或确定性本地摘要器生成。
+- 禁止发送完整历史、文件全文、API Key、Authorization、自定义敏感 header、multipart 内容。
+- `second|third|unknown` 上游永远不能接收 `AdvisorInput`。
+- 如果摘要无法在可信执行面生成，advisor 直接跳过，SmartRouter 使用默认规则。
+
+#### P0.3 确定性 TaskClassifier
+
+`TaskClassifier` 必须先用确定性规则生成 task class。advisor 只能在既定枚举内提供 hint，不能发明新分类。
+
+硬规则：
+- `images` → `image_generation`。
+- `vectors` → `embedding`。
+- `HasImage && VisionNeed` → `vision`。
+- `ContextNeed > threshold` → `long_context`。
+- `Operation` 命中标题、分类、格式转换、`count_tokens` 等白名单，且无图片/工具/reasoning/长上下文 → `lightweight`。
+- `AgentRole=main` 或未知 → `supervisor`。
+- `AgentRole=subagent` → `worker`。
+- 不确定时升级到更保守分类，不降级到 lightweight。
+
+#### P0.4 最终调度优先级矩阵
+
+真实请求必须按以下顺序裁决：
+
+| 顺序 | 层级 | 规则 |
+|------|------|------|
+| 0 | 全局开关 | `killSwitch=true` 时只走现有调度，不读取 advisor hint |
+| 1 | 安全硬约束 | 鉴权、协议、上下文、vision/tool/reasoning、image/vector 原生能力、embedding 维度 |
+| 2 | 用户显式意图 | `ManualRoutingIntent`、`X-Channel`、session pin、manual override；仍不能绕过硬约束 |
+| 3 | 显式模型配置 | 用户 `modelMapping` / `supportedModels` 优先，自动结果不得覆盖 |
+| 4 | 运行可用性 | 熔断、cooldown、手动限流、runtime RPM/TPM/RPD/concurrency limiter |
+| 5 | advisor hint | 只对允许 task class 生效；不能覆盖 `NeverDemote` 或用户显式意图 |
+| 6 | 质量与能力排序 | `CapabilityFloor`、`MinQualityTier`、HealthState、QualityTrend |
+| 7 | 成本排序 | 只在质量/能力下界之后使用 `estimatedRequestCost` |
+| 8 | 信任等级 tie-breaker | 只在同质量/同健康/同成本档使用，不代表服务质量 |
+| 9 | endpoint failover | `TryUpstreamWithAllKeys` 按 EndpointAttemptPolicy 细选 baseURL/key |
+
+#### P0.5 验收不变量
+
+实现必须覆盖以下测试：
+- 低信任上游不会收到 `AdvisorInput`、prompt 摘要或隐私 metadata。
+- `killSwitch=true` 时 Autopilot 不影响真实调度。
+- 手动 `RateLimitRPM` / key 级限流不会被自动发现覆盖。
+- 成本排序永远发生在能力、质量、上下文和协议硬约束之后。
+- `ManualRoutingIntent` 不能绕过鉴权、模型能力、embedding 维度、images operation 或上下文限制。
+- advisor 不能把 `supervisor`、`vision`、`long_context` 降级。
+- `/v1/images/*` 只走原生 images endpoint，不从 chat/messages/responses 自动转换。
+- `/v1/embeddings` 不跨模型猜测维度，不改写 input。
+- 路由 trace 不包含明文 API Key、Authorization、prompt 全文或 multipart 内容。
+
+### 12.2 P1：默认自动模式前必须完成
+
+#### P1.1 成本模型覆盖面
+
+CostResolver 必须区分：
+- 文本 input/output token。
+- prompt cache read/write 价格。
+- embedding token 价格。
+- image unit price：按 model、size、quality、operation、n 计算。
+- token plan / prepaid credit / shared free 的余额与倍率。
+- 币种换算：MVP 使用手动汇率；自动汇率更新属于 Phase 4。
+
+缺价格时：
+- `Confidence < requireCostConfidence`。
+- 只展示 shadow 估算，不参与强排序。
+- 不用 chat token 价格替代 image unit price 或 embedding price。
+
+#### P1.2 限流模型覆盖面
+
+RateLimitDiscoverer 必须同时表达：
+- RPM：requests per minute。
+- TPM：tokens per minute。
+- RPD：requests per day。
+- MaxConcurrent：并发连接/流式请求占用。
+- Retry-After / reset window / cooldown。
+
+应用规则：
+- 手动值永远优先。
+- header 明确值优先于 AIMD。
+- 无 header 时只保守收敛，不能主动压测。
+- 流式请求先降并发，再降 RPM/TPM，避免把长连接误判成请求速率过高。
+
+#### P1.3 本地 runtime 资源与安全边界
+
+本地运行时必须有资源保护：
+- 默认只允许 loopback/private network；远程 local runtime 需要显式开启和鉴权。
+- 禁止通过代理绕过 loopback/private 检查；需要防 DNS rebinding。
+- `maxLocalConcurrent`、`maxLocalPromptTokens`、`maxLocalCandidateLatencyMs` 必须生效。
+- 本地 candidate 超时或慢于阈值时 fail-open，不阻塞高优先级请求。
+- 不自动 unload/load 模型；模型生命周期只做探测和提示，避免破坏用户本地环境。
+
+#### P1.4 Routing trace schema
+
+所有真实或 dry-run 路由都输出结构化 trace：
+
+```go
+type RoutingDecisionTrace struct {
+    TraceUID string `json:"traceUid"`
+    TaskClass TaskClass `json:"taskClass"`
+    RequestKind string `json:"requestKind"`
+
+    ManualIntentUID string `json:"manualIntentUid,omitempty"`
+    AdvisorDecisionUID string `json:"advisorDecisionUid,omitempty"`
+
+    CandidatesBefore int `json:"candidatesBefore"`
+    CandidatesAfter int `json:"candidatesAfter"`
+    FilterReasons map[string][]string `json:"filterReasons,omitempty"`
+    SortReasons []string `json:"sortReasons,omitempty"`
+
+    SelectedChannelUID string `json:"selectedChannelUid,omitempty"`
+    SelectedMetricsKey string `json:"selectedMetricsKey,omitempty"`
+    SelectedOriginTier string `json:"selectedOriginTier,omitempty"`
+    EstimatedRequestCost float64 `json:"estimatedRequestCost,omitempty"`
+    CostConfidence float64 `json:"costConfidence,omitempty"`
+
+    FallbackUsed bool `json:"fallbackUsed"`
+    PromptHash string `json:"promptHash,omitempty"`
+}
+```
+
+trace 只记录解释性字段，不记录明文 prompt、密钥、敏感 header 或 multipart。
+
+#### P1.5 迁移与回滚
+
+落地必须包含：
+- SQLite schema version 和幂等 migration。
+- 旧配置 backfill：补 `ChannelUID`、`OriginType`、`OriginTier` 时不改变原调度。
+- profile 损坏或 migration 失败时 fail-open：禁用 Autopilot，保留现有调度。
+- 全局 `killSwitch`、按 task class disable、按 channel disable。
+- active 后的 SLO regression 自动 rollback 到 shadow，并在驾驶舱显示原因。
+
+### 12.3 P2：体验与运营增强
+
+P2 不阻塞核心落地，但应进入后续 backlog：
+- images/vectors 在渠道中心独立显示 operation、尺寸/质量、embedding 维度、原生端点健康。
+- 前端异常态：advisor 被隐私策略禁用、本地 runtime 慢/不可用、成本置信度低、来源混杂、RPM/TPM 未发现。
+- 导入/导出时保留订阅、倍率、信任等级和本地 runtime 绑定，但不导出密钥明文。
+- 管理面板增加“解释模式”：只开启 trace/dry-run，不改真实调度。
+- 运营报表按 task class 展示节省、fallback、advisor 命中、手动 override 和 SLO 变化。
+
+---
+
+## 13. 风险与缓解
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
@@ -2984,6 +3238,8 @@ frontend/src/components/
 | 人工试用变成永久偏置 | 用户临时测试的 fable-5 或公益站长期压过 Autopilot | `ManualRoutingIntent` 必须有 TTL、请求/成本预算、fallback；到期只生成建议，不自动写长期策略 |
 | 未知模型污染全局映射 | 测试新模型时把错误映射写入所有请求 | `model_trial` 只做 request-scoped 透传/映射；结果标记 `manual_trial`，用户显式保存后才进入 `modelMapping` |
 | 隐私内容被发给低信任上游做判定 | 中转站/公益站接触额外 prompt、系统提示或 metadata | routing advisor 只允许 `OriginTier=first|local`；second/third/unknown 只可作为候选执行上游，不可做隐私敏感 classifier/evaluator |
+| advisor 误判后持续影响真实调度 | 低风险任务被系统性降级，用户质量下降 | shadow 样本/准确率/critical misroute 门槛；active 后 SLO regression 自动 rollback；全局 kill switch |
+| trace 或 advisor 记录泄露隐私 | prompt、文件内容或密钥进入 SQLite/API 响应 | `AdvisorInput` 白名单、prompt hash、短 TTL、导出二次脱敏；禁止记录 Authorization/API Key/multipart |
 | 成本倍率配置错误 | 用户看到的具体费用不准，调度可能选错 key | 倍率必须显式展示来源和公式；低置信度成本只做 tie-breaker；UI 提供按 key 的有效价格预览 |
 | 生图成本被误按 chat token 估算 | images 调度选错上游或显示错误节省 | image_generation 使用 image unit price；缺价格时只 shadow 展示，不用 chat token 价格替代 |
 | chat 画图被误转成 images 请求 | 用户原本想走对话模型，系统改写协议导致行为变化 | MVP 禁止 chat/messages/responses → images 自动转换；只有显式 `/v1/images/*` 请求进入 image_generation 调度 |
@@ -2991,6 +3247,7 @@ frontend/src/components/
 | 为省钱牺牲质量 | supervisor/vision/long-context 被路由到低质量或能力不足 endpoint | 成本排序只在 `CapabilityFloor`、`MinQualityTier`、上下文和能力硬约束通过后执行 |
 | 自动 RPM 发现过于激进 | 误把免费/低配额上游打到 429 或封禁 | 只在未显式设置时启用；优先 header；无 header 用保守 AIMD；不主动压测；`maxAutoRPM` 封顶 |
 | 自动 RPM 覆盖用户意图 | 用户手动设置被 runtime 学习值覆盖 | 手动 channel/key `RateLimitRPM` 永远优先；自动值只展示或用于未设置场景的 runtime limiter |
+| TPM/RPD/并发限制缺失 | 只按 RPM 控制仍可能触发 token 限额或长连接拥塞 | RateLimitProfile 同时记录 RPM/TPM/RPD/MaxConcurrent；流式先降并发再降 RPM/TPM |
 | endpoint 级探测成本倍增 | 5 key × 3 baseURL = 15 endpoint，探测量是 channel 级的 15 倍 | endpoint 级探测轮转执行，不并发；L2 探测每日总量仍有上限；channel 级聚合结果缓存避免重复计算 |
 | Key 换分组后模型列表突变 | 调度时才发现模型不可用 | GroupChangeDetector 在 L2 探测和 model_not_found 时自动检测；分组变更立即标记 stale 并重探测 |
 | endpoint 间能力不一致导致配置污染 | 同一 channel 有的 endpoint 支持 vision 有的不支持，自动写 channel 级配置会误导调度 | 只有所有 endpoint 一致时才写 channel 级配置；不一致结果保留 ProfileStore 并通过 EndpointAttemptPolicy request-scoped 生效 |
@@ -3003,3 +3260,5 @@ frontend/src/components/
 | 趋势检测误判（短期波动 vs 真实恶化） | 频繁触发重评估浪费资源 | degrading 需要同时满足 24h 和 7d 双基准下降才触发重评估；volatile 状态只调 FastDecay 系数，不触发重评估 |
 | 多实例重复探测 | 多进程同时 L2/L3 探测导致 quota 消耗翻倍 | Phase 1 不自动探测；Phase 2 引入 `autopilot_jobs(locked_until, owner)` 后再启用自动 worker |
 | 管理 API 误操作 | 批量删除/暂停影响生产渠道 | 新端点要求管理权限；批量默认仅支持 refresh/probe/pause，删除走现有确认流程 |
+| 本地 runtime 被当成远端代理入口 | SSRF、内网探测或远程未鉴权 runtime 泄露请求 | 默认只允许 loopback/private network；远程 local runtime 必须显式开启和鉴权；防代理绕过和 DNS rebinding |
+| migration 失败影响生产流量 | schema/backfill 错误导致调度不可用 | migration 幂等；失败时 fail-open 禁用 Autopilot；保留现有调度和 kill switch |
