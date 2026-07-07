@@ -171,7 +171,7 @@ func ChannelDiscoveryWithModelFetchers(cfgManager *config.ConfigManager, modelFe
 		recommendation.BaseURLs = append([]string(nil), channel.BaseURLs...)
 		// 实际生效的成功模型列表：当 channelKind 协议无成功模型时（已做过 fallback
 		// 建映射）此处同步用 fallback 结果，避免后续探测从空 successByProtocol 取数。
-		effectiveSuccessModels := discoveryEffectiveSuccessModels(recommendedKind, successByProtocol)
+		effectiveSuccessModels := discoveryEffectiveSuccessModels(recommendedKind, compatProbeProtocol(channel, recommendedKind), successByProtocol)
 		applyDiscoveryModelCapabilityRecommendations(&recommendation, models.Items, effectiveSuccessModels, globalCapabilities)
 		capabilities := DiscoveryCapabilitiesResult{}
 		if recommendation.ChannelKind != "" {
@@ -404,7 +404,7 @@ func buildDiscoveryMappingRecommendation(
 	// 当 channelKind 协议无成功模型时降级到其他成功协议，确保别名映射仍能生成。
 	// 与调用方保持一致，统一走 discoveryEffectiveSuccessModels。
 	successful := make(map[string]struct{})
-	for _, model := range discoveryEffectiveSuccessModels(channelKind, successByProtocol) {
+	for _, model := range discoveryEffectiveSuccessModels(channelKind, "", successByProtocol) {
 		successful[model] = struct{}{}
 	}
 
@@ -474,8 +474,8 @@ func discoveryReasoningMapping(channelKind string, modelMapping map[string]strin
 		add("gpt", "max")
 		add("mini", "high")
 		add("codex", "high")
-	// gemini: reasoningMapping 暂不推荐，Gemini handler 目前不消费该字段，
-	// 写入配置只会产生无效噪声。待 Gemini thinking 路径完整支持后再启用。
+		// gemini: reasoningMapping 暂不推荐，Gemini handler 目前不消费该字段，
+		// 写入配置只会产生无效噪声。待 Gemini thinking 路径完整支持后再启用。
 	}
 	if len(reasoning) == 0 {
 		return nil
@@ -1418,14 +1418,26 @@ func discoverySuccessModelsByProtocol(protocols []DiscoveryProtocolResult) map[s
 	return result
 }
 
-// discoveryEffectiveSuccessModels 返回 channelKind 协议实际探测成功的模型列表；
-// 当该协议无成功模型时（用户显式选择 channelKind 但协议失败），
-// 按优先级降级到其他协议，与 buildDiscoveryMappingRecommendation 的 fallback 逻辑保持一致。
-func discoveryEffectiveSuccessModels(channelKind string, successByProtocol map[string][]string) []string {
+// discoveryEffectiveSuccessModels 返回 channelKind 协议实际探测成功的模型列表。
+// 当该协议无成功模型时（用户显式选择 channelKind 但协议失败），降级策略：
+//  1. 优先尝试 preferredProtocol（通常来自 compatProbeProtocol，反映 serviceType 实际目标协议）
+//  2. 再按 responses > messages > chat > gemini 固定顺序兜底
+//
+// 保持与 buildDiscoveryMappingRecommendation 的 fallback 行为一致。
+func discoveryEffectiveSuccessModels(channelKind, preferredProtocol string, successByProtocol map[string][]string) []string {
 	if models := successByProtocol[channelKind]; len(models) > 0 {
 		return models
 	}
+	// 优先试 serviceType 对应的实际上游协议，避免把模型映射到不可用的端点。
+	if preferredProtocol != "" && preferredProtocol != channelKind {
+		if models := successByProtocol[preferredProtocol]; len(models) > 0 {
+			return models
+		}
+	}
 	for _, protocol := range []string{"responses", "messages", "chat", "gemini"} {
+		if protocol == channelKind || protocol == preferredProtocol {
+			continue // 已试过，跳过
+		}
 		if models := successByProtocol[protocol]; len(models) > 0 {
 			return models
 		}
