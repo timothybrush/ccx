@@ -23,6 +23,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/conversation"
 	"github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/BenedictKing/ccx/internal/handlers/chat"
+	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/handlers/copilot"
 	"github.com/BenedictKing/ccx/internal/handlers/gemini"
 	"github.com/BenedictKing/ccx/internal/handlers/images"
@@ -554,6 +555,71 @@ func main() {
 			return sr.CandidateFilterFor(profile)
 		})
 		log.Printf("[Scheduler-Init] SmartRouter shadow filter 已注册 (默认模式: shadow)")
+	}
+
+	// Phase 2 第二批：EndpointAttemptPolicy 注入 + FastDecay 通知 + L2 探测 + 限速应用
+	// 注册 endpoint policy hook：handlers 层 TryUpstreamWithAllKeys 调用时自动获取 policy。
+	// shadow 模式：计算评分 + 记录 trace，不影响真实排序（默认行为不变）。
+	// off / kill switch：hook 内部检查模式，返回 nil（不注入）。
+	if autopilotManager != nil && autopilotManager.SmartRouter() != nil {
+		sr := autopilotManager.SmartRouter()
+		profileStore := sr.ProfileStore()
+		traceStore := sr.TraceStore()
+		fastDecayScorer := autopilotManager.FastDecayScorer()
+
+		// endpoint policy hook：为每个请求构建 EndpointAttemptPolicy
+		common.SetEndpointPolicyProviderHook(func(c *gin.Context, model string, upstream *config.UpstreamConfig) *autopilot.EndpointAttemptPolicy {
+			autopilotCfg := cfgManager.GetAutopilotRouting()
+			effectiveMode := autopilotCfg.EffectiveRoutingMode()
+			if effectiveMode == config.AutopilotModeOff {
+				return nil
+			}
+			mode := autopilot.RoutingMode(effectiveMode)
+			req := &autopilot.RequestProfile{
+				Model:       model,
+				ChannelKind: "", // channel kind 由 handler 层传入，hook 签名暂不含；shadow 模式下不影响评分
+			}
+			deps := autopilot.EndpointPolicyDeps{
+				ProfileStore: profileStore,
+				FastDecay:    fastDecayScorer,
+				TraceStore:   traceStore,
+			}
+			return autopilot.BuildEndpointPolicy(deps, req, mode)
+		})
+
+		// FastDecay 通知 hook：请求成功/失败时实时更新 FastDecayScorer
+		common.SetNotifyEndpointResultHook(func(endpointUID string, success bool) {
+			if fastDecayScorer != nil && endpointUID != "" {
+				fastDecayScorer.RecordResult(endpointUID, success)
+			}
+		})
+		log.Printf("[Autopilot-Init] EndpointAttemptPolicy hook + FastDecay notify hook 已注册")
+	}
+
+	// RateLimitApplier：将发现的限速建议应用到运行态 limiter
+	if autopilotManager != nil && rateLimitManager != nil {
+		rlApplier := autopilot.NewRateLimitApplier(
+			autopilotManager.RateLimitDiscoverer(),
+			rateLimitManager,
+			func() config.AutopilotRoutingConfig { return cfgManager.GetAutopilotRouting() },
+			envCfg.QuietPollingLogs,
+		)
+		autopilotManager.SetRateLimitApplier(rlApplier)
+	}
+
+	// L2 ProbeWorker：按配置门控启动（默认关闭）
+	if autopilotManager != nil {
+		autopilotCfg := cfgManager.GetAutopilotRouting()
+		if autopilotCfg.HealthCheck.L2ProbeEnabled {
+			probeWorker := autopilot.NewProbeWorker(
+				autopilotManager.ProfileStore(),
+				autopilot.ProbeWorkerConfig{
+					QuietLogs: envCfg.QuietPollingLogs,
+				},
+			)
+			autopilotManager.SetProbeWorker(probeWorker)
+			log.Printf("[Autopilot-Init] L2 ProbeWorker 已创建 (将在 StartWorker 时启动)")
+		}
 	}
 
 	// 初始化对话追踪器和覆盖管理器

@@ -132,6 +132,10 @@ type Manager struct {
 	traceStore  *TraceStore
 	smartRouter *SmartRouter
 
+	// Phase 2 第二批：endpoint 级策略 + L2 探测 + 限速应用
+	probeWorker      *ProbeWorker
+	rateLimitApplier *RateLimitApplier
+
 	cancel func()
 	wg     sync.WaitGroup
 }
@@ -314,6 +318,7 @@ func (m *Manager) ObserveRateLimitSignal(
 }
 
 // StartWorker 启动后台聚合 worker。ctx 取消时退出循环。
+// 若 ProbeWorker 已设置，同步启动 L2 探测 worker。
 func (m *Manager) StartWorker(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 	m.wg.Add(1)
@@ -321,10 +326,18 @@ func (m *Manager) StartWorker(ctx context.Context) {
 		defer m.wg.Done()
 		m.runWorker(ctx)
 	}()
+	// L2 探测 worker（config 门控，由 main.go 按配置决定是否 SetProbeWorker）
+	if m.probeWorker != nil {
+		m.probeWorker.Start(ctx)
+	}
 }
 
 // Stop 优雅停止后台 worker（等待当前循环完成）。
+// 若 ProbeWorker 已设置，同步停止。
 func (m *Manager) Stop() {
+	if m.probeWorker != nil {
+		m.probeWorker.Stop()
+	}
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -422,6 +435,31 @@ func (m *Manager) SmartRouter() *SmartRouter {
 // SetSmartRouter 设置 SmartRouter（由 main.go 在 NewManager 后调用）。
 func (m *Manager) SetSmartRouter(sr *SmartRouter) {
 	m.smartRouter = sr
+}
+
+// FastDecayScorer 返回内部 FastDecayScorer 引用（供 handler 层通知请求结果）。
+func (m *Manager) FastDecayScorer() *FastDecayScorer {
+	return m.scorer
+}
+
+// ProbeWorker 返回内部 ProbeWorker 引用。
+func (m *Manager) ProbeWorker() *ProbeWorker {
+	return m.probeWorker
+}
+
+// SetProbeWorker 设置 ProbeWorker（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetProbeWorker(pw *ProbeWorker) {
+	m.probeWorker = pw
+}
+
+// RateLimitApplier 返回内部 RateLimitApplier 引用。
+func (m *Manager) RateLimitApplier() *RateLimitApplier {
+	return m.rateLimitApplier
+}
+
+// SetRateLimitApplier 设置 RateLimitApplier（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetRateLimitApplier(rla *RateLimitApplier) {
+	m.rateLimitApplier = rla
 }
 
 // runWorker 后台循环主逻辑。

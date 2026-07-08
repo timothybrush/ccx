@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -61,6 +62,7 @@ type TryUpstreamOption func(*tryUpstreamOptions)
 
 type tryUpstreamOptions struct {
 	channelLogOptions []ChannelLogOption
+	endpointPolicy    *autopilot.EndpointAttemptPolicy // endpoint 级策略（nil 时不注入）
 }
 
 // WithSelectionTrace 将调度器的选择摘要写入后续渠道请求日志。
@@ -74,6 +76,42 @@ func WithSelectionTrace(selection *scheduler.SelectionResult) TryUpstreamOption 
 			scheduler.FormatSelectionTraceSummary(selection.Trace, 4),
 		))
 	}
+}
+
+// WithEndpointAttemptPolicy 将 autopilot EndpointAttemptPolicy 注入 TryUpstreamWithAllKeys。
+// nil policy 时等同于不注入（fail-open）。
+// panic 防护：policy 函数 panic 时回退原列表，记日志。
+func WithEndpointAttemptPolicy(policy *autopilot.EndpointAttemptPolicy) TryUpstreamOption {
+	return func(opts *tryUpstreamOptions) {
+		if opts == nil || policy == nil {
+			return
+		}
+		opts.endpointPolicy = policy
+	}
+}
+
+// ── Autopilot 包级钩子（可选注入，nil 时默认行为不变）──
+
+// endpointPolicyProviderHook 可选的 endpoint policy 提供者。
+// 由 main.go 在 autopilot 初始化后注入；handlers 通过 TryUpstreamOption 传入 policy。
+// 签名：(c, model, upstream) → *EndpointAttemptPolicy（nil 表示不注入）。
+var endpointPolicyProviderHook func(c *gin.Context, model string, upstream *config.UpstreamConfig) *autopilot.EndpointAttemptPolicy
+
+// SetEndpointPolicyProviderHook 设置 endpoint policy 提供者钩子。
+// 由 main.go 在 autopilot 初始化后调用；nil 表示不注入。
+func SetEndpointPolicyProviderHook(hook func(c *gin.Context, model string, upstream *config.UpstreamConfig) *autopilot.EndpointAttemptPolicy) {
+	endpointPolicyProviderHook = hook
+}
+
+// notifyEndpointResultHook 可选的 endpoint 请求结果通知器。
+// 由 main.go 在 autopilot 初始化后注入；用于实时更新 FastDecayScorer。
+// 签名：(endpointUID, success)。
+var notifyEndpointResultHook func(endpointUID string, success bool)
+
+// SetNotifyEndpointResultHook 设置 endpoint 结果通知钩子。
+// 由 main.go 在 autopilot 初始化后调用；nil 表示不通知。
+func SetNotifyEndpointResultHook(hook func(endpointUID string, success bool)) {
+	notifyEndpointResultHook = hook
 }
 
 func shouldNormalizeMetadataUserID(kind scheduler.ChannelKind, upstream *config.UpstreamConfig) bool {
@@ -213,6 +251,22 @@ func TryUpstreamWithAllKeys(
 		}
 	}
 
+	// ── EndpointAttemptPolicy: 步骤 1+2（FilterURLs + SortURLs）──
+	// 对 urlResults 应用 policy 过滤/排序（设计 §4.6.2a）。
+	// nil policy / hook 未设置 / panic 时均 fail-open，不影响现有逻辑。
+	endpointPolicy := tryOpts.endpointPolicy
+	if endpointPolicy == nil && endpointPolicyProviderHook != nil {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Autopilot-EndpointPolicy] endpointPolicyProviderHook panic: %v", r)
+				}
+			}()
+			endpointPolicy = endpointPolicyProviderHook(c, model, upstream)
+		}()
+	}
+	urlResults = applyPolicyToURLs(endpointPolicy, urlResults, apiType, c)
+
 	for urlIdx, urlResult := range urlResults {
 		currentBaseURL := urlResult.URL
 		originalIdx := urlResult.OriginalIdx // 原始索引用于指标记录
@@ -266,7 +320,10 @@ func TryUpstreamWithAllKeys(
 			} else {
 				keyAttempts++
 				var err error
-				selection, apiKey, err = selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey)
+				// 步骤 5+6: EndpointAttemptPolicy FilterKeys + SortKeys
+				// selectAttemptAPIKeyFiltered 在 keypool.CandidatesForModel 之后应用 policy 过滤/排序。
+				// nil policy 时回退到 selectAttemptAPIKey（行为不变）。
+				selection, apiKey, err = selectAttemptAPIKeyFiltered(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, redirectedModel, nextAPIKey, endpointPolicy, apiType, c)
 				if err != nil {
 					lastError = err
 					break // 当前 BaseURL 没有可用 Key，尝试下一个 BaseURL
@@ -405,6 +462,12 @@ func TryUpstreamWithAllKeys(
 				if markURLFailure != nil {
 					markURLFailure(currentBaseURL)
 				}
+				// 步骤 10: 通知 autopilot FastDecayScorer 请求失败（连接错误）
+				if notifyEndpointResultHook != nil {
+					keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+					endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
+					notifyEndpointResultHook(endpointUID, false)
+				}
 				// 记录渠道日志
 				// 完成日志记录
 				CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, err.Error(), isRetryAttempt)
@@ -478,6 +541,12 @@ func TryUpstreamWithAllKeys(
 					channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 					if markURLFailure != nil {
 						markURLFailure(currentBaseURL)
+					}
+					// 步骤 10: 通知 autopilot FastDecayScorer 请求失败（HTTP 错误）
+					if notifyEndpointResultHook != nil {
+						keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+						endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
+						notifyEndpointResultHook(endpointUID, false)
 					}
 					errorSummary := errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
 					if errorSummary != "" {
@@ -627,6 +696,12 @@ func TryUpstreamWithAllKeys(
 			if markURLSuccess != nil {
 				markURLSuccess(currentBaseURL)
 			}
+			// 步骤 9: 通知 autopilot FastDecayScorer 请求成功（§4.6.2a）
+			if notifyEndpointResultHook != nil {
+				keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+				endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
+				notifyEndpointResultHook(endpointUID, true)
+			}
 			metricsManager.RecordRequestFinalizeSuccess(currentBaseURL, apiKey, metricsServiceType, requestID, usage)
 			channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
 			if probeKey := currentBaseURL + "|" + apiKey; probeAcquired[probeKey] {
@@ -694,6 +769,238 @@ func waitForHalfOpenProbe(ctx context.Context, metricsManager *metrics.MetricsMa
 			}
 		}
 	}
+}
+
+// ── EndpointAttemptPolicy 辅助函数 ──
+//
+// 设计 §4.6.2a 十步执行顺序的 policy 注入点：
+//  步骤 1: applyPolicyToURLs — FilterURLs + SortURLs（URL 循环前）
+//  步骤 5-6: selectAttemptAPIKeyFiltered — FilterKeys + SortKeys（每个 baseURL 内 key 候选阶段）
+//  步骤 9-10: notifyEndpointResult — 请求成功/失败后更新 FastDecay（通过 hook）
+
+// applyPolicyToURLs 对 urlResults 应用 EndpointAttemptPolicy 的 FilterURLs 和 SortURLs。
+// 步骤 1 + 步骤 2：过滤 + 排序 baseURL 列表。
+// policy 为 nil 时原样返回。
+// 任一 policy 函数 panic 时回退原列表（fail-open）。
+func applyPolicyToURLs(policy *autopilot.EndpointAttemptPolicy, urlResults []warmup.URLLatencyResult, apiType string, c *gin.Context) (ret []warmup.URLLatencyResult) {
+	if policy == nil || len(urlResults) == 0 {
+		return urlResults
+	}
+	ret = urlResults // 默认回退：panic recover 时返回原列表
+
+	// 整体 recovery：任一 policy 函数 panic 时回退原列表（fail-open）
+	defer func() {
+		if r := recover(); r != nil {
+			RequestLogf(c, "[%s-Autopilot-EndpointPolicy] applyPolicyToURLs panic: %v，回退原列表", apiType, r)
+			ret = urlResults
+		}
+	}()
+
+	// 步骤 1: FilterURLs
+	urls := make([]string, len(urlResults))
+	for i, r := range urlResults {
+		urls[i] = r.URL
+	}
+	filtered := callPolicyFilterURLs(policy, urls, apiType, c)
+
+	// 步骤 2: SortURLs
+	sorted, _ := callPolicySortURLs(policy, filtered, apiType, c)
+
+	// 按排序后的 URL 重建 urlResults（保留 OriginalIdx）
+	urlToResult := make(map[string]warmup.URLLatencyResult, len(urlResults))
+	for _, r := range urlResults {
+		urlToResult[r.URL] = r
+	}
+	result := make([]warmup.URLLatencyResult, 0, len(sorted))
+	for _, url := range sorted {
+		if r, ok := urlToResult[url]; ok {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+// callPolicyFilterURLs 安全调用 policy.FilterURLs，panic 时回退原列表。
+func callPolicyFilterURLs(policy *autopilot.EndpointAttemptPolicy, urls []string, apiType string, c *gin.Context) []string {
+	if policy == nil || policy.FilterURLs == nil {
+		return urls
+	}
+	result := policy.FilterURLs(urls)
+	return result
+}
+
+// callPolicySortURLs 安全调用 policy.SortURLs，panic 时回退原列表。
+// 使用 result-capture 模式确保 panic 时返回原始输入。
+func callPolicySortURLs(policy *autopilot.EndpointAttemptPolicy, urls []string, apiType string, c *gin.Context) ([]string, []autopilot.EndpointCandidate) {
+	if policy == nil || policy.SortURLs == nil {
+		return urls, nil
+	}
+	var result []string
+	var candidates []autopilot.EndpointCandidate
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				RequestLogf(c, "[%s-Autopilot-EndpointPolicy] SortURLs panic: %v，回退原列表", apiType, r)
+			}
+		}()
+		result, candidates = policy.SortURLs(urls)
+	}()
+	if len(result) == 0 {
+		return urls, nil
+	}
+	return result, candidates
+}
+
+// selectAttemptAPIKeyFiltered 对 policy 过滤/排序后的 key 列表选择下一个可用 API key。
+// 步骤 5 (FilterKeys) + 步骤 6 (SortKeys)：在 keypool.CandidatesForModel 之后应用 endpoint 级策略。
+// 与 selectAttemptAPIKey 逻辑一致，但使用 policy 过滤/排序后的候选列表。
+// policy 过滤/排序失败时回退到 selectAttemptAPIKey（fail-open）。
+func selectAttemptAPIKeyFiltered(
+	channelScheduler *scheduler.ChannelScheduler,
+	kind scheduler.ChannelKind,
+	channelIndex int,
+	upstream *config.UpstreamConfig,
+	failedKeys map[string]bool,
+	failedQuotaGroups map[string]bool,
+	model string,
+	fallback NextAPIKeyFunc,
+	policy *autopilot.EndpointAttemptPolicy,
+	apiType string,
+	c *gin.Context,
+) (keypool.Selection, string, error) {
+	if policy == nil {
+		return selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, model, fallback)
+	}
+
+	if !keypool.HasEffectiveConfig(upstream) {
+		// 无 keypool 配置时：对 raw APIKeys 应用 policy filter/sort
+		apiKeys := upstream.APIKeys
+		if len(apiKeys) == 0 {
+			return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
+		}
+
+		filtered := callPolicyFilterKeys(policy, upstream.BaseURL, apiKeys, apiType, c)
+		if fallback != nil {
+			key, err := fallback(upstream, failedKeys)
+			if err != nil {
+				return keypool.Selection{}, "", err
+			}
+			// 验证 key 在过滤后的列表中
+			filteredSet := make(map[string]bool, len(filtered))
+			for _, k := range filtered {
+				filteredSet[k] = true
+			}
+			if filteredSet[key] {
+				return keypool.Selection{APIKey: key}, key, nil
+			}
+			// policy 过滤掉了所有 key → fail-open：使用第一个未失败的原始 key
+		}
+		// 无 fallback 时回退到未过滤
+		return selectAttemptAPIKey(channelScheduler, kind, channelIndex, upstream, failedKeys, failedQuotaGroups, model, fallback)
+	}
+
+	// keypool 路径：获取候选 → FilterKeys → SortKeys → 选择
+	candidates := keypool.CandidatesForModel(upstream, failedKeys, model)
+	if len(candidates) == 0 {
+		return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
+	}
+
+	// 步骤 5: FilterKeys
+	candidateKeys := make([]string, len(candidates))
+	for i, cand := range candidates {
+		candidateKeys[i] = cand.APIKey
+	}
+	filteredKeys := callPolicyFilterKeys(policy, upstream.BaseURL, candidateKeys, apiType, c)
+
+	// 步骤 6: SortKeys
+	sortedKeys, _ := callPolicySortKeys(policy, upstream.BaseURL, filteredKeys, apiType, c)
+
+	// 构建 candidate 查找表
+	candidateMap := make(map[string]keypool.Candidate, len(candidates))
+	for _, cand := range candidates {
+		candidateMap[cand.APIKey] = cand
+	}
+
+	// 按 policy 排序后的顺序选择第一个可用 key
+	var deferred []keypool.Selection
+	for _, apiKey := range sortedKeys {
+		if failedKeys[apiKey] {
+			continue
+		}
+		cand, ok := candidateMap[apiKey]
+		if !ok {
+			continue
+		}
+		if cand.QuotaGroup != "" && failedQuotaGroups[cand.QuotaGroup] {
+			continue
+		}
+		selection := keypool.Selection{
+			APIKey:         cand.APIKey,
+			CredentialID:   cand.Scope,
+			CredentialName: cand.Config.Name,
+			QuotaGroup:     cand.QuotaGroup,
+			LimiterScope:   cand.Scope,
+			Config:         cand.Config,
+		}
+		if channelScheduler != nil && selection.LimiterScope != "" {
+			cfg := keypool.ConfigForCandidate(*upstream, selection.Config)
+			deferForLoad, _, _ := channelScheduler.ShouldDeferForRateLimit(kind, channelIndex, selection.LimiterScope, cfg, time.Now())
+			if deferForLoad {
+				deferred = append(deferred, selection)
+				continue
+			}
+		}
+		return selection, cand.APIKey, nil
+	}
+
+	if len(deferred) > 0 {
+		selection := deferred[0]
+		return selection, selection.APIKey, nil
+	}
+
+	return keypool.Selection{}, "", fmt.Errorf("上游 %s 没有可用的API密钥", upstream.Name)
+}
+
+// callPolicyFilterKeys 安全调用 policy.FilterKeys，panic 时回退原列表。
+func callPolicyFilterKeys(policy *autopilot.EndpointAttemptPolicy, baseURL string, keys []string, apiType string, c *gin.Context) []string {
+	if policy == nil || policy.FilterKeys == nil {
+		return keys
+	}
+	var result []string
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				RequestLogf(c, "[%s-Autopilot-EndpointPolicy] FilterKeys panic: %v，回退原列表", apiType, r)
+			}
+		}()
+		result = policy.FilterKeys(baseURL, keys)
+	}()
+	if len(result) == 0 {
+		return keys
+	}
+	return result
+}
+
+// callPolicySortKeys 安全调用 policy.SortKeys，panic 时回退原列表。
+// 使用 result-capture 模式确保 panic 时返回原始输入。
+func callPolicySortKeys(policy *autopilot.EndpointAttemptPolicy, baseURL string, keys []string, apiType string, c *gin.Context) ([]string, []autopilot.EndpointCandidate) {
+	if policy == nil || policy.SortKeys == nil {
+		return keys, nil
+	}
+	var result []string
+	var candidates []autopilot.EndpointCandidate
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				RequestLogf(c, "[%s-Autopilot-EndpointPolicy] SortKeys panic: %v，回退原列表", apiType, r)
+			}
+		}()
+		result, candidates = policy.SortKeys(baseURL, keys)
+	}()
+	if len(result) == 0 {
+		return keys, nil
+	}
+	return result, candidates
 }
 
 func selectAttemptAPIKey(channelScheduler *scheduler.ChannelScheduler, kind scheduler.ChannelKind, channelIndex int, upstream *config.UpstreamConfig, failedKeys map[string]bool, failedQuotaGroups map[string]bool, model string, fallback NextAPIKeyFunc) (keypool.Selection, string, error) {

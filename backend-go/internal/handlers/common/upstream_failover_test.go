@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/ratelimit"
@@ -682,4 +683,258 @@ func newTestFailoverDependencies(t *testing.T, upstream config.UpstreamConfig) (
 	}
 
 	return cfgManager, channelScheduler, messagesMetrics, cleanup
+}
+
+// ── EndpointAttemptPolicy 注入不变量测试 ──
+
+// TestTryUpstreamWithAllKeys_NilPolicy_UnchangedBehavior 验证 nil policy 时
+// TryUpstreamWithAllKeys 行为与不传 policy 时完全一致。
+func TestTryUpstreamWithAllKeys_NilPolicy_UnchangedBehavior(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "nil-policy-test",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-nil-1", "sk-nil-2"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"test-model"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"test-model","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		nil,
+		nil,
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"test-model",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+		// nil policy（通过 WithEndpointAttemptPolicy(nil) 或不传）
+		WithEndpointAttemptPolicy(nil),
+	)
+
+	if !handled {
+		t.Fatal("nil policy 时应正常处理请求")
+	}
+	if successKey == "" {
+		t.Fatal("nil policy 时应有成功 key")
+	}
+	if failoverErr != nil {
+		t.Fatalf("nil policy 时 failoverErr 应为 nil: %v", failoverErr)
+	}
+	if lastErr != nil {
+		t.Fatalf("nil policy 时 lastErr 应为 nil: %v", lastErr)
+	}
+}
+
+// TestTryUpstreamWithAllKeys_ShadowPolicy_PreservesOrder 验证 shadow 模式 policy
+// 不改变 URL 和 key 的遍历顺序（shadow 只计算 + 记录，不影响真实排序）。
+func TestTryUpstreamWithAllKeys_ShadowPolicy_PreservesOrder(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "shadow-policy-test",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-shadow-1", "sk-shadow-2"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"test-model"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+
+	// 构建 shadow 模式 policy
+	shadowPolicy := autopilot.BuildEndpointPolicy(
+		autopilot.EndpointPolicyDeps{},
+		&autopilot.RequestProfile{Model: "test-model", ChannelKind: "messages"},
+		autopilot.RoutingModeShadow,
+	)
+	if shadowPolicy == nil {
+		t.Fatal("shadow 模式应返回非 nil policy")
+	}
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"test-model","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		nil,
+		nil,
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"test-model",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+		WithEndpointAttemptPolicy(shadowPolicy),
+	)
+
+	if !handled {
+		t.Fatal("shadow policy 时应正常处理请求")
+	}
+	if successKey == "" {
+		t.Fatal("shadow policy 时应有成功 key")
+	}
+	if failoverErr != nil {
+		t.Fatalf("shadow policy 时 failoverErr 应为 nil: %v", failoverErr)
+	}
+	if lastErr != nil {
+		t.Fatalf("shadow policy 时 lastErr 应为 nil: %v", lastErr)
+	}
+}
+
+// TestTryUpstreamWithAllKeys_PanicPolicy_DoesNotBreakRequest 验证 policy 函数 panic 时
+// TryUpstreamWithAllKeys 不中断请求，正常完成（fail-open）。
+func TestTryUpstreamWithAllKeys_PanicPolicy_DoesNotBreakRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "panic-policy-test",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-panic-1"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"test-model"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+
+	// 构建会 panic 的 policy
+	panicPolicy := &autopilot.EndpointAttemptPolicy{
+		FilterURLs: func(urls []string) []string {
+			panic("FilterURLs panic")
+		},
+		SortURLs: func(urls []string) ([]string, []autopilot.EndpointCandidate) {
+			panic("SortURLs panic")
+		},
+		FilterKeys: func(baseURL string, apiKeys []string) []string {
+			panic("FilterKeys panic")
+		},
+		SortKeys: func(baseURL string, apiKeys []string) ([]string, []autopilot.EndpointCandidate) {
+			panic("SortKeys panic")
+		},
+		RequestModel: "test-model",
+		Mode:         autopilot.RoutingModeShadow,
+	}
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"test-model","messages":[]}`),
+		nil,
+		false,
+		func(upstream *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			return cfgManager.GetNextAPIKey(upstream, failedKeys, "Messages")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			return http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+		},
+		func(apiKey string) {},
+		nil,
+		nil,
+		func(c *gin.Context, resp *http.Response, upstreamCopy *config.UpstreamConfig, apiKey string, actualRequestBody []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"test-model",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+		WithEndpointAttemptPolicy(panicPolicy),
+	)
+
+	// panic policy 不应中断请求：fail-open 回退到原始顺序
+	if !handled {
+		t.Fatal("panic policy 时应正常处理请求（fail-open）")
+	}
+	if successKey == "" {
+		t.Fatal("panic policy 时应有成功 key")
+	}
+	if failoverErr != nil {
+		t.Fatalf("panic policy 时 failoverErr 应为 nil: %v", failoverErr)
+	}
+	if lastErr != nil {
+		t.Fatalf("panic policy 时 lastErr 应为 nil: %v", lastErr)
+	}
 }
