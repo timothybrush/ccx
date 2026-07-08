@@ -827,3 +827,58 @@ export interface ChannelDiscoveryResponse {
   recommendation: ChannelDiscoveryRecommendation
   evidence?: DiscoveryEvidence[]
 }
+
+// ============== 健康中心类型 ==============
+
+export type HealthState = 'unknown' | 'healthy' | 'degraded' | 'limited' | 'misconfigured' | 'dead'
+
+export interface HealthCenterOverview {
+  totalChannels: number
+  totalEndpoints: number
+  stateCounts: Record<HealthState, number>
+}
+
+export interface ChannelHealthItem {
+  channelUid: string
+  channelId: number
+  channelKind: string
+  channelName?: string
+  aggState: HealthState
+  endpointCount: number
+  healthyCount: number
+  degradedCount: number
+  limitedCount: number
+  deadCount: number
+  unknownCount: number
+  avgSuccessRate?: number
+}
+
+export interface HealthCenterChannelsResponse {
+  channels: ChannelHealthItem[]
+}
+
+export interface EndpointDetailItem {
+  endpointUid: string
+  channelUid: string
+  channelKind: string
+  baseUrl: string
+  keyHash: string
+  healthState: HealthState
+  healthConfidence: number
+  healthEvidence?: string
+  suggestedAction?: string
+  qualityTier?: string
+  stabilityTier?: string
+  speedTier?: string
+  successRate15m?: number
+  successRate1h?: number
+  p95LatencyMs?: number
+  consecutiveFail: number
+  lastSuccessAt?: string
+  updatedAt?: string
+}
+
+export interface HealthCenterEndpointsResponse {
+  channelUid: string
+  endpoints: EndpointDetailItem[]
+}

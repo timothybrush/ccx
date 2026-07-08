@@ -81,7 +81,7 @@
               class="mobile-tab-selector text-body-2 font-weight-bold"
               append-icon="mdi-chevron-down"
             >
-              {{ route.path === '/conversations' ? t('app.tabs.conversations') : translatedApiTabOptions.find(tab => tab.value === channelStore.activeTab)?.label }}
+              {{ translatedApiTabOptions.find(tab => tab.route === route.path)?.label || translatedApiTabOptions.find(tab => tab.value === channelStore.activeTab)?.label }}
             </v-btn>
           </template>
           <v-list density="compact" nav>
@@ -124,6 +124,10 @@
           <span class="api-type-text separator">/</span>
           <router-link to="/conversations" class="api-type-text" :class="{ active: route.path === '/conversations' }">
             {{ t('app.tabs.conversations') }}
+          </router-link>
+          <span class="api-type-text separator">/</span>
+          <router-link to="/health" class="api-type-text" :class="{ active: route.path === '/health' }">
+            {{ t('app.tabs.healthCenter') }}
           </router-link>
           <span class="brand-text d-none d-md-inline">API Proxy - CCX</span>
         </div>
@@ -230,7 +234,7 @@
     <v-main>
       <v-container fluid class="pa-4 pa-md-6">
         <!-- 全局统计顶部可折叠卡片（根据当前 Tab 显示对应统计） -->
-        <v-card v-if="isAuthenticated && route.path !== '/conversations'" class="mb-6 global-stats-panel">
+        <v-card v-if="isAuthenticated && !['/conversations', '/health'].includes(route.path)" class="mb-6 global-stats-panel">
           <div
             class="global-stats-header d-flex align-center justify-space-between px-4 py-2"
             style="cursor: pointer;"
@@ -253,7 +257,7 @@
         </v-card>
 
         <!-- 统计卡片 - 玻璃拟态风格 -->
-        <v-row v-if="route.path !== '/conversations'" class="mb-6 stat-cards-row">
+        <v-row v-if="!['/conversations', '/health'].includes(route.path)" class="mb-6 stat-cards-row">
           <v-col cols="6" sm="4">
             <div class="stat-card stat-card-info">
               <div class="stat-card-icon">
@@ -300,7 +304,7 @@
         </v-row>
 
         <!-- 操作按钮区域 - 现代化设计 -->
-        <div v-if="route.path !== '/conversations'" class="action-bar mb-6">
+        <div v-if="!['/conversations', '/health'].includes(route.path)" class="action-bar mb-6">
           <div class="action-bar-left">
             <v-btn
               color="primary"

@@ -34,7 +34,10 @@ import type {
   SchedulerDiagnoseRequest,
   SchedulerDiagnoseResponse,
   StartCapabilityTestOptions,
-  CompatDiagnoseResult
+  CompatDiagnoseResult,
+  HealthCenterOverview,
+  HealthCenterChannelsResponse,
+  HealthCenterEndpointsResponse
 } from './api-types'
 
 export * from './api-helpers'
@@ -1118,6 +1121,20 @@ export class ApiService {
     await this.request(`/conversations/${id}/override`, {
       method: 'DELETE'
     })
+  }
+
+  // ============== 健康中心 API ==============
+
+  async getHealthCenterOverview(): Promise<HealthCenterOverview> {
+    return this.request('/health-center/overview')
+  }
+
+  async getHealthCenterChannels(): Promise<HealthCenterChannelsResponse> {
+    return this.request('/health-center/channels')
+  }
+
+  async getHealthCenterChannelEndpoints(channelUid: string): Promise<HealthCenterEndpointsResponse> {
+    return this.request(`/health-center/channels/${encodeURIComponent(channelUid)}/endpoints`)
   }
 
 }
