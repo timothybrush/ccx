@@ -333,6 +333,67 @@ SubscriptionProfile（官方 API / token plan / 中转套餐 / 公益来源）
 - 订阅中心负责维护余额、套餐倍率、续费周期和备注；渠道中心只展示链接结果和运行状态，不重复维护同一套价格字段。
 - 未链接订阅的历史渠道允许继续运行，UI 显示为「未归档来源」，不会阻塞调度。
 
+### 3.2.3 同订阅多 Key：能力共享与配额负载均衡
+
+**问题**：官方订阅 plan（Claude Max、Codex plan 等）允许用户持有多个 key，或购买多份相同套餐。若每个 endpoint 独立探测与配置，探测预算被浪费、配置重复；请求量大时还需要在同 plan 的多个 key 之间按官方 RPM 限速自动负载均衡，而不是打满第一个 key 才溢出到下一个。
+
+**能力检测去重（同一套餐只需一套能力检测和配置）**：
+
+```text
+SubscriptionUID 相同的 endpoint 共享一份「订阅级能力画像」：
+  模型列表 / vision / tool / reasoning 支持 / 协议兼容开关 → 只探测一次，
+  存在 SubscriptionProfile.SharedCapability，endpoint 画像以引用方式继承。
+
+仍然 per-endpoint 维护的：健康状态、延迟、熔断、用量窗口
+  （key 可能被单独封禁/限速，能力相同不代表运行态相同）
+
+继承失效条件：某 key 实测模型列表哈希与订阅级不一致（GroupChangeDetector 信号）
+  → 该 key 脱离继承、独立探测，并在 UI 标记「与套餐能力不一致」警告。
+```
+
+**配额负载均衡（Phase 1 shadow 展示，Phase 2 生效）**：
+
+```text
+每 key 维护配额余量视图：
+  remainingRPM = officialRPM − 当前窗口已用
+  officialRPM 来源优先级：内置 manifest > 用户配置 > RateLimitDiscoverer 建议
+
+同订阅多 key 时按「剩余余量加权」分配请求（余量大者优先、
+窗口最早重置者兜底），替代顺序打满：
+  仅当渠道 autoManaged 且同一 SubscriptionUID 下 key 数 > 1 时启用；
+  否则保持现有 sequential/random key 顺序策略不变。
+
+某 key 的窗口配额耗尽 → 临时降权并切到同订阅其他 key，
+不熔断整个渠道（这是配额耗尽，不是故障）。
+```
+
+### 3.2.4 订阅用量窗口 (Usage Windows)
+
+部分官方 plan 提供 5h / 日 / 周 / 月等窗口的用量查询与限制（如 Claude 订阅的 5h 滚动窗口 + 周配额）。在 key 的位置展示这些窗口，帮助用户掌握使用情况：
+
+```go
+type UsageWindow struct {
+    Window    string    `json:"window"`    // "5h" | "day" | "week" | "month"
+    Used      float64   `json:"used"`      // 已用量
+    Limit     float64   `json:"limit"`     // 上限，0 = 未知
+    Unit      string    `json:"unit"`      // requests | tokens | credits | percent
+    ResetsAt  time.Time `json:"resetsAt"`  // 窗口重置时间
+    Source    string    `json:"source"`    // official_api | response_header | local_metering
+    FetchedAt time.Time `json:"fetchedAt"`
+}
+// KeyEndpointProfile 与 SubscriptionProfile 均增加 UsageWindows []UsageWindow
+```
+
+数据来源优先级：
+
+```text
+1. 官方用量 API：有 provider adapter 的 plan 主动拉取（§Phase 4 订阅 adapter 的可提前子集）
+2. 响应头：anthropic-ratelimit-* / x-ratelimit-* 等（复用 RateLimitDiscoverer 的信号 tap）
+3. 本地计量兜底：CCX 按 key 累计请求数/token（误差来自窗口起点对齐，标注 Source=local_metering）
+```
+
+UI 要求：key 行内显示主窗口（5h）用量进度条，悬浮展开全部窗口；用量 >80% 黄色预警、超限红色并显示预计重置时间。调度联动（Phase 2）：窗口余量进入配额负载均衡权重，窗口耗尽的 key 临时降权而非熔断。
+
 ### 3.3 Channel 画像 (ChannelProfile) — 聚合视图
 
 ChannelProfile 不再存储原始数据，而是从 KeyEndpoint 画像聚合而来：
