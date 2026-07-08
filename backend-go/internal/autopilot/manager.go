@@ -437,6 +437,17 @@ func (m *Manager) SetSmartRouter(sr *SmartRouter) {
 	m.smartRouter = sr
 }
 
+// WireSmartRouter 将 advisor 和 localRuntimeStore 注入到 SmartRouter。
+// 在 main.go 构造 SmartRouter 后调用，确保 Phase 2 组件全部连接。
+// nil 参数表示不启用对应功能（fail-safe）。
+func (m *Manager) WireSmartRouter() {
+	if m.smartRouter == nil {
+		return
+	}
+	m.smartRouter.SetAdvisor(m.advisor, m.advisorStore)
+	m.smartRouter.SetLocalRuntimeStore(m.localRuntimeStore)
+}
+
 // FastDecayScorer 返回内部 FastDecayScorer 引用（供 handler 层通知请求结果）。
 func (m *Manager) FastDecayScorer() *FastDecayScorer {
 	return m.scorer

@@ -522,6 +522,10 @@ func main() {
 					cfgManager,
 				)
 				autopilotManager.SetSmartRouter(smartRouter)
+
+				// Phase 2: 将 Advisor + LocalRuntimeStore 注入 SmartRouter
+				autopilotManager.WireSmartRouter()
+				log.Printf("[Autopilot-Init] SmartRouter advisor + localRuntimeStore 已注入")
 				log.Printf("[Autopilot-Init] SmartRouter 已初始化 (默认模式: shadow)")
 
 				// 注册限速信号回调：上游响应 → autopilot 限速发现器 + 时间桶

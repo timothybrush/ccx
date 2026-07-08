@@ -27,11 +27,14 @@ type RoutingPlan struct {
 // active 模式：返回评分排序后的候选列表，改变调度顺序。
 // off / kill switch：不注入 CandidateFilter，调度链路不变。
 type SmartRouter struct {
-	profileStore  *ProfileStore
-	intentStore   *ManualIntentStore
-	traceStore    *TraceStore
-	configManager *config.ConfigManager
-	mu            sync.RWMutex
+	profileStore      *ProfileStore
+	intentStore       *ManualIntentStore
+	traceStore        *TraceStore
+	configManager     *config.ConfigManager
+	advisor           *TrustedRoutingAdvisor      // Phase 2: 可信路由顾问（nil = 不启用）
+	decisionStore     *AdvisorDecisionStore        // Phase 2: advisor 决策记录存储
+	localRuntimeStore *LocalRuntimeStore           // Phase 2: 本地运行时存储（nil = 不纳入本地候选）
+	mu                sync.RWMutex
 }
 
 // NewSmartRouter 创建 SmartRouter 实例。
@@ -67,6 +70,19 @@ func (r *SmartRouter) ProfileStore() *ProfileStore {
 // IntentStore 返回内部 ManualIntentStore 引用。
 func (r *SmartRouter) IntentStore() *ManualIntentStore {
 	return r.intentStore
+}
+
+// SetAdvisor 设置 TrustedRoutingAdvisor 和 AdvisorDecisionStore（由 main.go 在构造后调用）。
+// nil 参数表示不启用对应功能（fail-safe：不影响调度）。
+func (r *SmartRouter) SetAdvisor(advisor *TrustedRoutingAdvisor, decisionStore *AdvisorDecisionStore) {
+	r.advisor = advisor
+	r.decisionStore = decisionStore
+}
+
+// SetLocalRuntimeStore 设置 LocalRuntimeStore（由 main.go 在构造后调用）。
+// nil 表示不纳入本地候选（fail-safe：不影响调度）。
+func (r *SmartRouter) SetLocalRuntimeStore(store *LocalRuntimeStore) {
+	r.localRuntimeStore = store
 }
 
 // BuildPlan 为请求构建路由计划（§4.6.1）。
@@ -147,6 +163,16 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].Score > candidates[j].Score
 	})
+
+	// OriginTier tie-breaker：与 executeFilter（真实路由路径）保持一致，
+	// 否则 dry-run 预览结果会和实际调度在同分情况下产生不同的候选顺序。
+	if len(candidates) > 1 {
+		originTiers := make(map[string]ChannelOriginTier, len(entries))
+		for _, e := range entries {
+			originTiers[e.ChannelUID] = e.OriginTier
+		}
+		candidates = BreakTieByOriginTier(candidates, originTiers)
+	}
 
 	return &RoutingPlan{
 		RequestProfile: profile,
@@ -286,6 +312,127 @@ func (r *SmartRouter) executeFilter(
 		return scoredEntries[i].scored.Score > scoredEntries[j].scored.Score
 	})
 
+	// ── OriginTier tie-breaker（同分时按 OriginTier rank 降序）──
+	// 单轮 sort.SliceStable：Score 降序主序 + 同分时 OriginTier 降序次序
+	// 稳定排序保证同分同 rank 的候选保持输入相对顺序不变
+	if len(scoredEntries) > 1 {
+		sort.SliceStable(scoredEntries, func(i, j int) bool {
+			ci, cj := scoredEntries[i], scoredEntries[j]
+			// 主序：Score 降序
+			if ci.scored.Score != cj.scored.Score {
+				return ci.scored.Score > cj.scored.Score
+			}
+			// 同分 tie-breaker：OriginTier rank 降序
+			return originTierRank(ci.entry.OriginTier) > originTierRank(cj.entry.OriginTier)
+		})
+	}
+
+	// ── Phase 2: Advisor hint + 本地候选 ──
+	// 1) advisor hint 评估（shadow 模式下 Applied=false，不影响调度）
+	var advisorDecisionUID string
+	// advisorMinQualityTier 由下方闭包写入，供硬约束过滤阶段直接读取（类型化传值，
+	// 不经过 trace.GlobalFilterReasons 的字符串往返 —— 避免格式变更导致静默失效）。
+	var advisorMinQualityTier QualityTier
+	if r.advisor != nil && r.decisionStore != nil {
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[SmartRouter-Advisor] panic recovered (fail-open): %v", rec)
+				}
+			}()
+
+			// 从 RequestProfile 构建 AdvisorInput
+			advisorInput := AdvisorInput{
+				RequestKind:      profile.ChannelKind,
+				Operation:        profile.Operation,
+				RequestedModel:   profile.Model,
+				AgentRole:        profile.AgentRole,
+				InputTokenBucket: classifyTokenBucket(profile.EstTokens),
+				HasImage:         profile.HasImage,
+				NeedsToolUse:     profile.ToolUseNeed,
+				NeedsReasoning:   profile.ReasoningNeed,
+				NeedsLongContext: profile.ContextNeed > 50000,
+			}
+			hint, _ := r.advisor.EvaluateShadow(advisorInput)
+
+			// 获取 TrustedRoutingAdvisorConfig
+			autopilotCfg := r.configManager.GetConfig().AutopilotRouting
+			effect := ResolveAdvisorHintEffect(hint, autopilotCfg.TrustedRoutingAdvisor, profile.TaskClass)
+
+			// 无论 Applied 与否，都记录决策（用于人工审查 promotion 依据）
+			rec := &AdvisorDecisionRecord{
+				AdvisorUID:        "heuristic", // 固定值：Phase 1 只使用启发式后端
+				AdvisorOriginTier: "local",
+				Mode:              r.advisor.State(),
+				TaskClass:         profile.TaskClass,
+				PromptHash:        profile.PromptHash,
+				InputTokenBucket:  advisorInput.InputTokenBucket,
+				Applied:           effect.Applied,
+				Outcome:           "shadow", // 后续在调度结果回调中更新
+				CreatedAt:         time.Now().UTC(),
+			}
+			if hint != nil {
+				rec.Hint = *hint
+			}
+			if recordErr := r.decisionStore.Record(rec); recordErr != nil {
+				log.Printf("[SmartRouter-Advisor] 决策记录失败: %v", recordErr)
+			}
+			advisorDecisionUID = rec.DecisionUID
+			trace.AdvisorDecisionUID = advisorDecisionUID
+
+			if effect.Applied {
+				// auto 模式下：MinQualityTier 转化为硬约束过滤条件
+				if mode == RoutingModeAuto && effect.MinQualityTier != "" {
+					advisorMinQualityTier = effect.MinQualityTier
+					// trace 侧仍记录可读原因，供 UI/人工审查展示（非控制流依赖）。
+					trace.GlobalFilterReasons["advisor_min_quality_tier"] = []string{
+						fmt.Sprintf("MinQualityTier=%s (Applied=true)", effect.MinQualityTier),
+					}
+				}
+
+				// 本地候选允许标记：需结合 LocalModelRoutingConfig 再判一次
+				if effect.AllowLocalCandidate && r.localRuntimeStore != nil {
+					localCfg := autopilotCfg.LocalModelRouting
+					localEntries := CollectLocalCandidates(r.localRuntimeStore, localCfg, profile.TaskClass)
+					for _, le := range localEntries {
+						localEntry := channelScoreEntry{
+							ChannelUID:          le.RuntimeUID,
+							ChannelKind:         profile.ChannelKind,
+							OriginTier:          OriginTierLocal,
+							HealthState:         HealthStateHealthy,
+							EstimatedCost:       le.EstimatedCost,
+							SupportsVision:      le.SupportsVision,
+							SupportsToolCalls:   le.SupportsToolCalls,
+							SupportsReasoning:   le.SupportsReasoning,
+							ContextWindowTokens: le.ContextWindowTokens,
+							ScoringCandidate: ScoringCandidate{
+								ChannelUID:                le.RuntimeUID,
+								QualityTier:               QualityTierNormal, // 中性默认值
+								StabilityTier:             StabilityTierNormal,
+								SpeedTier:                 SpeedTierNormal,
+								CostTier:                  CostTierFree, // 本地运行时免费
+								HealthState:               HealthStateHealthy,
+								ProviderQualityScore:      0.5,
+								ProviderQualityConfidence: 0.3,
+								SavingsScore:              0.5,
+								DomainStrengthScore:       0.5,
+							},
+						}
+						// 本地候选纳入评分流程
+						localEntry.ScoringCandidate.SavingsScore = savingsMap[le.RuntimeUID]
+						localScored := ScoreCandidate(localEntry.ScoringCandidate, scoringCtx)
+						scoredEntries = append(scoredEntries, scoredEntry{entry: localEntry, scored: localScored})
+						// 本地候选成本为0，可能影响 savingsMap 归一化；
+						// 但不影响排序结果（savings 只是其中一个维度）
+					}
+				}
+
+				log.Printf("[SmartRouter-Advisor] hint生效 taskClass=%s MinQualityTier=%s AllowLocal=%v",
+					string(profile.TaskClass), effect.MinQualityTier, effect.AllowLocalCandidate)
+			}
+		}()
+	}
+
 	// ── 人工意图匹配（设计 §4.6.4）──
 	// 在评分排序后、构建结果前执行；shadow 模式只标注不影响输出。
 	var matchedIntent *IntentMatchResult
@@ -418,6 +565,14 @@ func (r *SmartRouter) executeFilter(
 		filteredResult := make([]scheduler.ChannelInfo, 0, len(scoredEntries))
 		for i, se := range scoredEntries {
 			reasons := autoHardConstraintReasons(profile, &se.entry)
+
+			// advisor hint 的 MinQualityTier 约束（只在 auto 模式生效，且 hint 真正 Applied 时才非零值）
+			if advisorMinQualityTier != "" {
+				if advisorMinQualityReasons := MinQualityTierReasons(se.entry.ScoringCandidate.QualityTier, advisorMinQualityTier); len(advisorMinQualityReasons) > 0 {
+					reasons = append(reasons, advisorMinQualityReasons...)
+				}
+			}
+
 			if len(reasons) > 0 {
 				candidates[i].Selected = false
 				candidates[i].FilterReasons = reasons
@@ -554,15 +709,18 @@ func (r *SmartRouter) executeFilter(
 
 // channelScoreEntry 渠道评分输入条目。
 type channelScoreEntry struct {
-	ChannelUID       string
-	ChannelKind      string
-	MetricsKey       string
-	OriginTier       ChannelOriginTier
-	HealthState      HealthState
-	EstimatedCost    float64
-	ChannelIndex     int
-	SupportsVision   bool // 渠道是否支持识图（来自画像聚合 + 手动配置覆盖）
-	ScoringCandidate ScoringCandidate
+	ChannelUID          string
+	ChannelKind         string
+	MetricsKey          string
+	OriginTier          ChannelOriginTier
+	HealthState         HealthState
+	EstimatedCost       float64
+	ChannelIndex        int
+	SupportsVision      bool  // 渠道是否支持识图（来自画像聚合 + 手动配置覆盖）
+	SupportsToolCalls   bool  // 渠道是否支持工具调用（来自画像聚合）
+	SupportsReasoning   bool  // 渠道是否支持推理（来自画像聚合）
+	ContextWindowTokens int   // 渠道上下文窗口大小（0 = 未知，来自画像聚合）
+	ScoringCandidate    ScoringCandidate
 }
 
 // buildChannelEntry 从 ChannelInfo + UpstreamConfig 构建评分输入。
@@ -603,6 +761,13 @@ func (r *SmartRouter) buildChannelEntry(
 				entry.SupportsVision = false
 			}
 
+			// 工具调用、推理、上下文窗口能力（画像聚合）
+			entry.SupportsToolCalls = agg.SupportsToolCalls
+			entry.SupportsReasoning = agg.SupportsReasoning
+			// ContextWindowTokens：ChannelProfile 当前无此聚合字段，
+			// 画像聚合层尚未从模型注册表获取。
+			// 暂填 0（未知），后续模型注册表 Phase 3 接入后填充。
+
 			entry.ScoringCandidate = ScoringCandidate{
 				ChannelUID:                channelUID,
 				QualityTier:               agg.QualityTier,
@@ -640,6 +805,8 @@ func (r *SmartRouter) buildChannelEntry(
 // 当前硬约束（逐批扩展）：
 //   - vision 请求但渠道不支持识图
 //   - CapabilityFloor：请求需要推理但渠道不支持（画像数据可用时）
+//   - CapabilityFloor：请求需要工具调用但渠道不支持
+//   - CapabilityFloor：上下文窗口需求大于渠道容量
 func autoHardConstraintReasons(profile *RequestProfile, entry *channelScoreEntry) []string {
 	var reasons []string
 
@@ -648,16 +815,12 @@ func autoHardConstraintReasons(profile *RequestProfile, entry *channelScoreEntry
 		reasons = append(reasons, "vision_unsupported")
 	}
 
-	// 模型级 NoVisionModels 精确匹配
-	if profile.VisionNeed && entry.SupportsVision && profile.Model != "" {
-		// 如果上游配置指定了此模型不支持视觉，通过 ProfileStore 的画像已覆盖
-		// 此处不重复检查（画像层已处理）
-	}
-
-	// TODO(P2-后续): CapabilityFloor 扩展 —— 当模型注册表可用时检查
-	//   - ContextNeed vs 上游 ContextWindowLimit
-	//   - ToolUseNeed vs 上游 SupportsToolCalls
-	//   - ReasoningNeed vs 上游 SupportsReasoning
+	// CapabilityFloor 三项硬约束（工具调用、推理、上下文窗口）
+	reasons = append(reasons, CapabilityFloorReasons(CandidateCapabilities{
+		SupportsToolCalls:   entry.SupportsToolCalls,
+		SupportsReasoning:   entry.SupportsReasoning,
+		ContextWindowTokens: entry.ContextWindowTokens,
+	}, profile)...)
 
 	return reasons
 }
@@ -672,6 +835,21 @@ func joinReasons(reasons []string) string {
 		result += "," + r
 	}
 	return result
+}
+
+// classifyTokenBucket 将估算 token 数映射到 AdvisorInput 所需的分桶字符串。
+// 遵循 AdvisorInput 白名单：<1k | 1-10k | 10-50k | 50k+
+func classifyTokenBucket(estTokens int) string {
+	if estTokens >= 50000 {
+		return "50k+"
+	}
+	if estTokens >= 10000 {
+		return "10-50k"
+	}
+	if estTokens >= 1000 {
+		return "1-10k"
+	}
+	return "<1k"
 }
 
 // collectChannelEntries 收集指定 kind 的所有渠道条目。

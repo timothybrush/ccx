@@ -41,6 +41,9 @@ type EndpointCandidate struct {
 	SuccessRate    float64 `json:"successRate"`
 	LatencyScore   float64 `json:"latencyScore"`
 	CostScore      float64 `json:"costScore"`
+
+	// ── 来源信任等级（用于 tie-breaker）──
+	OriginTier ChannelOriginTier `json:"originTier"` // first | second | third | local | unknown
 }
 
 // ── EndpointAttemptPolicy（§4.6.2 契约）──
@@ -511,6 +514,7 @@ func scoreEndpointForURL(store *ProfileStore, fastDecay *FastDecayScorer, model,
 
 	cand.ChannelUID = profile.ChannelUID
 	cand.ChannelKind = profile.ChannelKind
+	cand.OriginTier = ChannelOriginTier(profile.OriginTier)
 	cand.MetricsKey = profile.MetricsKey
 	cand.KeyMask = profile.KeyMask
 	cand.EndpointUID = profile.EndpointUID
@@ -562,6 +566,7 @@ func scoreEndpointForKey(store *ProfileStore, fastDecay *FastDecayScorer, model,
 
 	cand.ChannelUID = profile.ChannelUID
 	cand.ChannelKind = profile.ChannelKind
+	cand.OriginTier = ChannelOriginTier(profile.OriginTier)
 	cand.MetricsKey = profile.MetricsKey
 	cand.MappedModel = resolveMappedModel(profile, model)
 
@@ -649,16 +654,24 @@ func (s *endpointSorter) Less(i, j int) bool {
 	if ci.CostScore != cj.CostScore {
 		return ci.CostScore > cj.CostScore
 	}
-	// 三级排序：信任等级降序（first > second > third > unknown）
-	return originTierRank(ci.ChannelUID) > originTierRank(cj.ChannelUID)
+	// 三级排序：信任等级降序（first > second > {third,local} > unknown）
+	return originTierRank(ci.OriginTier) > originTierRank(cj.OriginTier)
 }
 
 // originTierRank 返回 OriginTier 的信任等级排名（数值越大越可信）。
-// 用于 tie-breaker。
-func originTierRank(channelUID string) int {
-	// 简化实现：基于 channelUID 前缀推断
-	// 实际使用时应从 profile 读取 OriginTier
-	return 0
+// 用于 tie-breaker：first=3, second=2, {third,local}=1, unknown=0。
+// 设计原则：不把信任等级当质量，local 与 third 同级（本地可信但低速/低资源）。
+func originTierRank(tier ChannelOriginTier) int {
+	switch tier {
+	case OriginTierFirst:
+		return 3
+	case OriginTierSecond:
+		return 2
+	case OriginTierThird, OriginTierLocal:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // ── Trace 辅助 ──

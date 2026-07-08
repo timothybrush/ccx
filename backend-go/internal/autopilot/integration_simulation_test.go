@@ -112,6 +112,84 @@ func TestAutopilotSimulation_EndToEnd(t *testing.T) {
 			"Worker 任务应优先低成本渠道")
 	})
 
+	// 3b. 验证 dry-run 路径的 OriginTier tie-breaker（BuildPlan 与真实路由路径 executeFilter
+	//     必须保持一致，否则用户看到的预览结果会和实际调度在同分情况下不一致）。
+	t.Run("SmartRouter_DryRun_OriginTier平局排序", func(t *testing.T) {
+		tieStore := newTestProfileStore(t)
+		if tieStore == nil {
+			t.Skip("ProfileStore 初始化失败，跳过")
+		}
+		tieCfgManager := setupTestConfigManager(t)
+		tieIntentStore, err := NewManualIntentStoreWithDB(tieStore.DB())
+		require.NoError(t, err)
+		tieTraceStore, err := NewTraceStoreWithDB(tieStore.DB())
+		require.NoError(t, err)
+		tieSmartRouter := NewSmartRouter(tieStore, tieIntentStore, tieTraceStore, tieCfgManager)
+
+		// 两个渠道画像完全相同（同分），只有 OriginTier 不同：first vs third。
+		// 预期：first 排在 third 前面（tie-breaker 生效），且都不因为 OriginTier 影响 Score 本身。
+		tieProfiles := []*KeyEndpointProfile{
+			{
+				EndpointUID: "ep_tie_first", ChannelUID: "ch_tie_first", ChannelKind: "messages",
+				ServiceType: "claude", MetricsKey: "tie-first", BaseURL: "https://tie-first.example",
+				QualityTier: QualityTierHigh, StabilityTier: StabilityTierNormal,
+				SpeedTier: SpeedTierNormal, CostTier: CostTierNormal,
+				OriginTier: string(OriginTierFirst), HealthState: HealthStateHealthy,
+				AvailableModels: []string{"claude-opus-4"},
+			},
+			{
+				EndpointUID: "ep_tie_third", ChannelUID: "ch_tie_third", ChannelKind: "messages",
+				ServiceType: "claude", MetricsKey: "tie-third", BaseURL: "https://tie-third.example",
+				QualityTier: QualityTierHigh, StabilityTier: StabilityTierNormal,
+				SpeedTier: SpeedTierNormal, CostTier: CostTierNormal,
+				OriginTier: string(OriginTierThird), HealthState: HealthStateHealthy,
+				AvailableModels: []string{"claude-opus-4"},
+			},
+		}
+		for _, p := range tieProfiles {
+			require.NoError(t, tieStore.Upsert(p))
+		}
+		tieChannels := []config.UpstreamConfig{
+			{Name: "平局-first", ChannelUID: "ch_tie_first", BaseURL: "https://tie-first.example",
+				BaseURLs: []string{"https://tie-first.example"}, APIKeys: []string{"sk-tie-first"},
+				ServiceType: "claude", Status: "active"},
+			{Name: "平局-third", ChannelUID: "ch_tie_third", BaseURL: "https://tie-third.example",
+				BaseURLs: []string{"https://tie-third.example"}, APIKeys: []string{"sk-tie-third"},
+				ServiceType: "claude", Status: "active"},
+		}
+		for _, ch := range tieChannels {
+			require.NoError(t, tieCfgManager.AddUpstream(ch))
+		}
+
+		router := gin.New()
+		RegisterDryRunRoutes(router, tieSmartRouter)
+
+		reqBody := DryRunRequest{
+			Model:       "claude-opus-4",
+			ChannelKind: "messages",
+			AgentRole:   "main",
+			EstTokens:   50000,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/route-dryrun", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		var resp DryRunResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		require.Len(t, resp.Plan.Candidates, 2, "应有2个同分候选")
+
+		c0, c1 := resp.Plan.Candidates[0], resp.Plan.Candidates[1]
+		t.Logf("  候选[0] %s 分数=%.2f  候选[1] %s 分数=%.2f", c0.ChannelUID, c0.Score, c1.ChannelUID, c1.Score)
+
+		assert.Equal(t, c0.Score, c1.Score, "两个渠道画像完全相同，分数必须严格相等，否则测试前提不成立")
+		assert.Equal(t, "ch_tie_first", c0.ChannelUID,
+			"OriginTier=first 应在同分时排在 OriginTier=third 前面（dry-run tie-breaker 生效）")
+		assert.Equal(t, "ch_tie_third", c1.ChannelUID)
+	})
+
 	// 4. 测试 ManualRoutingIntent 创建和查询
 	t.Run("ManualIntent_Create_And_List", func(t *testing.T) {
 		router := gin.New()
