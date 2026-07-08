@@ -3529,16 +3529,20 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 
 **目标**：画像实时更新，渠道自动恢复。
 
-**范围**：
-- [ ] 运行时指标驱动画像实时更新
-- [ ] 模型自动映射（ModelResolver + ModelSupportResolver + request-scoped mappedModel）
-- [ ] active model filter / context filter 支持自动映射前置判定
-- [ ] 自动恢复探测（limited/dead → healthy）
-- [ ] 晋升/降级机制（连续成功→升级，连续失败→降级）
-- [ ] WebSocket 推送画像变更事件
-- [ ] 前端画像变更历史/时间线
+**Phase 3A 状态（2026-07-09）**：低风险、不改真实路由语义的子集已完成并接入真实链路——`Manager.collectAll()` 新旧画像对比产出变更事件（`DetectProfileChanges`）、`ProfileChangelogStore`（环形内存 + SQLite，30 天机会性清理）、`EventHub` 内存 pub/sub、`GET /api/health-center/changelog`（历史）+ `GET /api/health-center/events`（WebSocket 实时推送）、`AutoDiscoveryRunner` 发布 `discovery_completed`/`auto_mapping_applied`、前端 `ProfileChangelogTimeline.vue` 接入健康中心页并支持断线自动重连。均为只读展示，未修改 `SmartRouter`/`EndpointAttemptPolicy` 调度逻辑。落地时顺带发现并修复一个真实缺口：浏览器原生 WebSocket 无法设自定义 header，为此给 `middleware.getAPIKey` 增加了 `Sec-WebSocket-Protocol` 鉴权回退（业界标准做法，仅新增一个 key 来源，不降低现有校验）。
 
-**预估工期**：2-3 周
+**Phase 3B（暂缓）**：模型自动映射、自动恢复探测、晋升/降级机制会直接改变真实调度决策，风险明显高于 3A；且依赖 §12.2 P1.5 的 SQLite schema version / 版本化 migration / `OriginType`&`OriginTier` 旧配置 backfill 尚未补强，建议先完成 P1.5 契约再启动。
+
+**范围**：
+- [x] 运行时指标驱动画像实时更新（Phase 3A：`collectAll()` 每轮 diff + changelog + WebSocket 推送）
+- [ ] 模型自动映射（ModelResolver + ModelSupportResolver + request-scoped mappedModel）—— Phase 3B，待 P1.5 补强后再评估
+- [ ] active model filter / context filter 支持自动映射前置判定 —— Phase 3B
+- [ ] 自动恢复探测（limited/dead → healthy）—— Phase 3B
+- [ ] 晋升/降级机制（连续成功→升级，连续失败→降级）—— Phase 3B
+- [x] WebSocket 推送画像变更事件（Phase 3A：`GET /api/health-center/events`）
+- [x] 前端画像变更历史/时间线（Phase 3A：`ProfileChangelogTimeline.vue`）
+
+**预估工期**：2-3 周（3A 已完成；3B 待 P1.5 就绪后重新评估工期）
 
 ### Phase 4：高级特性
 
