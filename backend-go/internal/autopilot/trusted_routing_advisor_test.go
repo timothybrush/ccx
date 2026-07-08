@@ -26,7 +26,7 @@ func TestEvaluateShadow_DisabledState(t *testing.T) {
 func TestEvaluateShadow_StateMachine(t *testing.T) {
 	advisor := NewTrustedRoutingAdvisor()
 
-	// Phase 1 只允许 disabled / shadow
+	// Phase 2 起支持全部五态
 	tests := []struct {
 		name    string
 		state   AdvisorState
@@ -34,9 +34,10 @@ func TestEvaluateShadow_StateMachine(t *testing.T) {
 	}{
 		{"disabled 合法", AdvisorStateDisabled, false},
 		{"shadow 合法", AdvisorStateShadow, false},
-		{"candidate 不允许", AdvisorStateCandidate, true},
-		{"active 不允许", AdvisorStateActive, true},
-		{"rolled_back 不允许", AdvisorStateRolledBack, true},
+		{"candidate 合法", AdvisorStateCandidate, false},
+		{"active 合法", AdvisorStateActive, false},
+		{"rolled_back 合法", AdvisorStateRolledBack, false},
+		{"未知状态 不允许", AdvisorState("unknown"), true},
 	}
 
 	for _, tt := range tests {

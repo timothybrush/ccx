@@ -9,7 +9,7 @@ import (
 // ── Advisor 状态机 ──
 
 // AdvisorState advisor 生命周期状态。
-// Phase 1 只实现 disabled / shadow 两态。
+// Phase 2 起支持全部五态：disabled/shadow/candidate/active/rolled_back。
 type AdvisorState string
 
 const (
@@ -99,14 +99,12 @@ func (a *TrustedRoutingAdvisor) State() AdvisorState {
 }
 
 // SetState 切换 advisor 状态。
-// Phase 1 只允许 disabled / shadow 两态切换。
+// Phase 2 起支持全部五态切换（disabled/shadow/candidate/active/rolled_back）。
 func (a *TrustedRoutingAdvisor) SetState(state AdvisorState) error {
 	switch state {
-	case AdvisorStateDisabled, AdvisorStateShadow:
+	case AdvisorStateDisabled, AdvisorStateShadow, AdvisorStateCandidate, AdvisorStateActive, AdvisorStateRolledBack:
 		a.state = state
 		return nil
-	case AdvisorStateCandidate, AdvisorStateActive, AdvisorStateRolledBack:
-		return fmt.Errorf("[Advisor-SetState] Phase 1 不支持状态 %q，仅允许 disabled/shadow", state)
 	default:
 		return fmt.Errorf("[Advisor-SetState] 未知状态 %q", state)
 	}
