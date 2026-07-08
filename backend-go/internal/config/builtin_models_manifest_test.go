@@ -1,0 +1,223 @@
+package config
+
+import "testing"
+
+func TestLookupBuiltinManifest_ExactHostMatch(t *testing.T) {
+	tests := []struct {
+		name        string
+		baseURL     string
+		serviceType string
+		wantFound   bool
+		wantModels  int
+	}{
+		{
+			name:        "Anthropic API 精确 host 匹配",
+			baseURL:     "https://api.anthropic.com",
+			serviceType: "messages",
+			wantFound:   true,
+			wantModels:  10,
+		},
+		{
+			name:        "Anthropic API 带尾部斜杠",
+			baseURL:     "https://api.anthropic.com/",
+			serviceType: "messages",
+			wantFound:   true,
+			wantModels:  10,
+		},
+		{
+			name:        "Anthropic API 带路径前缀",
+			baseURL:     "https://api.anthropic.com/v1",
+			serviceType: "messages",
+			wantFound:   true,
+			wantModels:  10,
+		},
+		{
+			name:        "Anthropic API 带 # 标记",
+			baseURL:     "https://api.anthropic.com#",
+			serviceType: "messages",
+			wantFound:   true,
+			wantModels:  10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest, found := LookupBuiltinManifest(tt.baseURL, tt.serviceType)
+			if found != tt.wantFound {
+				t.Fatalf("found = %v, want %v", found, tt.wantFound)
+			}
+			if found && len(manifest.ModelIDs) != tt.wantModels {
+				t.Fatalf("modelIDs len = %d, want %d", len(manifest.ModelIDs), tt.wantModels)
+			}
+		})
+	}
+}
+
+func TestLookupBuiltinManifest_ServiceTypeMismatch(t *testing.T) {
+	tests := []struct {
+		name        string
+		baseURL     string
+		serviceType string
+	}{
+		{
+			name:        "Anthropic host 但 serviceType 不匹配",
+			baseURL:     "https://api.anthropic.com",
+			serviceType: "chat",
+		},
+		{
+			name:        "Anthropic host 但 serviceType 为 responses",
+			baseURL:     "https://api.anthropic.com",
+			serviceType: "responses",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, found := LookupBuiltinManifest(tt.baseURL, tt.serviceType)
+			if found {
+				t.Fatalf("serviceType=%q 不应匹配 Anthropic messages 清单", tt.serviceType)
+			}
+		})
+	}
+}
+
+func TestLookupBuiltinManifest_UnmatchedHost(t *testing.T) {
+	tests := []struct {
+		name        string
+		baseURL     string
+		serviceType string
+	}{
+		{
+			name:        "未知域名不匹配",
+			baseURL:     "https://custom-proxy.example.com",
+			serviceType: "messages",
+		},
+		{
+			name:        "相似但不同的域名不匹配",
+			baseURL:     "https://api-anthropic.com",
+			serviceType: "messages",
+		},
+		{
+			name:        "子域名不匹配",
+			baseURL:     "https://proxy.api.anthropic.com",
+			serviceType: "messages",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, found := LookupBuiltinManifest(tt.baseURL, tt.serviceType)
+			if found {
+				t.Fatalf("baseURL=%q 不应匹配任何清单", tt.baseURL)
+			}
+		})
+	}
+}
+
+func TestLookupBuiltinManifest_EmptyInputs(t *testing.T) {
+	tests := []struct {
+		name        string
+		baseURL     string
+		serviceType string
+	}{
+		{name: "空 baseURL", baseURL: "", serviceType: "messages"},
+		{name: "空 serviceType", baseURL: "https://api.anthropic.com", serviceType: ""},
+		{name: "两者都空", baseURL: "", serviceType: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, found := LookupBuiltinManifest(tt.baseURL, tt.serviceType)
+			if found {
+				t.Fatalf("空输入不应匹配任何清单")
+			}
+		})
+	}
+}
+
+func TestLookupBuiltinManifest_ModelIDsContent(t *testing.T) {
+	manifest, found := LookupBuiltinManifest("https://api.anthropic.com", "messages")
+	if !found {
+		t.Fatal("Anthropic 清单应存在")
+	}
+
+	// 验证包含关键模型
+	expectedModels := []string{
+		"claude-fable-5",
+		"claude-sonnet-5",
+		"claude-opus-4-8",
+		"claude-sonnet-4-6",
+		"claude-haiku-4-5",
+	}
+	modelSet := make(map[string]bool, len(manifest.ModelIDs))
+	for _, id := range manifest.ModelIDs {
+		modelSet[id] = true
+	}
+	for _, expected := range expectedModels {
+		if !modelSet[expected] {
+			t.Errorf("缺少模型 %q", expected)
+		}
+	}
+
+	// 验证 PlanHint
+	if manifest.PlanHint != "anthropic_api" {
+		t.Errorf("planHint = %q, want anthropic_api", manifest.PlanHint)
+	}
+
+	// 验证 DisableProbe
+	if manifest.DisableProbe {
+		t.Errorf("Anthropic API 清单 disableProbe 应为 false")
+	}
+}
+
+func TestMatchManifestPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		host    string
+		pattern string
+		want    bool
+	}{
+		{"精确匹配", "api.anthropic.com", "api.anthropic.com", true},
+		{"host 匹配带路径", "api.anthropic.com/v1", "api.anthropic.com", true},
+		{"host+path 前缀匹配", "api.anthropic.com/v1", "api.anthropic.com/v1", true},
+		{"子域名不匹配", "proxy.api.anthropic.com", "api.anthropic.com", false},
+		{"不同域名", "api.openai.com", "api.anthropic.com", false},
+		{"空 host", "", "api.anthropic.com", false},
+		{"空 pattern", "api.anthropic.com", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchManifestPattern(tt.host, tt.pattern)
+			if got != tt.want {
+				t.Errorf("matchManifestPattern(%q, %q) = %v, want %v", tt.host, tt.pattern, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeBaseURLForManifest(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"标准 HTTPS URL", "https://api.anthropic.com", "api.anthropic.com"},
+		{"带路径", "https://api.anthropic.com/v1", "api.anthropic.com/v1"},
+		{"带尾部斜杠", "https://api.anthropic.com/", "api.anthropic.com"},
+		{"带 # 标记", "https://api.anthropic.com#", "api.anthropic.com"},
+		{"带端口", "https://localhost:8080", "localhost:8080"},
+		{"空字符串", "", ""},
+		{"纯空格", "   ", ""},
+		{"无 scheme", "api.anthropic.com", "api.anthropic.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeBaseURLForManifest(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeBaseURLForManifest(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

@@ -64,6 +64,7 @@ type ModelEntry struct {
 	LabelOverride       string   `json:"labelOverride,omitempty"`
 	Supports1M          bool     `json:"supports1m,omitempty"`
 	ContextWindow       int      `json:"context_window,omitempty"`
+	MaxOutputTokens     int      `json:"max_output_tokens,omitempty"`
 	AnthropicFamilyTier string   `json:"anthropicFamilyTier,omitempty"`
 	IsFamilyDefault     bool     `json:"isFamilyDefault,omitempty"`
 	InputModalities     []string `json:"input_modalities,omitempty"`
@@ -701,6 +702,9 @@ func normalizeModelEntry(model ModelEntry, upstream *config.UpstreamConfig, glob
 	if model.ContextWindow == 0 {
 		model.ContextWindow = resolved.Capability.ContextWindowTokens
 	}
+	if model.MaxOutputTokens == 0 && resolved.Capability.MaxOutputTokens > 0 {
+		model.MaxOutputTokens = resolved.Capability.MaxOutputTokens
+	}
 	if model.AnthropicFamilyTier == "" {
 		model.AnthropicFamilyTier = anthropicFamilyTierForModel(model.ID, resolved.ActualModel, resolved.Capability.DisplayName)
 	}
@@ -737,6 +741,9 @@ func mergeModelEntryMetadata(existing, incoming ModelEntry) ModelEntry {
 	existing.Supports1M = existing.Supports1M || incoming.Supports1M
 	if existing.ContextWindow == 0 {
 		existing.ContextWindow = incoming.ContextWindow
+	}
+	if existing.MaxOutputTokens == 0 {
+		existing.MaxOutputTokens = incoming.MaxOutputTokens
 	}
 	if existing.AnthropicFamilyTier == "" {
 		existing.AnthropicFamilyTier = incoming.AnthropicFamilyTier
