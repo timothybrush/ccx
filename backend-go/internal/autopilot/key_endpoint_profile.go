@@ -194,6 +194,17 @@ type KeyEndpointProfile struct {
 	GroupChangedAt *time.Time `json:"groupChangedAt,omitempty"` // 分组变更时间
 	ModelListHash  string     `json:"modelListHash,omitempty"`  // 模型列表哈希，用于检测变更
 
+	// ── 质量趋势（Phase 1 shadow）──
+	QualityTrend *QualityTrend `json:"qualityTrend,omitempty"` // 当前质量趋势检测结果
+
+	// ── 限速发现器附加字段（Phase 1 shadow）──
+	SuggestedRPMSource string `json:"suggestedRpmSource,omitempty"` // 限速建议来源（header | passive_aimd | unknown）
+	SuggestedRPMTPM    int    `json:"suggestedRpmTpm,omitempty"`    // 限速建议 TPM
+	SuggestedRPMRPD    int    `json:"suggestedRpmRpd,omitempty"`    // 限速建议 RPD
+
+	// ── 分组变更详情（Phase 1 shadow）──
+	LastGroupChange *GroupChangeResult `json:"lastGroupChange,omitempty"` // 最近一次分组变更详情
+
 	// ── 诊断 ──
 	HealthEvidence  []string        `json:"healthEvidence"` // 诊断证据列表
 	SuggestedAction SuggestedAction `json:"suggestedAction"`

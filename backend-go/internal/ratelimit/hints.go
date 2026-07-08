@@ -1,11 +1,41 @@
 package ratelimit
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// ── 上游信号回调（供 Autopilot 限速发现器消费）──
+
+// UpstreamSignalCallback 可选的信号回调，上游响应后触发。
+// 由 main.go 注册，仅传递解析后的信号；默认 nil 不影响现有行为。
+// endpointUID 和 metricsKey 由调用方（upstream_failover.go）在当前请求上下文中计算。
+var UpstreamSignalCallback func(endpointUID, metricsKey, serviceType string, isStream bool, latencyMs int64, headers http.Header, statusCode int)
+
+// SetUpstreamSignalCallback 设置上游信号回调（main.go 调用）。
+// 传 nil 可清除回调。
+func SetUpstreamSignalCallback(cb func(endpointUID, metricsKey, serviceType string, isStream bool, latencyMs int64, headers http.Header, statusCode int)) {
+	UpstreamSignalCallback = cb
+}
+
+// NotifySignal 若回调已注册，触发信号回调。
+// endpointUID / metricsKey 由调用方在请求上下文中计算好后传入。
+// 失败安全：回调 panic 不影响主流程。
+func NotifySignal(endpointUID, metricsKey, serviceType string, isStream bool, latencyMs int64, headers http.Header, statusCode int) {
+	cb := UpstreamSignalCallback
+	if cb == nil || headers == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[RateLimit-Signal] 回调 panic（已忽略）: %v", r)
+		}
+	}()
+	cb(endpointUID, metricsKey, serviceType, isStream, latencyMs, headers, statusCode)
+}
 
 // ApplyUpstreamHints 从上游响应头解析限流信息，动态调整 limiter 状态。
 // 支持的 header（按 provider 分类）：

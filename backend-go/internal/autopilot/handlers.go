@@ -58,6 +58,21 @@ type EndpointDetailItem struct {
 	ConsecutiveFail  int     `json:"consecutiveFail"`
 	LastSuccessAt    string  `json:"lastSuccessAt,omitempty"`
 	UpdatedAt        string  `json:"updatedAt,omitempty"`
+
+	// Phase 1 新增字段：限速建议（向后兼容，omitempty）
+	SuggestedRPM       int     `json:"suggestedRpm,omitempty"`
+	SuggestedRPMSource string  `json:"suggestedRpmSource,omitempty"`
+	SuggestedRPMConf   float64 `json:"suggestedRpmConfidence,omitempty"`
+	SuggestedRPMTPM    int     `json:"suggestedRpmTpm,omitempty"`
+	SuggestedRPMRPD    int     `json:"suggestedRpmRpd,omitempty"`
+
+	// Phase 1 新增字段：质量趋势（向后兼容，omitempty）
+	QualityTrend *QualityTrend `json:"qualityTrend,omitempty"`
+
+	// Phase 1 新增字段：分组变更（向后兼容，omitempty）
+	ModelListHash   string             `json:"modelListHash,omitempty"`
+	GroupChangedAt  string             `json:"groupChangedAt,omitempty"`
+	LastGroupChange *GroupChangeResult `json:"lastGroupChange,omitempty"`
 }
 
 // EndpointsResponse GET /api/health-center/channels/:channelUid/endpoints 返回结构。
@@ -172,12 +187,29 @@ func handleEndpoints(mgr *Manager) gin.HandlerFunc {
 				SuccessRate15m:   p.SuccessRate15m,
 				P95LatencyMs:     float64(p.P95LatencyMs),
 				ConsecutiveFail:  p.ConsecutiveFail,
+
+				// Phase 1 新增：限速建议
+				SuggestedRPM:       p.DiscoveredRPM,
+				SuggestedRPMSource: p.SuggestedRPMSource,
+				SuggestedRPMConf:   p.RateLimitConfidence,
+				SuggestedRPMTPM:    p.SuggestedRPMTPM,
+				SuggestedRPMRPD:    p.SuggestedRPMRPD,
+
+				// Phase 1 新增：质量趋势
+				QualityTrend: p.QualityTrend,
+
+				// Phase 1 新增：分组变更
+				ModelListHash:   p.ModelListHash,
+				LastGroupChange: p.LastGroupChange,
 			}
 			if p.LastSuccessAt != nil {
 				item.LastSuccessAt = p.LastSuccessAt.Format("2006-01-02T15:04:05Z07:00")
 			}
 			if !p.UpdatedAt.IsZero() {
 				item.UpdatedAt = p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")
+			}
+			if p.GroupChangedAt != nil {
+				item.GroupChangedAt = p.GroupChangedAt.Format("2006-01-02T15:04:05Z07:00")
 			}
 			endpoints = append(endpoints, item)
 		}

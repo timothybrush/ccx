@@ -10,10 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/keypool"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/providers"
+	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/types"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -422,6 +424,17 @@ func TryUpstreamWithAllKeys(
 					}
 				}
 			}
+
+			// 通知 Autopilot 限速发现器（Phase 1 shadow，不修改调度链路）
+			// endpointUID 与 profiler 同源：GenerateEndpointUID(channelUID, baseURL, keyHashFromAPIKey)
+			// 复用已有的 metricsKey（与统计同源的身份指纹）
+			keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+			signalEndpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
+			ratelimit.NotifySignal(
+				signalEndpointUID, metricsKey, apiType, isStream,
+				time.Since(attemptStartedAt).Milliseconds(),
+				resp.Header, resp.StatusCode,
+			)
 
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				respBodyBytes, _ := io.ReadAll(resp.Body)

@@ -3,6 +3,8 @@ package autopilot
 import (
 	"context"
 	"log"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -107,6 +109,12 @@ type Manager struct {
 	cfgManager *config.ConfigManager
 	cfg        ManagerConfig
 
+	// Phase 1 新组件：限速发现、时间桶、质量趋势、分组变更
+	rateLimitDiscoverer  *RateLimitDiscoverer
+	timeBucketStore      *TimeBucketStore
+	qualityTrendDetector *QualityTrendDetector
+	groupChangeDetector  *GroupChangeDetector
+
 	cancel func()
 	wg     sync.WaitGroup
 }
@@ -122,6 +130,9 @@ func NewManager(
 	if cfg.WorkerInterval <= 0 {
 		cfg.WorkerInterval = 5 * time.Minute
 	}
+
+	// 初始化 Phase 1 新组件（shadow/read-only，不修改调度链路）
+	timeBucketStore := NewTimeBucketStore()
 	return &Manager{
 		store:      store,
 		profiler:   NewProfiler(metrics),
@@ -130,7 +141,121 @@ func NewManager(
 		metrics:    metrics,
 		cfgManager: cfgManager,
 		cfg:        cfg,
+
+		rateLimitDiscoverer:  NewRateLimitDiscoverer(RateLimitDiscovererConfig{QuietLogs: cfg.QuietLogs}),
+		timeBucketStore:      timeBucketStore,
+		qualityTrendDetector: NewQualityTrendDetector(timeBucketStore),
+		groupChangeDetector:  NewGroupChangeDetector(store),
 	}
+}
+
+// RateLimitDiscoverer 返回内部限速发现器引用（供 main.go 注册信号回调）。
+func (m *Manager) RateLimitDiscoverer() *RateLimitDiscoverer {
+	return m.rateLimitDiscoverer
+}
+
+// TimeBucketStore 返回内部时间桶存储引用。
+func (m *Manager) TimeBucketStore() *TimeBucketStore {
+	return m.timeBucketStore
+}
+
+// ObserveRateLimitSignal 供信号回调调用：喂限速发现器和时间桶。
+// 并发安全，不修改调度链路。
+func (m *Manager) ObserveRateLimitSignal(
+	endpointUID string,
+	channelID int,
+	metricsKey string,
+	isStream bool,
+	latencyMs int64,
+	headers http.Header,
+	statusCode int,
+) {
+	if endpointUID == "" {
+		return
+	}
+	now := time.Now()
+
+	// 构造限速信号喂给 Discoverer
+	signal := RateLimitSignal{
+		IsStreaming: isStream,
+		LatencyMs:   latencyMs,
+		Timestamp:   now,
+	}
+
+	// 429 信号
+	if statusCode == http.StatusTooManyRequests {
+		signal.Source = SignalSource429
+		// 解析 Retry-After
+		ra := headers.Get("Retry-After")
+		if ra != "" {
+			if secs, err := strconv.ParseFloat(ra, 64); err == nil && secs > 0 {
+				signal.HasRetryAfter = true
+				signal.RetryAfterSeconds = secs
+			}
+		}
+		m.rateLimitDiscoverer.Observe(endpointUID, signal)
+
+		// 时间桶：记录为失败 + 429
+		m.timeBucketStore.Record(endpointUID, channelID, metricsKey, false, latencyMs)
+		return
+	}
+
+	// 成功响应（2xx）：解析 header 中的限速信息
+	if statusCode >= 200 && statusCode < 300 {
+		signal.Source = SignalSourceSuccess
+
+		// Anthropic limit header
+		if limitStr := headers.Get("anthropic-ratelimit-requests-limit"); limitStr != "" {
+			if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+				signal.Limit = limit
+				signal.Source = SignalSourceHeader
+			}
+		}
+		// Anthropic remaining header
+		if remStr := headers.Get("anthropic-ratelimit-requests-remaining"); remStr != "" {
+			if rem, err := strconv.Atoi(remStr); err == nil {
+				signal.Remaining = rem
+			}
+		}
+		// Anthropic reset header（RFC3339 → 秒数差）
+		if resetStr := headers.Get("anthropic-ratelimit-requests-reset"); resetStr != "" {
+			if resetTime, err := time.Parse(time.RFC3339, resetStr); err == nil {
+				secs := resetTime.Sub(now).Seconds()
+				if secs > 0 {
+					signal.ResetSeconds = secs
+				}
+			}
+		}
+
+		// OpenAI limit header
+		if limitStr := headers.Get("x-ratelimit-limit-requests"); limitStr != "" {
+			if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+				signal.Limit = limit
+				signal.Source = SignalSourceHeader
+			}
+		}
+		// OpenAI remaining header
+		if remStr := headers.Get("x-ratelimit-remaining-requests"); remStr != "" {
+			if rem, err := strconv.Atoi(remStr); err == nil {
+				signal.Remaining = rem
+			}
+		}
+		// OpenAI reset header（duration 格式）
+		if resetStr := headers.Get("x-ratelimit-reset-requests"); resetStr != "" {
+			if d, err := time.ParseDuration(resetStr); err == nil && d > 0 {
+				signal.ResetSeconds = d.Seconds()
+			}
+		}
+
+		m.rateLimitDiscoverer.Observe(endpointUID, signal)
+
+		// 时间桶：记录为成功
+		m.timeBucketStore.Record(endpointUID, channelID, metricsKey, true, latencyMs)
+		return
+	}
+
+	// 非 429 非 2xx：记录为失败但不喂限速信号（由健康诊断器处理）
+	m.timeBucketStore.Record(endpointUID, channelID, metricsKey, false, latencyMs)
 }
 
 // StartWorker 启动后台聚合 worker。ctx 取消时退出循环。
@@ -225,6 +350,58 @@ func (m *Manager) collectAll() {
 				profile.HealthEvidence = []string{diagnosis.Reason}
 			}
 			profile.UpdatedAt = time.Now()
+
+			// ── Phase 1 新组件接入 ──
+
+			// 限速发现器：映射建议到画像字段
+			if m.rateLimitDiscoverer != nil {
+				suggested := m.rateLimitDiscoverer.SuggestedLimit(profile.EndpointUID)
+				if suggested.RPM > 0 {
+					profile.DiscoveredRPM = suggested.RPM
+					profile.RateLimitConfidence = suggested.Confidence
+					profile.RateLimitSource = string(suggested.Source)
+					profile.SuggestedRPMSource = string(suggested.Source)
+					profile.SuggestedRPMTPM = suggested.TPM
+					profile.SuggestedRPMRPD = suggested.RPD
+				}
+			}
+
+			// 质量趋势检测
+			if m.qualityTrendDetector != nil {
+				trend := m.qualityTrendDetector.DetectTrend(
+					profile.EndpointUID,
+					profile.MetricsKey,
+					time.Now(),
+				)
+				// 仅在有数据时附加趋势（避免空桶浪费 JSON 空间）
+				if trend.Direction != TrendStable || len(trend.HourlyPattern) > 0 {
+					profile.QualityTrend = &trend
+				}
+			}
+
+			// 分组变更检测
+			if m.groupChangeDetector != nil {
+				changed, changeResult := m.groupChangeDetector.CheckGroupChange(
+					entry.ChannelUID,
+					entry.ChannelKind,
+					profile.MetricsKey,
+					profile.AvailableModels,
+				)
+				if changed {
+					now := time.Now()
+					profile.GroupChangedAt = &now
+					profile.ModelListHash = changeResult.NewHash
+					profile.LastGroupChange = &changeResult
+				} else {
+					// 维持快照哈希（即使无变更，也同步当前哈希供前端展示）
+					snap := m.groupChangeDetector.GetSnapshot(
+						buildGroupSnapshotKey(entry.ChannelUID, profile.MetricsKey),
+					)
+					if snap != nil {
+						profile.ModelListHash = snap.ListHash
+					}
+				}
+			}
 
 			if err := m.store.Upsert(&profile); err != nil {
 				log.Printf("[Autopilot-Worker] 警告: 写入画像失败 endpoint=%s: %v", profile.EndpointUID, err)

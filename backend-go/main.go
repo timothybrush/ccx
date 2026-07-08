@@ -499,6 +499,13 @@ func main() {
 				WorkerInterval: 5 * time.Minute,
 				QuietLogs:      envCfg.QuietPollingLogs,
 			})
+
+			// 注册限速信号回调：上游响应 → autopilot 限速发现器 + 时间桶
+			// endpointUID 和 metricsKey 由 upstream_failover.go 在请求上下文中计算后传入
+			ratelimit.SetUpstreamSignalCallback(func(endpointUID, metricsKey, serviceType string, isStream bool, latencyMs int64, headers http.Header, statusCode int) {
+				autopilotManager.ObserveRateLimitSignal(endpointUID, 0, metricsKey, isStream, latencyMs, headers, statusCode)
+			})
+
 			autopilotManager.StartWorker(context.Background())
 			log.Printf("[Autopilot-Init] 健康中心已初始化 (DB: %s, 间隔: 5分钟)", paths.AutopilotDBPath)
 		}
