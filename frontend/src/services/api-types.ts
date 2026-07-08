@@ -882,3 +882,103 @@ export interface HealthCenterEndpointsResponse {
   channelUid: string
   endpoints: EndpointDetailItem[]
 }
+
+// ============== 订阅中心类型 ==============
+
+export interface SubscriptionItem {
+  subscriptionUid: string
+  displayName: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  linkedChannelUids?: string[]
+  source?: string
+  confidence?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  archivedAt?: string
+}
+
+export interface SubscriptionsListResponse {
+  subscriptions: SubscriptionItem[]
+  total: number
+}
+
+export interface SubscriptionCreateRequest {
+  subscriptionUid: string
+  displayName: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  notes?: string
+  source?: string
+}
+
+export interface SubscriptionUpdateRequest {
+  displayName?: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  notes?: string
+  source?: string
+  confidence?: number
+}
+
+// ============== 驾驶舱类型 ==============
+
+export interface CockpitHealthSummary {
+  totalChannels: number
+  totalEndpoints: number
+  stateCounts: Record<string, number>
+}
+
+export interface CockpitSubscriptionSummary {
+  total: number
+  balanceByCode: Record<string, number>
+  countByMode: Record<string, number>
+  countByTier: Record<string, number>
+}
+
+export interface CockpitLocalRuntimeSummary {
+  total: number
+  statusCounts: Record<string, number>
+  totalModels: number
+}
+
+export interface CockpitManualIntentSummary {
+  activeCount: number
+  totalCount: number
+}
+
+export interface CockpitTodoItem {
+  endpointUid: string
+  channelUid: string
+  channelKind: string
+  baseUrl: string
+  healthState: string
+  suggestedAction: string
+}
+
+export interface CockpitOverviewResponse {
+  health: CockpitHealthSummary
+  subscriptions: CockpitSubscriptionSummary
+  localRuntimes: CockpitLocalRuntimeSummary
+  manualIntents: CockpitManualIntentSummary
+  todoItems: CockpitTodoItem[]
+}

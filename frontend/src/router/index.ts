@@ -21,6 +21,16 @@ const routes = [
     path: '/health',
     component: () => import('@/views/HealthCenterView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/subscriptions',
+    component: () => import('@/views/SubscriptionsView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/cockpit',
+    component: () => import('@/views/CockpitView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

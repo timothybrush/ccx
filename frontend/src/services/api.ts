@@ -20,6 +20,7 @@ import type {
   ChannelSequenceEntry,
   ChannelsResponse,
   ChannelStatus,
+  CockpitOverviewResponse,
   CopilotDeviceCodeResponse,
   CopilotTokenResponse,
   CopilotUserResponse,
@@ -34,6 +35,10 @@ import type {
   SchedulerDiagnoseRequest,
   SchedulerDiagnoseResponse,
   StartCapabilityTestOptions,
+  SubscriptionCreateRequest,
+  SubscriptionItem,
+  SubscriptionsListResponse,
+  SubscriptionUpdateRequest,
   CompatDiagnoseResult,
   HealthCenterOverview,
   HealthCenterChannelsResponse,
@@ -1135,6 +1140,56 @@ export class ApiService {
 
   async getHealthCenterChannelEndpoints(channelUid: string): Promise<HealthCenterEndpointsResponse> {
     return this.request(`/health-center/channels/${encodeURIComponent(channelUid)}/endpoints`)
+  }
+
+  // ============== 订阅中心 API ==============
+
+  async getSubscriptions(): Promise<SubscriptionsListResponse> {
+    return this.request('/subscriptions')
+  }
+
+  async getSubscription(uid: string): Promise<SubscriptionItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}`)
+  }
+
+  async createSubscription(data: SubscriptionCreateRequest): Promise<SubscriptionItem> {
+    return this.request('/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateSubscription(uid: string, data: SubscriptionUpdateRequest): Promise<SubscriptionItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteSubscription(uid: string): Promise<void> {
+    await this.request(`/subscriptions/${encodeURIComponent(uid)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async linkSubscriptionChannel(uid: string, channelUid: string): Promise<SubscriptionItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}/link`, {
+      method: 'POST',
+      body: JSON.stringify({ channelUid }),
+    })
+  }
+
+  async unlinkSubscriptionChannel(uid: string, channelUid: string): Promise<SubscriptionItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}/unlink`, {
+      method: 'POST',
+      body: JSON.stringify({ channelUid }),
+    })
+  }
+
+  // ============== 驾驶舱 API ==============
+
+  async getCockpitOverview(): Promise<CockpitOverviewResponse> {
+    return this.request('/cockpit/overview')
   }
 
 }

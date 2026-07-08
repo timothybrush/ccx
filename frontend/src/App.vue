@@ -129,6 +129,14 @@
           <router-link to="/health" class="api-type-text" :class="{ active: route.path === '/health' }">
             {{ t('app.tabs.healthCenter') }}
           </router-link>
+          <span class="api-type-text separator">/</span>
+          <router-link to="/subscriptions" class="api-type-text" :class="{ active: route.path === '/subscriptions' }">
+            {{ t('app.tabs.subscriptions') }}
+          </router-link>
+          <span class="api-type-text separator">/</span>
+          <router-link to="/cockpit" class="api-type-text" :class="{ active: route.path === '/cockpit' }">
+            {{ t('app.tabs.cockpitOverview') }}
+          </router-link>
           <span class="brand-text d-none d-md-inline">API Proxy - CCX</span>
         </div>
       </div>

@@ -1,0 +1,138 @@
+<template>
+  <div class="subscription-plan-table">
+    <v-table density="compact" hover>
+      <thead>
+        <tr>
+          <th class="text-left">{{ t('subscription.field.originType') }}</th>
+          <th class="text-left">{{ t('subscription.field.name') }}</th>
+          <th class="text-left">{{ t('subscription.field.balance') }}</th>
+          <th class="text-left">{{ t('subscription.field.rechargeMultiplier') }}</th>
+          <th class="text-left">{{ t('subscription.field.linkedChannels') }}</th>
+          <th class="text-left">{{ t('subscription.field.source') }}</th>
+          <th class="text-right" style="width: 100px;">{{ t('app.actions.edit') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in subscriptions" :key="item.subscriptionUid">
+          <!-- 来源类型 -->
+          <td>
+            <v-chip
+              size="small"
+              :color="getOriginTypeColor(item.originType)"
+              variant="tonal"
+            >
+              {{ getOriginTypeLabel(item.originType) }}
+            </v-chip>
+          </td>
+
+          <!-- 名称 -->
+          <td>
+            <div class="font-weight-medium">{{ item.displayName }}</div>
+            <div v-if="item.provider" class="text-caption text-medium-emphasis">{{ item.provider }}</div>
+          </td>
+
+          <!-- 余额 -->
+          <td>
+            <span v-if="item.balance || item.currency">
+              {{ formatBalance(item.balance, item.currency) }}
+            </span>
+            <span v-else class="text-medium-emphasis">-</span>
+          </td>
+
+          <!-- 充值倍率 -->
+          <td>
+            <span v-if="item.rechargeMultiplier && item.rechargeMultiplier !== 1">
+              x{{ item.rechargeMultiplier }}
+            </span>
+            <span v-else class="text-medium-emphasis">1.0</span>
+          </td>
+
+          <!-- 绑定渠道 -->
+          <td>
+            <div v-if="item.linkedChannelUids && item.linkedChannelUids.length > 0" class="d-flex flex-wrap ga-1">
+              <v-chip
+                v-for="ch in item.linkedChannelUids.slice(0, 3)"
+                :key="ch"
+                size="x-small"
+                variant="outlined"
+                color="primary"
+              >
+                {{ ch }}
+              </v-chip>
+              <v-chip
+                v-if="item.linkedChannelUids.length > 3"
+                size="x-small"
+                variant="outlined"
+                color="grey"
+              >
+                +{{ item.linkedChannelUids.length - 3 }}
+              </v-chip>
+            </div>
+            <span v-else class="text-caption text-medium-emphasis">{{ t('subscription.noChannels') }}</span>
+          </td>
+
+          <!-- 来源 -->
+          <td>
+            <v-chip size="x-small" variant="tonal" :color="item.source === 'auto_discovered' ? 'info' : 'grey'">
+              {{ getSourceLabel(item.source) }}
+            </v-chip>
+          </td>
+
+          <!-- 操作 -->
+          <td class="text-right">
+            <v-btn icon size="small" variant="text" @click="$emit('edit', item)">
+              <v-icon size="18">mdi-pencil</v-icon>
+            </v-btn>
+            <v-btn icon size="small" variant="text" color="error" @click="$emit('delete', item)">
+              <v-icon size="18">mdi-delete</v-icon>
+            </v-btn>
+          </td>
+        </tr>
+      </tbody>
+    </v-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useI18n } from '@/i18n'
+import type { SubscriptionItem } from '@/services/api-types'
+
+defineProps<{
+  subscriptions: SubscriptionItem[]
+}>()
+
+defineEmits<{
+  edit: [item: SubscriptionItem]
+  delete: [item: SubscriptionItem]
+}>()
+
+const { t } = useI18n()
+
+function getOriginTypeColor(originType?: string): string {
+  switch (originType) {
+    case 'official_api': return 'success'
+    case 'official_token_plan': return 'primary'
+    case 'relay': return 'warning'
+    case 'public_benefit': return 'info'
+    default: return 'grey'
+  }
+}
+
+function getOriginTypeLabel(originType?: string): string {
+  if (!originType) return '-'
+  const key = `subscription.originType.${originType}`
+  return t(key)
+}
+
+function formatBalance(balance?: number, currency?: string): string {
+  if (balance === undefined || balance === null) return '-'
+  const code = currency || ''
+  return `${code} ${balance.toFixed(2)}`
+}
+
+function getSourceLabel(source?: string): string {
+  if (!source) return '-'
+  const key = `subscription.source.${source}`
+  return t(key)
+}
+</script>
