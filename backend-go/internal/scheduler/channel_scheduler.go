@@ -33,6 +33,7 @@ type ChannelScheduler struct {
 	conversationTracker      *conversation.ConversationTracker
 	overrideManager          *conversation.OverrideManager
 	rateLimitManager         *ratelimit.Manager
+	candidateFilterProvider  CandidateFilterProvider // SmartRouter shadow 注入点
 	loadShedMu               sync.Mutex
 	loadShedStates           map[string]rateLimitLoadShedState
 	loadShedStopCh           chan struct{}
@@ -112,6 +113,20 @@ func (s *ChannelScheduler) GetOverrideManager() *conversation.OverrideManager {
 // SetRateLimitManager 设置主动限速管理器
 func (s *ChannelScheduler) SetRateLimitManager(m *ratelimit.Manager) {
 	s.rateLimitManager = m
+}
+
+// CandidateFilterProvider 根据渠道类型和模型返回对应的 CandidateFilter。
+// 用于 SmartRouter shadow 注入：main.go 注册后，SelectChannelWithOptions 自动调用。
+type CandidateFilterProvider func(kind ChannelKind, model string) CandidateFilterFunc
+
+// SetCandidateFilterProvider 设置全局候选过滤提供器。
+// 由 main.go 在 autopilot SmartRouter 初始化后注册。
+// provider 为 nil 时清除（恢复默认行为）。
+// 注入点在 SelectionOptions.CandidateFilter 之后、X-Channel/ManualOverride/Promotion 之前。
+func (s *ChannelScheduler) SetCandidateFilterProvider(provider CandidateFilterProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.candidateFilterProvider = provider
 }
 
 // GetRateLimitManager 获取主动限速管理器

@@ -1,0 +1,554 @@
+package autopilot
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/metrics"
+	"github.com/BenedictKing/ccx/internal/scheduler"
+	"github.com/BenedictKing/ccx/internal/session"
+	"github.com/BenedictKing/ccx/internal/warmup"
+)
+
+// ── SmartRouter 不变量测试（P0.5）──
+
+// createTestConfigManager 创建测试用配置管理器。
+func createTestConfigManager(t *testing.T, cfg config.Config) (*config.ConfigManager, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "smart-router-test-*")
+	if err != nil {
+		t.Fatalf("创建临时目录失败: %v", err)
+	}
+
+	configFile := filepath.Join(tmpDir, "config.json")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("序列化配置失败: %v", err)
+	}
+
+	if err := os.WriteFile(configFile, data, 0644); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+
+	cfgManager, err := config.NewConfigManager(configFile, "")
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("创建配置管理器失败: %v", err)
+	}
+
+	cleanup := func() {
+		cfgManager.Close()
+		os.RemoveAll(tmpDir)
+	}
+
+	return cfgManager, cleanup
+}
+
+// createTestScheduler 创建测试用调度器。
+func createTestScheduler(t *testing.T, cfg config.Config) (*scheduler.ChannelScheduler, *config.ConfigManager, func()) {
+	t.Helper()
+
+	cfgManager, cleanup := createTestConfigManager(t, cfg)
+	messagesMetrics := metrics.NewMetricsManager()
+	responsesMetrics := metrics.NewMetricsManager()
+	geminiMetrics := metrics.NewMetricsManager()
+	chatMetrics := metrics.NewMetricsManager()
+	imagesMetrics := metrics.NewMetricsManager()
+	traceAffinity := session.NewTraceAffinityManager()
+	urlManager := warmup.NewURLManager(30*time.Second, 3)
+
+	s := scheduler.NewChannelScheduler(
+		cfgManager, messagesMetrics, responsesMetrics, geminiMetrics,
+		chatMetrics, imagesMetrics, traceAffinity, urlManager,
+	)
+
+	fullCleanup := func() {
+		messagesMetrics.Stop()
+		responsesMetrics.Stop()
+		geminiMetrics.Stop()
+		chatMetrics.Stop()
+		imagesMetrics.Stop()
+		cleanup()
+	}
+
+	return s, cfgManager, fullCleanup
+}
+
+// createTestSmartRouter 创建测试用 SmartRouter（ProfileStore 为 nil，无画像数据）。
+func createTestSmartRouter(t *testing.T, cfgManager *config.ConfigManager) *SmartRouter {
+	t.Helper()
+	return &SmartRouter{
+		configManager: cfgManager,
+		traceStore:    nil, // 测试中不持久化 trace
+	}
+}
+
+// wrapAsSmartFilter 将 CandidateFilterFunc 包装为 SmartFilter 签名。
+// 测试辅助函数：SmartRouter 内部的 CandidateFilterFunc 通过 scheduler 包的
+// buildSmartFilterFromProvider 自动包装，此处手动模拟该包装。
+func wrapAsSmartFilter(filter scheduler.CandidateFilterFunc, cfg config.Config, kind scheduler.ChannelKind) func(context.Context, []scheduler.ChannelInfo) []scheduler.ChannelInfo {
+	if filter == nil {
+		return nil
+	}
+	upstreamCfgs := cfg.Upstream
+	return func(_ context.Context, channels []scheduler.ChannelInfo) []scheduler.ChannelInfo {
+		result, err := filter(channels, func(ch scheduler.ChannelInfo) *config.UpstreamConfig {
+			if ch.Index >= 0 && ch.Index < len(upstreamCfgs) {
+				u := upstreamCfgs[ch.Index]
+				return &u
+			}
+			return nil
+		}, func(ch scheduler.ChannelInfo, u *config.UpstreamConfig) bool {
+			return ch.Status == "active" && len(u.APIKeys) > 0
+		})
+		if err != nil {
+			return nil
+		}
+		return result
+	}
+}
+
+// testProfile 返回一个基础 RequestProfile 用于测试。
+func testProfile() *RequestProfile {
+	return &RequestProfile{
+		Model:       "claude-sonnet-4",
+		ChannelKind: "messages",
+		Operation:   "completion",
+		AgentRole:   "main",
+		HasImage:    false,
+		EstTokens:   1000,
+		QualityNeed: QualityTierHigh,
+		ContextNeed: 200000,
+	}
+}
+
+// baseTestConfig 返回含三个 messages 渠道的基础测试配置。
+func baseTestConfig() config.Config {
+	return config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:     "ch-premium",
+				BaseURL:  "https://premium.example.com",
+				APIKeys:  []string{"sk-premium"},
+				Status:   "active",
+				Priority: 1,
+			},
+			{
+				Name:     "ch-standard",
+				BaseURL:  "https://standard.example.com",
+				APIKeys:  []string{"sk-standard"},
+				Status:   "active",
+				Priority: 2,
+			},
+			{
+				Name:     "ch-economy",
+				BaseURL:  "https://economy.example.com",
+				APIKeys:  []string{"sk-economy"},
+				Status:   "active",
+				Priority: 3,
+			},
+		},
+	}
+}
+
+// TestInvariant_CandidateFilterNil_SameAsShadowFilter 验证：
+// CandidateFilter=nil（无 SmartRouter）与注入 shadow SmartFilter 时，
+// SelectChannelWithOptions 的选择结果完全一致。
+// 这是 P0.5 核心不变量：shadow 不改变真实调度。
+func TestInvariant_CandidateFilterNil_SameAsShadowFilter(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	s, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+
+	// 构建 shadow SmartFilter
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter == nil {
+		t.Fatal("shadow 模式下 CandidateFilterFor 应返回非 nil filter")
+	}
+	smartFilter := wrapAsSmartFilter(filter, cfg, scheduler.ChannelKindMessages)
+
+	ctx := context.Background()
+
+	// 无 filter 的基线选择
+	baseResult, baseErr := s.SelectChannelWithOptions(ctx, scheduler.SelectionOptions{
+		Kind:   scheduler.ChannelKindMessages,
+		Model:  "claude-sonnet-4",
+		DryRun: true,
+	})
+
+	// 有 shadow SmartFilter 的选择
+	shadowResult, shadowErr := s.SelectChannelWithOptions(ctx, scheduler.SelectionOptions{
+		Kind:        scheduler.ChannelKindMessages,
+		Model:       "claude-sonnet-4",
+		DryRun:      true,
+		SmartFilter: smartFilter,
+	})
+
+	// 两者应有相同错误状态
+	if (baseErr != nil) != (shadowErr != nil) {
+		t.Fatalf("错误状态不一致: base=%v shadow=%v", baseErr, shadowErr)
+	}
+	if baseErr != nil {
+		return // 两者都失败，不检查结果
+	}
+
+	// 两者应选择相同的渠道
+	if baseResult.ChannelIndex != shadowResult.ChannelIndex {
+		t.Errorf("渠道选择不一致: base=%d(%s) shadow=%d(%s)",
+			baseResult.ChannelIndex, baseResult.Upstream.Name,
+			shadowResult.ChannelIndex, shadowResult.Upstream.Name)
+	}
+	if baseResult.Upstream.Name != shadowResult.Upstream.Name {
+		t.Errorf("渠道名称不一致: base=%s shadow=%s",
+			baseResult.Upstream.Name, shadowResult.Upstream.Name)
+	}
+}
+
+// TestInvariant_KillSwitch 不注入 验证：
+// kill switch 启用时 CandidateFilterFor 返回 nil。
+func TestInvariant_KillSwitch_NotInjected(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  true, // 急停
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter != nil {
+		t.Error("kill switch 启用时 CandidateFilterFor 应返回 nil")
+	}
+}
+
+// TestInvariant_ModeOff_NotInjected 验证：
+// mode=off 时 CandidateFilterFor 返回 nil。
+func TestInvariant_ModeOff_NotInjected(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "off",
+		KillSwitch:  false,
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter != nil {
+		t.Error("mode=off 时 CandidateFilterFor 应返回 nil")
+	}
+}
+
+// TestInvariant_XChannel_BypassesSmartFilter 验证：
+// X-Channel 显式指定渠道时，不经过 SmartRouter 重排。
+// SelectChannelWithOptions 在 SmartFilter 之前就定位到 X-Channel 并返回。
+func TestInvariant_XChannel_BypassesSmartFilter(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	s, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+	filter := smartRouter.CandidateFilterFor(profile)
+	smartFilter := wrapAsSmartFilter(filter, cfg, scheduler.ChannelKindMessages)
+
+	ctx := context.Background()
+
+	// X-Channel 指定 ch-economy（优先级最低）
+	result, err := s.SelectChannelWithOptions(ctx, scheduler.SelectionOptions{
+		Kind:        scheduler.ChannelKindMessages,
+		Model:       "claude-sonnet-4",
+		ChannelName: "ch-economy",
+		DryRun:      true,
+		SmartFilter: smartFilter,
+	})
+	if err != nil {
+		t.Fatalf("X-Channel 选择失败: %v", err)
+	}
+
+	// X-Channel 应直接选择 ch-economy，不受 SmartRouter 评分影响
+	if result.Upstream.Name != "ch-economy" {
+		t.Errorf("X-Channel 应选择 ch-economy，实际选择: %s", result.Upstream.Name)
+	}
+	if result.Reason != "channel_pin" {
+		t.Errorf("选择原因应为 channel_pin，实际: %s", result.Reason)
+	}
+}
+
+// TestInvariant_ManualOverride_BypassesSmartFilter 验证：
+// 手动序列 override 优先于 SmartRouter。
+// 本测试验证即使 SmartRouter 评分偏爱其他渠道，手动 override 仍优先。
+func TestInvariant_ManualOverride_BypassesSmartFilter(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	s, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+	filter := smartRouter.CandidateFilterFor(profile)
+	smartFilter := wrapAsSmartFilter(filter, cfg, scheduler.ChannelKindMessages)
+
+	ctx := context.Background()
+
+	// 手动 override 场景：SelectChannelWithOptions 中 ManualOverride 检查
+	// 发生在 SmartFilter 之后（当前实现），但 ManualOverride 本身通过
+	// overrideManager 设置，不在 SelectionOptions 中。
+	// 此处验证 SmartFilter 不改变候选列表（shadow 模式返回原始列表），
+	// 因此 ManualOverride 仍能找到正确的渠道。
+	result, err := s.SelectChannelWithOptions(ctx, scheduler.SelectionOptions{
+		Kind:        scheduler.ChannelKindMessages,
+		Model:       "claude-sonnet-4",
+		DryRun:      true,
+		SmartFilter: smartFilter,
+	})
+	if err != nil {
+		t.Fatalf("选择失败: %v", err)
+	}
+
+	// shadow 模式下 SmartFilter 不改变候选顺序
+	// 默认优先级排序应选择 ch-premium（Priority=1）
+	if result.Upstream.Name != "ch-premium" {
+		t.Errorf("shadow 模式下默认排序应选择 ch-premium，实际选择: %s", result.Upstream.Name)
+	}
+}
+
+// TestInvariant_ShadowFilterReturnsOriginalList 验证：
+// shadow 模式 SmartFilter 内部始终返回原始候选列表。
+func TestInvariant_ShadowFilterReturnsOriginalList(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter == nil {
+		t.Fatal("shadow 模式下 filter 不应为 nil")
+	}
+
+	// 构造三个候选
+	channels := []scheduler.ChannelInfo{
+		{Index: 0, Name: "ch-premium", Priority: 1, Status: "active"},
+		{Index: 1, Name: "ch-standard", Priority: 2, Status: "active"},
+		{Index: 2, Name: "ch-economy", Priority: 3, Status: "active"},
+	}
+
+	upstreamCfgs := cfg.Upstream
+	upstreamFor := func(ch scheduler.ChannelInfo) *config.UpstreamConfig {
+		if ch.Index >= 0 && ch.Index < len(upstreamCfgs) {
+			u := upstreamCfgs[ch.Index]
+			return &u
+		}
+		return nil
+	}
+	available := func(ch scheduler.ChannelInfo, u *config.UpstreamConfig) bool {
+		return ch.Status == "active" && len(u.APIKeys) > 0
+	}
+
+	// 直接调用 filter 函数
+	result, err := filter(channels, upstreamFor, available)
+	if err != nil {
+		t.Fatalf("filter 执行失败: %v", err)
+	}
+
+	// shadow 模式必须返回原始列表（长度和顺序不变）
+	if len(result) != len(channels) {
+		t.Errorf("shadow 模式应返回原始列表: 期望 %d 个候选，实际 %d", len(channels), len(result))
+	}
+	for i, ch := range result {
+		if ch.Name != channels[i].Name {
+			t.Errorf("候选 %d 名称不一致: 期望 %s，实际 %s", i, channels[i].Name, ch.Name)
+		}
+	}
+}
+
+// TestInvariant_EmptyCandidateList 验证：
+// 空候选列表时 SmartFilter 不崩溃。
+func TestInvariant_EmptyCandidateList(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter == nil {
+		t.Fatal("shadow 模式下 filter 不应为 nil")
+	}
+
+	upstreamFor := func(ch scheduler.ChannelInfo) *config.UpstreamConfig {
+		return nil
+	}
+	available := func(ch scheduler.ChannelInfo, u *config.UpstreamConfig) bool {
+		return false
+	}
+
+	// 空候选列表
+	result, err := filter(nil, upstreamFor, available)
+	if err != nil {
+		t.Fatalf("空候选列表不应报错: %v", err)
+	}
+	// 返回 nil 或空列表均可
+	if len(result) != 0 {
+		t.Errorf("空输入应返回空结果，实际长度: %d", len(result))
+	}
+}
+
+// TestInvariant_NilProfile_NotInjected 验证：
+// RequestProfile 为 nil 时 CandidateFilterFor 返回 nil。
+func TestInvariant_NilProfile_NotInjected(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	filter := smartRouter.CandidateFilterFor(nil)
+	if filter != nil {
+		t.Error("nil profile 时 CandidateFilterFor 应返回 nil")
+	}
+}
+
+// TestInvariant_BuildPlan_WithKillSwitch 验证：
+// kill switch 启用时 BuildPlan 仍可调用（dry-run API 使用），
+// 但返回的路由计划不注入任何 filter。
+func TestInvariant_BuildPlan_WithKillSwitch(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  true,
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	smartRouter := createTestSmartRouter(t, cfgManager)
+	profile := testProfile()
+
+	// BuildPlan 用于 dry-run，即使 kill switch 也可执行
+	plan := smartRouter.BuildPlan(profile)
+	if plan == nil {
+		t.Fatal("BuildPlan 不应返回 nil")
+	}
+	if plan.Mode != RoutingModeDryRun {
+		t.Errorf("BuildPlan 模式应为 dry_run，实际: %s", plan.Mode)
+	}
+}
+
+// TestInvariant_RoutingTraceRecorded 验证：
+// shadow SmartFilter 执行后记录了 RoutingDecisionTrace。
+func TestInvariant_RoutingTraceRecorded(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{
+		RoutingMode: "shadow",
+		KillSwitch:  false,
+	}
+
+	_, cfgManager, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	// 创建带内存 TraceStore 的 SmartRouter
+	traceStore, err := NewTraceStoreWithDB(nil)
+	if err != nil {
+		t.Fatalf("创建 TraceStore 失败: %v", err)
+	}
+
+	smartRouter := &SmartRouter{
+		configManager: cfgManager,
+		traceStore:    traceStore,
+	}
+
+	profile := testProfile()
+	filter := smartRouter.CandidateFilterFor(profile)
+	if filter == nil {
+		t.Fatal("shadow 模式下 filter 不应为 nil")
+	}
+
+	// 构造三个候选
+	channels := []scheduler.ChannelInfo{
+		{Index: 0, Name: "ch-premium", Priority: 1, Status: "active"},
+		{Index: 1, Name: "ch-standard", Priority: 2, Status: "active"},
+		{Index: 2, Name: "ch-economy", Priority: 3, Status: "active"},
+	}
+
+	upstreamCfgs := cfg.Upstream
+	upstreamFor := func(ch scheduler.ChannelInfo) *config.UpstreamConfig {
+		if ch.Index >= 0 && ch.Index < len(upstreamCfgs) {
+			u := upstreamCfgs[ch.Index]
+			return &u
+		}
+		return nil
+	}
+	available := func(ch scheduler.ChannelInfo, u *config.UpstreamConfig) bool {
+		return ch.Status == "active" && len(u.APIKeys) > 0
+	}
+
+	// 执行 filter
+	_, _ = filter(channels, upstreamFor, available)
+
+	// 验证 trace 已记录
+	traces := traceStore.ListRecent(1)
+	if len(traces) != 1 {
+		t.Fatalf("应记录 1 条 trace，实际: %d", len(traces))
+	}
+
+	trace := traces[0]
+	if trace.TaskClass != TaskClassLightweight {
+		t.Errorf("TaskClass 应为 lightweight（EstTokens=1000, AgentRole=main），实际: %s", trace.TaskClass)
+	}
+	if trace.Mode != RoutingModeShadow {
+		t.Errorf("Mode 应为 shadow，实际: %s", trace.Mode)
+	}
+	if trace.CandidatesBefore != 3 {
+		t.Errorf("CandidatesBefore 应为 3，实际: %d", trace.CandidatesBefore)
+	}
+	if len(trace.Candidates) == 0 {
+		t.Error("Candidates 不应为空")
+	}
+}

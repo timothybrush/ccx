@@ -1,0 +1,111 @@
+package autopilot
+
+import (
+	"net/http"
+
+	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/gin-gonic/gin"
+)
+
+// ── Dry-Run API（设计 §4.6 + §9）──
+
+// RegisterDryRunRoutes 注册 SmartRouter dry-run API 到给定路由组。
+func RegisterDryRunRoutes(router gin.IRouter, smartRouter *SmartRouter) {
+	group := router.Group("/route-dryrun")
+	{
+		group.POST("", handleDryRunRoute(smartRouter))
+	}
+}
+
+// DryRunRequest dry-run 请求体。
+type DryRunRequest struct {
+	// Model 请求的目标模型名。
+	Model string `json:"model" binding:"required"`
+	// ChannelKind messages | chat | responses | gemini | images | vectors。
+	ChannelKind string `json:"channelKind" binding:"required"`
+	// Operation completion | count_tokens | image_generation | embedding 等。
+	Operation string `json:"operation"`
+	// AgentRole main | subagent | ""。
+	AgentRole string `json:"agentRole"`
+	// AgentType codex_subagent | claude_code_subagent | ""。
+	AgentType string `json:"agentType"`
+	// HasImage 是否包含图片。
+	HasImage bool `json:"hasImage"`
+	// EstTokens 估算输入 token 数。
+	EstTokens int `json:"estTokens"`
+	// VisionNeed 是否需要识图。
+	VisionNeed bool `json:"visionNeed"`
+	// ImageGenNeed 是否需要原生生图端点。
+	ImageGenNeed bool `json:"imageGenNeed"`
+	// EmbeddingNeed 是否需要原生 embedding 端点。
+	EmbeddingNeed bool `json:"embeddingNeed"`
+	// ToolUseNeed 是否需要工具调用。
+	ToolUseNeed bool `json:"toolUseNeed"`
+	// ReasoningNeed 是否需要推理。
+	ReasoningNeed bool `json:"reasoningNeed"`
+	// ContextNeed 最小上下文窗口。
+	ContextNeed int `json:"contextNeed"`
+}
+
+// DryRunResponse dry-run 响应体。
+type DryRunResponse struct {
+	// Plan 路由计划。
+	Plan *RoutingPlan `json:"plan"`
+	// Mode 当前生效模式。
+	Mode string `json:"mode"`
+	// Message 提示信息。
+	Message string `json:"message,omitempty"`
+}
+
+// handleDryRunRoute POST /api/autopilot/route-dryrun
+// 根据请求特征计算路由计划，返回候选分数明细，不发真实请求。
+func handleDryRunRoute(smartRouter *SmartRouter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req DryRunRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误: " + err.Error()})
+			return
+		}
+
+		if smartRouter == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "SmartRouter 未初始化"})
+			return
+		}
+
+		// 检查 kill switch
+		cfg := smartRouter.ConfigManager().GetConfig()
+		autopilotCfg := cfg.AutopilotRouting
+		mode := autopilotCfg.EffectiveRoutingMode()
+		if mode == config.AutopilotModeOff {
+			c.JSON(http.StatusOK, DryRunResponse{
+				Plan:    nil,
+				Mode:    mode,
+				Message: "智能路由已关闭（mode=off 或 kill switch 已启用）",
+			})
+			return
+		}
+
+		// 构建 RequestProfile
+		profile := &RequestProfile{
+			Model:         req.Model,
+			ChannelKind:   req.ChannelKind,
+			Operation:     req.Operation,
+			AgentRole:     req.AgentRole,
+			AgentType:     req.AgentType,
+			HasImage:      req.HasImage,
+			EstTokens:     req.EstTokens,
+			VisionNeed:    req.VisionNeed,
+			ImageGenNeed:  req.ImageGenNeed,
+			EmbeddingNeed: req.EmbeddingNeed,
+			ToolUseNeed:   req.ToolUseNeed,
+			ReasoningNeed: req.ReasoningNeed,
+			ContextNeed:   req.ContextNeed,
+		}
+
+		plan := smartRouter.BuildPlan(profile)
+		c.JSON(http.StatusOK, DryRunResponse{
+			Plan: plan,
+			Mode: mode,
+		})
+	}
+}

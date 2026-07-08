@@ -504,6 +504,25 @@ func main() {
 			} else {
 				autopilotManager = mgr
 
+				// Phase 2: 创建 TraceStore（内存环形 + 可选 SQLite 落盘）
+				traceStore, tsErr := autopilot.NewTraceStoreWithDB(autopilotStore.DB())
+				if tsErr != nil {
+					log.Printf("[Autopilot-Init] 警告: 初始化 TraceStore 失败: %v (路由追踪将不可用)", tsErr)
+				} else {
+					autopilotManager.SetTraceStore(traceStore)
+					log.Printf("[Autopilot-Init] TraceStore 已初始化")
+				}
+
+				// Phase 2: 创建 SmartRouter（shadow 注入）
+				smartRouter := autopilot.NewSmartRouter(
+					autopilotStore,
+					autopilotManager.ManualIntentStore(),
+					traceStore,
+					cfgManager,
+				)
+				autopilotManager.SetSmartRouter(smartRouter)
+				log.Printf("[Autopilot-Init] SmartRouter 已初始化 (默认模式: shadow)")
+
 				// 注册限速信号回调：上游响应 → autopilot 限速发现器 + 时间桶
 				// endpointUID 和 metricsKey 由 upstream_failover.go 在请求上下文中计算后传入
 				ratelimit.SetUpstreamSignalCallback(func(endpointUID, metricsKey, serviceType string, isStream bool, latencyMs int64, headers http.Header, statusCode int) {
@@ -520,6 +539,22 @@ func main() {
 	channelScheduler.SetRateLimitManager(rateLimitManager)
 	log.Printf("[Scheduler-Init] 多渠道调度器已初始化 (失败率阈值: %.0f%%, 滑动窗口: %d, 连续失败阈值: %d)",
 		messagesMetricsManager.GetFailureThreshold()*100, messagesMetricsManager.GetWindowSize(), messagesMetricsManager.GetConsecutiveRetryableFailuresThreshold())
+
+	// Phase 2: SmartRouter shadow 注入
+	// 通过 CandidateFilter 回调注入 autopilot SmartRouter 的 channel 级重排逻辑。
+	// shadow 模式：记录 RoutingDecisionTrace，返回原始候选列表（不影响真实调度）。
+	// off / kill switch：不注入任何 filter，行为完全不变。
+	if autopilotManager != nil && autopilotManager.SmartRouter() != nil {
+		sr := autopilotManager.SmartRouter()
+		channelScheduler.SetCandidateFilterProvider(func(kind scheduler.ChannelKind, model string) scheduler.CandidateFilterFunc {
+			profile := &autopilot.RequestProfile{
+				Model:       model,
+				ChannelKind: string(kind),
+			}
+			return sr.CandidateFilterFor(profile)
+		})
+		log.Printf("[Scheduler-Init] SmartRouter shadow filter 已注册 (默认模式: shadow)")
+	}
 
 	// 初始化对话追踪器和覆盖管理器
 	conversationTracker := conversation.NewConversationTracker(1*time.Hour, 24*time.Hour, paths.ConversationStatePath)
@@ -907,6 +942,14 @@ func main() {
 			autopilot.RegisterCockpitRoutes(apiGroup, autopilotManager)
 			// Advisor shadow 决策记录 API
 			autopilot.RegisterAdvisorRoutes(apiGroup, autopilotManager.AdvisorDecisionStore())
+			// 路由追踪 API
+			if autopilotManager.TraceStore() != nil {
+				autopilot.RegisterTraceRoutes(apiGroup, autopilotManager.TraceStore())
+			}
+			// SmartRouter dry-run API
+			if autopilotManager.SmartRouter() != nil {
+				autopilot.RegisterDryRunRoutes(apiGroup, autopilotManager.SmartRouter())
+			}
 		}
 
 		// Fuzzy 模式设置

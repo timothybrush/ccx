@@ -76,6 +76,13 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 	traceErr := func(err error) error {
 		return newSelectionTraceError(err, trace)
 	}
+
+	// 若 opts.SmartFilter 未显式设置但全局 provider 已注册，自动注入。
+	// 这样 handler 不需要感知 SmartRouter，由 main.go 统一注册。
+	if opts.SmartFilter == nil && s.candidateFilterProvider != nil {
+		opts.SmartFilter = s.buildSmartFilterFromProvider(ctx, kind, model)
+	}
+
 	finish := func(upstream *config.UpstreamConfig, channelIndex int, reason string) *SelectionResult {
 		result := s.selectionResultWithRecord(kind, upstream, channelIndex, reason, !opts.DryRun)
 		channelName := ""
@@ -193,7 +200,19 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 		trace.setStage("candidate_filter", len(activeChannels))
 	}
 
-	// 指定渠道名（X-Channel 头）：在模型、路由前缀与上下文过滤后直接定位。
+	// SmartFilter 注入点（设计 §4.6.5：CandidateFilter 之后、显式控制之前）。
+	// 设计 §4.6.3：显式人工控制（X-Channel / ManualOverride / Promotion）优先于 SmartRouter。
+	// shadow 模式：记录 RoutingDecisionTrace，返回原始列表（不影响真实调度）。
+	if opts.SmartFilter != nil {
+		filtered := opts.SmartFilter(ctx, activeChannels)
+		if len(filtered) > 0 {
+			activeChannels = filtered
+		}
+		// len(filtered)==0 时保留原列表，避免 SmartFilter bug 阻断全部调度
+		trace.setStage("smart_filter", len(activeChannels))
+	}
+
+	// 指定渠道名（X-Channel 头）：在 SmartFilter 之后定位，显式控制优先。
 	if channelName != "" {
 		for _, ch := range activeChannels {
 			if ch.Name == channelName {
@@ -1141,4 +1160,32 @@ func (s *ChannelScheduler) getUpstreamByIndex(index int, kind ChannelKind) *conf
 		return &upstream
 	}
 	return nil
+}
+
+// buildSmartFilterFromProvider 从全局 CandidateFilterProvider 构建 SmartFilter。
+// 返回的 SmartFilter 包装了 SmartRouter 的 CandidateFilterFunc，
+// 并通过 availableFn 过滤掉不满足基础条件的候选（非 active、无 key、熔断中）。
+// 返回 nil 表示 provider 返回了 nil filter（off / kill switch），不注入。
+func (s *ChannelScheduler) buildSmartFilterFromProvider(ctx context.Context, kind ChannelKind, model string) func(context.Context, []ChannelInfo) []ChannelInfo {
+	if s.candidateFilterProvider == nil {
+		return nil
+	}
+
+	filter := s.candidateFilterProvider(kind, model)
+	if filter == nil {
+		return nil // off / kill switch
+	}
+
+	return func(ctx context.Context, channels []ChannelInfo) []ChannelInfo {
+		result, err := filter(channels, func(ch ChannelInfo) *config.UpstreamConfig {
+			return s.getUpstreamByIndex(ch.Index, kind)
+		}, func(ch ChannelInfo, upstream *config.UpstreamConfig) bool {
+			return s.channelAvailableForCandidateFilter(ch, upstream, kind)
+		})
+		if err != nil {
+			// SmartFilter 出错时返回空列表，触发 fallback 保留原列表
+			return nil
+		}
+		return result
+	}
 }

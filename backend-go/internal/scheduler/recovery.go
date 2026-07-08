@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
@@ -64,6 +65,14 @@ type SelectionOptions struct {
 	AgentRole          string // "main" | "subagent" — 角色感知 override 查找与亲和隔离
 	CandidateFilter    CandidateFilterFunc
 	DryRun             bool // 只诊断选择结果，不更新 lastSelectedChannel 或 override TTL
+
+	// SmartFilter SmartRouter 注入点。
+	// 执行位置：ContextFilter → CandidateFilter → X-Channel/ManualOverride/Promotion → SmartFilter → PrioritySort
+	// 显式控制（X-Channel、ManualOverride、Promotion）优先于 SmartFilter。
+	// shadow 模式：计算+记录 RoutingDecisionTrace，返回原始列表（不影响真实调度）。
+	// active 模式：返回评分排序后的候选列表（改变调度顺序）。
+	// nil 时行为完全不变。
+	SmartFilter func(ctx context.Context, channels []ChannelInfo) []ChannelInfo
 }
 
 func (s *ChannelScheduler) selectionResult(kind ChannelKind, upstream *config.UpstreamConfig, channelIndex int, reason string) *SelectionResult {

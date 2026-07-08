@@ -128,6 +128,10 @@ type Manager struct {
 	advisor      *TrustedRoutingAdvisor
 	usageMeter   *UsageMeter
 
+	// Phase 2 新组件：SmartRouter + RoutingTrace
+	traceStore  *TraceStore
+	smartRouter *SmartRouter
+
 	cancel func()
 	wg     sync.WaitGroup
 }
@@ -354,6 +358,11 @@ func (m *Manager) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	if m.traceStore != nil {
+		if err := m.traceStore.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if len(errs) > 0 {
 		return fmt.Errorf("[Autopilot-Close] 关闭 store 出错: %v", errs)
 	}
@@ -393,6 +402,26 @@ func (m *Manager) Advisor() *TrustedRoutingAdvisor {
 // UsageMeter 返回内部 UsageMeter 引用。
 func (m *Manager) UsageMeter() *UsageMeter {
 	return m.usageMeter
+}
+
+// TraceStore 返回内部 TraceStore 引用。
+func (m *Manager) TraceStore() *TraceStore {
+	return m.traceStore
+}
+
+// SetTraceStore 设置 TraceStore（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetTraceStore(ts *TraceStore) {
+	m.traceStore = ts
+}
+
+// SmartRouter 返回内部 SmartRouter 引用。
+func (m *Manager) SmartRouter() *SmartRouter {
+	return m.smartRouter
+}
+
+// SetSmartRouter 设置 SmartRouter（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetSmartRouter(sr *SmartRouter) {
+	m.smartRouter = sr
 }
 
 // runWorker 后台循环主逻辑。
