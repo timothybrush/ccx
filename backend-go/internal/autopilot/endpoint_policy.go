@@ -16,8 +16,9 @@ import (
 //
 // 模式门控：
 //   - off / kill switch → BuildEndpointPolicy 返回 nil（不注入）
-//   - shadow → 计算评分 + 记录 trace，但原样返回输入（不影响真实调度）
-//   - assist / auto → 真实排序（只排序不删减，fail-open）
+//   - shadow / dry_run → 计算评分 + 记录 trace，但原样返回输入（不影响真实调度）
+//   - assist → 真实排序但不过滤（FilterURLs/FilterKeys 原样返回）
+//   - auto → 真实过滤（dead endpoint / low-decay key）+ 排序，fail-open 兜底
 
 // ── EndpointCandidate（§4.6.2 契约）──
 
@@ -98,8 +99,9 @@ type EndpointPolicyDeps struct {
 //
 // 模式门控：
 //   - off / kill switch → nil
-//   - shadow → 计算评分 + 记录 trace，但原样返回输入
-//   - assist / auto → 真实排序（只排序不删减，fail-open）
+//   - shadow / dry_run → 计算评分 + 记录 trace，但原样返回输入
+//   - assist → 真实排序（FilterURLs/FilterKeys 原样返回，只排序不删减）
+//   - auto → 真实过滤（dead endpoint / low-decay key）+ 排序，fail-open 兜底
 func BuildEndpointPolicy(deps EndpointPolicyDeps, req *RequestProfile, mode RoutingMode) *EndpointAttemptPolicy {
 	if req == nil {
 		return nil
@@ -108,10 +110,12 @@ func BuildEndpointPolicy(deps EndpointPolicyDeps, req *RequestProfile, mode Rout
 	switch mode {
 	case RoutingModeShadow, RoutingModeDryRun:
 		return buildShadowPolicy(deps, req)
-	case RoutingModeActive:
-		// TODO(P2-后续): assist/auto 模式启用真实排序
-		// 当前批次暂同 shadow
-		return buildShadowPolicy(deps, req)
+	case RoutingModeAssist:
+		// assist：真实排序但不过滤（FilterURLs/FilterKeys 原样返回）
+		return buildActivePolicy(deps, req, false)
+	case RoutingModeAuto:
+		// auto：真实过滤（dead endpoint + low-decay key）+ 排序，fail-open 兜底
+		return buildActivePolicy(deps, req, true)
 	default:
 		// off 或未知模式
 		return nil
@@ -183,47 +187,77 @@ func buildShadowPolicy(deps EndpointPolicyDeps, req *RequestProfile) *EndpointAt
 	return policy
 }
 
-// buildActivePolicy 构建 active 模式的策略（真实排序）。
-// TODO(P2-后续): 当 assist/auto 真实影响启用后，由 BuildEndpointPolicy 调用。
-func buildActivePolicy(deps EndpointPolicyDeps, req *RequestProfile) *EndpointAttemptPolicy {
+// buildActivePolicy 构建 active 模式的策略。
+// enableFilter=false（assist）：只排序不删减；enableFilter=true（auto）：过滤+排序。
+func buildActivePolicy(deps EndpointPolicyDeps, req *RequestProfile, enableFilter bool) *EndpointAttemptPolicy {
 	policy := &EndpointAttemptPolicy{
 		RequestModel: req.Model,
 		Mode:         RoutingModeActive,
 	}
 
-	// active FilterURLs：移除 dead 的 URL
-	policy.FilterURLs = func(urls []string) []string {
-		if len(urls) == 0 {
-			return urls
-		}
-		filtered := make([]string, 0, len(urls))
-		for _, url := range urls {
-			profile := findProfileByBaseURL(deps.ProfileStore, url)
-			if profile != nil && profile.HealthState == HealthStateDead {
-				continue
+	if enableFilter {
+		// ── auto 模式：过滤 dead URL ──
+		policy.FilterURLs = func(urls []string) []string {
+			if len(urls) == 0 {
+				return urls
 			}
-			filtered = append(filtered, url)
+			filtered := make([]string, 0, len(urls))
+			for _, url := range urls {
+				profile := findProfileByBaseURL(deps.ProfileStore, url)
+				if profile != nil && profile.HealthState == HealthStateDead {
+					continue
+				}
+				filtered = append(filtered, url)
+			}
+			// FailOpen：过滤后为空则回退全量
+			if len(filtered) == 0 {
+				return urls
+			}
+			return filtered
 		}
-		// FailOpen：过滤后为空则回退全量
-		if len(filtered) == 0 {
+	} else {
+		// ── assist 模式：原样返回 ──
+		policy.FilterURLs = func(urls []string) []string {
 			return urls
 		}
-		return filtered
 	}
 
-	// active SortURLs：按评分降序排列
+	// active SortURLs：按评分降序排列（含 panic 恢复）
 	policy.SortURLs = func(urls []string) ([]string, []EndpointCandidate) {
 		startTime := time.Now()
-		candidates := make([]EndpointCandidate, 0, len(urls))
-		for _, url := range urls {
-			cand := scoreEndpointForURL(deps.ProfileStore, deps.FastDecay, req.Model, url)
-			candidates = append(candidates, cand)
-		}
 
-		// 按评分降序排序
-		sortedURLs := make([]string, len(urls))
-		copy(sortedURLs, urls)
-		sortEndpointsByScore(sortedURLs, candidates)
+		// panic 恢复：排序异常时回退原列表
+		var sortedURLs []string
+		var candidates []EndpointCandidate
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[EndpointPolicy-PanicRecover] SortURLs panic recovered: %v", r)
+					sortedURLs = nil
+					candidates = nil
+				}
+			}()
+			cands := make([]EndpointCandidate, 0, len(urls))
+			for _, url := range urls {
+				cand := scoreEndpointForURL(deps.ProfileStore, deps.FastDecay, req.Model, url)
+				cands = append(cands, cand)
+			}
+
+			// 按评分降序排序
+			sorted := make([]string, len(urls))
+			copy(sorted, urls)
+			sortEndpointsByScore(sorted, cands)
+
+			sortedURLs = sorted
+			candidates = cands
+		}()
+
+		// panic 回退：使用原列表
+		if sortedURLs == nil {
+			sortedURLs = make([]string, len(urls))
+			copy(sortedURLs, urls)
+			candidates = make([]EndpointCandidate, len(urls))
+		}
 
 		// 记录 trace
 		trace := buildEndpointTrace(req, candidates, "url_active", startTime)
@@ -237,43 +271,73 @@ func buildActivePolicy(deps EndpointPolicyDeps, req *RequestProfile) *EndpointAt
 		return sortedURLs, candidates
 	}
 
-	// active FilterKeys：移除 FastDecay 分数过低的 key
-	policy.FilterKeys = func(baseURL string, apiKeys []string) []string {
-		if len(apiKeys) == 0 {
-			return apiKeys
-		}
-		filtered := make([]string, 0, len(apiKeys))
-		for _, key := range apiKeys {
-			keyHash := KeyHashFromAPIKey(key)
-			endpointUID := GenerateEndpointUID("", baseURL, keyHash)
-			if deps.FastDecay != nil {
-				decayScore := deps.FastDecay.Score(endpointUID)
-				if decayScore < fastDecayFilterThreshold {
-					continue
-				}
+	if enableFilter {
+		// ── auto 模式：过滤 FastDecay 分数过低的 key ──
+		policy.FilterKeys = func(baseURL string, apiKeys []string) []string {
+			if len(apiKeys) == 0 {
+				return apiKeys
 			}
-			filtered = append(filtered, key)
+			filtered := make([]string, 0, len(apiKeys))
+			for _, key := range apiKeys {
+				keyHash := KeyHashFromAPIKey(key)
+				endpointUID := GenerateEndpointUID("", baseURL, keyHash)
+				if deps.FastDecay != nil {
+					decayScore := deps.FastDecay.Score(endpointUID)
+					if decayScore < fastDecayFilterThreshold {
+						continue
+					}
+				}
+				filtered = append(filtered, key)
+			}
+			// FailOpen：过滤后为空则回退全量
+			if len(filtered) == 0 {
+				return apiKeys
+			}
+			return filtered
 		}
-		// FailOpen：过滤后为空则回退全量
-		if len(filtered) == 0 {
+	} else {
+		// ── assist 模式：原样返回 ──
+		policy.FilterKeys = func(baseURL string, apiKeys []string) []string {
 			return apiKeys
 		}
-		return filtered
 	}
 
-	// active SortKeys：按评分降序排列
+	// active SortKeys：按评分降序排列（含 panic 恢复）
 	policy.SortKeys = func(baseURL string, apiKeys []string) ([]string, []EndpointCandidate) {
 		startTime := time.Now()
-		candidates := make([]EndpointCandidate, 0, len(apiKeys))
-		for _, key := range apiKeys {
-			cand := scoreEndpointForKey(deps.ProfileStore, deps.FastDecay, req.Model, baseURL, key)
-			candidates = append(candidates, cand)
-		}
 
-		// 按评分降序排序
-		sortedKeys := make([]string, len(apiKeys))
-		copy(sortedKeys, apiKeys)
-		sortEndpointsByScore(sortedKeys, candidates)
+		// panic 恢复：排序异常时回退原列表
+		var sortedKeys []string
+		var candidates []EndpointCandidate
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[EndpointPolicy-PanicRecover] SortKeys panic recovered: %v", r)
+					sortedKeys = nil
+					candidates = nil
+				}
+			}()
+			cands := make([]EndpointCandidate, 0, len(apiKeys))
+			for _, key := range apiKeys {
+				cand := scoreEndpointForKey(deps.ProfileStore, deps.FastDecay, req.Model, baseURL, key)
+				cands = append(cands, cand)
+			}
+
+			// 按评分降序排序
+			sorted := make([]string, len(apiKeys))
+			copy(sorted, apiKeys)
+			sortEndpointsByScore(sorted, cands)
+
+			sortedKeys = sorted
+			candidates = cands
+		}()
+
+		// panic 回退：使用原列表
+		if sortedKeys == nil {
+			sortedKeys = make([]string, len(apiKeys))
+			copy(sortedKeys, apiKeys)
+			candidates = make([]EndpointCandidate, len(apiKeys))
+		}
 
 		// 记录 trace
 		trace := buildEndpointTrace(req, candidates, "key_active", startTime)

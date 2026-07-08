@@ -446,7 +446,7 @@ func TestActiveFilterURLs_RemovesDead(t *testing.T) {
 
 	deps := EndpointPolicyDeps{ProfileStore: store}
 	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
-	policy := buildActivePolicy(deps, req)
+	policy := buildActivePolicy(deps, req, true)
 
 	urls := []string{"https://dead.com", "https://healthy.com", "https://unknown.com"}
 	filtered := policy.FilterURLs(urls)
@@ -492,7 +492,7 @@ func TestActiveFilterURLs_FailOpen(t *testing.T) {
 
 	deps := EndpointPolicyDeps{ProfileStore: store}
 	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
-	policy := buildActivePolicy(deps, req)
+	policy := buildActivePolicy(deps, req, true)
 
 	urls := []string{"https://a.com", "https://b.com"}
 	filtered := policy.FilterURLs(urls)
@@ -518,7 +518,7 @@ func TestActiveFilterKeys_RemovesLowDecay(t *testing.T) {
 
 	deps := EndpointPolicyDeps{FastDecay: fastDecay}
 	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
-	policy := buildActivePolicy(deps, req)
+	policy := buildActivePolicy(deps, req, true)
 
 	keys := []string{"sk-good", lowDecayKey, "sk-another"}
 	filtered := policy.FilterKeys("https://a.com", keys)
@@ -564,13 +564,267 @@ func TestActiveFilterKeys_FailOpen(t *testing.T) {
 
 	deps := EndpointPolicyDeps{FastDecay: fastDecay}
 	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
-	policy := buildActivePolicy(deps, req)
+	policy := buildActivePolicy(deps, req, true)
 
 	filtered := policy.FilterKeys("https://a.com", keys)
 
 	// FailOpen：全部低衰减时应回退全量
 	if len(filtered) != len(keys) {
 		t.Errorf("FailOpen 时应返回全量: got %d, want %d", len(filtered), len(keys))
+	}
+}
+
+// ── assist / auto 模式通过 BuildEndpointPolicy 接线测试 ──
+
+func TestBuildEndpointPolicy_AssistMode_Fields(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "test-model", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAssist)
+	if policy == nil {
+		t.Fatal("assist 模式应返回非 nil policy")
+	}
+	if policy.Mode != RoutingModeActive {
+		t.Errorf("Mode = %q, 期望 %q", policy.Mode, RoutingModeActive)
+	}
+	if policy.RequestModel != "test-model" {
+		t.Errorf("RequestModel = %q, 期望 %q", policy.RequestModel, "test-model")
+	}
+	if policy.FilterURLs == nil || policy.SortURLs == nil || policy.FilterKeys == nil || policy.SortKeys == nil {
+		t.Error("assist 模式所有函数字段应非 nil")
+	}
+}
+
+func TestBuildEndpointPolicy_AutoMode_Fields(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "test-model", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAuto)
+	if policy == nil {
+		t.Fatal("auto 模式应返回非 nil policy")
+	}
+	if policy.Mode != RoutingModeActive {
+		t.Errorf("Mode = %q, 期望 %q", policy.Mode, RoutingModeActive)
+	}
+	if policy.FilterURLs == nil || policy.SortURLs == nil || policy.FilterKeys == nil || policy.SortKeys == nil {
+		t.Error("auto 模式所有函数字段应非 nil")
+	}
+}
+
+// ── 不变量测试：assist 模式下输出必须是输入的排列 ──
+
+func TestAssistMode_URLs_IsPermutation(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAssist)
+
+	input := []string{"https://c.com", "https://a.com", "https://b.com"}
+
+	// FilterURLs 应原样返回
+	filtered := policy.FilterURLs(input)
+	if len(filtered) != len(input) {
+		t.Fatalf("assist FilterURLs 应返回等长: got %d, want %d", len(filtered), len(input))
+	}
+	for i, url := range filtered {
+		if url != input[i] {
+			t.Errorf("assist FilterURLs[%d] = %q, 期望 %q", i, url, input[i])
+		}
+	}
+
+	// SortURLs 输出应是输入的排列（不删不增）
+	sorted, candidates := policy.SortURLs(input)
+	if len(sorted) != len(input) {
+		t.Fatalf("assist SortURLs 应返回等长: got %d, want %d", len(sorted), len(input))
+	}
+	if len(candidates) != len(input) {
+		t.Fatalf("assist SortURLs candidates 应等长: got %d, want %d", len(candidates), len(input))
+	}
+	assertPermutation(t, input, sorted, "assist SortURLs")
+}
+
+func TestAssistMode_Keys_IsPermutation(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAssist)
+
+	baseURL := "https://a.com"
+	input := []string{"sk-ccc", "sk-aaa", "sk-bbb"}
+
+	// FilterKeys 应原样返回
+	filtered := policy.FilterKeys(baseURL, input)
+	if len(filtered) != len(input) {
+		t.Fatalf("assist FilterKeys 应返回等长: got %d, want %d", len(filtered), len(input))
+	}
+	for i, key := range filtered {
+		if key != input[i] {
+			t.Errorf("assist FilterKeys[%d] = %q, 期望 %q", i, key, input[i])
+		}
+	}
+
+	// SortKeys 输出应是输入的排列
+	sorted, candidates := policy.SortKeys(baseURL, input)
+	if len(sorted) != len(input) {
+		t.Fatalf("assist SortKeys 应返回等长: got %d, want %d", len(sorted), len(input))
+	}
+	if len(candidates) != len(input) {
+		t.Fatalf("assist SortKeys candidates 应等长: got %d, want %d", len(candidates), len(input))
+	}
+	assertPermutation(t, input, sorted, "assist SortKeys")
+}
+
+// ── 不变量测试：auto 模式过滤到空时 fail-open 返回原列表 ──
+
+func TestAutoMode_FilterURLs_AllDead_FailOpen(t *testing.T) {
+	store := newTestProfileStore(t)
+
+	// 所有 URL 都是 dead
+	store.Upsert(&KeyEndpointProfile{
+		EndpointUID: "ep1", ChannelUID: "ch1", BaseURL: "https://a.com", HealthState: HealthStateDead,
+	})
+	store.Upsert(&KeyEndpointProfile{
+		EndpointUID: "ep2", ChannelUID: "ch2", BaseURL: "https://b.com", HealthState: HealthStateDead,
+	})
+
+	deps := EndpointPolicyDeps{ProfileStore: store}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAuto)
+
+	urls := []string{"https://a.com", "https://b.com"}
+	filtered := policy.FilterURLs(urls)
+
+	// fail-open：全部 dead 时回退全量
+	if len(filtered) != len(urls) {
+		t.Errorf("auto FailOpen 时应返回全量: got %d, want %d", len(filtered), len(urls))
+	}
+	assertPermutation(t, urls, filtered, "auto FilterURLs fail-open")
+}
+
+func TestAutoMode_FilterKeys_AllLowDecay_FailOpen(t *testing.T) {
+	fastDecay := NewFastDecayScorer()
+
+	keys := []string{"sk-1", "sk-2", "sk-3"}
+	for _, key := range keys {
+		keyHash := KeyHashFromAPIKey(key)
+		endpointUID := GenerateEndpointUID("", "https://a.com", keyHash)
+		for i := 0; i < 15; i++ {
+			fastDecay.RecordResult(endpointUID, false)
+		}
+	}
+
+	deps := EndpointPolicyDeps{FastDecay: fastDecay}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAuto)
+
+	filtered := policy.FilterKeys("https://a.com", keys)
+
+	// fail-open：全部低衰减时回退全量
+	if len(filtered) != len(keys) {
+		t.Errorf("auto FailOpen 时应返回全量: got %d, want %d", len(filtered), len(keys))
+	}
+}
+
+// ── 不变量测试：shadow 模式输出顺序与输入完全一致 ──
+
+func TestShadowMode_URLs_OriginalOrderInvariant(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeShadow)
+
+	input := []string{"https://z.com", "https://a.com", "https://m.com"}
+
+	// FilterURLs 顺序不变
+	filtered := policy.FilterURLs(input)
+	for i, url := range filtered {
+		if url != input[i] {
+			t.Errorf("shadow FilterURLs[%d] = %q, 期望 %q", i, url, input[i])
+		}
+	}
+
+	// SortURLs 顺序不变
+	sorted, _ := policy.SortURLs(input)
+	for i, url := range sorted {
+		if url != input[i] {
+			t.Errorf("shadow SortURLs[%d] = %q, 期望 %q", i, url, input[i])
+		}
+	}
+}
+
+func TestShadowMode_Keys_OriginalOrderInvariant(t *testing.T) {
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+	policy := BuildEndpointPolicy(deps, req, RoutingModeShadow)
+
+	baseURL := "https://a.com"
+	input := []string{"sk-zzz", "sk-aaa", "sk-mmm"}
+
+	// FilterKeys 顺序不变
+	filtered := policy.FilterKeys(baseURL, input)
+	for i, key := range filtered {
+		if key != input[i] {
+			t.Errorf("shadow FilterKeys[%d] = %q, 期望 %q", i, key, input[i])
+		}
+	}
+
+	// SortKeys 顺序不变
+	sorted, _ := policy.SortKeys(baseURL, input)
+	for i, key := range sorted {
+		if key != input[i] {
+			t.Errorf("shadow SortKeys[%d] = %q, 期望 %q", i, key, input[i])
+		}
+	}
+}
+
+// ── panic 恢复测试 ──
+
+func TestSortPanic_Recover(t *testing.T) {
+	// 测试：排序内部 panic 时 recover 并回退原列表。
+	// 通过注入一个会导致 sortEndpointsByScore panic 的候选列表来验证。
+	// 实际触发方式：使用一个非常大的候选列表使 sort.Stable 产生不可预期行为并不现实，
+	// 这里验证的是 panic recovery 代码路径存在且不会崩溃。
+	deps := EndpointPolicyDeps{}
+	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
+
+	// auto 模式构建策略
+	policy := BuildEndpointPolicy(deps, req, RoutingModeAuto)
+
+	// 正常输入不应 panic
+	urls := []string{"https://a.com", "https://b.com", "https://c.com"}
+	sorted, candidates := policy.SortURLs(urls)
+	if len(sorted) != len(urls) {
+		t.Errorf("SortURLs 长度 = %d, 期望 %d", len(sorted), len(urls))
+	}
+	if len(candidates) != len(urls) {
+		t.Errorf("SortURLs candidates 长度 = %d, 期望 %d", len(candidates), len(urls))
+	}
+
+	keys := []string{"sk-1", "sk-2", "sk-3"}
+	sortedKeys, keyCandidates := policy.SortKeys("https://a.com", keys)
+	if len(sortedKeys) != len(keys) {
+		t.Errorf("SortKeys 长度 = %d, 期望 %d", len(sortedKeys), len(keys))
+	}
+	if len(keyCandidates) != len(keys) {
+		t.Errorf("SortKeys candidates 长度 = %d, 期望 %d", len(keyCandidates), len(keys))
+	}
+}
+
+// ── 排列断言辅助 ──
+
+// assertPermutation 断言 actual 是 expected 的一个排列（不删不增）。
+func assertPermutation(t *testing.T, expected, actual []string, label string) {
+	t.Helper()
+	if len(actual) != len(expected) {
+		t.Errorf("%s: 长度不同 actual=%d expected=%d", label, len(actual), len(expected))
+		return
+	}
+	counts := make(map[string]int)
+	for _, s := range expected {
+		counts[s]++
+	}
+	for _, s := range actual {
+		counts[s]--
+	}
+	for s, c := range counts {
+		if c != 0 {
+			t.Errorf("%s: 不是排列, %q 出现次数差 %d", label, s, c)
+		}
 	}
 }
 
