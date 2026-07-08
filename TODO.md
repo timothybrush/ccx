@@ -41,3 +41,8 @@
 
 ---
 
+> **上游版本变更**
+
+## [ ] Codex rust-v0.143.0 上游协议/工具变更评估
+
+发现协议/工具/用法变更：remote plugins 默认启用、system proxy routing (PAC/WPAD)、`codex remote-control pair` 新命令、MCP tool search by default + session auth、app-server 环境/线程检查 RPC、`max` reasoning effort 一等支持。请评估对 ccx Responses 渠道的影响。
