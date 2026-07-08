@@ -117,6 +117,20 @@ func KeyHashFromAPIKey(apiKey string) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// ── 用量窗口（设计 §3.2.4）──
+
+// UsageWindow 描述一个时间窗口内的用量统计。
+// 数据来源优先级：official_api > response_header > local_metering。
+type UsageWindow struct {
+	Window    string    `json:"window"`    // "5h" | "day" | "week" | "month"
+	Used      float64   `json:"used"`      // 已用量
+	Limit     float64   `json:"limit"`     // 上限，0 = 未知
+	Unit      string    `json:"unit"`      // requests | tokens | credits | percent
+	ResetsAt  time.Time `json:"resetsAt"`  // 窗口重置时间
+	Source    string    `json:"source"`    // official_api | response_header | local_metering
+	FetchedAt time.Time `json:"fetchedAt"` // 最近一次数据获取时间
+}
+
 // ── 成本画像 ──
 
 // CostProfile 描述 endpoint 的实际成本倍率。
@@ -204,6 +218,12 @@ type KeyEndpointProfile struct {
 
 	// ── 分组变更详情（Phase 1 shadow）──
 	LastGroupChange *GroupChangeResult `json:"lastGroupChange,omitempty"` // 最近一次分组变更详情
+
+	// ── 订阅级能力继承（§3.2.3）──
+	InheritedFromSubscription bool `json:"inheritedFromSubscription,omitempty"` // 是否从订阅级能力画像继承
+
+	// ── 用量窗口（§3.2.4）──
+	UsageWindows []UsageWindow `json:"usageWindows,omitempty"` // 该 endpoint 的用量窗口列表
 
 	// ── 诊断 ──
 	HealthEvidence  []string        `json:"healthEvidence"` // 诊断证据列表

@@ -30,10 +30,42 @@ type SubscriptionProfile struct {
 	Source            string   `json:"source"` // manual | imported | inferred
 	Confidence        float64  `json:"confidence"`
 
+	// ── 订阅级共享能力（§3.2.3，shadow 展示）──
+	SharedCapability *SharedCapability `json:"sharedCapability,omitempty"` // 从同订阅 endpoint 聚合的共享能力
+
+	// ── 订阅级用量窗口（§3.2.4）──
+	UsageWindows []UsageWindow `json:"usageWindows,omitempty"` // 订阅级汇总用量窗口
+
 	Notes      string     `json:"notes,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	UpdatedAt  time.Time  `json:"updatedAt"`
 	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
+}
+
+// SharedCapability 描述同订阅下所有 endpoint 共享的能力画像。
+// 由 BuildSharedCapability 从 endpoint 画像聚合（多数派投票），存储在 SubscriptionProfile 中。
+// endpoint 画像通过引用继承，无需重复探测。
+type SharedCapability struct {
+	// ── 模型列表 ──
+	ModelListHash string   `json:"modelListHash"` // 模型列表哈希（排序后 SHA-256）
+	ModelList     []string `json:"modelList"`     // 多数派模型列表快照
+
+	// ── 能力标签（多数派投票结果）──
+	SupportsVision    bool `json:"supportsVision"`
+	SupportsToolCalls bool `json:"supportsToolCalls"`
+	SupportsReasoning bool `json:"supportsReasoning"`
+
+	// ── 协议兼容开关快照 ──
+	SupportsStreaming  bool `json:"supportsStreaming"`  // 流式支持
+	SupportsLongCtx    bool `json:"supportsLongCtx"`    // 长上下文支持
+	SupportsMultiModal bool `json:"supportsMultiModal"` // 多模态支持
+
+	// ── 统计 ──
+	TotalEndpoints   int      `json:"totalEndpoints"`             // 参与聚合的 endpoint 总数
+	ConsistentCount  int      `json:"consistentCount"`            // 与共享能力一致的 endpoint 数
+	InconsistentKeys []string `json:"inconsistentKeys,omitempty"` // 与共享能力不一致的 endpointUID 列表
+
+	ProbedAt time.Time `json:"probedAt"` // 最近一次聚合计算时间
 }
 
 // SubscriptionStore 管理 SubscriptionProfile 的内存缓存与 SQLite 持久化。
