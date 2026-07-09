@@ -612,9 +612,15 @@ func scoreEndpointForKey(store *ProfileStore, fastDecay *FastDecayScorer, model,
 	cand.ChannelKind = profile.ChannelKind
 	cand.OriginTier = ChannelOriginTier(profile.OriginTier)
 	cand.MetricsKey = profile.MetricsKey
+	// 命中画像后改用 profile.EndpointUID（含真实 channelUID），
+	// 与 handlers 层 upstream_failover.go 的 GenerateEndpointUID(upstream.ChannelUID, ...) 保持一致，
+	// 否则 modelByUID 的 key 与 handlers 层查询的 key 永不相等，MappedModel 永远查不到（见 Phase 3B-2 复核发现）。
+	if profile.EndpointUID != "" {
+		cand.EndpointUID = profile.EndpointUID
+	}
 	cand.MappedModel = resolveMappedModel(profile, model, req, deps)
 
-	// 计算 FastDecay 分
+	// 计算 FastDecay 分（沿用本函数原有的 baseURL+keyHash 派生 UID，不改变既有 FastDecay 查找行为）
 	fastDecayScore := 1.0
 	if fastDecay != nil {
 		fastDecayScore = fastDecay.Score(endpointUID)

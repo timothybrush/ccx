@@ -960,6 +960,48 @@ func TestGetKeyCandidates_EmptyInput(t *testing.T) {
 	}
 }
 
+// TestScoreEndpointForKey_EndpointUIDMatchesHandlerComputation 回归测试（Phase 3B-2 复核发现的真实 bug）：
+// scoreEndpointForKey 命中画像后，cand.EndpointUID 必须与 handlers 层
+// upstream_failover.go 用 GenerateEndpointUID(upstream.ChannelUID, baseURL, keyHash) 算出的值一致，
+// 否则 modelByUID 的 key 与 handlers 层查询用的 key 永不相等，MappedModel 永远查不到。
+func TestScoreEndpointForKey_EndpointUIDMatchesHandlerComputation(t *testing.T) {
+	store := newTestProfileStore(t)
+	fastDecay := NewFastDecayScorer()
+
+	const (
+		channelUID = "ch-real-uid"
+		baseURL    = "https://a.com"
+		apiKey     = "sk-test-key"
+	)
+	keyHash := KeyHashFromAPIKey(apiKey)
+	// profile 以真实 channelUID 生成 EndpointUID，与 profiler 落盘时的行为一致。
+	realEndpointUID := GenerateEndpointUID(channelUID, baseURL, keyHash)
+
+	profile := &KeyEndpointProfile{
+		EndpointUID: realEndpointUID,
+		ChannelUID:  channelUID,
+		BaseURL:     baseURL,
+		HealthState: HealthStateHealthy,
+	}
+	store.Upsert(profile)
+
+	candidates := GetKeyCandidates(store, fastDecay, "m1", baseURL, []string{apiKey})
+	if len(candidates) != 1 {
+		t.Fatalf("candidates 长度 = %d, 期望 1", len(candidates))
+	}
+
+	// handlers 层的计算方式：GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
+	handlerComputedUID := GenerateEndpointUID(channelUID, baseURL, keyHash)
+
+	if candidates[0].EndpointUID != handlerComputedUID {
+		t.Errorf("cand.EndpointUID = %q, 期望与 handlers 层计算一致 = %q（否则 MappedModel 查找会因 key 不匹配而永远落空）",
+			candidates[0].EndpointUID, handlerComputedUID)
+	}
+	if candidates[0].EndpointUID != realEndpointUID {
+		t.Errorf("cand.EndpointUID = %q, 期望等于命中的 profile.EndpointUID = %q", candidates[0].EndpointUID, realEndpointUID)
+	}
+}
+
 // ── 辅助函数测试 ──
 
 func TestTopN(t *testing.T) {
