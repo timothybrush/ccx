@@ -87,6 +87,7 @@ type RequestRecord struct {
 	OutputTokens             int64
 	CacheCreationInputTokens int64
 	CacheReadInputTokens     int64
+	ProxyKeyMask             string // 代理 Key 掩码（用于成本报表按用户分组，由 RecordRequestConnected 传入）
 }
 
 // KeyMetrics 单个 Key 的指标（绑定到 BaseURL + Key 组合）

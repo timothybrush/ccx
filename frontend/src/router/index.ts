@@ -37,6 +37,12 @@ const routes = [
     name: 'autopilot',
     component: () => import('@/views/AutopilotView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/cost-report',
+    name: 'cost-report',
+    component: () => import('@/views/CostReportView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

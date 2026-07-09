@@ -152,6 +152,19 @@ func getAPIKey(c *gin.Context) string {
 	return ""
 }
 
+// ContextKeyProxyKeyMask 代理 Key 掩码在 gin.Context 中的存储键。
+// ProxyAuthMiddleware 验证通过后写入，下游 handler 通过 GetProxyKeyMask 取出用于成本报表按用户分组。
+// Item 4（渠道推荐）将直接复用此键名和 GetProxyKeyMask helper。
+const ContextKeyProxyKeyMask = "proxyKeyMask"
+
+// GetProxyKeyMask 从 gin.Context 取出本次请求的代理 Key 掩码。
+// 返回空字符串表示未经过 ProxyAuthMiddleware 或密钥为空。
+func GetProxyKeyMask(c *gin.Context) string {
+	v, _ := c.Get(ContextKeyProxyKeyMask)
+	s, _ := v.(string)
+	return s
+}
+
 // ProxyAuthMiddleware 代理访问控制中间件
 func ProxyAuthMiddleware(envCfg *config.EnvConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -167,6 +180,11 @@ func ProxyAuthMiddleware(envCfg *config.EnvConfig) gin.HandlerFunc {
 			})
 			c.Abort()
 			return
+		}
+
+		// 写入代理 Key 掩码，用于成本报表按用户维度分组（仅掩码，不存明文）
+		if mask := envCfg.ProxyKeyMaskForRequest(providedKey); mask != "" {
+			c.Set(ContextKeyProxyKeyMask, mask)
 		}
 
 		c.Next()

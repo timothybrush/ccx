@@ -323,3 +323,74 @@ func TestProxyAuthMiddleware_AllowsExtraProxyKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyAuthMiddleware_WritesProxyKeyMask(t *testing.T) {
+	envCfg := &config.EnvConfig{
+		ProxyAccessKey:       "sk-primarykey-aaaa",
+		ExtraProxyAccessKeys: []string{"sk-extrakey-bbbb"},
+	}
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(ProxyAuthMiddleware(envCfg))
+
+	var capturedMask string
+	r.POST("/v1/messages", func(c *gin.Context) {
+		capturedMask = GetProxyKeyMask(c)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	t.Run("primary key sets mask", func(t *testing.T) {
+		capturedMask = ""
+		req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		req.Header.Set("x-api-key", "sk-primarykey-aaaa")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if capturedMask == "" {
+			t.Fatal("expected non-empty proxyKeyMask for primary key")
+		}
+		// Should be a masked version (first 4 + last 4 with stars in between)
+		if len(capturedMask) < 8 {
+			t.Fatalf("expected mask length >= 8, got %q", capturedMask)
+		}
+	})
+
+	t.Run("extra key sets mask", func(t *testing.T) {
+		capturedMask = ""
+		req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		req.Header.Set("x-api-key", "sk-extrakey-bbbb")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if capturedMask == "" {
+			t.Fatal("expected non-empty proxyKeyMask for extra key")
+		}
+	})
+
+	t.Run("no key means no mask", func(t *testing.T) {
+		capturedMask = "sentinel"
+		req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		// Middleware returns 401 and aborts; handler never runs.
+		// capturedMask stays "sentinel" because the handler is never called.
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+		if capturedMask != "sentinel" {
+			t.Fatalf("handler should not have run; expected sentinel, got %q", capturedMask)
+		}
+	})
+}
+
+func TestGetProxyKeyMask_ReturnsEmptyWhenNotSet(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if mask := GetProxyKeyMask(c); mask != "" {
+		t.Fatalf("expected empty mask for fresh context, got %q", mask)
+	}
+}

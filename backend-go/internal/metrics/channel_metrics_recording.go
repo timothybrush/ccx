@@ -86,14 +86,25 @@ func (m *MetricsManager) recordFailureLocked(baseURL, apiKey, serviceType string
 	}
 }
 
-// RecordRequestConnected 记录“开始发起上游请求（TCP 建连阶段）”的请求（用于更实时的活跃度统计）。
+// RecordRequestConnected 记录”开始发起上游请求（TCP 建连阶段）”的请求（用于更实时的活跃度统计）。
 // 返回 requestID，用于后续在请求结束时回写成功/失败与 token。
 func (m *MetricsManager) RecordRequestConnected(baseURL, apiKey, serviceType string, model string) uint64 {
 	return m.RecordRequestConnectedAt(baseURL, apiKey, serviceType, model, time.Now())
 }
 
+// RecordRequestConnectedWithProxyKeyMask 记录请求开始并关联代理 Key 掩码（用于成本报表按用户分组）。
+// 保持与 RecordRequestConnected 相同的行为，额外将 proxyKeyMask 存入 pending 记录，
+// 后续 RecordRequestFinalizeOutcome 会将其写入 PersistentRecord 持久化到 SQLite。
+func (m *MetricsManager) RecordRequestConnectedWithProxyKeyMask(baseURL, apiKey, serviceType, model, proxyKeyMask string) uint64 {
+	return m.recordRequestConnectedInternal(baseURL, apiKey, serviceType, model, proxyKeyMask, time.Now())
+}
+
 // RecordRequestConnectedAt 与 RecordRequestConnected 相同，但允许注入时间戳（用于测试）。
 func (m *MetricsManager) RecordRequestConnectedAt(baseURL, apiKey, serviceType string, model string, timestamp time.Time) uint64 {
+	return m.recordRequestConnectedInternal(baseURL, apiKey, serviceType, model, "", timestamp)
+}
+
+func (m *MetricsManager) recordRequestConnectedInternal(baseURL, apiKey, serviceType, model, proxyKeyMask string, timestamp time.Time) uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -112,6 +123,7 @@ func (m *MetricsManager) RecordRequestConnectedAt(baseURL, apiKey, serviceType s
 		Success:      true, // 先按成功计数；结束时会回写真实结果
 		FailureClass: FailureClassNone,
 		Model:        model,
+		ProxyKeyMask: proxyKeyMask,
 	})
 	metrics.pendingHistoryIdx[requestID] = len(metrics.requestHistory) - 1
 
@@ -198,6 +210,7 @@ func (m *MetricsManager) RecordRequestFinalizeOutcome(baseURL, apiKey, serviceTy
 				CacheReadTokens:     cacheReadTokens,
 				APIType:             m.apiType,
 				Model:               record.Model,
+				ProxyKeyMask:        record.ProxyKeyMask,
 			})
 		}
 		return
@@ -226,6 +239,7 @@ func (m *MetricsManager) RecordRequestFinalizeOutcome(baseURL, apiKey, serviceTy
 			CacheReadTokens:     0,
 			APIType:             m.apiType,
 			Model:               record.Model,
+			ProxyKeyMask:        record.ProxyKeyMask,
 		})
 	}
 }

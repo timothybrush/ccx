@@ -20,6 +20,11 @@ func TestMigrateMetricsKeysToIdentity_MigratesRecordsAndCircuitStates(t *testing
 	}
 	defer store.Close()
 
+	// initSchema 已将 schema 升级到 v4；重置为 v2 让 MigrateMetricsKeysToIdentity 实际执行 v2→v3 迁移
+	if _, err := store.db.Exec("PRAGMA user_version = 2"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
+
 	baseURL := "https://example.com"
 	apiKey := "sk-test"
 	legacyKey := GenerateMetricsKey(baseURL, apiKey)
@@ -59,6 +64,7 @@ func TestMigrateMetricsKeysToIdentity_MigratesRecordsAndCircuitStates(t *testing
 		t.Fatalf("MigrateMetricsKeysToIdentity() error = %v", err)
 	}
 
+	// 版本重置为 2 后，MigrateMetricsKeysToIdentity 执行 PRAGMA user_version = 3
 	version, err := store.schemaVersion()
 	if err != nil {
 		t.Fatalf("schemaVersion() error = %v", err)
@@ -106,6 +112,11 @@ func TestMigrateMetricsKeysToIdentity_MergesCircuitStatesBySeverity(t *testing.T
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
 	defer store.Close()
+
+	// initSchema 已将 schema 升级到 v4；重置为 v2 让 MigrateMetricsKeysToIdentity 实际执行 v2→v3 迁移
+	if _, err := store.db.Exec("PRAGMA user_version = 2"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
 
 	baseURL := "https://example.com"
 	apiKey := "sk-test"
@@ -190,6 +201,11 @@ func TestMigrateMetricsKeysToIdentity_MigratesHashSuffixLegacyRows(t *testing.T)
 	}
 	defer store.Close()
 
+	// initSchema 已将 schema 升级到 v4；重置为 v2 让 MigrateMetricsKeysToIdentity 实际执行 v2→v3 迁移
+	if _, err := store.db.Exec("PRAGMA user_version = 2"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
+
 	baseURL := "https://example.com/#"
 	apiKey := "sk-test"
 	legacyKey := GenerateMetricsKey("https://example.com/#", apiKey)
@@ -251,6 +267,11 @@ func TestMigrateMetricsKeysToIdentity_MigratesHistoricalAPIKeyRows(t *testing.T)
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
 	defer store.Close()
+
+	// initSchema 已将 schema 升级到 v4；重置为 v2 让 MigrateMetricsKeysToIdentity 实际执行 v2→v3 迁移
+	if _, err := store.db.Exec("PRAGMA user_version = 2"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
 
 	baseURL := "https://example.com"
 	historicalKey := "sk-history"
@@ -354,8 +375,8 @@ func TestMigrateMetricsKeysToIdentity_IgnoresConflictingMappingsWithoutLegacyRow
 	if err != nil {
 		t.Fatalf("schemaVersion() error = %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("schemaVersion = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schemaVersion = %d, want 4", version)
 	}
 }
 
@@ -368,6 +389,11 @@ func TestMigrateMetricsKeysToIdentity_FailsWhenConflictingLegacyRowsExist(t *tes
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
 	defer store.Close()
+
+	// initSchema 已将 schema 升级到 v4；重置为 v2 让 MigrateMetricsKeysToIdentity 实际执行 v2→v3 迁移
+	if _, err := store.db.Exec("PRAGMA user_version = 2"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
 
 	legacyKey := GenerateMetricsKey("https://shared.example.com", "sk-shared")
 	now := time.Now().Unix()
@@ -451,8 +477,8 @@ func TestSchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schemaVersion() error = %v", err)
 	}
-	if version != 2 {
-		t.Fatalf("schemaVersion = %d, want 2", version)
+	if version != 4 {
+		t.Fatalf("schemaVersion = %d, want 4", version)
 	}
 }
 

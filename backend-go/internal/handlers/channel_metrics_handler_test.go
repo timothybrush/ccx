@@ -47,6 +47,12 @@ func (f *fakePersistenceStore) DeleteRecordsByMetricsKeys(metricsKeys []string, 
 func (f *fakePersistenceStore) DeleteCircuitStatesByMetricsKeys(metricsKeys []string, apiType string) (int64, error) {
 	return 0, nil
 }
+func (f *fakePersistenceStore) QueryCostReport(apiType string, since time.Time, groupBy string) ([]metrics.CostReportRow, error) {
+	return nil, nil
+}
+func (f *fakePersistenceStore) QueryModelCostBreakdown(apiType string, since time.Time, groupBy string, filterGroupKey string) ([]metrics.ModelCostBreakdownRow, error) {
+	return nil, nil
+}
 func (f *fakePersistenceStore) Close() error { return nil }
 
 // findBucketWithRequests 从补零后的桶序列中挑出带请求数据的桶。

@@ -206,6 +206,28 @@ func initSchema(db *sql.DB) error {
 		return fmt.Errorf("create composite index failed: %w", err)
 	}
 
+	// v4: 添加 proxy_key_mask 列（成本报表按用户维度分组）
+	var curVersion int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&curVersion); err != nil {
+		return fmt.Errorf("读取 schema 版本失败: %w", err)
+	}
+	if curVersion < 4 {
+		v4Migrations := []string{
+			"ALTER TABLE request_records ADD COLUMN proxy_key_mask TEXT NOT NULL DEFAULT ''",
+			"CREATE INDEX IF NOT EXISTS idx_records_proxy_key_mask ON request_records(proxy_key_mask)",
+			"PRAGMA user_version = 4",
+		}
+		for _, q := range v4Migrations {
+			if _, err := db.Exec(q); err != nil {
+				if strings.Contains(err.Error(), "duplicate column name") {
+					continue
+				}
+				return fmt.Errorf("migration v3->v4 failed: %w", err)
+			}
+		}
+		log.Printf("[SQLite-Migration] schema 升级: v3 -> v4 (添加 proxy_key_mask 列)")
+	}
+
 	return nil
 }
 
@@ -630,8 +652,8 @@ func (s *SQLiteStore) batchInsertRecords(records []PersistentRecord) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO request_records
 		(metrics_key, base_url, key_mask, timestamp, success, failure_class,
-		 input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, api_type, model)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, api_type, model, proxy_key_mask)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -645,7 +667,7 @@ func (s *SQLiteStore) batchInsertRecords(records []PersistentRecord) error {
 		}
 		_, err := stmt.Exec(
 			r.MetricsKey, r.BaseURL, r.KeyMask, r.Timestamp.Unix(), success, string(r.FailureClass),
-			r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.APIType, r.Model,
+			r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.APIType, r.Model, r.ProxyKeyMask,
 		)
 		if err != nil {
 			return err
@@ -659,7 +681,7 @@ func (s *SQLiteStore) batchInsertRecords(records []PersistentRecord) error {
 func (s *SQLiteStore) LoadRecords(since time.Time, apiType string) ([]PersistentRecord, error) {
 	rows, err := s.db.Query(`
 		SELECT metrics_key, base_url, key_mask, timestamp, success, failure_class,
-		       input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, model
+		       input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, model, proxy_key_mask
 		FROM request_records
 		WHERE timestamp >= ? AND api_type = ?
 		ORDER BY timestamp ASC
@@ -679,7 +701,7 @@ func (s *SQLiteStore) LoadRecords(since time.Time, apiType string) ([]Persistent
 
 		err := rows.Scan(
 			&r.MetricsKey, &r.BaseURL, &r.KeyMask, &ts, &success, &failureClass,
-			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens, &r.Model,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens, &r.Model, &r.ProxyKeyMask,
 		)
 		if err != nil {
 			return nil, err
@@ -1171,4 +1193,135 @@ func (s *SQLiteStore) requeueRecords(records []PersistentRecord, logPrefix strin
 	}
 
 	log.Printf("%s 警告: 写入缓冲区已满，丢弃 %d 条记录", logPrefix, len(records))
+}
+
+// CostReportRow 成本报表聚合行
+type CostReportRow struct {
+	GroupKey            string `json:"groupKey"`            // 分组键（user/model/channel/keyMask）
+	TotalRequests       int64  `json:"totalRequests"`       // 总请求数
+	SuccessCount        int64  `json:"successCount"`        // 成功数
+	InputTokens         int64  `json:"inputTokens"`         // 输入 Token
+	OutputTokens        int64  `json:"outputTokens"`        // 输出 Token
+	CacheCreationTokens int64  `json:"cacheCreationTokens"` // 缓存创建 Token
+	CacheReadTokens     int64  `json:"cacheReadTokens"`     // 缓存读取 Token
+}
+
+// QueryCostReport 按指定维度聚合成本数据。
+// groupBy 支持 "user"（按 proxy_key_mask）、"model"（按 model）、"key"（按 key_mask）。
+// 返回聚合行列表，按总请求数降序排列。
+func (s *SQLiteStore) QueryCostReport(apiType string, since time.Time, groupBy string) ([]CostReportRow, error) {
+	s.flushMu.Lock()
+	s.flushBufferLocked()
+	s.flushMu.Unlock()
+
+	var groupExpr string
+	switch groupBy {
+	case "user":
+		groupExpr = "proxy_key_mask"
+	case "model":
+		groupExpr = "model"
+	case "key":
+		groupExpr = "key_mask"
+	default:
+		groupExpr = "proxy_key_mask"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s AS group_key,
+			COUNT(*) AS total,
+			SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success_count,
+			SUM(input_tokens) AS input_tokens,
+			SUM(output_tokens) AS output_tokens,
+			SUM(cache_creation_tokens) AS cache_creation_tokens,
+			SUM(cache_read_tokens) AS cache_read_tokens
+		FROM request_records
+		WHERE api_type = ? AND timestamp >= ?
+		GROUP BY group_key
+		HAVING group_key <> ''
+		ORDER BY total DESC
+	`, groupExpr)
+
+	rows, err := s.db.Query(query, apiType, since.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("查询成本报表失败: %w", err)
+	}
+	defer rows.Close()
+
+	var results []CostReportRow
+	for rows.Next() {
+		var row CostReportRow
+		if err := rows.Scan(&row.GroupKey, &row.TotalRequests, &row.SuccessCount, &row.InputTokens, &row.OutputTokens, &row.CacheCreationTokens, &row.CacheReadTokens); err != nil {
+			return nil, fmt.Errorf("扫描成本报表结果失败: %w", err)
+		}
+		results = append(results, row)
+	}
+	return results, rows.Err()
+}
+
+// ModelCostBreakdownRow 按模型分组的 token 聚合行（用于成本计算）
+type ModelCostBreakdownRow struct {
+	Model               string `json:"model"`
+	InputTokens         int64  `json:"inputTokens"`
+	OutputTokens        int64  `json:"outputTokens"`
+	CacheCreationTokens int64  `json:"cacheCreationTokens"`
+	CacheReadTokens     int64  `json:"cacheReadTokens"`
+}
+
+// QueryModelCostBreakdown 按指定维度筛选后，再按 model 分组返回 token 明细。
+// 用于 handler 层计算 ListCostUSD / EffectiveCostUSD（需要逐模型定价）。
+// filterGroupKey 按 groupBy 对应列精确匹配；空字符串表示不过滤。
+func (s *SQLiteStore) QueryModelCostBreakdown(apiType string, since time.Time, groupBy string, filterGroupKey string) ([]ModelCostBreakdownRow, error) {
+	s.flushMu.Lock()
+	s.flushBufferLocked()
+	s.flushMu.Unlock()
+
+	var groupExpr string
+	switch groupBy {
+	case "user":
+		groupExpr = "proxy_key_mask"
+	case "model":
+		groupExpr = "model"
+	case "key":
+		groupExpr = "key_mask"
+	default:
+		groupExpr = "proxy_key_mask"
+	}
+
+	var whereExtra string
+	var args []interface{}
+	args = append(args, apiType, since.Unix())
+	if filterGroupKey != "" {
+		whereExtra = fmt.Sprintf(" AND %s = ?", groupExpr)
+		args = append(args, filterGroupKey)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			model,
+			SUM(input_tokens) AS input_tokens,
+			SUM(output_tokens) AS output_tokens,
+			SUM(cache_creation_tokens) AS cache_creation_tokens,
+			SUM(cache_read_tokens) AS cache_read_tokens
+		FROM request_records
+		WHERE api_type = ? AND timestamp >= ?%s
+		GROUP BY model
+		HAVING model <> ''
+	`, whereExtra)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("查询模型成本明细失败: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ModelCostBreakdownRow
+	for rows.Next() {
+		var row ModelCostBreakdownRow
+		if err := rows.Scan(&row.Model, &row.InputTokens, &row.OutputTokens, &row.CacheCreationTokens, &row.CacheReadTokens); err != nil {
+			return nil, fmt.Errorf("扫描模型成本明细失败: %w", err)
+		}
+		results = append(results, row)
+	}
+	return results, rows.Err()
 }

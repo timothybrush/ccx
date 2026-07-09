@@ -204,6 +204,33 @@ func (c *EnvConfig) IsValidProxyAccessKey(providedKey string) bool {
 	return false
 }
 
+// ProxyKeyMaskForRequest 返回匹配代理密钥的掩码标识，用于成本报表按用户维度分组。
+// 仅返回掩码（前4+后4），不存储明文，不做反查。
+// 返回空字符串表示 providedKey 为空或无匹配。
+func (c *EnvConfig) ProxyKeyMaskForRequest(providedKey string) string {
+	if providedKey == "" {
+		return ""
+	}
+	if secureCompare(providedKey, c.ProxyAccessKey) {
+		return maskKeyForIdentity(c.ProxyAccessKey)
+	}
+	for _, key := range c.ExtraProxyAccessKeys {
+		if secureCompare(providedKey, key) {
+			return maskKeyForIdentity(key)
+		}
+	}
+	return ""
+}
+
+// maskKeyForIdentity 生成用于聚合分组的 key 掩码。
+// 与 utils.MaskAPIKey 风格一致（前4+后4），但独立于 utils 包避免循环依赖。
+func maskKeyForIdentity(key string) string {
+	if len(key) <= 8 {
+		return strings.Repeat("*", len(key))
+	}
+	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
+}
+
 // IsValidAdminAccessKey 判断是否为有效管理访问密钥
 func (c *EnvConfig) IsValidAdminAccessKey(providedKey string) bool {
 	if providedKey == "" {

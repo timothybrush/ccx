@@ -15,6 +15,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/keypool"
 	"github.com/BenedictKing/ccx/internal/metrics"
+	"github.com/BenedictKing/ccx/internal/middleware"
 	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -444,11 +445,18 @@ func TryUpstreamWithAllKeys(
 			// 计算本次尝试的 metricsKey（与统计同源的身份指纹）
 			metricsKey := metrics.GenerateMetricsIdentityKey(currentBaseURL, apiKey, metricsServiceType)
 
-			// 创建 pending 状态日志（附带代理上下文与会话标识，用于 subagent 观测）
-			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, redirectedModel, originalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c), tryOpts.channelLogOptions...)
+			// 提取代理 Key 掩码（ProxyAuthMiddleware 写入 gin context），用于成本报表按用户维度分组
+			proxyKeyMask := middleware.GetProxyKeyMask(c)
+			logOpts := tryOpts.channelLogOptions
+			if proxyKeyMask != "" {
+				logOpts = append(logOpts, WithProxyKeyMask(proxyKeyMask))
+			}
 
-			// TCP 建连开始即计数：将活跃度统计提前到发起上游请求之前
-			requestID := metricsManager.RecordRequestConnected(currentBaseURL, apiKey, metricsServiceType, redirectedModel)
+			// 创建 pending 状态日志（附带代理上下文与会话标识，用于 subagent 观测）
+			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, redirectedModel, originalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c), logOpts...)
+
+			// TCP 建连开始即计数：将活跃度统计提前到发起上游请求之前；同时关联 proxyKeyMask 用于成本报表持久化
+			requestID := metricsManager.RecordRequestConnectedWithProxyKeyMask(currentBaseURL, apiKey, metricsServiceType, redirectedModel, proxyKeyMask)
 
 			lifecycleTrace := &RequestLifecycleTrace{
 				OnConnected: func() {

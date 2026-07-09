@@ -48,7 +48,8 @@ import type {
   AutopilotTraceStats,
   AutoAddChannelRequest,
   AutoAddChannelResponse,
-  ChannelAutoStatusResponse
+  ChannelAutoStatusResponse,
+  CostReportResponse
 } from './api-types'
 
 export * from './api-helpers'
@@ -1238,6 +1239,13 @@ export class ApiService {
   /** 查询渠道自动托管状态 */
   async getChannelAutoStatus(kind: string, channelId: number): Promise<ChannelAutoStatusResponse> {
     return this.request(`/${kind}/channels/${channelId}/auto-status`)
+  }
+
+  // ============== 成本报表 API（Phase 4 Item 2） ==============
+
+  /** 获取成本报表（按 user/model/key 分组） */
+  async getCostReport(groupBy: string = 'user', duration: string = '7d', apiType: string = 'messages'): Promise<CostReportResponse> {
+    return this.request(`/reports/cost?groupBy=${groupBy}&duration=${duration}&type=${apiType}`)
   }
 
 }

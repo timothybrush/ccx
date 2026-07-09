@@ -1124,3 +1124,24 @@ export interface ProfileChangelogResponse {
   events: ProfileChangeEvent[]
   total: number
 }
+
+// ============== 成本报表（Phase 4 Item 2） ==============
+
+export interface CostReportRow {
+  groupKey: string
+  totalRequests: number
+  successCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheCreationTokens: number
+  cacheReadTokens: number
+  listCostUSD: number
+  effectiveCostUSD: number
+}
+
+export interface CostReportResponse {
+  groupBy: 'user' | 'model' | 'key'
+  apiType: string
+  duration: string
+  rows: CostReportRow[]
+}

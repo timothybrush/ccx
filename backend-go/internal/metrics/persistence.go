@@ -39,6 +39,12 @@ type PersistenceStore interface {
 	// DeleteCircuitStatesByMetricsKeys 按 metrics_key 和 api_type 批量删除熔断状态
 	DeleteCircuitStatesByMetricsKeys(metricsKeys []string, apiType string) (int64, error)
 
+	// QueryCostReport 按指定维度聚合成本数据（Phase 4 Item 2: 成本报表）
+	QueryCostReport(apiType string, since time.Time, groupBy string) ([]CostReportRow, error)
+
+	// QueryModelCostBreakdown 按维度筛选后再按 model 分组返回 token 明细（用于逐模型定价计算）
+	QueryModelCostBreakdown(apiType string, since time.Time, groupBy string, filterGroupKey string) ([]ModelCostBreakdownRow, error)
+
 	// Close 关闭存储（会先刷新缓冲区）
 	Close() error
 }
@@ -80,4 +86,5 @@ type PersistentRecord struct {
 	CacheReadTokens     int64        // 缓存读取 Token
 	Model               string       // 请求模型
 	APIType             string       // "messages"、"responses"、"gemini" 或 "chat"
+	ProxyKeyMask        string       // 代理 Key 掩码（用于成本报表按用户分组，由 ProxyAuthMiddleware 写入）
 }

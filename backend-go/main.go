@@ -1071,6 +1071,18 @@ func main() {
 		apiGroup.DELETE("/conversations/:id/override", handlers.RemoveConversationOverride(convDeps))
 		apiGroup.GET("/conversations/settings", handlers.GetConversationSettings(convDeps))
 		apiGroup.PUT("/conversations/settings", handlers.UpdateConversationSettings(convDeps))
+
+		// Phase 4 Item 2: 成本报表 API（按 user/model/key 分组聚合）
+		apiGroup.GET("/reports/cost", handlers.GetCostReport(&handlers.CostReportDeps{
+			MetricsManagers: map[string]*metrics.MetricsManager{
+				"messages":  messagesMetricsManager,
+				"responses": responsesMetricsManager,
+				"chat":      chatMetricsManager,
+				"gemini":    geminiMetricsManager,
+				"images":    imagesMetricsManager,
+				"vectors":   vectorsMetricsManager,
+			},
+		}))
 	}
 
 	// 代理端点 - Messages API

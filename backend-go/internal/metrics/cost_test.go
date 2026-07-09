@@ -60,3 +60,28 @@ func TestCalculateTokenCostUSD_CachePricingFallback(t *testing.T) {
 		t.Fatalf("expected 4 USD, got %v", cost)
 	}
 }
+
+func TestApplyEffectiveCostMultiplier(t *testing.T) {
+	tests := []struct {
+		name       string
+		listCost   float64
+		multiplier float64
+		want       float64
+	}{
+		{name: "no multiplier (0)", listCost: 10.0, multiplier: 0, want: 10.0},
+		{name: "no multiplier (negative)", listCost: 10.0, multiplier: -1, want: 10.0},
+		{name: "identity multiplier (1.0)", listCost: 10.0, multiplier: 1.0, want: 10.0},
+		{name: "discount (0.8)", listCost: 10.0, multiplier: 0.8, want: 8.0},
+		{name: "surcharge (1.5)", listCost: 10.0, multiplier: 1.5, want: 15.0},
+		{name: "zero cost", listCost: 0, multiplier: 1.5, want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ApplyEffectiveCostMultiplier(tt.listCost, tt.multiplier)
+			if math.Abs(got-tt.want) > 0.0001 {
+				t.Fatalf("ApplyEffectiveCostMultiplier(%v, %v) = %v, want %v", tt.listCost, tt.multiplier, got, tt.want)
+			}
+		})
+	}
+}

@@ -79,3 +79,14 @@ func selectPricingTier(tiers []config.ModelPricingTier, inputTokens int64) *conf
 	}
 	return nil
 }
+
+// ApplyEffectiveCostMultiplier 将官方价（list price）按实际成本倍率换算为 EffectiveCostUSD。
+// multiplier 来自 autopilot.KeyEndpointProfile.CostProfile.EffectiveCostMultiplier，由调用方传入，
+// metrics 包本身不反向依赖 autopilot（保持现有分层约束）。
+// multiplier <= 0 或 == 1.0 时返回原始 listCostUSD（无折扣/无加价）。
+func ApplyEffectiveCostMultiplier(listCostUSD float64, multiplier float64) float64 {
+	if multiplier <= 0 || multiplier == 1.0 {
+		return listCostUSD
+	}
+	return listCostUSD * multiplier
+}

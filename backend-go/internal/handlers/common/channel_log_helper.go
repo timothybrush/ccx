@@ -22,6 +22,17 @@ func GenerateRequestID() string {
 // ChannelLogOption 为 pending 渠道日志补充可选观测字段。
 type ChannelLogOption func(*metrics.ChannelLog)
 
+// WithProxyKeyMask 将代理 Key 掩码写入 pending 渠道日志。
+// 由 ProxyAuthMiddleware 写入 gin context，upstream_failover 提取后通过此选项传入。
+func WithProxyKeyMask(mask string) ChannelLogOption {
+	return func(log *metrics.ChannelLog) {
+		if log == nil || mask == "" {
+			return
+		}
+		log.ProxyKeyMask = mask
+	}
+}
+
 // WithChannelSelectionTrace 记录本次渠道选择的可解释性摘要。
 func WithChannelSelectionTrace(reason, summary string) ChannelLogOption {
 	reason = strings.TrimSpace(reason)

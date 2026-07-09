@@ -48,6 +48,9 @@ type ChannelLog struct {
 	ParentThreadID  string `json:"parentThreadId,omitempty"`  // Codex parent thread id
 	AgentConfidence string `json:"agentConfidence,omitempty"` // exact | heuristic
 	SessionID       string `json:"sessionId,omitempty"`       // 扁平化会话标识（用于驾驶舱关联）
+
+	// 代理 Key 掩码（用于成本报表按用户维度分组，由 ProxyAuthMiddleware 写入 gin context）
+	ProxyKeyMask string `json:"proxyKeyMask,omitempty"`
 }
 
 const (
