@@ -22,6 +22,14 @@
         >
           {{ t('subscription.add') }}
         </v-btn>
+        <v-btn
+          variant="tonal"
+          color="primary"
+          prepend-icon="mdi-connection"
+          @click="showNewApiDialog = true"
+        >
+          {{ t('subscription.newApi.connect') }}
+        </v-btn>
       </div>
     </div>
 
@@ -200,6 +208,27 @@
       </v-card>
     </v-dialog>
 
+    <!-- new-api 接入 dialog -->
+    <v-dialog v-model="showNewApiDialog" max-width="700">
+      <v-card class="pa-4">
+        <v-card-title class="text-h5 mb-2">
+          {{ t('subscription.newApi.connect') }}
+        </v-card-title>
+        <v-card-text>
+          <NewApiSubscriptionForm
+            @created="handleNewApiCreated"
+            @error="handleNewApiError"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showNewApiDialog = false">
+            {{ t('app.actions.close') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Snackbar -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000">
       {{ snackbar.message }}
@@ -212,7 +241,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
 import SubscriptionPlanTable from '@/components/SubscriptionPlanTable.vue'
-import type { SubscriptionItem, SubscriptionCreateRequest, SubscriptionUpdateRequest } from '@/services/api-types'
+import NewApiSubscriptionForm from '@/components/NewApiSubscriptionForm.vue'
+import type {
+  SubscriptionItem,
+  SubscriptionCreateRequest,
+  SubscriptionUpdateRequest,
+  NewApiProvisionResponse,
+} from '@/services/api-types'
 
 const { t } = useI18n()
 
@@ -222,6 +257,7 @@ const saving = ref(false)
 const deleting = ref(false)
 const showDialog = ref(false)
 const showDeleteDialog = ref(false)
+const showNewApiDialog = ref(false)
 const editingSubscription = ref<SubscriptionItem | null>(null)
 const deletingSubscription = ref<SubscriptionItem | null>(null)
 
@@ -406,6 +442,19 @@ async function handleRefresh(item: SubscriptionItem) {
 
 function showSnackbar(message: string, color: string) {
   snackbar.value = { show: true, message, color }
+}
+
+async function handleNewApiCreated(result: NewApiProvisionResponse) {
+  showNewApiDialog.value = false
+  const suffix = result.discoveryStarted
+    ? t('subscription.newApi.discoveryStarted')
+    : ''
+  showSnackbar(`${t('subscription.newApi.provisionSuccess')} ${suffix}`.trim(), 'success')
+  await fetchSubscriptions()
+}
+
+function handleNewApiError(message: string) {
+  showSnackbar(message, 'error')
 }
 
 onMounted(fetchSubscriptions)

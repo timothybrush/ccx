@@ -55,7 +55,11 @@ import type {
   ChannelAutoStatusResponse,
   CostReportResponse,
   ABTestResultsResponse,
-  ABTestEmergencyStopResponse
+  ABTestEmergencyStopResponse,
+  NewApiVerifyRequest,
+  NewApiVerifyResponse,
+  NewApiProvisionRequest,
+  NewApiProvisionResponse
 } from './api-types'
 
 export * from './api-helpers'
@@ -1202,6 +1206,22 @@ export class ApiService {
   async refreshSubscription(uid: string): Promise<{ subscription: SubscriptionItem; refreshResult: { success: boolean; balance: number; currency: string; errorMessage: string } }> {
     return this.request(`/subscriptions/${encodeURIComponent(uid)}/refresh`, {
       method: 'POST',
+    })
+  }
+
+  /** 校验 new-api 令牌并预览账户/分组/模型（不落库） */
+  async verifyNewApiSubscription(data: NewApiVerifyRequest): Promise<NewApiVerifyResponse> {
+    return this.request('/subscriptions/newapi/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  /** 完整接入 new-api：建 profile + 建 key + 建渠道 + 触发 Discovery */
+  async provisionNewApiSubscription(data: NewApiProvisionRequest): Promise<NewApiProvisionResponse> {
+    return this.request('/subscriptions/newapi/provision', {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 

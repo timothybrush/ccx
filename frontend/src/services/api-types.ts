@@ -963,6 +963,54 @@ export interface SubscriptionUpdateRequest {
   autoRefreshEnabled?: boolean
 }
 
+// ============== new-api 订阅集成类型（§8.5.1） ==============
+
+export interface NewApiVerifyRequest {
+  baseUrl: string
+  accessToken: string
+  userId?: string
+  authTokenMode?: string
+  displayName?: string
+  subscriptionUid?: string
+}
+
+export interface NewApiVerifyResponse {
+  username: string
+  userId: number
+  quota: number
+  usedQuota: number
+  groups: Record<string, number>
+  availableModels: string[]
+  suggestedOriginType: string
+  suggestedOriginTier: string
+  accessTokenMasked: string
+}
+
+export interface NewApiProvisionRequest {
+  subscriptionUid: string
+  displayName: string
+  baseUrl: string
+  accessToken: string
+  channelKind: string
+  userId?: string
+  authTokenMode?: string
+  channelName?: string
+  provisionKeyName?: string
+  provisionGroup?: string
+  provisionModels?: string[]
+  notes?: string
+}
+
+export interface NewApiProvisionResponse {
+  subscription: SubscriptionItem
+  channelUid: string
+  channelIndex: number
+  provisionedKey: string
+  provisionedTokenId: number
+  reused: boolean
+  discoveryStarted: boolean
+}
+
 // ============== 驾驶舱类型 ==============
 
 export interface CockpitHealthSummary {
