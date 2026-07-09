@@ -3546,14 +3546,21 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 
 ### Phase 4：高级特性
 
+**Phase 4 状态（2026-07-09，全部完成）**：8 项全部实现并接入真实链路，均遵循"默认关闭 + 显式 opt-in"安全守则。
+
 **范围**：
-- [ ] 多维度标签系统扩展（用户自定义标签）
-- [ ] A/B 测试：同一请求走不同渠道对比
-- [ ] 成本报表：按用户/模型/渠道/key 统计真实有效成本
-- [ ] 订阅中心 provider adapter：可选自动刷新余额/套餐状态
-- [ ] 本地任务模板：用户显式配置可本地预处理/摘要的固定模板
-- [ ] 批量渠道管理（导入/导出/模板）
-- [ ] 渠道推荐：根据使用模式推荐新渠道
+- [x] 多维度标签系统扩展（用户自定义标签）——Item 1
+- [x] 成本报表：按用户/模型/渠道/key 统计真实有效成本——Item 2（新增 `proxyKeyMask` 身份贯穿链路：`middleware.GetProxyKeyMask` → `ChannelLog`/`RequestRecord` → SQLite `proxy_key_mask` 列，供 Item 4 复用）
+- [x] SLO regression 自动回滚——Item 3（默认关闭；`SLORollbackConfig`，连续 degrading 窗口数默认 3，不做自动恢复以避免震荡）
+- [x] 渠道推荐：根据使用模式推荐新渠道——Item 4
+- [x] 批量渠道管理（导入/导出/模板）——Item 5
+- [x] 订阅中心 provider adapter：可选自动刷新余额/套餐状态——Item 6（默认关闭；仅 openai/anthropic/google 且显式填写 BillingAPIKey 的订阅生效，中转/公益渠道继续手动维护）
+- [x] 本地任务模板：用户显式配置可本地预处理/摘要的固定模板——Item 7
+- [x] A/B 测试：低比例统计抽样双发——Item 8（默认关闭，默认 1% 抽样 + 每小时 60 次硬预算；主请求路径不受影响，影子请求在主响应返回后异步发起）
+
+**关键实现说明**：
+- Item 3/6/8 均在 `AutopilotRoutingConfig` 新增独立配置块（`SLORollback`/`SubscriptionAutoRefresh`/`ABTest`），`Validate()` 统一做负值/越界兜底，保持与既有字段一致的防御模式。
+- Item 4 直接复用 Item 2 的 `proxyKeyMask` 身份标记，未重新发明身份识别机制。
 
 ---
 
