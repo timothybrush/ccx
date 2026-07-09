@@ -799,3 +799,436 @@ export interface HealthResponse {
   mode: string
   timestamp: string
 }
+
+// ============== 健康中心（Health Center）==============
+
+export type HealthState = 'unknown' | 'healthy' | 'degraded' | 'limited' | 'misconfigured' | 'dead'
+
+export interface HealthCenterOverview {
+  totalChannels: number
+  totalEndpoints: number
+  stateCounts: Record<HealthState, number>
+}
+
+export interface ChannelHealthItem {
+  channelUid: string
+  channelId: number
+  channelKind: string
+  channelName?: string
+  aggState: HealthState
+  endpointCount: number
+  healthyCount: number
+  degradedCount: number
+  limitedCount: number
+  deadCount: number
+  unknownCount: number
+  avgSuccessRate?: number
+  originTier?: 'first' | 'second' | 'third' | 'unknown'
+  poolTag?: 'free' | 'temp' | ''
+}
+
+export interface HealthCenterChannelsResponse {
+  channels: ChannelHealthItem[]
+}
+
+export interface EndpointDetailItem {
+  endpointUid: string
+  channelUid: string
+  channelKind: string
+  baseUrl: string
+  keyHash: string
+  healthState: HealthState
+  healthConfidence: number
+  healthEvidence?: string
+  suggestedAction?: string
+  qualityTier?: string
+  stabilityTier?: string
+  speedTier?: string
+  successRate15m?: number
+  successRate1h?: number
+  p95LatencyMs?: number
+  consecutiveFail: number
+  lastSuccessAt?: string
+  updatedAt?: string
+}
+
+export interface HealthCenterEndpointsResponse {
+  channelUid: string
+  endpoints: EndpointDetailItem[]
+}
+
+export type ProfileChangeEventType =
+  | 'profile_updated'
+  | 'health_changed'
+  | 'discovery_completed'
+  | 'auto_mapping_applied'
+
+export interface ProfileChangeEvent {
+  eventUid: string
+  channelUid: string
+  channelKind: string
+  endpointUid?: string
+  metricsKey?: string
+  eventType: ProfileChangeEventType
+  summary: string
+  oldValue?: string
+  newValue?: string
+  createdAt: string
+}
+
+export interface ProfileChangelogResponse {
+  events: ProfileChangeEvent[]
+  total: number
+}
+
+// ============== 订阅中心（Subscription Center）==============
+
+export interface SubscriptionItem {
+  subscriptionUid: string
+  displayName: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  linkedChannelUids?: string[]
+  source?: string
+  confidence?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  archivedAt?: string
+  billingApiKey?: string
+  autoRefreshEnabled?: boolean
+  autoRefreshSupported?: boolean
+  lastBalanceRefreshAt?: string
+  lastBalanceRefreshError?: string
+}
+
+export interface SubscriptionsListResponse {
+  subscriptions: SubscriptionItem[]
+  total: number
+}
+
+export interface SubscriptionCreateRequest {
+  subscriptionUid: string
+  displayName: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  notes?: string
+  source?: string
+  billingApiKey?: string
+  autoRefreshEnabled?: boolean
+}
+
+export interface SubscriptionUpdateRequest {
+  displayName?: string
+  provider?: string
+  originType?: string
+  originTier?: string
+  billingMode?: string
+  currency?: string
+  balance?: number
+  groupMultipliers?: Record<string, number>
+  rechargeMultiplier?: number
+  notes?: string
+  source?: string
+  confidence?: number
+  billingApiKey?: string
+  autoRefreshEnabled?: boolean
+}
+
+// ============== new-api 订阅接入类型 ==============
+
+export interface NewApiVerifyRequest {
+  baseUrl: string
+  accessToken: string
+  userId?: string
+  authTokenMode?: string
+  displayName?: string
+  subscriptionUid?: string
+}
+
+export interface NewApiVerifyResponse {
+  username: string
+  userId: number
+  quota: number
+  usedQuota: number
+  groups: Record<string, number>
+  availableModels: string[]
+  suggestedOriginType: string
+  suggestedOriginTier: string
+  accessTokenMasked: string
+}
+
+export interface NewApiProvisionRequest {
+  subscriptionUid: string
+  displayName: string
+  baseUrl: string
+  accessToken: string
+  channelKind: string
+  userId?: string
+  authTokenMode?: string
+  channelName?: string
+  provisionKeyName?: string
+  provisionGroup?: string
+  provisionModels?: string[]
+  notes?: string
+}
+
+export interface NewApiProvisionResponse {
+  subscription: SubscriptionItem
+  channelUid: string
+  channelIndex: number
+  provisionedKey: string
+  provisionedTokenId: number
+  reused: boolean
+  discoveryStarted: boolean
+}
+
+// ============== 驾驶舱（Cockpit）类型 ==============
+
+export interface CockpitHealthSummary {
+  totalChannels: number
+  totalEndpoints: number
+  stateCounts: Record<string, number>
+}
+
+export interface CockpitSubscriptionSummary {
+  total: number
+  balanceByCode: Record<string, number>
+  countByMode: Record<string, number>
+  countByTier: Record<string, number>
+}
+
+export interface CockpitLocalRuntimeSummary {
+  total: number
+  statusCounts: Record<string, number>
+  totalModels: number
+}
+
+export interface CockpitManualIntentSummary {
+  activeCount: number
+  totalCount: number
+}
+
+export interface CockpitTodoItem {
+  endpointUid: string
+  channelUid: string
+  channelKind: string
+  baseUrl: string
+  healthState: string
+  suggestedAction: string
+}
+
+export interface CockpitOverviewResponse {
+  health: CockpitHealthSummary
+  subscriptions: CockpitSubscriptionSummary
+  localRuntimes: CockpitLocalRuntimeSummary
+  manualIntents: CockpitManualIntentSummary
+  todoItems: CockpitTodoItem[]
+}
+
+// ============== 渠道推荐类型 ==============
+
+export interface ChannelRecommendation {
+  proxyKeyMask: string
+  domain: string
+  domainUsageCount: number
+  currentChannelUid: string
+  currentScore: number
+  recommendedChannelUid: string
+  recommendedScore: number
+  scoreDelta: number
+  reason: string
+}
+
+export interface RecommendationsResponse {
+  proxyKeyMask?: string
+  recommendations: ChannelRecommendation[]
+}
+
+// ============== 人工路由意图（试用意图）类型 ==============
+
+/** 人工路由意图的类型 */
+export type ManualIntentType = 'model_trial' | 'channel_trial' | 'endpoint_trial' | 'session_pin'
+
+/** 人工路由意图的生命周期状态 */
+export type ManualIntentStatus = 'active' | 'expired' | 'exhausted' | 'disabled'
+
+/** 意图作用范围的任务类别 */
+export type ManualIntentTaskClass =
+  | 'supervisor'
+  | 'worker'
+  | 'lightweight'
+  | 'vision'
+  | 'long_context'
+  | 'image_generation'
+  | 'embedding'
+
+/** 试用结果统计（Phase 1 shadow：仅记录统计，不影响真实调度） */
+export interface TrialResult {
+  hitCount: number
+  successCount: number
+  failureCount: number
+  totalLatencyMs?: number
+  avgLatencyMs: number
+  fallbackCount?: number
+  estimatedCost?: number
+}
+
+/** POST /api/manual-intents 请求体 */
+export interface CreateIntentRequest {
+  name?: string
+  intentType: ManualIntentType
+  channelKind: string
+  channelUid?: string
+  metricsKey?: string
+  model?: string
+  mappedModel?: string
+  agentRoles?: string[]
+  taskClasses?: ManualIntentTaskClass[]
+  sessionId?: string
+  trafficPercent?: number
+  expiresAt?: string
+  ttlMinutes?: number
+  maxRequests?: number
+  maxEstimatedCost?: number
+  fallbackOnFailure?: boolean
+  requireHardConstraints: boolean
+  createdBy?: string
+  reason?: string
+}
+
+/** 人工路由意图（试用意图）完整记录 */
+export interface ManualRoutingIntent {
+  intentUid: string
+  name?: string
+  intentType: ManualIntentType
+  channelKind: string
+  channelUid?: string
+  metricsKey?: string
+  model?: string
+  mappedModel?: string
+  agentRoles?: string[]
+  taskClasses?: ManualIntentTaskClass[]
+  sessionId?: string
+  trafficPercent?: number
+  expiresAt: string
+  maxRequests?: number
+  maxEstimatedCost?: number
+  fallbackOnFailure?: boolean
+  requireHardConstraints: boolean
+  createdBy?: string
+  createdAt: string
+  reason?: string
+  status: ManualIntentStatus
+  trialResult: TrialResult
+}
+
+/** GET /api/manual-intents 列表响应 */
+export interface IntentListResponse {
+  intents: ManualRoutingIntent[]
+  total: number
+}
+
+// ============== Autopilot 智能路由类型 ==============
+
+export type AutopilotMode = 'off' | 'shadow' | 'assist' | 'auto'
+
+export interface SmartRoutingConfig {
+  mode: AutopilotMode
+  killSwitchActive: boolean
+  costPreference: string
+  l2ProbeEnabled?: boolean
+}
+
+export interface CandidateScore {
+  dimension: string
+  score: number
+  weight: number
+}
+
+export interface RoutingCandidate {
+  channelUid: string
+  metricsKey?: string
+  originTier?: string
+  channelKind?: string
+  healthState?: string
+  totalScore: number
+  scores?: CandidateScore[]
+  selected: boolean
+  filterReasons?: string[]
+}
+
+export interface RoutingDecisionTrace {
+  traceUid: string
+  requestKind: string
+  taskClass: string
+  taskDomain?: string
+  requestedModel?: string
+  agentRole?: string
+  candidates: RoutingCandidate[]
+  candidatesBefore: number
+  candidatesAfter: number
+  globalFilterReasons?: Record<string, string[]>
+  sortReasons?: string[]
+  selectedChannelUid?: string
+  selectedMetricsKey?: string
+  selectedOriginTier?: string
+  estimatedCost?: number
+  costConfidence?: number
+  fallbackUsed: boolean
+  shadowChannelUid?: string
+  actualChannelUid?: string
+  match: boolean
+  mode: 'off' | 'shadow' | 'assist' | 'auto' | 'active' | 'dry_run'
+  durationMs: number
+  createdAt: string
+}
+
+export interface AutopilotTraceListResponse {
+  traces: RoutingDecisionTrace[]
+  total: number
+}
+
+export interface AutopilotTraceStats {
+  totalCount: number
+  mismatchCount: number
+  mismatchRate: number
+  taskClassDist: Record<string, number>
+  modeDist: Record<string, number>
+}
+
+// ============== Admin API 端点路径常量 ==============
+
+export const HEALTH_CENTER_OVERVIEW_PATH = '/api/health-center/overview'
+export const HEALTH_CENTER_CHANNELS_PATH = '/api/health-center/channels'
+export const healthCenterChannelEndpointsPath = (channelUid: string) =>
+  `/api/health-center/channels/${encodeURIComponent(channelUid)}/endpoints`
+export const HEALTH_CENTER_CHANGELOG_PATH = '/api/health-center/changelog'
+export const HEALTH_CENTER_EVENTS_WS_PATH = '/api/health-center/events'
+
+export const SUBSCRIPTIONS_PATH = '/api/subscriptions'
+export const subscriptionPath = (uid: string) => `/api/subscriptions/${encodeURIComponent(uid)}`
+export const NEWAPI_VERIFY_PATH = '/api/subscriptions/newapi/verify'
+export const NEWAPI_PROVISION_PATH = '/api/subscriptions/newapi/provision'
+
+export const COCKPIT_OVERVIEW_PATH = '/api/cockpit/overview'
+
+export const MANUAL_INTENTS_PATH = '/api/manual-intents'
+export const manualIntentPath = (uid: string) => `/api/manual-intents/${encodeURIComponent(uid)}`
+
+export const AUTOPILOT_RECOMMENDATIONS_PATH = '/api/autopilot/recommendations'
+export const SMART_ROUTING_CONFIG_PATH = '/api/smart-routing/config'
+export const AUTOPILOT_TRACES_PATH = '/api/traces'
+export const AUTOPILOT_TRACE_STATS_PATH = '/api/traces/stats'

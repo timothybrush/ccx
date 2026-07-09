@@ -23,7 +23,9 @@ import {
   Sparkles,
   Sun,
   Moon,
-  Loader2
+  Loader2,
+  HeartPulse,
+  Gauge
 } from 'lucide-vue-next'
 import type { TabValue } from '@/types'
 
@@ -96,6 +98,8 @@ const menuItems = computed<MenuItem[]>(() => [
   { id: 'env', label: t('nav.env'), icon: Sliders, desc: t('nav.envDesc') },
   { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, desc: t('nav.dashboardDesc') },
   { id: 'cockpit', label: t('nav.cockpit'), icon: Kanban, desc: t('nav.cockpitDesc') },
+  { id: 'health', label: t('nav.health'), icon: HeartPulse, desc: t('nav.healthDesc') },
+  { id: 'autopilot', label: t('nav.autopilot'), icon: Gauge, desc: t('nav.autopilotDesc') },
 ])
 
 const primaryMenuItems = computed(() => menuItems.value.slice(0, 5))
