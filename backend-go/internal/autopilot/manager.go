@@ -151,6 +151,10 @@ type Manager struct {
 	// Phase 3B-2：模型自动映射器（用于 resolveMappedModel + ResolveModelSupport）
 	modelResolver *ModelResolver
 
+	// Phase 4 Item 8：A/B 测试（低比例统计抽样双发）
+	abTestStore   *ABTestStore
+	abTestSampler *ABTestSampler
+
 	cancel func()
 	wg     sync.WaitGroup
 }
@@ -503,6 +507,26 @@ func (m *Manager) ProbeWorker() *ProbeWorker {
 // SetProbeWorker 设置 ProbeWorker（由 main.go 在 NewManager 后调用）。
 func (m *Manager) SetProbeWorker(pw *ProbeWorker) {
 	m.probeWorker = pw
+}
+
+// ABTestSampler 返回内部 ABTestSampler 引用。
+func (m *Manager) ABTestSampler() *ABTestSampler {
+	return m.abTestSampler
+}
+
+// SetABTestSampler 设置 ABTestSampler（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetABTestSampler(s *ABTestSampler) {
+	m.abTestSampler = s
+}
+
+// ABTestStore 返回内部 ABTestStore 引用。
+func (m *Manager) ABTestStore() *ABTestStore {
+	return m.abTestStore
+}
+
+// SetABTestStore 设置 ABTestStore（由 main.go 在 NewManager 后调用）。
+func (m *Manager) SetABTestStore(s *ABTestStore) {
+	m.abTestStore = s
 }
 
 // ResolveAPIKey 根据 channelUID + keyHash 反查明文 API Key，供 ProbeWorker.APIKeyResolver 使用。
