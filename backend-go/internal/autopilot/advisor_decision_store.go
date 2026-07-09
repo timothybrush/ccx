@@ -31,6 +31,7 @@ type AdvisorDecisionRecord struct {
 	Applied         bool               `json:"applied"`
 
 	Outcome              string    `json:"outcome"`                    // matched | fallback | user_override | upstream_error | timeout
+	Reason               string    `json:"reason,omitempty"`           // slo_regression | manual | 自动回滚触发原因
 	MisrouteSeverity     string    `json:"misrouteSeverity,omitempty"` // none | minor | major | critical
 	LatencyMs            int64     `json:"latencyMs"`
 	EstimatedAdvisorCost float64   `json:"estimatedAdvisorCost,omitempty"`
@@ -112,6 +113,7 @@ CREATE TABLE IF NOT EXISTS autopilot_advisor_decisions (
     misroute_severity   TEXT    NOT NULL DEFAULT '',
     latency_ms          INTEGER NOT NULL DEFAULT 0,
     estimated_advisor_cost REAL NOT NULL DEFAULT 0,
+    reason              TEXT    NOT NULL DEFAULT '',
     created_at          TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_advisor_decisions_created
@@ -130,7 +132,7 @@ func (s *AdvisorDecisionStore) loadAll() error {
 		       mode, task_class, prompt_hash, input_token_bucket,
 		       hint_json, default_plan_hash, applied,
 		       outcome, misroute_severity, latency_ms, estimated_advisor_cost,
-		       created_at
+		       reason, created_at
 		FROM autopilot_advisor_decisions
 		ORDER BY created_at ASC`)
 	if err != nil {
@@ -162,7 +164,7 @@ func (s *AdvisorDecisionStore) loadAll() error {
 // scanDecisionRow 扫描一行并返回 AdvisorDecisionRecord。
 func scanDecisionRow(rows *sql.Rows) (*AdvisorDecisionRecord, error) {
 	var rec AdvisorDecisionRecord
-	var requestUID, promptHash, defaultPlanHash, outcome, misrouteSeverity sql.NullString
+	var requestUID, promptHash, defaultPlanHash, outcome, misrouteSeverity, reason sql.NullString
 	var hintJSON string
 	var applied int
 	var createdAt string
@@ -172,7 +174,7 @@ func scanDecisionRow(rows *sql.Rows) (*AdvisorDecisionRecord, error) {
 		&rec.Mode, &rec.TaskClass, &promptHash, &rec.InputTokenBucket,
 		&hintJSON, &defaultPlanHash, &applied,
 		&outcome, &misrouteSeverity, &rec.LatencyMs, &rec.EstimatedAdvisorCost,
-		&createdAt,
+		&reason, &createdAt,
 	)
 	if err != nil {
 		return nil, err
@@ -189,6 +191,9 @@ func scanDecisionRow(rows *sql.Rows) (*AdvisorDecisionRecord, error) {
 	rec.Outcome = outcome.String
 	if misrouteSeverity.Valid {
 		rec.MisrouteSeverity = misrouteSeverity.String
+	}
+	if reason.Valid {
+		rec.Reason = reason.String
 	}
 	rec.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 
@@ -311,8 +316,8 @@ INSERT INTO autopilot_advisor_decisions
      mode, task_class, prompt_hash, input_token_bucket,
      hint_json, default_plan_hash, applied,
      outcome, misroute_severity, latency_ms, estimated_advisor_cost,
-     created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     reason, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(decision_uid) DO UPDATE SET
     outcome            = excluded.outcome,
     misroute_severity  = excluded.misroute_severity,
@@ -334,6 +339,7 @@ ON CONFLICT(decision_uid) DO UPDATE SET
 		rec.MisrouteSeverity,
 		rec.LatencyMs,
 		rec.EstimatedAdvisorCost,
+		rec.Reason,
 		rec.CreatedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {

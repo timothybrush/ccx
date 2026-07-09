@@ -645,7 +645,11 @@ func (m *Manager) collectAll() {
 	var profiled, diagnosed int
 	var allProfiles []*KeyEndpointProfile
 	// 读取 StabilityTier 滞后窗口配置（单次读取，避免循环内反复加锁）
-	stabilityHysteresisWindows := m.cfgManager.GetAutopilotRouting().HealthCheck.StabilityHysteresisWindows
+	routingCfg := m.cfgManager.GetAutopilotRouting()
+	stabilityHysteresisWindows := routingCfg.HealthCheck.StabilityHysteresisWindows
+	// Phase 4 Item 3: SLO regression 自动回滚配置
+	sloRollbackCfg := routingCfg.SLORollback
+	channelDegrading := make(map[string]bool) // channelUID -> 是否存在 degrading endpoint
 	for _, entry := range entries {
 		for _, apiKey := range entry.APIKeys {
 			profile := m.profiler.DeriveEndpointProfile(
@@ -696,6 +700,11 @@ func (m *Manager) collectAll() {
 				// 仅在有数据时附加趋势（避免空桶浪费 JSON 空间）
 				if trend.Direction != TrendStable || len(trend.HourlyPattern) > 0 {
 					profile.QualityTrend = &trend
+				}
+
+				// Phase 4 Item 3: 渠道级 degrading 聚合（任一 endpoint degrading 即计为渠道 degrading）
+				if trend.Direction == TrendDegrading {
+					channelDegrading[entry.ChannelUID] = true
 				}
 			}
 
@@ -754,6 +763,34 @@ func (m *Manager) collectAll() {
 			// 收集指针用于订阅级能力推导
 			p := profile
 			allProfiles = append(allProfiles, &p)
+		}
+
+		// ── Phase 4 Item 3: SLO regression 自动回滚检查 ──
+		// 双门控：SLO Rollback 开关必须开启 + advisor 当前状态必须为 active。
+		if sloRollbackCfg.Enabled && m.advisor != nil {
+			isDegrading := channelDegrading[entry.ChannelUID]
+			rollbackChannelUID := m.advisor.CheckAndApplySLORollback(
+				entry.ChannelUID,
+				isDegrading,
+				sloRollbackCfg.ConsecutiveWindows,
+			)
+			if rollbackChannelUID != "" {
+				// 记录回滚决策
+				if m.advisorStore != nil {
+					rec := &AdvisorDecisionRecord{
+						AdvisorUID:       rollbackChannelUID,
+						AdvisorOriginTier: "slo_regression",
+						Mode:             AdvisorStateRolledBack,
+						TaskClass:        "slo_regression",
+						Applied:          true,
+						Outcome:          "rolled_back",
+						Reason:           "slo_regression",
+					}
+					if err := m.advisorStore.Record(rec); err != nil {
+						log.Printf("[Autopilot-Worker] 警告: SLO 回滚决策记录失败: %v", err)
+					}
+				}
+			}
 		}
 	}
 

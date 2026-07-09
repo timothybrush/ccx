@@ -292,3 +292,149 @@ func (m *mockBackend) Generate(input AdvisorInput) (*TrustedRoutingHint, error) 
 }
 
 func (m *mockBackend) BackendType() string { return "mock" }
+
+// ── CheckAndApplySLORollback 表驱动测试 ──
+
+func TestCheckAndApplySLORollback_StreakBelowThreshold(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// 连续 2 轮 degrading（阈值=3），不应触发回滚
+	for i := 0; i < 2; i++ {
+		rolledBack := advisor.CheckAndApplySLORollback("ch-1", true, 3)
+		if rolledBack != "" {
+			t.Fatalf("第 %d 轮不应触发回滚，streak=%d < threshold=3", i+1, i+1)
+		}
+	}
+
+	if advisor.State() != AdvisorStateActive {
+		t.Errorf("2 轮 degrading 后 advisor 状态应保持 active, got %s", advisor.State())
+	}
+}
+
+func TestCheckAndApplySLORollback_StreakReachingThreshold_Active(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// 连续 3 轮 degrading（阈值=3），第 3 轮应触发回滚
+	for i := 0; i < 2; i++ {
+		advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	}
+
+	rolledBack := advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	if rolledBack != "ch-1" {
+		t.Errorf("第 3 轮应回滚 ch-1, got %q", rolledBack)
+	}
+	if advisor.State() != AdvisorStateRolledBack {
+		t.Errorf("触发回滚后 advisor 状态应为 rolled_back, got %s", advisor.State())
+	}
+}
+
+func TestCheckAndApplySLORollback_StreakReachingThreshold_NotActive(t *testing.T) {
+	tests := []struct {
+		name  string
+		state AdvisorState
+	}{
+		{"shadow 状态不触发回滚", AdvisorStateShadow},
+		{"candidate 状态不触发回滚", AdvisorStateCandidate},
+		{"disabled 状态不触发回滚", AdvisorStateDisabled},
+		{"rolled_back 状态不触发回滚", AdvisorStateRolledBack},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			advisor := NewTrustedRoutingAdvisorWithBackend(tt.state, &mockBackend{})
+
+			// 连续 3 轮 degrading，但 advisor 不在 active 状态
+			for i := 0; i < 3; i++ {
+				rolledBack := advisor.CheckAndApplySLORollback("ch-1", true, 3)
+				if rolledBack != "" {
+					t.Fatalf("非 active 状态不应触发回滚, got %q", rolledBack)
+				}
+			}
+
+			if advisor.State() != tt.state {
+				t.Errorf("状态不应改变: 原=%s, 现=%s", tt.state, advisor.State())
+			}
+		})
+	}
+}
+
+func TestCheckAndApplySLORollback_NonDegradingResetsStreak(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// 连续 2 轮 degrading
+	advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	advisor.CheckAndApplySLORollback("ch-1", true, 3)
+
+	// 第 3 轮非 degrading → streak 归零
+	advisor.CheckAndApplySLORollback("ch-1", false, 3)
+
+	// 再连续 2 轮 degrading → 仍不应触发（streak 重置后从 1 开始）
+	for i := 0; i < 2; i++ {
+		rolledBack := advisor.CheckAndApplySLORollback("ch-1", true, 3)
+		if rolledBack != "" {
+			t.Fatalf("streak 重置后第 %d 轮不应触发回滚", i+1)
+		}
+	}
+
+	if advisor.State() != AdvisorStateActive {
+		t.Errorf("streak 重置后 2 轮 degrading 不应回滚, got %s", advisor.State())
+	}
+}
+
+func TestCheckAndApplySLORollback_MultipleChannels(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// ch-1 连续 2 轮 degrading，ch-2 连续 2 轮 degrading
+	advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	advisor.CheckAndApplySLORollback("ch-2", true, 3)
+	advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	advisor.CheckAndApplySLORollback("ch-2", true, 3)
+
+	// ch-2 第 3 轮触发回滚
+	rolledBack := advisor.CheckAndApplySLORollback("ch-2", true, 3)
+	if rolledBack != "ch-2" {
+		t.Errorf("ch-2 第 3 轮应回滚, got %q", rolledBack)
+	}
+
+	if advisor.State() != AdvisorStateRolledBack {
+		t.Errorf("任一渠道达到阈值应回滚 advisor, got %s", advisor.State())
+	}
+}
+
+func TestCheckAndApplySLORollback_ZeroThresholdDefaultsTo3(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// threshold=0 应默认为 3
+	for i := 0; i < 2; i++ {
+		advisor.CheckAndApplySLORollback("ch-1", true, 0)
+	}
+
+	// 第 3 轮应触发（0 被当作 3）
+	rolledBack := advisor.CheckAndApplySLORollback("ch-1", true, 0)
+	if rolledBack != "ch-1" {
+		t.Errorf("threshold=0 应默认为 3, 第 3 轮应回滚, got %q", rolledBack)
+	}
+}
+
+func TestCheckAndApplySLORollback_RollbackClearsAllStreaks(t *testing.T) {
+	advisor := NewTrustedRoutingAdvisorWithBackend(AdvisorStateActive, &mockBackend{})
+
+	// ch-1 连续 3 轮触发回滚
+	for i := 0; i < 3; i++ {
+		advisor.CheckAndApplySLORollback("ch-1", true, 3)
+	}
+
+	// 回滚后 advisor 状态变为 rolled_back
+	if advisor.State() != AdvisorStateRolledBack {
+		t.Fatalf("应已回滚, got %s", advisor.State())
+	}
+
+	// 手动重新激活
+	advisor.SetState(AdvisorStateActive)
+
+	// ch-2 从零开始计数（回滚时清零了所有 streaks）
+	rolledBack := advisor.CheckAndApplySLORollback("ch-2", true, 3)
+	if rolledBack != "" {
+		t.Error("回滚清零后 ch-2 第 1 轮不应触发")
+	}
+}

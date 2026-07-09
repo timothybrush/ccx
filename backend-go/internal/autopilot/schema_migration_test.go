@@ -89,3 +89,59 @@ func TestNewProfileStoreWithDB_PropagatesSchemaVersionError(t *testing.T) {
 		t.Fatal("失败时不应返回非 nil 的 store")
 	}
 }
+
+func TestEnsureSchemaVersion_V1ToV2Migration(t *testing.T) {
+	db := newTestDB(t)
+
+	// 模拟 v1 数据库：先建表（不含 reason 列），再设版本为 1
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS autopilot_advisor_decisions (
+    decision_uid        TEXT PRIMARY KEY,
+    request_uid         TEXT,
+    advisor_uid         TEXT    NOT NULL,
+    advisor_origin_tier TEXT    NOT NULL,
+    mode                TEXT    NOT NULL,
+    task_class          TEXT    NOT NULL,
+    prompt_hash         TEXT,
+    input_token_bucket  TEXT    NOT NULL DEFAULT '',
+    hint_json           TEXT    NOT NULL,
+    default_plan_hash   TEXT    NOT NULL DEFAULT '',
+    applied             INTEGER NOT NULL DEFAULT 0,
+    outcome             TEXT    NOT NULL DEFAULT '',
+    misroute_severity   TEXT    NOT NULL DEFAULT '',
+    latency_ms          INTEGER NOT NULL DEFAULT 0,
+    estimated_advisor_cost REAL NOT NULL DEFAULT 0,
+    created_at          TEXT    NOT NULL
+)`); err != nil {
+		t.Fatalf("建 v1 表失败: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA user_version = 1"); err != nil {
+		t.Fatalf("设置 v1 版本失败: %v", err)
+	}
+
+	// 执行迁移
+	if err := ensureSchemaVersion(db); err != nil {
+		t.Fatalf("v1->v2 迁移失败: %v", err)
+	}
+
+	// 验证 reason 列已添加（插入含 reason 的记录应成功，否则 no such column 会报错）
+	_, err := db.Exec(`INSERT INTO autopilot_advisor_decisions
+		(decision_uid, advisor_uid, advisor_origin_tier, mode, task_class,
+		 input_token_bucket, hint_json, default_plan_hash, applied,
+		 outcome, misroute_severity, latency_ms, estimated_advisor_cost,
+		 reason, created_at)
+		VALUES ('test-v2', 'ch-1', 'first', 'shadow', 'worker',
+		 '', '{}', '', 0, '', '', 0, 0, 'slo_regression', '2024-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("v1->v2 迁移后插入含 reason 的记录失败（列可能未添加）: %v", err)
+	}
+
+	// 验证版本已升级
+	var version int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("读取 user_version 失败: %v", err)
+	}
+	if version != 2 {
+		t.Fatalf("v1->v2 迁移后 user_version = %d, want 2", version)
+	}
+}

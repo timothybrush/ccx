@@ -19,7 +19,7 @@ import (
 // v1 = 现有 7 张表的建表语句本身（首次引入版本化时的基线，无需 ALTER）。
 // 后续新增/变更表结构时，在 ensureSchemaVersion 里追加 "if version < N { ... }" 迁移块，
 // 并将本常量递增。
-const autopilotSchemaVersion = 1
+const autopilotSchemaVersion = 2
 
 // ensureSchemaVersion 在任何 CREATE TABLE 之前执行一次版本检查/迁移。
 // 必须在 ProfileStore 打开 DB 后、调用 initProfileStoreSchema 之前调用——
@@ -54,21 +54,21 @@ func ensureSchemaVersion(db *sql.DB) error {
 		return nil
 	}
 
-	// 未来 v2+ 的门控迁移块示例（保留注释，实际迁移到来时按此形状追加）：
-	//
-	// if version < 2 {
-	//     migrations := []string{
-	//         "ALTER TABLE autopilot_endpoint_profiles ADD COLUMN xxx TEXT DEFAULT ''",
-	//         "PRAGMA user_version = 2",
-	//     }
-	//     for _, stmt := range migrations {
-	//         if _, err := db.Exec(stmt); err != nil {
-	//             return fmt.Errorf("[Autopilot-SchemaMigration] v1->v2 迁移失败: %w", err)
-	//         }
-	//     }
-	//     log.Printf("[Autopilot-SchemaMigration] schema 升级: v1 -> v2")
-	//     version = 2
-	// }
+	// v1 -> v2: advisor_decisions 新增 reason 列（SLO regression 自动回滚记录触发原因）
+	// 仅对已有 v1 schema 的数据库执行 ALTER TABLE；全新库（version=0）的 CREATE TABLE 已包含新列。
+	if version > 0 && version < 2 {
+		migrations := []string{
+			"ALTER TABLE autopilot_advisor_decisions ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
+			"PRAGMA user_version = 2",
+		}
+		for _, stmt := range migrations {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("[Autopilot-SchemaMigration] v1->v2 迁移失败: %w", err)
+			}
+		}
+		log.Printf("[Autopilot-SchemaMigration] schema 升级: v1 -> v2")
+		version = 2
+	}
 
 	// version == 0：全新库，直接写入当前基线版本；version 属于 (0, autopilotSchemaVersion) 但
 	// 未命中任何迁移块的情况理论上不应出现（说明版本常量与迁移块不同步），同样兜底写回当前版本，

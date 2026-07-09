@@ -613,3 +613,41 @@ func TestIsTruthyEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultAutopilotRoutingConfig_SLORollback(t *testing.T) {
+	cfg := DefaultAutopilotRoutingConfig()
+
+	if cfg.SLORollback.Enabled {
+		t.Error("默认 SLORollback.Enabled 应为 false")
+	}
+	if cfg.SLORollback.ConsecutiveWindows != 3 {
+		t.Errorf("默认 SLORollback.ConsecutiveWindows = %d, 期望 3", cfg.SLORollback.ConsecutiveWindows)
+	}
+}
+
+func TestAutopilotRoutingConfig_Validate_SLORollbackConsecutiveWindows(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    int
+		expected int
+	}{
+		{"正数保持不变", 5, 5},
+		{"零回退为默认 3", 0, 3},
+		{"负数回退为默认 3", -1, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := AutopilotRoutingConfig{
+				SLORollback: SLORollbackConfig{
+					ConsecutiveWindows: tt.input,
+				},
+			}
+			cfg.Validate()
+			if cfg.SLORollback.ConsecutiveWindows != tt.expected {
+				t.Errorf("Validate 后 ConsecutiveWindows = %d, 期望 %d",
+					cfg.SLORollback.ConsecutiveWindows, tt.expected)
+			}
+		})
+	}
+}

@@ -82,6 +82,10 @@ type AutopilotRoutingConfig struct {
 
 	// localModelRouting 本地模型路由配置。
 	LocalModelRouting LocalModelRoutingConfig `json:"localModelRouting,omitempty"`
+
+	// sloRollback SLO regression 自动回滚配置。
+	// 仅作用于 TrustedRoutingAdvisor 已手动晋升到 active 的渠道。
+	SLORollback SLORollbackConfig `json:"sloRollback,omitempty"`
 }
 
 // ── §9.1 子配置类型 ──
@@ -269,6 +273,19 @@ type LocalModelRoutingConfig struct {
 	ForbidAutoDecomposeAndMerge bool     `json:"forbidAutoDecomposeAndMerge,omitempty"`
 }
 
+// SLORollbackConfig SLO regression 自动回滚配置。
+// 仅作用于 TrustedRoutingAdvisor 里已被运维手动晋升到 active 状态的渠道。
+// 不做自动恢复：rolled_back 后只能运维手动重新晋升，避免自动升降级来回震荡。
+type SLORollbackConfig struct {
+	// Enabled 是否启用 SLO regression 自动回滚。
+	// 默认 false，需显式 opt-in（Phase 3B+ 安全守则）。
+	Enabled bool `json:"enabled,omitempty"`
+
+	// ConsecutiveWindows 连续 degrading 窗口数达到此阈值时触发回滚。
+	// 默认 3，防止单轮抖动误触发。
+	ConsecutiveWindows int `json:"consecutiveWindows,omitempty"`
+}
+
 // ── 模式常量 ──
 
 const (
@@ -433,6 +450,11 @@ func DefaultAutopilotRoutingConfig() AutopilotRoutingConfig {
 			NeverDemoteTaskClasses:      []string{"supervisor", "vision", "long_context"},
 			ForbidAutoDecomposeAndMerge: true,
 		},
+
+		SLORollback: SLORollbackConfig{
+			Enabled:            false, // 默认关闭，需显式 opt-in（Phase 4 Item 3 安全守则）
+			ConsecutiveWindows: 3,
+		},
 	}
 }
 
@@ -468,6 +490,11 @@ func (c *AutopilotRoutingConfig) Validate() {
 	// 7. StabilityTier 晋降级滞后窗口兜底
 	if c.HealthCheck.StabilityHysteresisWindows <= 0 {
 		c.HealthCheck.StabilityHysteresisWindows = 2
+	}
+
+	// 8. SLO regression 自动回滚：连续窗口阈值兜底
+	if c.SLORollback.ConsecutiveWindows <= 0 {
+		c.SLORollback.ConsecutiveWindows = 3
 	}
 }
 

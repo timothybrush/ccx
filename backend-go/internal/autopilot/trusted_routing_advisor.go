@@ -72,24 +72,27 @@ type AdvisorBackend interface {
 // TrustedRoutingAdvisor 可信模型路由辅助器。
 // Phase 1 shadow：只生成 hint 并记录，绝不影响真实调度。
 type TrustedRoutingAdvisor struct {
-	state   AdvisorState
-	backend AdvisorBackend
+	state            AdvisorState
+	backend          AdvisorBackend
+	regressionStreaks map[string]int // channelUID -> 连续 degrading 窗口计数（Phase 4 Item 3）
 }
 
 // NewTrustedRoutingAdvisor 创建 TrustedRoutingAdvisor。
 // Phase 1 默认使用 heuristicBackend，初始状态 shadow。
 func NewTrustedRoutingAdvisor() *TrustedRoutingAdvisor {
 	return &TrustedRoutingAdvisor{
-		state:   AdvisorStateShadow,
-		backend: &heuristicBackend{},
+		state:            AdvisorStateShadow,
+		backend:          &heuristicBackend{},
+		regressionStreaks: make(map[string]int),
 	}
 }
 
 // NewTrustedRoutingAdvisorWithBackend 使用自定义 backend 创建（便于测试）。
 func NewTrustedRoutingAdvisorWithBackend(state AdvisorState, backend AdvisorBackend) *TrustedRoutingAdvisor {
 	return &TrustedRoutingAdvisor{
-		state:   state,
-		backend: backend,
+		state:            state,
+		backend:          backend,
+		regressionStreaks: make(map[string]int),
 	}
 }
 
@@ -108,6 +111,39 @@ func (a *TrustedRoutingAdvisor) SetState(state AdvisorState) error {
 	default:
 		return fmt.Errorf("[Advisor-SetState] 未知状态 %q", state)
 	}
+}
+
+// CheckAndApplySLORollback 检查渠道质量是否持续恶化，满足阈值时自动回滚 advisor 到 rolled_back。
+// 仅当 advisor 当前处于 active 状态时才执行回滚（双门控之一）。
+// isDegrading 为 true 表示该 channelUID 本轮存在质量恶化信号。
+// consecutiveWindows 是触发回滚所需的连续 degrading 窗口数。
+// 返回触发回滚的 channelUID（空字符串表示未触发）。
+func (a *TrustedRoutingAdvisor) CheckAndApplySLORollback(
+	channelUID string,
+	isDegrading bool,
+	consecutiveWindows int,
+) (rolledBackChannelUID string) {
+	if consecutiveWindows <= 0 {
+		consecutiveWindows = 3
+	}
+
+	if isDegrading {
+		a.regressionStreaks[channelUID]++
+	} else {
+		a.regressionStreaks[channelUID] = 0
+	}
+
+	streak := a.regressionStreaks[channelUID]
+	if streak >= consecutiveWindows && a.state == AdvisorStateActive {
+		log.Printf("[Advisor-SLORollback] 渠道 %s 连续 %d 轮 degrading，回滚 advisor 到 rolled_back",
+			channelUID, streak)
+		a.state = AdvisorStateRolledBack
+		// 清零所有 streak（advisor 已全局回滚）
+		a.regressionStreaks = make(map[string]int)
+		return channelUID
+	}
+
+	return ""
 }
 
 // EvaluateShadow shadow 模式下评估请求，返回 hint。
