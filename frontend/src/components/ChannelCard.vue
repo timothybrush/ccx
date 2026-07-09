@@ -365,7 +365,19 @@
         >
           {{ t('addChannel.testCapability') }}
         </v-btn>
-        
+
+        <v-btn
+          size="small"
+          color="deep-purple"
+          variant="outlined"
+          rounded="lg"
+          class="action-btn"
+          prepend-icon="mdi-flask-outline"
+          @click="$emit('trial', channel.index)"
+        >
+          {{ t('orchestration.trial') }}
+        </v-btn>
+
         <v-btn
           size="small"
           color="info"
@@ -438,6 +450,7 @@ defineEmits<{
   togglePin: [channelId: number]
   toggleVision: [channelId: number]
   testCapability: [channelId: number]
+  trial: [channelId: number]
 }>()
 
 // 获取服务类型对应的芯片颜色

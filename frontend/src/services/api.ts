@@ -40,6 +40,9 @@ import type {
   SubscriptionItem,
   SubscriptionsListResponse,
   SubscriptionUpdateRequest,
+  CreateIntentRequest,
+  ManualRoutingIntent,
+  IntentListResponse,
   CompatDiagnoseResult,
   HealthCenterOverview,
   HealthCenterChannelsResponse,
@@ -1206,6 +1209,36 @@ export class ApiService {
 
   async getCockpitOverview(): Promise<CockpitOverviewResponse> {
     return this.request('/cockpit/overview')
+  }
+
+  // ============== 人工路由意图（试用意图）API ==============
+
+  /** 查询试用意图列表。all=true 返回全部（含 expired/exhausted/disabled），默认只返回 active */
+  async getManualIntents(params?: { all?: boolean }): Promise<IntentListResponse> {
+    const query = new URLSearchParams()
+    if (params?.all) query.set('all', 'true')
+    const qs = query.toString()
+    return this.request(`/manual-intents${qs ? `?${qs}` : ''}`)
+  }
+
+  /** 查询单条试用意图详情 */
+  async getManualIntent(uid: string): Promise<ManualRoutingIntent> {
+    return this.request(`/manual-intents/${encodeURIComponent(uid)}`)
+  }
+
+  /** 创建试用意图 */
+  async createManualIntent(data: CreateIntentRequest): Promise<ManualRoutingIntent> {
+    return this.request('/manual-intents', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  /** 删除（结束）试用意图 */
+  async deleteManualIntent(uid: string): Promise<void> {
+    await this.request(`/manual-intents/${encodeURIComponent(uid)}`, {
+      method: 'DELETE',
+    })
   }
 
   // ============== 渠道推荐 API（Phase 4 Item 4）==============

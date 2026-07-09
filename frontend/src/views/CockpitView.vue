@@ -10,7 +10,7 @@
         variant="tonal"
         prepend-icon="mdi-refresh"
         :loading="loading"
-        @click="() => { fetchOverview(); fetchRecommendations() }"
+        @click="() => { fetchOverview(); fetchRecommendations(); fetchActiveTrials() }"
       >
         {{ t('app.actions.refresh') }}
       </v-btn>
@@ -159,6 +159,59 @@
         </v-col>
       </v-row>
 
+      <!-- Active trial intents -->
+      <div class="section-label text-subtitle-2 font-weight-bold mb-2 d-flex align-center">
+        <v-icon size="18" class="mr-1" color="deep-purple">mdi-flask-outline</v-icon>
+        {{ t('cockpitOverview.activeTrials') }}
+      </div>
+
+      <div v-if="activeTrials.length === 0" class="text-body-2 text-medium-emphasis mb-4">
+        {{ t('cockpitOverview.noActiveTrials') }}
+      </div>
+
+      <v-row v-else dense class="mb-4">
+        <v-col
+          v-for="trial in activeTrials"
+          :key="trial.intentUid"
+          cols="12" sm="6" md="4"
+        >
+          <v-card variant="tonal" color="deep-purple" rounded="lg" class="pa-3">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <v-chip size="x-small" variant="tonal" color="primary">{{ t(`manualIntent.intentType.${trial.intentType}`) }}</v-chip>
+              <v-chip size="x-small" variant="tonal" :color="getIntentStatusColor(trial.status)">{{ t(`manualIntent.status.${trial.status}`) }}</v-chip>
+            </div>
+            <div v-if="trial.model" class="text-body-2 mb-1">
+              <span class="text-medium-emphasis">{{ t('manualIntent.field.model') }}:</span>
+              <code class="text-caption">{{ trial.model }}</code>
+            </div>
+            <div v-if="trial.channelUid" class="text-body-2 mb-1">
+              <span class="text-medium-emphasis">{{ t('manualIntent.field.channelUid') }}:</span>
+              <code class="text-caption">{{ trial.channelUid }}</code>
+            </div>
+            <div class="text-caption text-medium-emphasis mb-1">
+              {{ t('cockpitOverview.trialRemaining', { time: formatRemaining(trial.expiresAt) }) }}
+            </div>
+            <div class="text-caption mb-2">
+              {{ t('cockpitOverview.trialStats', {
+                hit: trial.trialResult.hitCount,
+                rate: formatSuccessRate(trial.trialResult),
+                fallback: trial.trialResult.fallbackCount ?? 0,
+              }) }}
+            </div>
+            <v-btn
+              size="x-small"
+              variant="tonal"
+              color="error"
+              prepend-icon="mdi-stop-circle-outline"
+              :loading="endingTrialUid === trial.intentUid"
+              @click="endTrial(trial.intentUid)"
+            >
+              {{ t('manualIntent.actions.end') }}
+            </v-btn>
+          </v-card>
+        </v-col>
+      </v-row>
+
       <!-- Channel recommendations -->
       <div class="section-label text-subtitle-2 font-weight-bold mb-2 d-flex align-center">
         <v-icon size="18" class="mr-1" color="success">mdi-lightbulb-on-outline</v-icon>
@@ -243,13 +296,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
-import type { CockpitOverviewResponse, ChannelRecommendation } from '@/services/api-types'
+import type { CockpitOverviewResponse, ChannelRecommendation, ManualRoutingIntent, TrialResult } from '@/services/api-types'
 
 const { t } = useI18n()
 
 const overview = ref<CockpitOverviewResponse | null>(null)
 const loading = ref(true)
 const recommendations = ref<ChannelRecommendation[]>([])
+const activeTrials = ref<ManualRoutingIntent[]>([])
+const endingTrialUid = ref<string>('')
 
 interface HealthStateItem {
   state: string
@@ -325,8 +380,56 @@ async function fetchRecommendations() {
   }
 }
 
+async function fetchActiveTrials() {
+  try {
+    const resp = await api.getManualIntents({ all: false })
+    activeTrials.value = resp.intents
+  } catch (e) {
+    console.error('Failed to fetch active trial intents:', e)
+    activeTrials.value = []
+  }
+}
+
+async function endTrial(uid: string) {
+  endingTrialUid.value = uid
+  try {
+    await api.deleteManualIntent(uid)
+    await fetchActiveTrials()
+  } catch (e) {
+    console.error('Failed to end trial intent:', e)
+  } finally {
+    endingTrialUid.value = ''
+  }
+}
+
+function getIntentStatusColor(status: string): string {
+  switch (status) {
+    case 'active': return 'success'
+    case 'expired': return 'grey'
+    case 'exhausted': return 'warning'
+    case 'disabled': return 'error'
+    default: return 'grey'
+  }
+}
+
+function formatRemaining(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now()
+  if (Number.isNaN(ms) || ms <= 0) return t('cockpitOverview.trialExpired')
+  const totalMinutes = Math.floor(ms / 60000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
+function formatSuccessRate(result: TrialResult): string {
+  if (!result.hitCount) return '0%'
+  return `${Math.round((result.successCount / result.hitCount) * 100)}%`
+}
+
 onMounted(() => {
   fetchOverview()
   fetchRecommendations()
+  fetchActiveTrials()
 })
 </script>

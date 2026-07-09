@@ -130,6 +130,7 @@ export interface ModelPricingTier {
 
 export interface Channel {
   name: string
+  channelUid?: string                // 渠道稳定身份标识（创建后不因重排/改名/Key 变更而改变）
   serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot'
   authHeader?: ChannelAuthHeader | ''
   baseUrl: string
@@ -1022,6 +1023,90 @@ export interface ChannelRecommendation {
 export interface RecommendationsResponse {
   proxyKeyMask?: string
   recommendations: ChannelRecommendation[]
+}
+
+// ============== 人工路由意图（试用意图）类型 ==============
+
+/** 人工路由意图的类型 */
+export type ManualIntentType = 'model_trial' | 'channel_trial' | 'endpoint_trial' | 'session_pin'
+
+/** 人工路由意图的生命周期状态 */
+export type ManualIntentStatus = 'active' | 'expired' | 'exhausted' | 'disabled'
+
+/** 意图作用范围的任务类别 */
+export type ManualIntentTaskClass =
+  | 'supervisor'
+  | 'worker'
+  | 'lightweight'
+  | 'vision'
+  | 'long_context'
+  | 'image_generation'
+  | 'embedding'
+
+/** 试用结果统计（Phase 1 shadow：仅记录统计，不影响真实调度） */
+export interface TrialResult {
+  hitCount: number
+  successCount: number
+  failureCount: number
+  totalLatencyMs?: number
+  avgLatencyMs: number
+  fallbackCount?: number
+  estimatedCost?: number
+}
+
+/** POST /manual-intents 请求体 */
+export interface CreateIntentRequest {
+  name?: string
+  intentType: ManualIntentType
+  channelKind: string
+  channelUid?: string
+  metricsKey?: string
+  model?: string
+  mappedModel?: string
+  agentRoles?: string[]
+  taskClasses?: ManualIntentTaskClass[]
+  sessionId?: string
+  trafficPercent?: number
+  expiresAt?: string
+  ttlMinutes?: number
+  maxRequests?: number
+  maxEstimatedCost?: number
+  fallbackOnFailure?: boolean
+  requireHardConstraints: boolean
+  createdBy?: string
+  reason?: string
+}
+
+/** 人工路由意图（试用意图）完整记录 */
+export interface ManualRoutingIntent {
+  intentUid: string
+  name?: string
+  intentType: ManualIntentType
+  channelKind: string
+  channelUid?: string
+  metricsKey?: string
+  model?: string
+  mappedModel?: string
+  agentRoles?: string[]
+  taskClasses?: ManualIntentTaskClass[]
+  sessionId?: string
+  trafficPercent?: number
+  expiresAt: string
+  maxRequests?: number
+  maxEstimatedCost?: number
+  fallbackOnFailure?: boolean
+  requireHardConstraints: boolean
+  createdBy?: string
+  createdAt: string
+  reason?: string
+  status: ManualIntentStatus
+  trialResult: TrialResult
+}
+
+/** GET /manual-intents 列表响应 */
+export interface IntentListResponse {
+  intents: ManualRoutingIntent[]
+  total: number
 }
 
 // ============== Autopilot 智能路由类型 ==============
