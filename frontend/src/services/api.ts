@@ -21,6 +21,7 @@ import type {
   ChannelsResponse,
   ChannelStatus,
   CockpitOverviewResponse,
+  RecommendationsResponse,
   CopilotDeviceCodeResponse,
   CopilotTokenResponse,
   CopilotUserResponse,
@@ -1205,6 +1206,17 @@ export class ApiService {
 
   async getCockpitOverview(): Promise<CockpitOverviewResponse> {
     return this.request('/cockpit/overview')
+  }
+
+  // ============== 渠道推荐 API（Phase 4 Item 4）==============
+
+  /** 获取渠道推荐列表。proxyKeyMask 缺省时聚合返回全部用户的推荐。 */
+  async getRecommendations(params?: { proxyKeyMask?: string; windowDays?: number }): Promise<RecommendationsResponse> {
+    const query = new URLSearchParams()
+    if (params?.proxyKeyMask) query.set('proxyKeyMask', params.proxyKeyMask)
+    if (params?.windowDays) query.set('windowDays', String(params.windowDays))
+    const qs = query.toString()
+    return this.request(`/autopilot/recommendations${qs ? `?${qs}` : ''}`)
   }
 
   // ============== Autopilot 智能路由 API ==============

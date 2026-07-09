@@ -128,6 +128,18 @@ func SetPostSuccessfulProxyHook(hook func(channelKind, model, channelUID string,
 	postSuccessfulProxyHook = hook
 }
 
+// usagePatternRecorderHook 可选的用量画像记录器（Phase 4 Item 4：渠道推荐）。
+// 由 main.go 在 autopilot 初始化后注入；在主响应已写回客户端之后触发，纯观测性累积，
+// 不参与任何调度/候选过滤决策。
+// 签名：(proxyKeyMask, channelKind, channelUID, model string)。
+var usagePatternRecorderHook func(proxyKeyMask, channelKind, channelUID, model string)
+
+// SetUsagePatternRecorderHook 设置用量画像记录钩子。
+// 由 main.go 在 autopilot 初始化后调用；nil 表示不记录。
+func SetUsagePatternRecorderHook(hook func(proxyKeyMask, channelKind, channelUID, model string)) {
+	usagePatternRecorderHook = hook
+}
+
 func shouldNormalizeMetadataUserID(kind scheduler.ChannelKind, upstream *config.UpstreamConfig) bool {
 	if upstream == nil {
 		return false
@@ -768,6 +780,14 @@ func TryUpstreamWithAllKeys(
 				bodyCopy := make([]byte, len(requestBody))
 				copy(bodyCopy, requestBody)
 				postSuccessfulProxyHook(string(kind), model, upstream.ChannelUID, http.StatusOK, latencyMs, bodyCopy)
+			}
+
+			// Phase 4 Item 4: 用量画像记录（渠道推荐用）。
+			// 与上面的 A/B 测试回调同一时机（主响应已返回），纯观测性累积，不影响主请求路径。
+			if usagePatternRecorderHook != nil {
+				if proxyKeyMask := middleware.GetProxyKeyMask(c); proxyKeyMask != "" {
+					usagePatternRecorderHook(proxyKeyMask, string(kind), upstream.ChannelUID, model)
+				}
 			}
 
 			return true, apiKey, originalIdx, nil, usage, nil

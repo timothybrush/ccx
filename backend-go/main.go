@@ -661,6 +661,15 @@ func main() {
 		autopilotManager.SetRateLimitApplier(rlApplier)
 	}
 
+	// Phase 4 Item 4: 用量画像记录 hook（渠道推荐用）。
+	// 请求成功完成后（主响应已返回客户端之后）记录 proxyKeyMask -> channelUID 归因，
+	// 纯观测性累积，不参与任何调度/候选过滤决策。
+	if autopilotManager != nil {
+		common.SetUsagePatternRecorderHook(func(proxyKeyMask, channelKind, channelUID, model string) {
+			autopilotManager.RecordUsagePattern(proxyKeyMask, channelKind, channelUID, model)
+		})
+	}
+
 	// L2 ProbeWorker：按配置门控启动（默认关闭）
 	if autopilotManager != nil {
 		autopilotCfg := cfgManager.GetAutopilotRouting()
@@ -1095,6 +1104,8 @@ func main() {
 			autopilot.RegisterCockpitRoutes(apiGroup, autopilotManager)
 			// Advisor shadow 决策记录 API
 			autopilot.RegisterAdvisorRoutes(apiGroup, autopilotManager.AdvisorDecisionStore())
+			// Phase 4 Item 4: 渠道推荐只读 API
+			autopilot.RegisterRecommendationRoutes(apiGroup, autopilotManager)
 
 			// Phase 4 Item 8: A/B 测试结果 + 紧急停止 API
 			if autopilotManager.ABTestSampler() != nil && autopilotManager.ABTestStore() != nil {
@@ -1162,12 +1173,12 @@ func main() {
 				"vectors":   vectorsMetricsManager,
 			},
 		}))
-			// Phase 4 Item 5: 批量渠道管理 API（导入/导出/模板）
-			apiGroup.POST("/channels/export", handlers.ExportChannels(envCfg, cfgManager))
-			apiGroup.GET("/channels/export", handlers.ExportAllChannels(envCfg, cfgManager))
-			apiGroup.POST("/channels/import", handlers.ImportChannels(cfgManager))
-			apiGroup.POST("/channels/import/confirm", handlers.ImportChannelsConfirm(cfgManager))
-			apiGroup.GET("/channels/templates", handlers.GetChannelTemplates())
+		// Phase 4 Item 5: 批量渠道管理 API（导入/导出/模板）
+		apiGroup.POST("/channels/export", handlers.ExportChannels(envCfg, cfgManager))
+		apiGroup.GET("/channels/export", handlers.ExportAllChannels(envCfg, cfgManager))
+		apiGroup.POST("/channels/import", handlers.ImportChannels(cfgManager))
+		apiGroup.POST("/channels/import/confirm", handlers.ImportChannelsConfirm(cfgManager))
+		apiGroup.GET("/channels/templates", handlers.GetChannelTemplates())
 	}
 
 	// 代理端点 - Messages API

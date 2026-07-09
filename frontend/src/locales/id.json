@@ -1014,6 +1014,12 @@
   "cockpitOverview.todoList": "Daftar Tugas",
   "cockpitOverview.noTodoItems": "Tidak ada tugas. Semua endpoint berjalan normal.",
   "cockpitOverview.empty": "Belum ada data. Silakan konfigurasi channel dan langganan terlebih dahulu.",
+  "cockpitOverview.recommendations": "Rekomendasi Channel",
+  "cockpitOverview.noRecommendations": "Belum ada rekomendasi. Saran akan muncul setelah data penggunaan terkumpul.",
+  "cockpitOverview.usageCount": "{count} permintaan terbaru",
+  "cockpitOverview.currentChannel": "Channel saat ini",
+  "cockpitOverview.recommendedChannel": "Coba ini",
+  "cockpitOverview.scoreDelta": "Selisih skor +{delta}",
 
   "autopilot.title": "Smart Routing Autopilot",
   "autopilot.mode.off": "Mati",

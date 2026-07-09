@@ -1014,6 +1014,12 @@
   "cockpitOverview.todoList": "待办事项",
   "cockpitOverview.noTodoItems": "暂无待办事项，所有 endpoint 运行正常。",
   "cockpitOverview.empty": "暂无数据，请先配置渠道和订阅。",
+  "cockpitOverview.recommendations": "渠道推荐",
+  "cockpitOverview.noRecommendations": "暂无推荐，用量数据积累后会在此展示建议。",
+  "cockpitOverview.usageCount": "近期使用 {count} 次",
+  "cockpitOverview.currentChannel": "当前主用渠道",
+  "cockpitOverview.recommendedChannel": "推荐尝试",
+  "cockpitOverview.scoreDelta": "综合分差 +{delta}",
 
   "autopilot.title": "智能路由 Autopilot",
   "autopilot.mode.off": "关闭",

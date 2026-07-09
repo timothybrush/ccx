@@ -1014,6 +1014,12 @@
   "cockpitOverview.todoList": "To-Do Items",
   "cockpitOverview.noTodoItems": "No to-do items. All endpoints are running normally.",
   "cockpitOverview.empty": "No data yet. Please configure channels and subscriptions first.",
+  "cockpitOverview.recommendations": "Channel Recommendations",
+  "cockpitOverview.noRecommendations": "No recommendations yet. Suggestions will appear once usage data accumulates.",
+  "cockpitOverview.usageCount": "{count} recent requests",
+  "cockpitOverview.currentChannel": "Current channel",
+  "cockpitOverview.recommendedChannel": "Try instead",
+  "cockpitOverview.scoreDelta": "Score delta +{delta}",
 
   "autopilot.title": "Smart Routing Autopilot",
   "autopilot.mode.off": "Off",

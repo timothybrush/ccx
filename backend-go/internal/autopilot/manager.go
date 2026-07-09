@@ -158,6 +158,9 @@ type Manager struct {
 	abTestStore   *ABTestStore
 	abTestSampler *ABTestSampler
 
+	// Phase 4 Item 4：渠道推荐用量画像累积（纯内存，shadow 风格，不影响调度）
+	usagePatternAccumulator *UsagePatternAccumulator
+
 	cancel func()
 	wg     sync.WaitGroup
 }
@@ -243,6 +246,8 @@ func NewManager(
 
 		modelProfileStore: modelProfileStore,
 		modelResolver:     NewModelResolver(modelProfileStore, cfgManager),
+
+		usagePatternAccumulator: NewUsagePatternAccumulator(defaultUsagePatternRetentionDays),
 	}, nil
 }
 
@@ -550,6 +555,30 @@ func (m *Manager) SetABTestStore(s *ABTestStore) {
 	m.abTestStore = s
 }
 
+// UsagePatternAccumulator 返回内部用量画像累积器引用（Phase 4 Item 4：渠道推荐）。
+func (m *Manager) UsagePatternAccumulator() *UsagePatternAccumulator {
+	return m.usagePatternAccumulator
+}
+
+// RecordUsagePattern 记录一次请求的用量画像：proxyKeyMask 落到 channelUID。
+// 用于 Phase 4 Item 4 渠道推荐的用量画像积累。
+// 由 handlers/common 的 usagePatternRecorderHook 在请求成功完成后调用（主响应已返回客户端之后），
+// 纯观测性累积，不参与任何调度/候选过滤决策。
+// proxyKeyMask 或 channelUID 为空时静默跳过。
+//
+// channelKind/model 目前未参与域推导（InferTaskDomain 依赖 system prompt/工具集/文件扩展名等
+// DomainHints，这些信号在代理层的请求完成钩子上不可得，是现有代码库的已知缺口，非本项新增回归）；
+// 保留参数是为了未来在有 DomainHints 数据源时无需再改调用方签名。
+func (m *Manager) RecordUsagePattern(proxyKeyMask, channelKind, channelUID, model string) {
+	if m.usagePatternAccumulator == nil || proxyKeyMask == "" || channelUID == "" {
+		return
+	}
+	_ = channelKind
+	_ = model
+	domain := InferTaskDomain(DomainHints{})
+	m.usagePatternAccumulator.RecordUsage(proxyKeyMask, domain, channelUID)
+}
+
 // ResolveAPIKey 根据 channelUID + keyHash 反查明文 API Key，供 ProbeWorker.APIKeyResolver 使用。
 // KeyEndpointProfile 只存 sha256(apiKey) 摘要（MetricsKey），无法直接还原明文，
 // 需要遍历当前配置里该渠道的 APIKeys，逐个计算摘要与 keyHash 比对。
@@ -837,13 +866,13 @@ func (m *Manager) collectAll() {
 				// 记录回滚决策
 				if m.advisorStore != nil {
 					rec := &AdvisorDecisionRecord{
-						AdvisorUID:       rollbackChannelUID,
+						AdvisorUID:        rollbackChannelUID,
 						AdvisorOriginTier: "slo_regression",
-						Mode:             AdvisorStateRolledBack,
-						TaskClass:        "slo_regression",
-						Applied:          true,
-						Outcome:          "rolled_back",
-						Reason:           "slo_regression",
+						Mode:              AdvisorStateRolledBack,
+						TaskClass:         "slo_regression",
+						Applied:           true,
+						Outcome:           "rolled_back",
+						Reason:            "slo_regression",
 					}
 					if err := m.advisorStore.Record(rec); err != nil {
 						log.Printf("[Autopilot-Worker] 警告: SLO 回滚决策记录失败: %v", err)

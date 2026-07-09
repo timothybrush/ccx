@@ -10,7 +10,7 @@
         variant="tonal"
         prepend-icon="mdi-refresh"
         :loading="loading"
-        @click="fetchOverview"
+        @click="() => { fetchOverview(); fetchRecommendations() }"
       >
         {{ t('app.actions.refresh') }}
       </v-btn>
@@ -159,6 +159,44 @@
         </v-col>
       </v-row>
 
+      <!-- Channel recommendations -->
+      <div class="section-label text-subtitle-2 font-weight-bold mb-2 d-flex align-center">
+        <v-icon size="18" class="mr-1" color="success">mdi-lightbulb-on-outline</v-icon>
+        {{ t('cockpitOverview.recommendations') }}
+      </div>
+
+      <div v-if="recommendations.length === 0" class="text-body-2 text-medium-emphasis mb-4">
+        {{ t('cockpitOverview.noRecommendations') }}
+      </div>
+
+      <v-row v-else dense class="mb-4">
+        <v-col
+          v-for="(rec, idx) in recommendations"
+          :key="`${rec.proxyKeyMask}-${rec.domain}-${idx}`"
+          cols="12" sm="6" md="4"
+        >
+          <v-card variant="tonal" color="success" rounded="lg" class="pa-3">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <v-chip size="x-small" variant="tonal" color="primary">{{ rec.domain }}</v-chip>
+              <span class="text-caption text-medium-emphasis">{{ t('cockpitOverview.usageCount', { count: rec.domainUsageCount }) }}</span>
+            </div>
+            <div class="text-body-2 mb-1">
+              <span class="text-medium-emphasis">{{ t('cockpitOverview.currentChannel') }}:</span>
+              <code class="text-caption">{{ rec.currentChannelUid }}</code>
+              <span class="text-caption text-medium-emphasis"> ({{ rec.currentScore.toFixed(2) }})</span>
+            </div>
+            <div class="text-body-2 mb-1">
+              <span class="text-medium-emphasis">{{ t('cockpitOverview.recommendedChannel') }}:</span>
+              <code class="text-caption font-weight-bold">{{ rec.recommendedChannelUid }}</code>
+              <span class="text-caption text-medium-emphasis"> ({{ rec.recommendedScore.toFixed(2) }})</span>
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ t('cockpitOverview.scoreDelta', { delta: rec.scoreDelta.toFixed(2) }) }}
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
       <!-- To-do items -->
       <div class="section-label text-subtitle-2 font-weight-bold mb-2 d-flex align-center">
         <v-icon size="18" class="mr-1" color="warning">mdi-alert</v-icon>
@@ -205,12 +243,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
-import type { CockpitOverviewResponse } from '@/services/api-types'
+import type { CockpitOverviewResponse, ChannelRecommendation } from '@/services/api-types'
 
 const { t } = useI18n()
 
 const overview = ref<CockpitOverviewResponse | null>(null)
 const loading = ref(true)
+const recommendations = ref<ChannelRecommendation[]>([])
 
 interface HealthStateItem {
   state: string
@@ -276,5 +315,18 @@ async function fetchOverview() {
   }
 }
 
-onMounted(fetchOverview)
+async function fetchRecommendations() {
+  try {
+    const resp = await api.getRecommendations()
+    recommendations.value = resp.recommendations
+  } catch (e) {
+    console.error('Failed to fetch channel recommendations:', e)
+    recommendations.value = []
+  }
+}
+
+onMounted(() => {
+  fetchOverview()
+  fetchRecommendations()
+})
 </script>

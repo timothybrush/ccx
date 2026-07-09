@@ -1005,6 +1005,25 @@ export interface CockpitOverviewResponse {
   todoItems: CockpitTodoItem[]
 }
 
+// ============== 渠道推荐类型（Phase 4 Item 4）==============
+
+export interface ChannelRecommendation {
+  proxyKeyMask: string
+  domain: string
+  domainUsageCount: number
+  currentChannelUid: string
+  currentScore: number
+  recommendedChannelUid: string
+  recommendedScore: number
+  scoreDelta: number
+  reason: string
+}
+
+export interface RecommendationsResponse {
+  proxyKeyMask?: string
+  recommendations: ChannelRecommendation[]
+}
+
 // ============== Autopilot 智能路由类型 ==============
 
 export interface SmartRoutingCostPreference {
