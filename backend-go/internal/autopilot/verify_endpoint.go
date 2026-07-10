@@ -1,0 +1,177 @@
+package autopilot
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/httpclient"
+	"github.com/BenedictKing/ccx/internal/utils"
+)
+
+// verifyEndpointTimeout 单次端点验证探测的超时。
+const verifyEndpointTimeout = 12 * time.Second
+
+// minimalClaudeProbeBody 最小 Anthropic Messages 探测请求体。
+// max_tokens 取极小值，模型名用占位（鉴权判定不依赖模型有效性）。
+// 若上游因模型无效返回 4xx（非 401/403），仍说明服务可达且鉴权通过。
+var minimalClaudeProbeBody = []byte(`{"model":"probe","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`)
+
+var verifyVersionPattern = regexp.MustCompile(`/v\d+[a-z]*$`)
+
+// EndpointVerifyResult 端点验证结果。
+type EndpointVerifyResult struct {
+	OK         bool   // 鉴权通过且服务可用
+	StatusCode int    // 上游返回状态码（网络错误时为 0）
+	AuthFailed bool   // true 表示服务可达但鉴权失败（401/403）
+	Err        error  // 网络/构建错误
+	Message    string // 简要诊断信息
+}
+
+// VerifyClaudeEndpoint 对一个 (baseURL, apiKey) 发最小 Anthropic Messages 请求验证可用性。
+//
+// 判定规则：
+//   - 2xx / 400 / 422：鉴权通过（400/422 通常是探测用的占位模型或参数被拒，但服务可达且 key 有效）→ OK=true
+//   - 401 / 403：服务可达但鉴权失败 → OK=false, AuthFailed=true
+//   - 其他 4xx/5xx：该 baseURL 不可用（换下一个候选）→ OK=false
+//   - 网络错误：该 baseURL 不可用 → OK=false, Err!=nil
+//
+// baseURL 应为 Anthropic 兼容入口（如 https://api.xiaomimimo.com/anthropic），
+// 本函数按 claude provider 的拼接规则补 /v1/messages。
+func VerifyClaudeEndpoint(ctx context.Context, baseURL, apiKey, authHeader string) EndpointVerifyResult {
+	url := buildClaudeProbeURL(baseURL)
+
+	reqCtx, cancel := context.WithTimeout(ctx, verifyEndpointTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, url, bytes.NewReader(minimalClaudeProbeBody))
+	if err != nil {
+		return EndpointVerifyResult{Err: err, Message: "构建请求失败"}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, authHeader)
+
+	client := httpclient.GetManager().GetStandardClient(verifyEndpointTimeout, false)
+	resp, err := client.Do(req)
+	if err != nil {
+		return EndpointVerifyResult{Err: err, Message: "请求失败: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+
+	sc := resp.StatusCode
+	switch {
+	case sc >= 200 && sc < 300:
+		return EndpointVerifyResult{OK: true, StatusCode: sc}
+	case sc == http.StatusBadRequest || sc == http.StatusUnprocessableEntity:
+		// 占位模型/参数被拒，但服务可达且 key 有效
+		return EndpointVerifyResult{OK: true, StatusCode: sc, Message: "服务可达（探测参数被拒，鉴权通过）"}
+	case sc == http.StatusUnauthorized || sc == http.StatusForbidden:
+		return EndpointVerifyResult{OK: false, StatusCode: sc, AuthFailed: true, Message: "鉴权失败"}
+	default:
+		return EndpointVerifyResult{OK: false, StatusCode: sc, Message: "端点不可用"}
+	}
+}
+
+// buildClaudeProbeURL 按 claude provider 拼接规则构建 /messages 探测 URL。
+// 复用 internal/providers/claude.go 的智能拼接逻辑：
+//   - baseURL 以 # 结尾 → 跳过自动补 /v1
+//   - baseURL 已含 /vN 后缀 → 直接拼 /messages
+//   - 否则补 /v1/messages
+func buildClaudeProbeURL(baseURL string) string {
+	skipVersionPrefix := strings.HasSuffix(baseURL, "#")
+	if skipVersionPrefix {
+		baseURL = strings.TrimSuffix(baseURL, "#")
+	}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	if verifyVersionPattern.MatchString(baseURL) || skipVersionPrefix {
+		return baseURL + "/messages"
+	}
+	return baseURL + "/v1/messages"
+}
+
+// verifyProviderKeys 对一批 API Key 按 provider 模板的候选 baseURL 逐个探测验证，
+// 为每个 key 绑定其首个可用端点（per-key baseURL），供 failover 热路径过滤无效组合。
+//
+// 探测策略（对应用户决策）：
+//   - 每个 key 按 CandidatesForKey 得到的顺序探测（前缀命中的 plan 候选优先，其余回退在后）
+//   - 命中首个 OK 端点即绑定，停止该 key 的后续探测
+//   - 若某 key 遍历完所有候选：
+//     · 存在鉴权失败（401/403）→ 该 key 无效
+//     · 仅端点不可达/网络错误 → 该 key 无可用端点
+//
+// 返回：
+//   - keyConfigs：与 apiKeys 一一对应、且 BaseURL 已绑定的 APIKeyConfig 列表
+//   - baseURLs：去重后的所有命中端点（渠道级 BaseURLs，保持首次命中顺序）
+//   - err：任一 key 验证失败时返回聚合错误（渠道不创建）
+//
+// 仅支持 Anthropic 兼容 provider（ServiceType=claude）；其余类型返回错误。
+func verifyProviderKeys(ctx context.Context, tmpl *config.ProviderTemplate, apiKeys []string) ([]config.APIKeyConfig, []string, error) {
+	if tmpl == nil {
+		return nil, nil, fmt.Errorf("provider 模板为空")
+	}
+	if tmpl.ServiceType != "claude" {
+		return nil, nil, fmt.Errorf("provider %s 暂不支持模板化验证（serviceType=%s）", tmpl.ProviderID, tmpl.ServiceType)
+	}
+	if len(apiKeys) == 0 {
+		return nil, nil, fmt.Errorf("apiKeys 不能为空")
+	}
+
+	keyConfigs := make([]config.APIKeyConfig, 0, len(apiKeys))
+	baseURLs := make([]string, 0, len(tmpl.Candidates))
+	seenBaseURL := make(map[string]bool)
+
+	for _, apiKey := range apiKeys {
+		candidates := tmpl.CandidatesForKey(apiKey)
+		if len(candidates) == 0 {
+			return nil, nil, fmt.Errorf("provider %s 无可用候选端点", tmpl.ProviderID)
+		}
+
+		var (
+			boundURL   string
+			authFailed bool
+			lastMsg    string
+		)
+		for _, cand := range candidates {
+			res := VerifyClaudeEndpoint(ctx, cand.BaseURL, apiKey, "")
+			if res.OK {
+				boundURL = cand.BaseURL
+				break
+			}
+			if res.AuthFailed {
+				authFailed = true
+			}
+			if res.Message != "" {
+				lastMsg = res.Message
+			} else if res.Err != nil {
+				lastMsg = res.Err.Error()
+			}
+		}
+
+		if boundURL == "" {
+			mask := utils.MaskAPIKey(apiKey)
+			if authFailed {
+				return nil, nil, fmt.Errorf("Key %s 鉴权失败：所有候选端点均返回 401/403", mask)
+			}
+			return nil, nil, fmt.Errorf("Key %s 无可用端点：所有候选均不可达（%s）", mask, lastMsg)
+		}
+
+		keyConfigs = append(keyConfigs, config.APIKeyConfig{
+			Key:     apiKey,
+			BaseURL: boundURL,
+		})
+		if !seenBaseURL[boundURL] {
+			seenBaseURL[boundURL] = true
+			baseURLs = append(baseURLs, boundURL)
+		}
+	}
+
+	return keyConfigs, baseURLs, nil
+}

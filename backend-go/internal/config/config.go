@@ -29,6 +29,7 @@ type UpstreamConfig struct {
 	DisabledAPIKeys       []DisabledKeyInfo                  `json:"disabledApiKeys,omitempty"`   // 被拉黑的 API Key（持久化，需手动恢复）
 	ServiceType           string                             `json:"serviceType"`                 // gemini, openai, claude
 	AuthHeader            string                             `json:"authHeader,omitempty"`        // 认证头覆盖：auto(空)/bearer/x-api-key
+	ProviderID            string                             `json:"providerId,omitempty"`        // 来源 provider 模板 ID（如 mimo/deepseek），模板化添加时写入，用于回溯与预设引用
 	Name                  string                             `json:"name,omitempty"`
 	Description           string                             `json:"description,omitempty"`
 	Website               string                             `json:"website,omitempty"`
@@ -121,8 +122,12 @@ type UpstreamConfig struct {
 
 // APIKeyConfig 描述单个 API Key 的附加调度配置。
 type APIKeyConfig struct {
-	Key                      string   `json:"key"`
-	Name                     string   `json:"name,omitempty"`
+	Key  string `json:"key"`
+	Name string `json:"name,omitempty"`
+	// BaseURL 该 Key 绑定的上游端点。非空时 failover 遍历仅在此 baseURL 上尝试该 Key，
+	// 避免 provider 模板化添加场景下不同 plan 的 Key（如 MiMo sk-/tp-）与多 baseURL 产生无效笛卡尔积组合。
+	// 为空时保持原有笛卡尔积行为（向后兼容，历史手填渠道不受影响）。
+	BaseURL                  string   `json:"baseUrl,omitempty"`
 	Enabled                  *bool    `json:"enabled,omitempty"`
 	QuotaGroup               string   `json:"quotaGroup,omitempty"`
 	RateLimitRPM             int      `json:"rateLimitRpm,omitempty"`

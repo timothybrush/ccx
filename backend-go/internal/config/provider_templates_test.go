@@ -1,0 +1,59 @@
+package config
+
+import "testing"
+
+func TestCandidatesForKeyPrefix(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("mimo")
+	if !ok {
+		t.Fatal("未找到 mimo 模板")
+	}
+
+	// sk- 前缀 → payg 优先
+	skCands := tmpl.CandidatesForKey("sk-abc")
+	if len(skCands) == 0 || skCands[0].PlanTag != "payg" {
+		t.Errorf("sk- key 首选应为 payg，实际 %+v", skCands)
+	}
+
+	// tp- 前缀 → token_plan 优先，且按 Priority（cn=0 先）
+	tpCands := tmpl.CandidatesForKey("tp-xyz")
+	if len(tpCands) == 0 || tpCands[0].PlanTag != "token_plan" || tpCands[0].Region != "cn" {
+		t.Errorf("tp- key 首选应为 token_plan/cn，实际 %+v", tpCands)
+	}
+	// tp- 回退候选应包含 payg（全部候选都在）
+	if len(tpCands) != len(tmpl.Candidates) {
+		t.Errorf("tp- key 应返回全部候选（含回退）%d，实际 %d", len(tmpl.Candidates), len(tpCands))
+	}
+
+	// 无匹配前缀 → 返回全部候选
+	unknownCands := tmpl.CandidatesForKey("xx-none")
+	if len(unknownCands) != len(tmpl.Candidates) {
+		t.Errorf("未匹配前缀应返回全部候选 %d，实际 %d", len(tmpl.Candidates), len(unknownCands))
+	}
+}
+
+func TestCandidatesForKeyNoPrefixRules(t *testing.T) {
+	// deepseek 无前缀规则，任意 key 返回全部候选
+	tmpl, ok := GetProviderTemplate("deepseek")
+	if !ok {
+		t.Fatal("未找到 deepseek 模板")
+	}
+	cands := tmpl.CandidatesForKey("anything")
+	if len(cands) != len(tmpl.Candidates) {
+		t.Errorf("无前缀规则应返回全部候选 %d，实际 %d", len(tmpl.Candidates), len(cands))
+	}
+}
+
+func TestListAndGetProviderTemplate(t *testing.T) {
+	all := ListProviderTemplates()
+	if len(all) < 4 {
+		t.Errorf("内置 provider 模板应 >= 4，实际 %d", len(all))
+	}
+	for _, id := range []string{"mimo", "deepseek", "kimi", "glm"} {
+		if _, ok := GetProviderTemplate(id); !ok {
+			t.Errorf("缺少 provider 模板: %s", id)
+		}
+	}
+	if _, ok := GetProviderTemplate("nonexistent"); ok {
+		t.Error("不存在的 providerId 应返回 false")
+	}
+}

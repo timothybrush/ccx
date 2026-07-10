@@ -1209,6 +1209,7 @@ func main() {
 		apiGroup.POST("/channels/import", handlers.ImportChannels(cfgManager))
 		apiGroup.POST("/channels/import/confirm", handlers.ImportChannelsConfirm(cfgManager))
 		apiGroup.GET("/channels/templates", handlers.GetChannelTemplates())
+		apiGroup.GET("/channels/provider-templates", handlers.GetProviderTemplates())
 	}
 
 	// 代理端点 - Messages API

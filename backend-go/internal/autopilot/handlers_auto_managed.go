@@ -8,14 +8,20 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/presetstore"
 	"github.com/gin-gonic/gin"
 )
 
 // ─── 请求/响应类型 ────────────────────────────────────────────────────────────────────
 
 // AutoAddRequest POST /:kind/channels/auto-add 请求体。
+//
+// 两种模式：
+//   - provider 模板模式：带 ProviderID + APIKeys，系统自动判别 baseURL（按 key 前缀探测验证），无需填 BaseURLs
+//   - 自定义模式：带 BaseURLs + APIKeys，保持原有行为
 type AutoAddRequest struct {
 	Name            string   `json:"name,omitempty"`
+	ProviderID      string   `json:"providerId,omitempty"`
 	BaseURLs        []string `json:"baseUrls"`
 	APIKeys         []string `json:"apiKeys"`
 	SubscriptionUID string   `json:"subscriptionUid,omitempty"`
@@ -30,18 +36,18 @@ type AutoAddResponse struct {
 
 // AutoStatusResponse GET /:kind/channels/:id/auto-status 响应体。
 type AutoStatusResponse struct {
-	AutoManaged   bool               `json:"autoManaged"`
-	AutoManagedAt *time.Time         `json:"autoManagedAt,omitempty"`
+	AutoManaged   bool                 `json:"autoManaged"`
+	AutoManagedAt *time.Time           `json:"autoManagedAt,omitempty"`
 	Discovery     *DiscoveryStatusInfo `json:"discovery,omitempty"`
 }
 
 // DiscoveryStatusInfo 发现状态信息。
 type DiscoveryStatusInfo struct {
-	Status     DiscoveryStatus            `json:"status"`
-	StartedAt  *time.Time                 `json:"startedAt,omitempty"`
-	FinishedAt *time.Time                 `json:"finishedAt,omitempty"`
-	Error      string                     `json:"error,omitempty"`
-	Endpoints  []EndpointDiscoveryInfo     `json:"endpoints"`
+	Status     DiscoveryStatus         `json:"status"`
+	StartedAt  *time.Time              `json:"startedAt,omitempty"`
+	FinishedAt *time.Time              `json:"finishedAt,omitempty"`
+	Error      string                  `json:"error,omitempty"`
+	Endpoints  []EndpointDiscoveryInfo `json:"endpoints"`
 }
 
 // EndpointDiscoveryInfo 端点发现结果（key 已掩码）。
@@ -58,6 +64,7 @@ type EndpointDiscoveryInfo struct {
 type AutoManagedDeps struct {
 	CfgManager  *config.ConfigManager
 	Runner      *AutoDiscoveryRunner
+	PresetStore *presetstore.PresetStore // 用于 provider 模板化添加时后端 apply 预设（可为 nil）
 }
 
 // RegisterAutoManagedRoutes 注册自动托管 API 路由。
@@ -116,12 +123,13 @@ func handleAutoAdd(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
 			return
 		}
-		if len(req.BaseURLs) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "baseUrls 不能为空"})
-			return
-		}
 		if len(req.APIKeys) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "apiKeys 不能为空"})
+			return
+		}
+		// provider 模板模式无需 baseUrls（由模板判定）；自定义模式必须带 baseUrls
+		if req.ProviderID == "" && len(req.BaseURLs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "baseUrls 不能为空"})
 			return
 		}
 
@@ -137,13 +145,50 @@ func handleAutoAdd(deps *AutoManagedDeps) gin.HandlerFunc {
 		upstream := config.UpstreamConfig{
 			Name:          name,
 			ChannelUID:    config.GenerateChannelUID(), // 预分配 channelUID，避免竞态
-			BaseURL:       req.BaseURLs[0],
-			BaseURLs:      req.BaseURLs,
-			APIKeys:       req.APIKeys,
 			ServiceType:   serviceType,
 			Status:        "active",
 			AutoManaged:   true,
 			AutoManagedAt: &now,
+		}
+
+		// provider 模板模式：按 key 前缀探测验证候选 baseURL，per-key 绑定成功端点
+		if req.ProviderID != "" {
+			tmpl, ok := config.GetProviderTemplate(req.ProviderID)
+			if !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("未知的 provider: %s", req.ProviderID)})
+				return
+			}
+			if tmpl.ChannelKind != "" && tmpl.ChannelKind != kind {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s 应添加到 %s 渠道，而非 %s", req.ProviderID, tmpl.ChannelKind, kind)})
+				return
+			}
+
+			keyConfigs, baseURLs, verr := verifyProviderKeys(c.Request.Context(), tmpl, req.APIKeys)
+			if verr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+				return
+			}
+
+			upstream.ProviderID = tmpl.ProviderID
+			upstream.ServiceType = tmpl.ServiceType
+			upstream.OriginType = tmpl.OriginType
+			upstream.OriginTier = tmpl.OriginTier
+			upstream.BaseURLs = baseURLs
+			upstream.BaseURL = baseURLs[0]
+			upstream.APIKeys = req.APIKeys
+			upstream.APIKeyConfigs = keyConfigs
+
+			// 后端 apply 预设（modelMapping / 兼容开关 / 视觉回退 / RPM 等）
+			if deps.PresetStore != nil {
+				if err := applyProviderPreset(deps.PresetStore.Get(), tmpl.PresetCollection, tmpl.PresetRef, &upstream); err != nil {
+					log.Printf("[AutoManaged-Add] 应用 provider 预设失败（继续创建）: %v", err)
+				}
+			}
+		} else {
+			// 自定义模式：保持原有行为
+			upstream.BaseURL = req.BaseURLs[0]
+			upstream.BaseURLs = req.BaseURLs
+			upstream.APIKeys = req.APIKeys
 		}
 
 		// 调用对应类型的 Add 方法

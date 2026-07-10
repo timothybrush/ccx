@@ -356,6 +356,16 @@ func TryUpstreamWithAllKeys(
 				}
 			}
 
+			// per-key baseURL 绑定过滤（provider 模板化添加）：
+			// 若该 Key 通过 APIKeyConfigs 绑定了特定端点，且与当前 BaseURL 不符，则跳过，
+			// 避免不同 plan 的 Key 与多 BaseURL 产生无效笛卡尔积（如 MiMo sk-/tp- 交叉尝试必失败）。
+			// 未绑定端点的 Key（历史手填渠道）保持原有笛卡尔积行为。
+			if bound := upstream.BoundBaseURLForKey(apiKey); bound != "" && bound != currentBaseURL {
+				failedKeys[apiKey] = true
+				RequestLogf(c, "[%s-Key] 跳过绑定其他端点的 Key: %s (绑定 %s ≠ 当前 %s)", apiType, utils.MaskAPIKey(apiKey), bound, currentBaseURL)
+				continue
+			}
+
 			// 检查熔断状态
 			circuitState := metricsManager.GetKeyCircuitState(currentBaseURL, apiKey, metricsServiceType)
 			if circuitState == metrics.CircuitStateOpen {

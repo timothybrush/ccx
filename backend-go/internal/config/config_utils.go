@@ -715,3 +715,22 @@ func (u *UpstreamConfig) GetAllBaseURLs() []string {
 	}
 	return nil
 }
+
+// BoundBaseURLForKey 返回某 API Key 通过 APIKeyConfigs 绑定的上游端点（已归一化）。
+//
+// provider 模板化添加时，不同 plan 的 Key（如 MiMo sk-/tp-）各自绑定成功探测的 baseURL，
+// failover 遍历应仅在绑定端点上尝试该 Key，避免多 baseURL × 多 Key 的无效笛卡尔积。
+//
+// 返回空串表示该 Key 未绑定端点（历史手填渠道 / 自定义模式），调用方应保持原有笛卡尔积行为。
+// 归一化后与 GetAllBaseURLs 的元素同源，便于直接字符串比较。
+func (u *UpstreamConfig) BoundBaseURLForKey(apiKey string) string {
+	for _, cfg := range u.APIKeyConfigs {
+		if cfg.Key == apiKey {
+			if cfg.BaseURL == "" {
+				return ""
+			}
+			return utils.CanonicalBaseURL(cfg.BaseURL, u.ServiceType)
+		}
+	}
+	return ""
+}
