@@ -6,9 +6,40 @@ import { API_BASE } from './api-helpers'
 /** 自动添加渠道请求 */
 export interface AutoAddChannelRequest {
   name?: string
-  baseUrls: string[]
+  /** provider 模板模式：带 providerId 时 baseURL 由后端按 key 前缀探测判定，无需填 baseUrls */
+  providerId?: string
+  baseUrls?: string[]
   apiKeys: string[]
   subscriptionUid?: string
+}
+
+/** Provider 模板 key 前缀规则 */
+export interface ProviderKeyPrefixRule {
+  prefix: string
+  planTag: string
+}
+
+/** Provider 候选 baseURL */
+export interface ProviderCandidate {
+  baseUrl: string
+  planTag?: string
+  region?: string
+  priority?: number
+}
+
+/** 官方 provider 模板 */
+export interface ProviderTemplate {
+  providerId: string
+  displayName: string
+  description?: string
+  channelKind: string
+  serviceType: string
+  originType?: string
+  originTier?: string
+  keyPrefixRules?: ProviderKeyPrefixRule[]
+  candidates?: ProviderCandidate[]
+  presetRef?: string
+  presetCollection?: string
 }
 
 /** 自动添加渠道响应 */
@@ -101,4 +132,24 @@ export async function getChannelAutoStatus(
   }
 
   return response.json()
+}
+
+/**
+ * 获取内置 provider 模板（模板化添加：选 provider + 输 key）
+ * GET /api/channels/provider-templates
+ */
+export async function getProviderTemplates(): Promise<ProviderTemplate[]> {
+  const url = `${API_BASE}/channels/provider-templates`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.statusText)
+    throw new Error(`provider-templates failed (${response.status}): ${text}`)
+  }
+
+  const data = await response.json()
+  return data.providers ?? []
 }

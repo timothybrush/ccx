@@ -54,6 +54,7 @@ import type {
   AutoAddChannelRequest,
   AutoAddChannelResponse,
   ChannelAutoStatusResponse,
+  ProviderTemplatesResponse,
   CostReportResponse,
   ABTestResultsResponse,
   ABTestEmergencyStopResponse,
@@ -1317,6 +1318,11 @@ export class ApiService {
   /** 查询渠道自动托管状态 */
   async getChannelAutoStatus(kind: string, channelId: number): Promise<ChannelAutoStatusResponse> {
     return this.request(`/${kind}/channels/${channelId}/auto-status`)
+  }
+
+  /** 获取内置 provider 模板（模板化添加：选 provider + 输 key） */
+  async getProviderTemplates(): Promise<ProviderTemplatesResponse> {
+    return this.request('/channels/provider-templates')
   }
 
   // ============== 成本报表 API（Phase 4 Item 2） ==============

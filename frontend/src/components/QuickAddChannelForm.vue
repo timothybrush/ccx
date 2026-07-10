@@ -1,7 +1,39 @@
 <template>
   <div class="quick-add-form d-flex flex-column ga-4">
-    <!-- 服务类型选择 -->
-    <div class="d-flex align-center ga-2">
+    <!-- Provider 选择（模板化添加：选 provider + 输 key，系统自动判别 plan/baseURL） -->
+    <div v-if="providerItems.length > 1" class="d-flex align-center ga-2">
+      <v-icon color="primary" size="20">mdi-shape-outline</v-icon>
+      <div class="text-caption text-medium-emphasis flex-shrink-0">
+        {{ t('autopilot.quickAdd.provider.label') }}
+      </div>
+      <v-spacer />
+      <v-select
+        v-model="providerId"
+        :items="providerItems"
+        item-title="title"
+        item-value="value"
+        variant="outlined"
+        density="compact"
+        hide-details
+        :menu-props="{ contentClass: 'upstream-select-menu' }"
+        class="service-type-select"
+        @update:model-value="onProviderChange"
+      />
+    </div>
+
+    <!-- Provider 说明 -->
+    <v-alert
+      v-if="isProviderMode && selectedProvider?.description"
+      color="primary"
+      variant="tonal"
+      density="comfortable"
+      icon="mdi-information"
+    >
+      {{ selectedProvider.description }}
+    </v-alert>
+
+    <!-- 服务类型选择（自定义模式；provider 模式下由模板锁定，隐藏） -->
+    <div v-if="!isProviderMode" class="d-flex align-center ga-2">
       <v-icon :color="serviceTypeColor" size="20">{{ serviceTypeIcon }}</v-icon>
       <div class="text-caption text-medium-emphasis flex-shrink-0">
         {{ t('channelEditor.basic.serviceType.label') }}
@@ -32,8 +64,8 @@
       prepend-inner-icon="mdi-tag"
     />
 
-    <!-- Base URL 输入 -->
-    <div>
+    <!-- Base URL 输入（provider 模式下由后端按 key 前缀判定，隐藏） -->
+    <div v-if="!isProviderMode">
       <div class="d-flex align-center justify-space-between mb-2">
         <div class="d-flex align-center ga-2">
           <v-icon size="16" color="medium-emphasis">mdi-web</v-icon>
@@ -167,6 +199,17 @@
       </v-card-text>
     </v-card>
 
+    <!-- 提交错误（provider 模式 key 无效等） -->
+    <v-alert
+      v-if="submitError"
+      color="error"
+      variant="tonal"
+      density="comfortable"
+      icon="mdi-alert-circle-outline"
+    >
+      {{ submitError }}
+    </v-alert>
+
     <!-- 发现状态面板 -->
     <v-card v-if="submitting" variant="outlined" class="discovery-card" rounded="lg">
       <v-card-text class="pa-4">
@@ -208,9 +251,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from '../i18n'
-import { autoAddChannel, getChannelAutoStatus } from '../services/autopilot-api'
+import {
+  autoAddChannel,
+  getChannelAutoStatus,
+  getProviderTemplates,
+} from '../services/autopilot-api'
+import type { ProviderTemplate } from '../services/autopilot-api'
 
 type ServiceType = 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot'
 type ChannelType = 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
@@ -236,6 +284,12 @@ const apiKeys = ref<string[]>([''])
 const showKeys = ref<boolean[]>([false])
 const autoManaged = ref(true)
 const submitting = ref(false)
+const submitError = ref('')
+
+// ---- Provider 模板状态 ----
+// '' 表示自定义模式（手填 baseURL）；非空表示选中某官方 provider（模板化添加）
+const providerId = ref('')
+const providerTemplates = ref<ProviderTemplate[]>([])
 
 // ---- 发现状态 ----
 import type { AutoEndpointStatus } from '../services/autopilot-api'
@@ -285,10 +339,33 @@ const serviceTypeColor = computed(() => {
 
 const isCopilot = computed(() => serviceType.value === 'copilot')
 
+// ---- Provider 模板计算属性 ----
+// 仅展示与当前渠道类型匹配的 provider（channelKind 为空视为通用）
+const availableProviders = computed(() =>
+  providerTemplates.value.filter(
+    p => !p.channelKind || p.channelKind === props.channelType,
+  ),
+)
+
+// 选择项：首项为「自定义」（value=''），其余为官方 provider
+const providerItems = computed(() => [
+  { title: t('autopilot.quickAdd.provider.custom'), value: '' },
+  ...availableProviders.value.map(p => ({ title: p.displayName, value: p.providerId })),
+])
+
+const selectedProvider = computed(() =>
+  availableProviders.value.find(p => p.providerId === providerId.value),
+)
+
+const isProviderMode = computed(() => providerId.value !== '')
+
 const isFormValid = computed(() => {
+  const hasKey = apiKeys.value.some(k => k.trim() !== '')
+  // provider 模式：baseURL 由后端判定，只需 key
+  if (isProviderMode.value) return hasKey
   const hasUrl = baseUrls.value.some(u => u.trim() !== '')
   if (isCopilot.value) return hasUrl
-  return hasUrl && apiKeys.value.some(k => k.trim() !== '')
+  return hasUrl && hasKey
 })
 
 const statusText = computed(() => {
@@ -312,6 +389,24 @@ function getDefaultServiceType(): ServiceType {
 function onServiceTypeChange() {
   if (isCopilot.value && baseUrls.value.length === 1 && !baseUrls.value[0]) {
     baseUrls.value = ['https://api.githubcopilot.com']
+  }
+}
+
+// 切换 provider：选中官方 provider 时锁定其 serviceType（baseURL 由后端判定）
+function onProviderChange() {
+  submitError.value = ''
+  const tmpl = selectedProvider.value
+  if (tmpl) {
+    serviceType.value = tmpl.serviceType as ServiceType
+  }
+}
+
+async function loadProviderTemplates() {
+  try {
+    providerTemplates.value = await getProviderTemplates()
+  } catch (err) {
+    console.error('[QuickAdd-Provider] 加载 provider 模板失败:', err)
+    providerTemplates.value = []
   }
 }
 
@@ -359,6 +454,10 @@ function generateRandomSuffix(length = 6): string {
 }
 
 function getGeneratedName(): string {
+  // provider 模式：baseURL 由后端判定，用 providerId 生成名称
+  if (isProviderMode.value) {
+    return `${providerId.value}-${generateRandomSuffix()}`
+  }
   const filtered = getFilteredBaseUrls()
   const first = filtered[0] || ''
   try {
@@ -413,17 +512,27 @@ async function handleSubmit() {
   if (!isFormValid.value || submitting.value) return
 
   submitting.value = true
+  submitError.value = ''
   autoStatus.status = 'discovering'
   autoStatus.endpoints = []
 
   const finalName = channelName.value.trim() || getGeneratedName()
 
   try {
-    const result = await autoAddChannel(props.channelType, {
-      name: finalName,
-      baseUrls: getFilteredBaseUrls(),
-      apiKeys: getFilteredApiKeys(),
-    })
+    const result = await autoAddChannel(
+      props.channelType,
+      isProviderMode.value
+        ? {
+            name: finalName,
+            providerId: providerId.value,
+            apiKeys: getFilteredApiKeys(),
+          }
+        : {
+            name: finalName,
+            baseUrls: getFilteredBaseUrls(),
+            apiKeys: getFilteredApiKeys(),
+          },
+    )
 
     if (result.discoveryStarted) {
       startPolling(props.channelType, result.index)
@@ -434,11 +543,30 @@ async function handleSubmit() {
     stopPolling()
     submitting.value = false
     autoStatus.status = 'failed'
+    // provider 模式下后端会对无效 key 返回 400（含明确原因），提取给用户
+    submitError.value = extractErrorMessage(err)
     console.error('[QuickAdd-Submit] 自动添加渠道失败:', err)
   }
 }
 
+// 从 auto-add 抛出的 Error 中提取后端返回的错误正文
+function extractErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  // autopilot-api 抛出格式：`auto-add failed (400): {"error":"..."}`
+  const jsonStart = raw.indexOf('{')
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart))
+      if (parsed?.error) return String(parsed.error)
+    } catch {
+      // 非 JSON 正文，回退到原始消息
+    }
+  }
+  return raw
+}
+
 function resetForm() {
+  providerId.value = ''
   serviceType.value = getDefaultServiceType()
   channelName.value = ''
   baseUrls.value = ['']
@@ -446,12 +574,17 @@ function resetForm() {
   showKeys.value = [false]
   autoManaged.value = true
   submitting.value = false
+  submitError.value = ''
   autoStatus.status = ''
   autoStatus.endpoints = []
   stopPolling()
 }
 
 // ---- 生命周期 ----
+onMounted(() => {
+  loadProviderTemplates()
+})
+
 onUnmounted(() => {
   stopPolling()
 })

@@ -1235,9 +1235,45 @@ export interface AutopilotTraceStats {
 // 自动添加渠道请求
 export interface AutoAddChannelRequest {
   name?: string
-  baseUrls: string[]
+  // provider 模板模式：带 providerId + apiKeys，baseURL 由后端按 key 前缀探测判定，baseUrls 可省略
+  providerId?: string
+  baseUrls?: string[]
   apiKeys: string[]
   subscriptionUid?: string
+}
+
+// Provider 模板 key 前缀规则
+export interface ProviderKeyPrefixRule {
+  prefix: string
+  planTag: string
+}
+
+// Provider 候选 baseURL
+export interface ProviderCandidate {
+  baseUrl: string
+  planTag?: string
+  region?: string
+  priority?: number
+}
+
+// 官方 provider 模板（模板化添加：选 provider + 输 key，系统自动判别 plan/baseURL）
+export interface ProviderTemplate {
+  providerId: string
+  displayName: string
+  description?: string
+  channelKind: string
+  serviceType: string
+  originType?: string
+  originTier?: string
+  keyPrefixRules?: ProviderKeyPrefixRule[]
+  candidates?: ProviderCandidate[]
+  presetRef?: string
+  presetCollection?: string
+}
+
+// GET /channels/provider-templates 响应
+export interface ProviderTemplatesResponse {
+  providers: ProviderTemplate[]
 }
 
 // 自动添加渠道响应

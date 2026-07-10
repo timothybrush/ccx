@@ -1155,6 +1155,8 @@
   "autopilot.quickAdd.discoveryDone": "Discovery complete",
   "autopilot.quickAdd.discoveryFailed": "Discovery failed",
   "autopilot.quickAdd.models": "models",
+  "autopilot.quickAdd.provider.label": "Provider",
+  "autopilot.quickAdd.provider.custom": "Custom (manual URL)",
   "autopilot.badge.label": "Auto",
   "autopilot.badge.tooltip": "Auto-managed channel"
 }
