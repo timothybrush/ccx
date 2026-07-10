@@ -4,7 +4,7 @@ GREEN=\033[0;32m
 YELLOW=\033[0;33m
 NC=\033[0m
 
-.PHONY: help install dev run build clean frontend-dev frontend-build embed-frontend desktop-dev desktop-build
+.PHONY: help install dev run build clean frontend-dev frontend-build embed-frontend desktop-dev desktop-build generate-preset-manifest
 
 help:
 	@echo "$(GREEN)CCX - 可用命令:$(NC)"
@@ -81,3 +81,6 @@ frontend-dev:
 
 frontend-build:
 	@cd frontend && bun run build
+
+generate-preset-manifest:
+	@node scripts/generate-preset-manifest.mjs

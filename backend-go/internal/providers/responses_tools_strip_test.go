@@ -434,6 +434,34 @@ func TestNormalizeResponsesInputForPassthrough_PreservesStatefulToolOutput(t *te
 	}
 }
 
+func TestNormalizeResponsesInputForPassthrough_StripsAdditionalTools(t *testing.T) {
+	req := map[string]interface{}{
+		"input": []interface{}{
+			map[string]interface{}{
+				"type": "message",
+				"role": "user",
+				"content": []interface{}{
+					map[string]interface{}{"type": "input_text", "text": "hello"},
+				},
+				"additional_tools": []interface{}{
+					map[string]interface{}{
+						"type":      "tool_search",
+						"execution": "client",
+					},
+				},
+			},
+		},
+	}
+
+	normalizeResponsesInputForPassthrough(req)
+
+	input := req["input"].([]interface{})
+	item := input[0].(map[string]interface{})
+	if _, ok := item["additional_tools"]; ok {
+		t.Fatalf("additional_tools 应在 passthrough normalization 中被剥离: %#v", item)
+	}
+}
+
 func TestConvertCodexToolsForPassthrough(t *testing.T) {
 	t.Run("转换 custom apply_patch 为 5 个 function 工具", func(t *testing.T) {
 		req := map[string]interface{}{

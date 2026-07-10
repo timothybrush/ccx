@@ -1264,6 +1264,7 @@ func normalizeResponsesInputForPassthrough(reqMap map[string]interface{}) {
 
 func stripResponsesClientOnlyInputMetadata(item map[string]interface{}) {
 	delete(item, "internal_chat_message_metadata_passthrough")
+	delete(item, "additional_tools")
 }
 
 func normalizeStatelessResponsesToolHistory(input []interface{}) []interface{} {

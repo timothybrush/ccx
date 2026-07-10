@@ -42,6 +42,10 @@ type EnvConfig struct {
 	MetricsRetentionDays      int  // 数据保留天数（3-366）
 	// HTTP 客户端配置
 	ResponseHeaderTimeout int // 等待响应头超时时间（秒）
+	// 远程预置数据更新
+	PresetUpdateEnabled         bool   // 是否自动检查文档站预置更新（默认 true）
+	PresetUpdateURL             string // 官方预置 index URL
+	PresetUpdateIntervalMinutes int    // 检查间隔（分钟，30-10080）
 	// 驾驶舱 override 默认有效期
 	OverrideTTLMinutes int // 驾驶舱 override 默认有效期（分钟，1-1440，默认 30）
 	// 日志文件相关配置
@@ -96,6 +100,10 @@ func NewEnvConfig() *EnvConfig {
 		MetricsRetentionDays:      clampInt(getEnvAsInt("METRICS_RETENTION_DAYS", 366), 3, 366),
 		// HTTP 客户端配置
 		ResponseHeaderTimeout: clampInt(getEnvAsInt("RESPONSE_HEADER_TIMEOUT", 120), 30, 300), // 30-300 秒
+		// 远程预置数据更新：默认每 6 小时检查；最短 30 分钟，最长 7 天。
+		PresetUpdateEnabled:         getEnv("PRESET_UPDATE_ENABLED", "true") != "false",
+		PresetUpdateURL:             strings.TrimSpace(getEnv("PRESET_UPDATE_URL", "https://benedictking.github.io/ccx/presets/index.json")),
+		PresetUpdateIntervalMinutes: clampInt(getEnvAsInt("PRESET_UPDATE_INTERVAL_MINUTES", 360), 30, 10080),
 		// 驾驶舱 override 默认有效期
 		OverrideTTLMinutes: clampInt(getEnvAsInt("OVERRIDE_TTL_MINUTES", 30), 1, 1440),
 		// 日志文件配置

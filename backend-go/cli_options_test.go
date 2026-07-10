@@ -77,6 +77,7 @@ func TestResolveRuntimePathsDefaults(t *testing.T) {
 		ConversationStatePath:      filepath.Join(".config", "conversation_state.json"),
 		ScheduledRecoveryStatePath: filepath.Join(".config", "scheduled_recovery_state.json"),
 		AutopilotDBPath:            filepath.Join(".config", "autopilot.db"),
+		PresetCacheDir:             filepath.Join(".config", "presets"),
 		LogDir:                     "logs",
 		BackupDir:                  filepath.Join(".config", "backups"),
 	}

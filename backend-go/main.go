@@ -21,7 +21,6 @@ import (
 	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/conversation"
-	"github.com/BenedictKing/ccx/internal/presetstore"
 	"github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/BenedictKing/ccx/internal/handlers/chat"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
@@ -34,6 +33,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/logger"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/middleware"
+	"github.com/BenedictKing/ccx/internal/presetstore"
 	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -80,6 +80,7 @@ type runtimePaths struct {
 	ConversationStatePath      string
 	ScheduledRecoveryStatePath string
 	AutopilotDBPath            string
+	PresetCacheDir             string
 	LogDir                     string
 	BackupDir                  string
 }
@@ -278,6 +279,7 @@ func resolveRuntimePaths(opts cliOptions, envCfg *config.EnvConfig) (runtimePath
 		ConversationStatePath:      filepath.Join(stateDir, conversationStateFile),
 		ScheduledRecoveryStatePath: filepath.Join(stateDir, scheduledRecoveryStateFileName),
 		AutopilotDBPath:            filepath.Join(stateDir, autopilotDBFile),
+		PresetCacheDir:             filepath.Join(stateDir, "presets"),
 		LogDir:                     logDir,
 		BackupDir:                  backupDir,
 	}, nil
@@ -334,6 +336,19 @@ func main() {
 		log.Fatalf("初始化配置管理器失败: %v", err)
 	}
 	defer cfgManager.Close()
+
+	// 远程预置更新：启动时先尝试恢复已校验磁盘缓存，再由后台 worker 异步检查文档站。
+	// 网络/缓存失败不阻断服务，始终保留编译期 embedded fallback。
+	presetUpdater := presetstore.NewPresetUpdater(presetstore.Default(), presetstore.UpdaterConfig{
+		Enabled:  envCfg.PresetUpdateEnabled,
+		IndexURL: envCfg.PresetUpdateURL,
+		Interval: time.Duration(envCfg.PresetUpdateIntervalMinutes) * time.Minute,
+		CacheDir: paths.PresetCacheDir,
+	})
+	if err := presetUpdater.LoadCacheAtStartup(); err != nil && !os.IsNotExist(err) {
+		log.Printf("[PresetUpdater-Cache] 缓存不可用，继续使用内置预置: %v", err)
+	}
+	presetUpdater.Start(context.Background())
 
 	applyThinkingCacheConfig := func(cfg config.Config) {
 		if err := thinkingcache.Configure(thinkingcache.Config{
@@ -892,6 +907,7 @@ func main() {
 
 		// 预置数据（订阅来源分类等），前端表单选项来源；独立于 autopilot 开关。
 		apiGroup.GET("/presets", presetstore.Handler(presetstore.Default()))
+		apiGroup.GET("/presets/status", presetstore.StatusHandler(presetUpdater))
 
 		apiGroup.POST("/channel-discovery", handlers.ChannelDiscoveryWithModelFetchers(cfgManager, discoveryModelFetchers))
 
@@ -1376,6 +1392,10 @@ func main() {
 		} else {
 			log.Println("[Server-Shutdown] 服务器已安全关闭")
 		}
+
+		// 停止远程预置更新器（取消进行中的 HTTP 请求并等待 worker 退出）。
+		presetUpdater.Stop()
+		log.Println("[PresetUpdater-Shutdown] 预置更新器已安全关闭")
 
 		// 关闭指标持久化存储
 		if metricsStore != nil {
