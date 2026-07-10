@@ -41,8 +41,15 @@
 
 ---
 
-> **上游版本变更**
+## [ ] gpt-5.6的适配
 
-## [ ] Codex rust-v0.143.0 上游协议/工具变更评估
+2.openai新增了"OpenAI-Beta": “{client_header:OpenAI-Beta}” 这个，来传输子代理相关信息，这个也需要调整
+3.工具调用传参之类的都需要优化
+4.提醒下同行，oai在最新版本codex里面加入了设备验证相关信息，可能会封pro号
 
-发现协议/工具/用法变更：remote plugins 默认启用、system proxy routing (PAC/WPAD)、`codex remote-control pair` 新命令、MCP tool search by default + session auth、app-server 环境/线程检查 RPC、`max` reasoning effort 一等支持。请评估对 ccx Responses 渠道的影响。
+---
+
+## [ ] 在codex里面使用imagegen使用上游的文生图
+
+百炼生图是生成url, 和 openai生成base64不一样，比如我在codex介入ccx, ccx配的是百炼，然后在codex里面用 codex自带技能 imagegen 能调用百炼生图模型 成功生图
+https://github.com/QuantumNous/new-api/issues/5513
