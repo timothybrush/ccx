@@ -967,6 +967,7 @@
   "subscription.field.provider": "供应商",
   "subscription.field.originType": "来源类型",
   "subscription.field.originTier": "来源等级",
+  "subscription.field.originTierHint": "由来源类型自动推导，无需手动选择",
   "subscription.field.billingMode": "计费模式",
   "subscription.field.currency": "货币",
   "subscription.field.balance": "余额",

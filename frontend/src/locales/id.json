@@ -967,6 +967,7 @@
   "subscription.field.provider": "Penyedia",
   "subscription.field.originType": "Jenis Asal",
   "subscription.field.originTier": "Tingkat Asal",
+  "subscription.field.originTierHint": "Otomatis diturunkan dari tipe asal; tidak perlu dipilih manual",
   "subscription.field.billingMode": "Mode Penagihan",
   "subscription.field.currency": "Mata Uang",
   "subscription.field.balance": "Saldo",

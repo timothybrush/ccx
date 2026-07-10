@@ -94,13 +94,16 @@
               density="compact"
               class="mb-2"
             />
-            <v-select
-              v-model="form.originTier"
+            <!-- 来源等级：由来源类型系统推导，只读展示 -->
+            <v-text-field
+              :model-value="derivedOriginTierLabel"
               :label="t('subscription.field.originTier')"
-              :items="originTierOptions"
               variant="outlined"
               density="compact"
               class="mb-2"
+              readonly
+              :hint="t('subscription.field.originTierHint')"
+              persistent-hint
             />
             <v-select
               v-model="form.billingMode"
@@ -286,12 +289,28 @@ const originTypeOptions = computed(() => [
   { title: t('subscription.originType.public_benefit'), value: 'public_benefit' },
 ])
 
-const originTierOptions = computed(() => [
-  { title: t('subscription.originTier.first'), value: 'first' },
-  { title: t('subscription.originTier.second'), value: 'second' },
-  { title: t('subscription.originTier.third'), value: 'third' },
-  { title: t('subscription.originTier.unknown'), value: 'unknown' },
-])
+// 来源等级由来源类型系统推导，与后端 InferOriginTier 语义对齐：
+// official_api / official_token_plan -> first；relay -> second；
+// public_benefit(community) -> third；其余 -> unknown。
+function inferOriginTier(originType?: string): string {
+  switch (originType) {
+    case 'official_api':
+    case 'official_token_plan':
+      return 'first'
+    case 'relay':
+      return 'second'
+    case 'public_benefit':
+      return 'third'
+    default:
+      return 'unknown'
+  }
+}
+
+const derivedOriginTier = computed(() => inferOriginTier(form.value.originType))
+
+const derivedOriginTierLabel = computed(() =>
+  t(`subscription.originTier.${derivedOriginTier.value}`),
+)
 
 const billingModeOptions = computed(() => [
   { title: t('subscription.billingMode.token_plan'), value: 'token_plan' },
@@ -372,6 +391,9 @@ function closeDialog() {
 async function handleSubmit() {
   if (!form.value.subscriptionUid.trim() || !form.value.displayName.trim()) return
 
+  // 来源等级始终由来源类型推导，提交时同步，不接受手动值
+  form.value.originTier = derivedOriginTier.value
+
   saving.value = true
   try {
     if (editingSubscription.value) {
@@ -379,7 +401,7 @@ async function handleSubmit() {
         displayName: form.value.displayName,
         provider: form.value.provider || undefined,
         originType: form.value.originType || undefined,
-        originTier: form.value.originTier || undefined,
+        originTier: derivedOriginTier.value,
         billingMode: form.value.billingMode || undefined,
         currency: form.value.currency || undefined,
         balance: form.value.balance,

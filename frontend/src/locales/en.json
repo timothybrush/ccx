@@ -967,6 +967,7 @@
   "subscription.field.provider": "Provider",
   "subscription.field.originType": "Origin Type",
   "subscription.field.originTier": "Origin Tier",
+  "subscription.field.originTierHint": "Automatically derived from origin type; no manual selection needed",
   "subscription.field.billingMode": "Billing Mode",
   "subscription.field.currency": "Currency",
   "subscription.field.balance": "Balance",
