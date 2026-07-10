@@ -7,7 +7,7 @@ import EnvTab from '@/components/env/EnvTab.vue'
 import ConsoleTab from '@/components/console/ConsoleTab.vue'
 import ChannelTab from '@/components/channel/ChannelTab.vue'
 import SubscriptionTab from '@/components/subscriptions/SubscriptionTab.vue'
-import ConversationDashboard from '@/components/console/ConversationDashboard.vue'
+import CockpitOverview from '@/components/cockpit/CockpitOverview.vue'
 import HealthCenterTab from '@/components/health/HealthCenterTab.vue'
 import AutopilotTab from '@/components/autopilot/AutopilotTab.vue'
 import SetupLoading from '@/components/setup/SetupLoading.vue'
@@ -252,7 +252,7 @@ onBeforeUnmount(() => {
             <SubscriptionTab />
           </div>
           <div v-show="activeTab === 'cockpit'" class="h-full">
-            <ConversationDashboard />
+            <CockpitOverview />
           </div>
           <div v-show="activeTab === 'dashboard'" class="h-full">
             <ConsoleTab

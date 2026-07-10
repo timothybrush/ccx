@@ -10,11 +10,12 @@ import { useCopilotOAuth } from '@/composables/useCopilotOAuth'
 import { buildBaseConfigs, maskKey, useCopilotAccounts } from '@/composables/useCopilotAccounts'
 import { useLanguage } from '@/composables/useLanguage'
 import { GetProviderKeyAssets } from '@bindings/github.com/BenedictKing/ccx/desktop/desktopservice'
-import type { Channel, ChannelsResponse } from '@/services/admin-api'
+import NewApiSubscriptionForm from '@/components/subscriptions/NewApiSubscriptionForm.vue'
+import type { Channel, ChannelsResponse, NewApiProvisionResponse } from '@/services/admin-api'
 import type { ProviderKeyAsset } from '@/types'
 
 type CopilotTarget = 'messages' | 'chat' | 'responses' | 'gemini'
-type SubscriptionProvider = 'github-copilot'
+type SubscriptionProvider = 'github-copilot' | 'new-api'
 type CopilotKnownAccount = {
   target: CopilotTarget
   key: string
@@ -46,6 +47,8 @@ const verifyingAccount = ref(false)
 const removingKey = ref('')
 const pendingRemoveKey = ref('')
 const savedTokenFailed = ref(false)
+const newApiError = ref('')
+const newApiSuccessMessage = ref('')
 
 const {
   copilotOAuthLoading,
@@ -283,6 +286,18 @@ async function removeAccountConfirmed(key: string) {
   }
 }
 
+function handleNewApiCreated(result: NewApiProvisionResponse) {
+  newApiError.value = ''
+  newApiSuccessMessage.value = result.discoveryStarted
+    ? `${t('subscription.newApi.provisionSuccess')} ${t('subscription.newApi.discoveryStarted')}`
+    : t('subscription.newApi.provisionSuccess')
+}
+
+function handleNewApiError(message: string) {
+  newApiSuccessMessage.value = ''
+  newApiError.value = message
+}
+
 watch(latestAuthorizedCopilotToken, (token) => {
   if (token) void processNewToken(token)
 })
@@ -338,9 +353,25 @@ onMounted(() => {
             </p>
           </div>
         </button>
+
+        <button
+          type="button"
+          :class="[
+            'w-full rounded-xl border p-3 text-left transition-colors duration-200',
+            selectedSubscription === 'new-api'
+              ? 'border-border bg-secondary/60 dark:border-white/10 dark:bg-white/[0.04]'
+              : 'border-border bg-card/40 hover:bg-card/70 dark:hover:bg-white/[0.03]',
+          ]"
+          @click="selectedSubscription = 'new-api'"
+        >
+          <div class="min-w-0">
+            <span class="font-semibold text-foreground">new-api</span>
+            <p class="mt-1 truncate text-xs text-muted-foreground">{{ t('subscription.newApi.connect') }}</p>
+          </div>
+        </button>
       </div>
 
-      <section class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 space-y-5 md:min-h-0 md:overflow-y-auto md:overscroll-contain">
+      <section v-if="selectedSubscription === 'github-copilot'" class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 space-y-5 md:min-h-0 md:overflow-y-auto md:overscroll-contain">
         <div class="space-y-3">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
@@ -526,6 +557,18 @@ onMounted(() => {
             {{ t('subscription.retryAddAccount') }}
           </button>
         </div>
+      </section>
+
+      <section v-else class="bg-glass dark:bg-glass-dark border border-border rounded-2xl p-5 space-y-4 md:min-h-0 md:overflow-y-auto md:overscroll-contain">
+        <div class="min-w-0">
+          <h4 class="text-base font-semibold text-foreground">new-api</h4>
+          <p class="mt-1 text-sm text-muted-foreground">{{ t('subscription.newApi.connect') }}</p>
+        </div>
+
+        <p v-if="newApiError" class="text-xs text-destructive">{{ newApiError }}</p>
+        <p v-else-if="newApiSuccessMessage" class="text-xs text-emerald-600">{{ newApiSuccessMessage }}</p>
+
+        <NewApiSubscriptionForm @created="handleNewApiCreated" @error="handleNewApiError" />
       </section>
     </div>
   </div>
