@@ -53,6 +53,7 @@ type ProviderCandidate struct {
 //   - DeepSeek: https://api-docs.deepseek.com（Anthropic 兼容 /anthropic）
 //   - Kimi:     https://api.moonshot.ai/anthropic（全球）/ https://api.moonshot.cn/anthropic（中国）
 //   - GLM:      https://open.bigmodel.cn/api/anthropic
+//   - 火山方舟: https://ark.cn-beijing.volces.com/api/plan（Agent Plan）与 /api/coding（Coding Plan）
 //
 // Claude route 的 baseURL 使用 Anthropic 兼容入口且不带 /v1（claude provider 会自动补 /v1/messages）。
 // Chat/Responses/Gemini route 使用 OpenAI Chat 兼容入口 /v1（provider 自动拼 /chat/completions）。
@@ -107,6 +108,45 @@ var builtinProviderTemplates = []ProviderTemplate{
 		OriginTier:  "first",
 		Candidates: []ProviderCandidate{
 			{BaseURL: "https://api.deepseek.com/anthropic", PlanTag: "", Region: "", Priority: 0},
+		},
+	},
+	{
+		ProviderID:  "volcengine",
+		DisplayName: "火山方舟 Agent/Coding Plan",
+		Description: "ark- 套餐推理 Key（系统自动识别套餐；模型发现需为每个 Key 绑定火山云 Access Key）",
+		ChannelKind: "messages",
+		ServiceType: "claude",
+		OriginType:  "official_api",
+		OriginTier:  "first",
+		KeyPrefixRules: []KeyPrefixRule{
+			{Prefix: "ark-", PlanTag: "personal_plan"},
+		},
+		Candidates: volcenginePlanClaudeCandidates(),
+		Routes: []ProviderRoute{
+			{
+				ChannelKind: "messages",
+				ServiceType: "claude",
+				Description: "Agent/Coding Plan Claude Messages 入口",
+				Candidates:  volcenginePlanClaudeCandidates(),
+			},
+			{
+				ChannelKind: "chat",
+				ServiceType: "openai",
+				Description: "Agent/Coding Plan OpenAI Chat Completions 入口",
+				Candidates:  volcenginePlanChatCandidates(),
+			},
+			{
+				ChannelKind: "responses",
+				ServiceType: "openai",
+				Description: "Codex/Responses 请求转换到套餐 Chat Completions",
+				Candidates:  volcenginePlanChatCandidates(),
+			},
+			{
+				ChannelKind: "gemini",
+				ServiceType: "openai",
+				Description: "Gemini 请求转换到套餐 Chat Completions",
+				Candidates:  volcenginePlanChatCandidates(),
+			},
 		},
 	},
 	{
@@ -253,5 +293,19 @@ func mimoChatCandidates() []ProviderCandidate {
 		{BaseURL: "https://token-plan-cn.xiaomimimo.com/v1", PlanTag: "token_plan", Region: "cn", Priority: 0},
 		{BaseURL: "https://token-plan-sgp.xiaomimimo.com/v1", PlanTag: "token_plan", Region: "sgp", Priority: 1},
 		{BaseURL: "https://token-plan-ams.xiaomimimo.com/v1", PlanTag: "token_plan", Region: "ams", Priority: 2},
+	}
+}
+
+func volcenginePlanClaudeCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://ark.cn-beijing.volces.com/api/plan", PlanTag: "personal_plan", Region: "cn", Priority: 0},
+		{BaseURL: "https://ark.cn-beijing.volces.com/api/coding", PlanTag: "personal_plan", Region: "cn", Priority: 1},
+	}
+}
+
+func volcenginePlanChatCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://ark.cn-beijing.volces.com/api/plan/v3", PlanTag: "personal_plan", Region: "cn", Priority: 0},
+		{BaseURL: "https://ark.cn-beijing.volces.com/api/coding/v3", PlanTag: "personal_plan", Region: "cn", Priority: 1},
 	}
 }

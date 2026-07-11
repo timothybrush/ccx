@@ -54,12 +54,13 @@ type DiscoveryTask struct {
 // 内存状态机：每个渠道同时只运行一个发现任务，重复触发会被拒绝。
 // 所有配置为空时零值即可用，不触发任何实际操作。
 type AutoDiscoveryRunner struct {
-	mu      sync.Mutex
-	tasks   map[string]*DiscoveryTask // channelUID -> task
-	store   *ProfileStore             // nil 时不写画像，只记录结果
-	hub     *EventHub                 // nil 时不发布 discovery_completed/auto_mapping_applied 事件
-	client  *http.Client              // nil 时使用默认 client
-	timeout time.Duration             // 单次请求超时，默认 10s
+	mu                             sync.Mutex
+	tasks                          map[string]*DiscoveryTask // channelUID -> task
+	store                          *ProfileStore             // nil 时不写画像，只记录结果
+	hub                            *EventHub                 // nil 时不发布 discovery_completed/auto_mapping_applied 事件
+	client                         *http.Client              // nil 时使用默认 client
+	timeout                        time.Duration             // 单次请求超时，默认 10s
+	volcengineControlPlaneEndpoint string
 
 	// Phase 3B-2：自动发现时同步写入模型画像（nil 时不写 model_profiles，不影响现有功能）
 	ModelProfileStore *ModelProfileStore
@@ -136,7 +137,7 @@ func (r *AutoDiscoveryRunner) runDiscovery(ctx context.Context, task *DiscoveryT
 		}
 	}()
 
-	endpoints := r.discoverEndpoints(ctx, channel)
+	endpoints := r.discoverEndpoints(ctx, channel, cfgManager)
 
 	r.mu.Lock()
 	task.Endpoints = endpoints
@@ -193,7 +194,7 @@ func (r *AutoDiscoveryRunner) runDiscovery(ctx context.Context, task *DiscoveryT
 }
 
 // discoverEndpoints 遍历所有 (baseURL, key) 组合，调用 GET /v1/models。
-func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *config.UpstreamConfig) []EndpointDiscoveryResult {
+func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *config.UpstreamConfig, managers ...*config.ConfigManager) []EndpointDiscoveryResult {
 	baseURLs := channel.GetAllBaseURLs()
 	keys := channel.APIKeys
 
@@ -207,6 +208,10 @@ func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *co
 	}
 
 	var results []EndpointDiscoveryResult
+	var cfgManager *config.ConfigManager
+	if len(managers) > 0 {
+		cfgManager = managers[0]
+	}
 	for _, key := range keys {
 		keyBaseURLs := baseURLs
 		if bound := channel.BoundBaseURLForKey(key); bound != "" {
@@ -219,11 +224,58 @@ func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *co
 			default:
 			}
 
-			result := r.probeEndpoint(ctx, client, channel, baseURL, key)
+			var result EndpointDiscoveryResult
+			if channel.ProviderID == "volcengine" {
+				result = r.discoverVolcenginePlanEndpoint(ctx, client, channel, baseURL, key, cfgManager)
+			} else {
+				result = r.probeEndpoint(ctx, client, channel, baseURL, key)
+			}
 			results = append(results, result)
 		}
 	}
 	return results
+}
+
+func (r *AutoDiscoveryRunner) discoverVolcenginePlanEndpoint(
+	ctx context.Context,
+	client *http.Client,
+	channel *config.UpstreamConfig,
+	baseURL string,
+	apiKey string,
+	cfgManager *config.ConfigManager,
+) EndpointDiscoveryResult {
+	result := EndpointDiscoveryResult{KeyMask: utils.MaskAPIKey(apiKey), BaseURL: baseURL}
+	if cfgManager == nil || channel == nil || channel.AccountUID == "" {
+		result.ErrorMessage = "火山套餐模型发现需要自动托管账号上下文"
+		return result
+	}
+	credentialUID := channel.CredentialUIDForKey(apiKey)
+	credential, ok := cfgManager.GetManagedAccountCredential(channel.AccountUID, credentialUID)
+	if !ok || credential.VolcengineAccessKey == nil {
+		result.ErrorMessage = "请先为该推理 Key 绑定火山云 Access Key ID 与 Secret Access Key"
+		return result
+	}
+	planClient := &volcenginePlanClient{
+		Endpoint:   r.volcengineControlPlaneEndpoint,
+		HTTPClient: client,
+	}
+	plan, err := planClient.DetectPlan(ctx, credential.VolcengineAccessKey, volcenginePlanFromBaseURL(baseURL))
+	if err != nil {
+		result.ErrorMessage = err.Error()
+		return result
+	}
+	models, err := planClient.FetchModels(ctx, credential.VolcengineAccessKey, plan.Plan)
+	if err != nil {
+		result.ErrorMessage = err.Error()
+		return result
+	}
+	if err := cfgManager.SetManagedAccountVolcenginePlan(channel.AccountUID, credentialUID, plan.Plan, plan.Tier, plan.Status); err != nil {
+		log.Printf("[AutoDiscovery-Volcengine] 保存套餐识别结果失败 credential=%s: %v", credentialUID, err)
+	}
+	result.Models = models
+	result.ModelsCount = len(models)
+	result.ProtocolOk = true
+	return result
 }
 
 // probeEndpoint 探测单个 (baseURL, key) 组合。

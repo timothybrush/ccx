@@ -44,6 +44,100 @@ func (cm *ConfigManager) GetAccountChannels(accountUID string) []AccountChannel 
 	return result
 }
 
+// GetManagedAccountCredential 返回账号凭证的副本。
+func (cm *ConfigManager) GetManagedAccountCredential(accountUID, credentialUID string) (ManagedAccountCredential, bool) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	for _, account := range cm.config.ManagedAccounts {
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for _, credential := range account.Credentials {
+			if credential.CredentialUID == credentialUID {
+				if credential.VolcengineAccessKey != nil {
+					pair := *credential.VolcengineAccessKey
+					credential.VolcengineAccessKey = &pair
+				}
+				return credential, true
+			}
+		}
+	}
+	return ManagedAccountCredential{}, false
+}
+
+// SetManagedAccountVolcengineAccessKey 为一个推理 Key 绑定火山云签名凭证。
+func (cm *ConfigManager) SetManagedAccountVolcengineAccessKey(accountUID, credentialUID, accessKeyID, secretAccessKey string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	accessKeyID = strings.TrimSpace(accessKeyID)
+	secretAccessKey = strings.TrimSpace(secretAccessKey)
+	if accessKeyID == "" || secretAccessKey == "" {
+		return fmt.Errorf("Access Key ID 和 Secret Access Key 均不能为空")
+	}
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID != credentialUID {
+				continue
+			}
+			account.Credentials[j].VolcengineAccessKey = &VolcengineAccessKeyPair{
+				AccessKeyID: accessKeyID, SecretAccessKey: secretAccessKey,
+			}
+			return cm.saveConfigLocked(cm.config)
+		}
+		return fmt.Errorf("凭证 %s 不存在", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
+// ClearManagedAccountVolcengineAccessKey 删除推理 Key 绑定的火山云签名凭证。
+func (cm *ConfigManager) ClearManagedAccountVolcengineAccessKey(accountUID, credentialUID string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID != credentialUID {
+				continue
+			}
+			account.Credentials[j].VolcengineAccessKey = nil
+			return cm.saveConfigLocked(cm.config)
+		}
+		return fmt.Errorf("凭证 %s 不存在", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
+// SetManagedAccountVolcenginePlan 保存由火山管控面自动识别出的套餐信息。
+func (cm *ConfigManager) SetManagedAccountVolcenginePlan(accountUID, credentialUID, plan, tier, status string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for j := range account.Credentials {
+			credential := &account.Credentials[j]
+			if credential.CredentialUID != credentialUID || credential.VolcengineAccessKey == nil {
+				continue
+			}
+			credential.VolcengineAccessKey.Plan = strings.TrimSpace(plan)
+			credential.VolcengineAccessKey.PlanTier = strings.TrimSpace(tier)
+			credential.VolcengineAccessKey.PlanStatus = strings.TrimSpace(status)
+			return cm.saveConfigLocked(cm.config)
+		}
+		return fmt.Errorf("凭证 %s 不存在或未绑定火山 Access Key", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
 // mergeManagedProviderAccounts 将同一官方 provider 的历史自动托管账号归并为一个凭证池。
 // provider 模板已经描述完整协议 routes，因此账号身份应是 provider 级，而不是每个 Key 一份。
 func (cm *ConfigManager) mergeManagedProviderAccounts() bool {
@@ -392,8 +486,14 @@ func accountChannelSuffix(kind string) string {
 
 func (c *Config) syncManagedAccountsFromChannels() {
 	existingOrder := append([]ManagedAccountConfig(nil), c.ManagedAccounts...)
+	existingCredentials := make(map[string]map[string]ManagedAccountCredential, len(c.ManagedAccounts))
 	accounts := make(map[string]ManagedAccountConfig, len(c.ManagedAccounts))
 	for _, account := range c.ManagedAccounts {
+		byUID := make(map[string]ManagedAccountCredential, len(account.Credentials))
+		for _, credential := range account.Credentials {
+			byUID[credential.CredentialUID] = credential
+		}
+		existingCredentials[account.AccountUID] = byUID
 		account.Credentials = nil
 		accounts[account.AccountUID] = account
 	}
@@ -418,7 +518,10 @@ func (c *Config) syncManagedAccountsFromChannels() {
 			for _, apiKey := range channel.APIKeys {
 				uid := channel.CredentialUIDForKey(apiKey)
 				if !seen[uid] {
-					account.Credentials = append(account.Credentials, ManagedAccountCredential{CredentialUID: uid, APIKey: apiKey})
+					credential := existingCredentials[channel.AccountUID][uid]
+					credential.CredentialUID = uid
+					credential.APIKey = apiKey
+					account.Credentials = append(account.Credentials, credential)
 					seen[uid] = true
 				}
 			}

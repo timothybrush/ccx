@@ -219,6 +219,38 @@ func TestVerifyProviderKeys(t *testing.T) {
 		}
 	})
 
+	t.Run("火山套餐必须获得真实成功响应才绑定端点", func(t *testing.T) {
+		var paths []string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			paths = append(paths, r.URL.Path)
+			if strings.Contains(r.URL.Path, "/api/plan/") {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		tmpl := &config.ProviderTemplate{ProviderID: "volcengine"}
+		route := config.ProviderRoute{
+			ChannelKind: "chat",
+			ServiceType: "openai",
+			Candidates: []config.ProviderCandidate{
+				{BaseURL: server.URL + "/api/plan/v3", Priority: 0},
+				{BaseURL: server.URL + "/api/coding/v3", Priority: 1},
+			},
+		}
+		configs, _, err := verifyProviderRouteKeys(context.Background(), tmpl, route, []string{"ark-test"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(configs) != 1 || configs[0].BaseURL != server.URL+"/api/coding/v3" {
+			t.Fatalf("错误绑定套餐端点: %+v", configs)
+		}
+		if len(paths) != 2 || paths[0] != "/api/plan/v3/chat/completions" || paths[1] != "/api/coding/v3/chat/completions" {
+			t.Fatalf("探测路径=%v", paths)
+		}
+	})
+
 	t.Run("不支持的 serviceType 拒绝", func(t *testing.T) {
 		tmpl := &config.ProviderTemplate{ProviderID: "x"}
 		route := config.ProviderRoute{ChannelKind: "gemini", ServiceType: "gemini"}

@@ -150,8 +150,19 @@ type ManagedAccountConfig struct {
 }
 
 type ManagedAccountCredential struct {
-	CredentialUID string `json:"credentialUid"`
-	APIKey        string `json:"apiKey"`
+	CredentialUID       string                   `json:"credentialUid"`
+	APIKey              string                   `json:"apiKey"`
+	VolcengineAccessKey *VolcengineAccessKeyPair `json:"volcengineAccessKey,omitempty"`
+}
+
+// VolcengineAccessKeyPair 是火山云管控面签名凭证，用于 Agent/Coding Plan 识别与模型发现。
+// SecretAccessKey 与推理 API Key 一样只持久化在 0600 配置文件中，管理 API 不得回显。
+type VolcengineAccessKeyPair struct {
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
+	Plan            string `json:"plan,omitempty"`
+	PlanTier        string `json:"planTier,omitempty"`
+	PlanStatus      string `json:"planStatus,omitempty"`
 }
 
 // CredentialUIDForKey 返回账号内 API Key 的稳定凭证身份。
@@ -632,7 +643,14 @@ func (cm *ConfigManager) GetConfig() Config {
 		cloned.ManagedAccounts = make([]ManagedAccountConfig, len(cm.config.ManagedAccounts))
 		for i, account := range cm.config.ManagedAccounts {
 			cloned.ManagedAccounts[i] = account
-			cloned.ManagedAccounts[i].Credentials = append([]ManagedAccountCredential(nil), account.Credentials...)
+			cloned.ManagedAccounts[i].Credentials = make([]ManagedAccountCredential, len(account.Credentials))
+			for j, credential := range account.Credentials {
+				cloned.ManagedAccounts[i].Credentials[j] = credential
+				if credential.VolcengineAccessKey != nil {
+					pair := *credential.VolcengineAccessKey
+					cloned.ManagedAccounts[i].Credentials[j].VolcengineAccessKey = &pair
+				}
+			}
 		}
 	}
 

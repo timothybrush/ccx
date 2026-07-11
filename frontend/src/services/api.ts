@@ -55,6 +55,7 @@ import type {
   AutoAddChannelResponse,
   UpdateManagedAccountResponse,
   ManagedAccountsResponse,
+  VolcengineAccessKeyResponse,
   ChannelAutoStatusResponse,
   ProviderTemplatesResponse,
   CostReportResponse,
@@ -1360,6 +1361,25 @@ export class ApiService {
   /** 按稳定凭证 ID 删除账号中的单个 Key。 */
   async deleteManagedAccountCredential(accountUid: string, credentialUid: string): Promise<UpdateManagedAccountResponse> {
     return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  /** 为火山套餐推理 Key 绑定管控面 AK/SK，并自动识别 Agent/Coding Plan。 */
+  async setVolcengineAccessKey(
+    accountUid: string,
+    credentialUid: string,
+    data: { accessKeyId: string; secretAccessKey: string }
+  ): Promise<VolcengineAccessKeyResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/volcengine-access-key`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  /** 删除火山套餐推理 Key 绑定的管控面 AK/SK。 */
+  async clearVolcengineAccessKey(accountUid: string, credentialUid: string): Promise<void> {
+    await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/volcengine-access-key`, {
       method: 'DELETE',
     })
   }

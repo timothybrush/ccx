@@ -319,6 +319,87 @@ func TestManagedAccountUIDForProviderUsesExistingAccount(t *testing.T) {
 	}
 }
 
+func TestListManagedAccountsDoesNotExposeVolcengineSecret(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts":[{"accountUid":"acct_volc","providerId":"volcengine","name":"volc","credentials":[{"credentialUid":"cred_volc","apiKey":"ark-secret","volcengineAccessKey":{"accessKeyId":"AKIDEXAMPLE","secretAccessKey":"SECRET_MUST_NOT_LEAK","plan":"agent_plan","planTier":"Large","planStatus":"Running"}}]}],
+  "upstream":[{"accountUid":"acct_volc","channelUid":"ch_volc","providerId":"volcengine","name":"volc","serviceType":"claude","autoManaged":true,"baseUrl":"https://ark.cn-beijing.volces.com/api/plan","apiKeyConfigs":[{"credentialUid":"cred_volc","baseUrl":"https://ark.cn-beijing.volces.com/api/plan"}]}],
+  "chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[],"vectorsUpstream":[]
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	router := setupAutoManagedRouter(&AutoManagedDeps{CfgManager: manager})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "SECRET_MUST_NOT_LEAK") || strings.Contains(body, "ark-secret") {
+		t.Fatalf("管理 API 泄漏凭证: %s", body)
+	}
+	for _, expected := range []string{`"hasVolcengineAccessKey":true`, `"volcenginePlan":"agent_plan"`, `"volcenginePlanTier":"Large"`} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("响应缺少 %s: %s", expected, body)
+		}
+	}
+}
+
+func TestSetVolcengineAccessKeyDetectsPlanBeforePersisting(t *testing.T) {
+	controlPlane := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("Action") != "GetPersonalPlan" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var body struct{ Plan string }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Plan == "CodingPlan" {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"ResponseMetadata":{"Error":{"Code":"ResourceNotFound.Plan","Message":"not found"}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Result":{"PlanType":"Large","Status":"Running"}}`))
+	}))
+	defer controlPlane.Close()
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts":[{"accountUid":"acct_volc","providerId":"volcengine","name":"volc","credentials":[{"credentialUid":"cred_volc","apiKey":"ark-inference"}]}],
+  "upstream":[{"accountUid":"acct_volc","channelUid":"ch_volc","providerId":"volcengine","name":"volc","serviceType":"claude","autoManaged":true,"baseUrl":"https://ark.cn-beijing.volces.com/api/plan","apiKeyConfigs":[{"credentialUid":"cred_volc","baseUrl":"https://ark.cn-beijing.volces.com/api/plan"}]}],
+  "chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[],"vectorsUpstream":[]
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	runner.client = controlPlane.Client()
+	runner.volcengineControlPlaneEndpoint = controlPlane.URL
+	router := setupAutoManagedRouter(&AutoManagedDeps{CfgManager: manager, Runner: runner})
+	req := httptest.NewRequest(http.MethodPut, "/api/accounts/acct_volc/credentials/cred_volc/volcengine-access-key", bytes.NewBufferString(`{"accessKeyId":"AKID","secretAccessKey":"SECRET"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"plan":"agent_plan"`) {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	credential, ok := manager.GetManagedAccountCredential("acct_volc", "cred_volc")
+	if !ok || credential.VolcengineAccessKey == nil || credential.VolcengineAccessKey.SecretAccessKey != "SECRET" || credential.VolcengineAccessKey.Plan != "agent_plan" {
+		t.Fatalf("凭证未正确持久化: %+v", credential)
+	}
+}
+
 func TestProviderAutoAddReusesExistingAccount(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")

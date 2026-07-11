@@ -93,6 +93,8 @@ func RegisterAutoManagedRoutes(apiGroup *gin.RouterGroup, deps *AutoManagedDeps)
 	apiGroup.POST("/accounts/:accountUid/credentials", handleAddAccountCredentials(deps))
 	apiGroup.PATCH("/accounts/:accountUid/credentials", handlePatchAccountCredentials(deps))
 	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid", handleDeleteAccountCredential(deps))
+	apiGroup.PUT("/accounts/:accountUid/credentials/:credentialUid/volcengine-access-key", handleSetVolcengineAccessKey(deps))
+	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid/volcengine-access-key", handleClearVolcengineAccessKey(deps))
 	kinds := []string{"messages", "chat", "responses", "gemini", "images", "vectors"}
 	for _, kind := range kinds {
 		apiGroup.POST("/"+kind+"/channels/auto-add", handleAutoAdd(deps))
@@ -124,8 +126,13 @@ func handleRenameAccount(deps *AutoManagedDeps) gin.HandlerFunc {
 }
 
 type managedAccountCredentialView struct {
-	CredentialUID string `json:"credentialUid"`
-	KeyMask       string `json:"keyMask"`
+	CredentialUID             string `json:"credentialUid"`
+	KeyMask                   string `json:"keyMask"`
+	HasVolcengineAccessKey    bool   `json:"hasVolcengineAccessKey,omitempty"`
+	VolcengineAccessKeyIDMask string `json:"volcengineAccessKeyIdMask,omitempty"`
+	VolcenginePlan            string `json:"volcenginePlan,omitempty"`
+	VolcenginePlanTier        string `json:"volcenginePlanTier,omitempty"`
+	VolcenginePlanStatus      string `json:"volcenginePlanStatus,omitempty"`
 }
 
 type managedAccountChannelView struct {
@@ -156,10 +163,18 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 		for _, account := range cfg.ManagedAccounts {
 			view := managedAccountView{AccountUID: account.AccountUID, ProviderID: account.ProviderID, Name: account.Name}
 			for _, credential := range account.Credentials {
-				view.Credentials = append(view.Credentials, managedAccountCredentialView{
+				credentialView := managedAccountCredentialView{
 					CredentialUID: credential.CredentialUID,
 					KeyMask:       utils.MaskAPIKey(credential.APIKey),
-				})
+				}
+				if credential.VolcengineAccessKey != nil {
+					credentialView.HasVolcengineAccessKey = true
+					credentialView.VolcengineAccessKeyIDMask = utils.MaskAPIKey(credential.VolcengineAccessKey.AccessKeyID)
+					credentialView.VolcenginePlan = credential.VolcengineAccessKey.Plan
+					credentialView.VolcenginePlanTier = credential.VolcengineAccessKey.PlanTier
+					credentialView.VolcenginePlanStatus = credential.VolcengineAccessKey.PlanStatus
+				}
+				view.Credentials = append(view.Credentials, credentialView)
 			}
 			for _, channel := range deps.CfgManager.GetAccountChannels(account.AccountUID) {
 				view.Channels = append(view.Channels, managedAccountChannelView{
@@ -173,6 +188,93 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 			accounts = append(accounts, view)
 		}
 		c.JSON(http.StatusOK, gin.H{"accounts": accounts})
+	}
+}
+
+func handleSetVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		var req struct {
+			AccessKeyID     string `json:"accessKeyId"`
+			SecretAccessKey string `json:"secretAccessKey"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
+			return
+		}
+		accountUID := strings.TrimSpace(c.Param("accountUid"))
+		credentialUID := strings.TrimSpace(c.Param("credentialUid"))
+		channels := deps.CfgManager.GetAccountChannels(accountUID)
+		if len(channels) == 0 || channels[0].Upstream.ProviderID != "volcengine" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "仅火山方舟自动托管账号支持绑定 Access Key"})
+			return
+		}
+		if _, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID); !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "推理 Key 凭证不存在"})
+			return
+		}
+		pair := &config.VolcengineAccessKeyPair{AccessKeyID: strings.TrimSpace(req.AccessKeyID), SecretAccessKey: strings.TrimSpace(req.SecretAccessKey)}
+		planClient := &volcenginePlanClient{}
+		if deps.Runner != nil {
+			planClient.Endpoint = deps.Runner.volcengineControlPlaneEndpoint
+			planClient.HTTPClient = deps.Runner.client
+		}
+		hint := ""
+		for _, channel := range channels {
+			for _, keyConfig := range channel.Upstream.APIKeyConfigs {
+				if keyConfig.CredentialUID == credentialUID {
+					hint = volcenginePlanFromBaseURL(keyConfig.BaseURL)
+					break
+				}
+			}
+			if hint != "" {
+				break
+			}
+		}
+		plan, err := planClient.DetectPlan(c.Request.Context(), pair, hint)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.CfgManager.SetManagedAccountVolcengineAccessKey(accountUID, credentialUID, req.AccessKeyID, req.SecretAccessKey); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.CfgManager.SetManagedAccountVolcenginePlan(accountUID, credentialUID, plan.Plan, plan.Tier, plan.Status); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		started := 0
+		for _, channel := range deps.CfgManager.GetAccountChannels(accountUID) {
+			if triggerDiscoveryForChannel(deps, channel.Kind, channel.Upstream.ChannelUID) {
+				started++
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"accountUid": accountUID, "credentialUid": credentialUID,
+			"accessKeyIdMask": utils.MaskAPIKey(strings.TrimSpace(req.AccessKeyID)),
+			"plan":            plan.Plan, "planTier": plan.Tier, "planStatus": plan.Status,
+			"discoveryStarted": started,
+		})
+	}
+}
+
+func handleClearVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		accountUID := strings.TrimSpace(c.Param("accountUid"))
+		credentialUID := strings.TrimSpace(c.Param("credentialUid"))
+		if err := deps.CfgManager.ClearManagedAccountVolcengineAccessKey(accountUID, credentialUID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
 	}
 }
 

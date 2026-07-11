@@ -62,6 +62,10 @@ func VerifyOpenAIChatEndpoint(ctx context.Context, baseURL, apiKey, authHeader s
 }
 
 func verifyJSONPostEndpoint(ctx context.Context, url, apiKey, authHeader string, prepare func(*http.Request), body []byte) EndpointVerifyResult {
+	return verifyJSONPostEndpointWithPolicy(ctx, url, apiKey, authHeader, prepare, body, true)
+}
+
+func verifyJSONPostEndpointWithPolicy(ctx context.Context, url, apiKey, authHeader string, prepare func(*http.Request), body []byte, acceptValidationError bool) EndpointVerifyResult {
 	reqCtx, cancel := context.WithTimeout(ctx, verifyEndpointTimeout)
 	defer cancel()
 
@@ -87,7 +91,7 @@ func verifyJSONPostEndpoint(ctx context.Context, url, apiKey, authHeader string,
 	switch {
 	case sc >= 200 && sc < 300:
 		return EndpointVerifyResult{OK: true, StatusCode: sc}
-	case sc == http.StatusBadRequest || sc == http.StatusUnprocessableEntity:
+	case acceptValidationError && (sc == http.StatusBadRequest || sc == http.StatusUnprocessableEntity):
 		// 占位模型/参数被拒，但服务可达且 key 有效
 		return EndpointVerifyResult{OK: true, StatusCode: sc, Message: "服务可达（探测参数被拒，鉴权通过）"}
 	case sc == http.StatusUnauthorized || sc == http.StatusForbidden:
@@ -174,7 +178,7 @@ func verifyProviderRouteKeys(ctx context.Context, tmpl *config.ProviderTemplate,
 			lastMsg    string
 		)
 		for _, cand := range candidates {
-			res := verifyProviderCandidateEndpoint(ctx, route, cand.BaseURL, apiKey)
+			res := verifyProviderCandidateEndpoint(ctx, tmpl.ProviderID, route, cand.BaseURL, apiKey)
 			if res.OK {
 				boundURL = cand.BaseURL
 				break
@@ -210,12 +214,31 @@ func verifyProviderRouteKeys(ctx context.Context, tmpl *config.ProviderTemplate,
 	return keyConfigs, baseURLs, nil
 }
 
-func verifyProviderCandidateEndpoint(ctx context.Context, route config.ProviderRoute, baseURL, apiKey string) EndpointVerifyResult {
+func verifyProviderCandidateEndpoint(ctx context.Context, providerID string, route config.ProviderRoute, baseURL, apiKey string) EndpointVerifyResult {
+	if providerID == "volcengine" {
+		return verifyVolcenginePlanEndpoint(ctx, route, baseURL, apiKey)
+	}
 	switch route.ServiceType {
 	case "claude":
 		return VerifyClaudeEndpoint(ctx, baseURL, apiKey, "")
 	case "openai":
 		return VerifyOpenAIChatEndpoint(ctx, baseURL, apiKey, "")
+	default:
+		return EndpointVerifyResult{Message: fmt.Sprintf("不支持的 serviceType: %s", route.ServiceType)}
+	}
+}
+
+func verifyVolcenginePlanEndpoint(ctx context.Context, route config.ProviderRoute, baseURL, apiKey string) EndpointVerifyResult {
+	const model = "ark-code-latest"
+	switch route.ServiceType {
+	case "claude":
+		body := []byte(`{"model":"` + model + `","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`)
+		return verifyJSONPostEndpointWithPolicy(ctx, buildClaudeProbeURL(baseURL), apiKey, "", func(req *http.Request) {
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}, body, false)
+	case "openai":
+		body := []byte(`{"model":"` + model + `","messages":[{"role":"user","content":"ping"}],"max_tokens":1}`)
+		return verifyJSONPostEndpointWithPolicy(ctx, buildOpenAIChatProbeURL(baseURL), apiKey, "", nil, body, false)
 	default:
 		return EndpointVerifyResult{Message: fmt.Sprintf("不支持的 serviceType: %s", route.ServiceType)}
 	}

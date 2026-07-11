@@ -1342,6 +1342,21 @@ export interface UpdateManagedAccountResponse {
 export interface ManagedAccountCredential {
   credentialUid: string
   keyMask: string
+  hasVolcengineAccessKey?: boolean
+  volcengineAccessKeyIdMask?: string
+  volcenginePlan?: 'agent_plan' | 'coding_plan'
+  volcenginePlanTier?: string
+  volcenginePlanStatus?: string
+}
+
+export interface VolcengineAccessKeyResponse {
+  accountUid: string
+  credentialUid: string
+  accessKeyIdMask: string
+  plan: 'agent_plan' | 'coding_plan'
+  planTier: string
+  planStatus: string
+  discoveryStarted: number
 }
 
 export interface ManagedAccountChannel {

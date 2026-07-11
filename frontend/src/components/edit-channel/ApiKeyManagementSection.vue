@@ -169,6 +169,111 @@
           </v-list>
         </div>
 
+        <div v-if="providerId === 'volcengine' && accountUid" class="volcengine-access-keys mb-5">
+          <v-divider class="mb-4" />
+          <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-2">
+            <div class="d-flex align-center ga-2">
+              <v-icon color="primary" size="small">mdi-shield-key-outline</v-icon>
+              <span class="text-body-2 font-weight-medium">{{ t('volcengineAccessKey.title') }}</span>
+            </div>
+            <v-btn
+              href="https://console.volcengine.com/iam/keymanage"
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              variant="text"
+              color="primary"
+            >
+              <v-icon start size="small">mdi-open-in-new</v-icon>
+              {{ t('volcengineAccessKey.openConsole') }}
+            </v-btn>
+          </div>
+          <div class="text-caption text-medium-emphasis mb-3">
+            {{ t('volcengineAccessKey.hint') }}
+          </div>
+          <v-progress-linear v-if="volcengineCredentialsLoading" indeterminate color="primary" class="mb-3" />
+          <v-alert v-if="volcengineCredentialsError" color="error" variant="tonal" density="compact" class="mb-3">
+            {{ volcengineCredentialsError }}
+          </v-alert>
+          <div
+            v-for="credential in volcengineCredentials"
+            :key="credential.credentialUid"
+            class="volcengine-credential py-3"
+          >
+            <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
+              <code class="text-caption">{{ credential.keyMask }}</code>
+              <div class="d-flex align-center ga-2 flex-wrap">
+                <v-chip v-if="credential.volcenginePlan" size="x-small" color="success" variant="tonal">
+                  {{ planDisplayName(credential.volcenginePlan) }}
+                  <span v-if="credential.volcenginePlanTier"> · {{ credential.volcenginePlanTier }}</span>
+                </v-chip>
+                <v-chip
+                  :color="credential.hasVolcengineAccessKey ? 'info' : 'warning'"
+                  size="x-small"
+                  variant="tonal"
+                >
+                  {{ credential.hasVolcengineAccessKey
+                    ? credential.volcengineAccessKeyIdMask
+                    : t('volcengineAccessKey.notConfigured') }}
+                </v-chip>
+              </div>
+            </div>
+            <div v-if="volcengineForms[credential.credentialUid]" class="d-flex flex-column ga-2">
+              <div class="volcengine-key-fields">
+                <v-text-field
+                  v-model="volcengineForms[credential.credentialUid].accessKeyId"
+                  :label="t('volcengineAccessKey.accessKeyId')"
+                  variant="outlined"
+                  density="compact"
+                  autocomplete="off"
+                  hide-details
+                />
+                <v-text-field
+                  v-model="volcengineForms[credential.credentialUid].secretAccessKey"
+                  :label="t('volcengineAccessKey.secretAccessKey')"
+                  type="password"
+                  variant="outlined"
+                  density="compact"
+                  autocomplete="new-password"
+                  hide-details
+                />
+              </div>
+              <v-alert
+                v-if="volcengineForms[credential.credentialUid].error"
+                color="error"
+                variant="tonal"
+                density="compact"
+              >
+                {{ volcengineForms[credential.credentialUid].error }}
+              </v-alert>
+              <div class="d-flex align-center justify-end ga-2">
+                <v-btn
+                  v-if="credential.hasVolcengineAccessKey"
+                  size="small"
+                  variant="text"
+                  color="error"
+                  :loading="volcengineForms[credential.credentialUid].clearing"
+                  @click="clearVolcengineAccessKey(credential)"
+                >
+                  <v-icon start size="small">mdi-delete-outline</v-icon>
+                  {{ t('volcengineAccessKey.clear') }}
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="primary"
+                  :loading="volcengineForms[credential.credentialUid].saving"
+                  :disabled="!canSaveVolcengineCredential(credential.credentialUid)"
+                  @click="saveVolcengineAccessKey(credential)"
+                >
+                  <v-icon start size="small">mdi-content-save-outline</v-icon>
+                  {{ t('volcengineAccessKey.verifyAndSave') }}
+                </v-btn>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 添加新密钥 -->
         <div class="d-flex align-start ga-3">
           <v-text-field
@@ -368,9 +473,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from '../../i18n'
 import { ApiService } from '../../services/api'
+import type { ManagedAccountCredential } from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
 
 interface KeyModelsStatus {
@@ -397,6 +503,8 @@ interface Props {
   isAutoManaged?: boolean
   channelId?: number
   proxyUrl?: string
+  accountUid?: string
+  providerId?: string
 }
 
 const props = defineProps<Props>()
@@ -414,6 +522,18 @@ const newApiKey = ref('')
 const apiKeyError = ref('')
 const duplicateKeyIndex = ref<number | null>(null)
 const copiedKeyIndex = ref<number | null>(null)
+interface VolcengineCredentialForm {
+  accessKeyId: string
+  secretAccessKey: string
+  saving: boolean
+  clearing: boolean
+  error: string
+}
+
+const volcengineCredentials = ref<ManagedAccountCredential[]>([])
+const volcengineCredentialsLoading = ref(false)
+const volcengineCredentialsError = ref('')
+const volcengineForms = ref<Record<string, VolcengineCredentialForm>>({})
 interface CopilotDiagnoseResponse {
   githubUser?: {
     login?: string
@@ -446,6 +566,95 @@ const hasConfigurableKeys = computed(() => props.serviceType === 'copilot' || pr
 const visibleDisabledKeys = computed(() => {
   return props.disabledKeys.filter(dk => !props.apiKeys.includes(dk.key))
 })
+
+const loadVolcengineCredentials = async () => {
+  volcengineCredentials.value = []
+  volcengineCredentialsError.value = ''
+  if (props.providerId !== 'volcengine' || !props.accountUid) return
+  volcengineCredentialsLoading.value = true
+  try {
+    const response = await apiService.getManagedAccounts()
+    const account = response.accounts.find(item => item.accountUid === props.accountUid)
+    if (!account) {
+      volcengineCredentialsError.value = t('volcengineAccessKey.accountNotFound')
+      return
+    }
+    volcengineCredentials.value = account.credentials
+    const nextForms: Record<string, VolcengineCredentialForm> = {}
+    for (const credential of account.credentials) {
+      nextForms[credential.credentialUid] = volcengineForms.value[credential.credentialUid] ?? {
+        accessKeyId: '',
+        secretAccessKey: '',
+        saving: false,
+        clearing: false,
+        error: '',
+      }
+    }
+    volcengineForms.value = nextForms
+  } catch (err) {
+    volcengineCredentialsError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    volcengineCredentialsLoading.value = false
+  }
+}
+
+watch(
+  () => [props.providerId, props.accountUid],
+  () => { void loadVolcengineCredentials() },
+  { immediate: true }
+)
+
+const planDisplayName = (plan?: string) => plan === 'agent_plan' ? 'Agent Plan' : 'Coding Plan'
+
+const canSaveVolcengineCredential = (credentialUid: string) => {
+  const form = volcengineForms.value[credentialUid]
+  return !!form?.accessKeyId.trim() && !!form?.secretAccessKey.trim() && !form.saving
+}
+
+const saveVolcengineAccessKey = async (credential: ManagedAccountCredential) => {
+  if (!props.accountUid) return
+  const form = volcengineForms.value[credential.credentialUid]
+  if (!form || !canSaveVolcengineCredential(credential.credentialUid)) return
+  form.saving = true
+  form.error = ''
+  try {
+    const response = await apiService.setVolcengineAccessKey(props.accountUid, credential.credentialUid, {
+      accessKeyId: form.accessKeyId.trim(),
+      secretAccessKey: form.secretAccessKey.trim(),
+    })
+    credential.hasVolcengineAccessKey = true
+    credential.volcengineAccessKeyIdMask = response.accessKeyIdMask
+    credential.volcenginePlan = response.plan
+    credential.volcenginePlanTier = response.planTier
+    credential.volcenginePlanStatus = response.planStatus
+    form.accessKeyId = ''
+    form.secretAccessKey = ''
+  } catch (err) {
+    form.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    form.saving = false
+  }
+}
+
+const clearVolcengineAccessKey = async (credential: ManagedAccountCredential) => {
+  if (!props.accountUid || !window.confirm(t('volcengineAccessKey.clearConfirm'))) return
+  const form = volcengineForms.value[credential.credentialUid]
+  if (!form) return
+  form.clearing = true
+  form.error = ''
+  try {
+    await apiService.clearVolcengineAccessKey(props.accountUid, credential.credentialUid)
+    credential.hasVolcengineAccessKey = false
+    credential.volcengineAccessKeyIdMask = undefined
+    credential.volcenginePlan = undefined
+    credential.volcenginePlanTier = undefined
+    credential.volcenginePlanStatus = undefined
+  } catch (err) {
+    form.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    form.clearing = false
+  }
+}
 
 const handleInput = () => {
   apiKeyError.value = ''
@@ -637,6 +846,22 @@ const getDisabledKeyLabel = (reason: string) => {
 
 .font-weight-mono {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+}
+
+.volcengine-credential + .volcengine-credential {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.volcengine-key-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .volcengine-key-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 </style>

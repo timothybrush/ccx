@@ -88,12 +88,31 @@ func TestCandidatesForKeyNoPrefixRules(t *testing.T) {
 	}
 }
 
+func TestProviderTemplateVolcenginePlanRoutes(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("volcengine")
+	if !ok {
+		t.Fatal("未找到火山方舟模板")
+	}
+	if tmpl.DisplayName != "火山方舟 Agent/Coding Plan" || len(tmpl.AutoAddRoutes()) != 4 {
+		t.Fatalf("火山模板不完整: %+v", tmpl)
+	}
+	for _, route := range tmpl.AutoAddRoutes() {
+		candidates := tmpl.CandidatesForRouteKey(route, "ark-test")
+		if len(candidates) != 2 {
+			t.Fatalf("route %s 应包含 Agent/Coding 两个候选: %+v", route.ChannelKind, candidates)
+		}
+		if !strings.Contains(candidates[0].BaseURL, "/api/plan") || !strings.Contains(candidates[1].BaseURL, "/api/coding") {
+			t.Fatalf("route %s 候选顺序错误: %+v", route.ChannelKind, candidates)
+		}
+	}
+}
+
 func TestListAndGetProviderTemplate(t *testing.T) {
 	all := ListProviderTemplates()
 	if len(all) < 4 {
 		t.Errorf("内置 provider 模板应 >= 4，实际 %d", len(all))
 	}
-	for _, id := range []string{"mimo", "deepseek", "kimi", "glm"} {
+	for _, id := range []string{"mimo", "deepseek", "kimi", "glm", "volcengine"} {
 		if _, ok := GetProviderTemplate(id); !ok {
 			t.Errorf("缺少 provider 模板: %s", id)
 		}

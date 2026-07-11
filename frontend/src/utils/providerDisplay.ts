@@ -6,6 +6,7 @@ const PROVIDER_BRAND_NAMES: Record<string, string> = {
   deepseek: 'DeepSeek',
   gemini: 'Gemini',
   anthropic: 'Anthropic',
+  volcengine: '火山方舟',
 }
 
 export const providerDisplayName = (providerId?: string): string => {

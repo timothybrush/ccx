@@ -70,6 +70,8 @@
                 :is-auto-managed="isAutoManagedChannel"
                 :channel-id="props.channel?.index"
                 :proxy-url="form.proxyUrl"
+                :account-uid="props.channel?.accountUid"
+                :provider-id="props.channel?.providerId"
                 @update:api-keys="form.apiKeys = $event"
                 @update:proxy-url="form.proxyUrl = $event"
                 @restore-key="restoreDisabledKey"

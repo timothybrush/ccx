@@ -4,6 +4,7 @@ import { isManagedProviderChannel, providerDisplayName } from './providerDisplay
 describe('providerDisplayName', () => {
   it('保留 provider 品牌的标准大小写', () => {
     expect(providerDisplayName('mimo')).toBe('MiMo')
+    expect(providerDisplayName('volcengine')).toBe('火山方舟')
     expect(providerDisplayName('openai')).toBe('OpenAI')
   })
 
