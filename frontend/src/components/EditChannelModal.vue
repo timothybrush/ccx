@@ -42,6 +42,8 @@
                 :expected-request-urls="expectedRequestUrls"
                 :base-url-has-error="baseUrlHasError"
                 :service-type-options="serviceTypeOptions"
+                :hide-service-type="isAutoManagedChannel"
+                :hide-base-url="isAutoManagedChannel"
                 :errors="errors"
                 :rules="rules"
                 @update:form="updateForm"
@@ -331,6 +333,7 @@
                 :supports-open-a-i-advanced-options="supportsOpenAIAdvancedOptions"
                 :reasoning-param-style-options="reasoningParamStyleOptions"
                 :text-verbosity-options="textVerbosityOptions"
+                :is-auto-managed="isAutoManagedChannel"
                 :diagnosing="diagnosingCompat"
                 :diagnose-result="diagnoseResult"
                 @update:form="updateForm"
@@ -438,6 +441,7 @@ const {
   supportsReasoningMappingOptions,
   supportsChatRoleNormalization,
   supportsChannelDiscovery,
+  isAutoManagedChannel,
   showModelMappingPresets,
   showMessagesOpenAIChannelPresets,
   showClaudeChannelPresets,

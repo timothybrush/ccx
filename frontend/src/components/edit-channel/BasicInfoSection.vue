@@ -2,7 +2,7 @@
   <div class="basic-info-section">
     <v-row>
       <!-- 渠道名称 -->
-      <v-col cols="12" sm="8">
+      <v-col cols="12" :sm="hideServiceType ? 12 : 8">
         <v-text-field
           :model-value="form.name"
           :label="t('channelEditor.basic.name.label')"
@@ -18,7 +18,7 @@
       </v-col>
 
       <!-- 服务类型 -->
-      <v-col cols="12" sm="4">
+      <v-col v-if="!hideServiceType" cols="12" sm="4">
         <v-select
           :model-value="form.serviceType"
           :label="t('channelEditor.basic.serviceType.label')"
@@ -36,7 +36,7 @@
       </v-col>
 
       <!-- Base URL -->
-      <v-col v-if="form.serviceType !== 'copilot'" cols="12">
+      <v-col v-if="!hideBaseUrl && form.serviceType !== 'copilot'" cols="12">
         <v-textarea
           :model-value="baseUrlsText"
           :label="t('channelEditor.basic.baseUrl.label')"
@@ -143,6 +143,8 @@ interface Props {
   expectedRequestUrls: Array<{ expectedUrl: string }>
   baseUrlHasError: boolean
   serviceTypeOptions: Array<{ title: string; value: string }>
+  hideServiceType?: boolean
+  hideBaseUrl?: boolean
   errors: Record<string, string>
   rules: {
     required: (_value: string) => boolean | string

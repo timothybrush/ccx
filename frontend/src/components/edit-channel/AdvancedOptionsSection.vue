@@ -2,7 +2,7 @@
   <div class="advanced-options-section">
     <v-row dense>
       <!-- 跳过 TLS 证书验证 -->
-      <v-col cols="12">
+      <v-col v-if="!isAutoManaged" cols="12">
         <div class="d-flex align-center justify-space-between">
           <div class="d-flex align-center ga-2">
             <v-icon color="warning">mdi-shield-alert</v-icon>
@@ -30,7 +30,7 @@
       </v-col>
 
       <!-- 认证头覆盖 -->
-      <v-col cols="12">
+      <v-col v-if="!isAutoManaged" cols="12">
         <v-row dense align="center">
           <v-col cols="12" md="7">
             <div class="d-flex align-center ga-2">
@@ -63,7 +63,7 @@
       </v-col>
 
       <!-- Compatibility 协议规范化 -->
-      <v-col cols="12">
+      <v-col v-if="!isAutoManaged" cols="12">
         <CompatibilitySwitchGroup
           v-if="channelType !== 'vectors'"
           :form="form"
@@ -122,6 +122,7 @@ interface Props {
   supportsOpenAIAdvancedOptions: boolean
   reasoningParamStyleOptions: Array<{ title: string; value: string }>
   textVerbosityOptions: Array<{ title: string; value: string }>
+  isAutoManaged?: boolean
   diagnosing?: boolean
   diagnoseResult?: { type: 'success' | 'error'; message: string; appliedCount: number } | null
 }

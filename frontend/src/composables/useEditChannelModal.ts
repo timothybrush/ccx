@@ -117,6 +117,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   } = useEditChannelSectionNav(t)
 
   const { isAnySelectMenuOpen, suppressDialogEscapeUntil, onMenuUpdate } = useDialogMenuWorkaround()
+  const isAutoManagedChannel = computed(() => !!props.channel?.autoManaged)
 
   const supportsOpenAIAdvancedOptions = computed(() => props.channelType !== 'vectors' && supportsAdvancedChannelOptions(form.serviceType))
   const supportsReasoningMappingOptions = computed(() => props.channelType !== 'vectors' && supportsReasoningMapping(form.serviceType))
@@ -124,7 +125,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     return props.channelType === 'chat' || (props.channelType === 'responses' && form.serviceType === 'openai')
   })
   const supportsChannelDiscovery = computed(() => {
-    return props.channelType !== 'images' && props.channelType !== 'vectors'
+    return !isAutoManagedChannel.value && props.channelType !== 'images' && props.channelType !== 'vectors'
   })
 
   // 模型优先级排序规则（索引越小优先级越高）
@@ -686,7 +687,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   const { headerClasses, avatarColor, headerIconStyle, subtitleClasses } = useChannelEditorHeaderState(theme)
 
   const isFormValid = computed(() => {
-    const hasValidBaseUrl = form.serviceType === 'copilot' || (!!form.baseUrl.trim() && isValidUrl(form.baseUrl))
+    const hasValidBaseUrl = isAutoManagedChannel.value || form.serviceType === 'copilot' || (!!form.baseUrl.trim() && isValidUrl(form.baseUrl))
     const hasValidApiKeys = form.serviceType === 'copilot' || hasConfigurableKeys.value
     return (
       !!form.name.trim() && !!form.serviceType && hasValidBaseUrl && hasValidApiKeys && !modelCapabilitiesError.value && !embeddingCapabilitiesError.value
@@ -695,6 +696,21 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
 
   const buildSubmitPayload = () => {
     const payload = buildChannelPayload(form, { channelType: props.channelType })
+    if (isAutoManagedChannel.value && props.channel) {
+      payload.serviceType = props.channel.serviceType
+      payload.baseUrl = props.channel.baseUrl
+      if (props.channel.baseUrls?.length) {
+        payload.baseUrls = [...props.channel.baseUrls]
+      } else {
+        delete payload.baseUrls
+      }
+      payload.insecureSkipVerify = !!props.channel.insecureSkipVerify
+      if (props.channel.authHeader) {
+        payload.authHeader = props.channel.authHeader
+      } else {
+        delete payload.authHeader
+      }
+    }
     applyVisionFallbackReasoning(payload)
     if (!form.streamFirstContentTimeoutEnabled) {
       delete payload.streamFirstContentTimeoutMs
@@ -1276,6 +1292,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     supportsReasoningMappingOptions,
     supportsChatRoleNormalization,
     supportsChannelDiscovery,
+    isAutoManagedChannel,
     showModelMappingPresets,
     showMessagesOpenAIChannelPresets,
     showClaudeChannelPresets,
