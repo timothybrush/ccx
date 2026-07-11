@@ -82,11 +82,12 @@ type BuiltinModelsManifestPreset struct {
 }
 
 type BuiltinModelsManifestEntryPreset struct {
-	BaseURLPattern string   `json:"baseUrlPattern"`
-	ServiceType    string   `json:"serviceType"`
-	PlanHint       string   `json:"planHint,omitempty"`
-	ModelIDs       []string `json:"modelIds"`
-	DisableProbe   bool     `json:"disableProbe"`
+	BaseURLPattern       string   `json:"baseUrlPattern"`
+	ServiceType          string   `json:"serviceType"`
+	PlanHint             string   `json:"planHint,omitempty"`
+	ModelIDs             []string `json:"modelIds"`
+	ExcludeModelPatterns []string `json:"excludeModelPatterns,omitempty"`
+	DisableProbe         bool     `json:"disableProbe"`
 }
 
 func (p *ChannelPresetsPreset) UnmarshalJSON(data []byte) error {

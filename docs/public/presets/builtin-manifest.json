@@ -25,8 +25,10 @@
       "planHint": "mimo_payg_anthropic",
       "modelIds": [
         "mimo-v2.5-pro",
-        "mimo-v2.5",
-        "mimo-v2-flash"
+        "mimo-v2.5"
+      ],
+      "excludeModelPatterns": [
+        "^mimo-v2\\.5-(?:asr|tts(?:-.+)?)$"
       ],
       "disableProbe": true
     },
@@ -36,8 +38,10 @@
       "planHint": "mimo_token_plan_cn_anthropic",
       "modelIds": [
         "mimo-v2.5-pro",
-        "mimo-v2.5",
-        "mimo-v2-flash"
+        "mimo-v2.5"
+      ],
+      "excludeModelPatterns": [
+        "^mimo-v2\\.5-(?:asr|tts(?:-.+)?)$"
       ],
       "disableProbe": true
     },
@@ -47,8 +51,10 @@
       "planHint": "mimo_token_plan_sgp_anthropic",
       "modelIds": [
         "mimo-v2.5-pro",
-        "mimo-v2.5",
-        "mimo-v2-flash"
+        "mimo-v2.5"
+      ],
+      "excludeModelPatterns": [
+        "^mimo-v2\\.5-(?:asr|tts(?:-.+)?)$"
       ],
       "disableProbe": true
     },
@@ -58,8 +64,10 @@
       "planHint": "mimo_token_plan_ams_anthropic",
       "modelIds": [
         "mimo-v2.5-pro",
-        "mimo-v2.5",
-        "mimo-v2-flash"
+        "mimo-v2.5"
+      ],
+      "excludeModelPatterns": [
+        "^mimo-v2\\.5-(?:asr|tts(?:-.+)?)$"
       ],
       "disableProbe": true
     }

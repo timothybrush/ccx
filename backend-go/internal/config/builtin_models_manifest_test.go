@@ -181,13 +181,22 @@ func TestLookupBuiltinManifest_MiMoAnthropicTokenPlan(t *testing.T) {
 	if manifest.PlanHint != "mimo_token_plan_cn_anthropic" {
 		t.Fatalf("planHint = %q, want mimo_token_plan_cn_anthropic", manifest.PlanHint)
 	}
-	expected := []string{"mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"}
+	expected := []string{"mimo-v2.5-pro", "mimo-v2.5"}
 	if len(manifest.ModelIDs) != len(expected) {
 		t.Fatalf("ModelIDs len = %d, want %d", len(manifest.ModelIDs), len(expected))
 	}
 	for i, modelID := range expected {
 		if manifest.ModelIDs[i] != modelID {
 			t.Fatalf("ModelIDs[%d] = %q, want %q", i, manifest.ModelIDs[i], modelID)
+		}
+	}
+	expectedExcludes := []string{`^mimo-v2\.5-(?:asr|tts(?:-.+)?)$`}
+	if len(manifest.ExcludeModelPatterns) != len(expectedExcludes) {
+		t.Fatalf("ExcludeModelPatterns len = %d, want %d", len(manifest.ExcludeModelPatterns), len(expectedExcludes))
+	}
+	for i, pattern := range expectedExcludes {
+		if manifest.ExcludeModelPatterns[i] != pattern {
+			t.Fatalf("ExcludeModelPatterns[%d] = %q, want %q", i, manifest.ExcludeModelPatterns[i], pattern)
 		}
 	}
 }

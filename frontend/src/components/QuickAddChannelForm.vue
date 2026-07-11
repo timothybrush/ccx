@@ -484,6 +484,7 @@ async function startPolling(kind: ChannelType, channelId: number) {
     if (attempts > maxAttempts) {
       stopPolling()
       autoStatus.status = 'failed'
+      submitting.value = false
       return
     }
 
@@ -495,10 +496,12 @@ async function startPolling(kind: ChannelType, channelId: number) {
         stopPolling()
         autoStatus.status = 'done'
         autoStatus.endpoints = discovery.endpoints || []
+        submitting.value = false
       } else if (discovery.status === 'failed') {
         stopPolling()
         autoStatus.status = 'failed'
         autoStatus.endpoints = discovery.endpoints || []
+        submitting.value = false
       } else {
         autoStatus.endpoints = discovery.endpoints || []
       }
@@ -536,6 +539,9 @@ async function handleSubmit() {
 
     if (result.discoveryStarted) {
       startPolling(props.channelType, result.index)
+    } else {
+      autoStatus.status = ''
+      submitting.value = false
     }
 
     emit('added', result.index)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -199,6 +200,14 @@ func validateBuiltinModelsManifestPreset(preset *BuiltinModelsManifestPreset) er
 				return fmt.Errorf("[presetstore] builtinModelsManifests.manifests[%d].modelIds[%d] 重复", idx, modelIdx)
 			}
 			seenModels[modelID] = true
+		}
+		for patternIdx, pattern := range manifest.ExcludeModelPatterns {
+			if strings.TrimSpace(pattern) == "" {
+				return fmt.Errorf("[presetstore] builtinModelsManifests.manifests[%d].excludeModelPatterns[%d] 不能为空", idx, patternIdx)
+			}
+			if _, err := regexp.Compile(pattern); err != nil {
+				return fmt.Errorf("[presetstore] builtinModelsManifests.manifests[%d].excludeModelPatterns[%d] 非法: %w", idx, patternIdx, err)
+			}
 		}
 	}
 	return nil

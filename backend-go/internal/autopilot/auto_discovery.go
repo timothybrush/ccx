@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -298,6 +299,9 @@ func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Cl
 	}
 
 	models := parseModelsResponse(body)
+	if hasManifest {
+		models = filterExcludedDiscoveryModels(models, manifest.ExcludeModelPatterns)
+	}
 	if len(models) == 0 && hasManifest {
 		applyBuiltinModels(&result, manifest, "models 端点返回空列表，已回退内置模型清单")
 		return result
@@ -330,10 +334,44 @@ func discoveryManifestServiceType(serviceType string) string {
 }
 
 func applyBuiltinModels(result *EndpointDiscoveryResult, manifest config.BuiltinModelsManifest, message string) {
-	result.Models = append([]string(nil), manifest.ModelIDs...)
+	result.Models = filterExcludedDiscoveryModels(append([]string(nil), manifest.ModelIDs...), manifest.ExcludeModelPatterns)
 	result.ModelsCount = len(result.Models)
 	result.ProtocolOk = len(result.Models) > 0
 	result.ErrorMessage = message
+}
+
+func filterExcludedDiscoveryModels(models []string, patterns []string) []string {
+	if len(models) == 0 || len(patterns) == 0 {
+		return models
+	}
+
+	excludeRules := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		rule, err := regexp.Compile(pattern)
+		if err != nil {
+			log.Printf("[AutoDiscovery-ModelsFilter] 忽略非法排除正则 %q: %v", pattern, err)
+			continue
+		}
+		excludeRules = append(excludeRules, rule)
+	}
+	if len(excludeRules) == 0 {
+		return models
+	}
+
+	filtered := make([]string, 0, len(models))
+	for _, modelID := range models {
+		excluded := false
+		for _, rule := range excludeRules {
+			if rule.MatchString(modelID) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			filtered = append(filtered, modelID)
+		}
+	}
+	return filtered
 }
 
 // parseModelsResponse 解析 OpenAI /v1/models 响应体。
@@ -405,6 +443,7 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		}
 
 		// 更新发现相关字段
+		profile.EndpointUID = endpointUID
 		profile.ChannelUID = channelUID
 		profile.BaseURL = ep.BaseURL
 		profile.KeyMask = ep.KeyMask

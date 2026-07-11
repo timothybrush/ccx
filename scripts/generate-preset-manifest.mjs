@@ -179,6 +179,18 @@ function validateBuiltinManifest(value, label) {
     if (!Array.isArray(entry.modelIds) || entry.modelIds.length === 0 || entry.modelIds.some(model => typeof model !== 'string' || model.trim() === '')) {
       throw new Error(`${label} manifests[${index}].modelIds must be a non-empty string array`)
     }
+    if (entry.excludeModelPatterns !== undefined) {
+      if (!Array.isArray(entry.excludeModelPatterns) || entry.excludeModelPatterns.some(pattern => typeof pattern !== 'string' || pattern.trim() === '')) {
+        throw new Error(`${label} manifests[${index}].excludeModelPatterns must be a non-empty string array when present`)
+      }
+      for (const [patternIndex, pattern] of entry.excludeModelPatterns.entries()) {
+        try {
+          new RegExp(pattern)
+        } catch (error) {
+          throw new Error(`${label} manifests[${index}].excludeModelPatterns[${patternIndex}] is invalid: ${error.message}`)
+        }
+      }
+    }
     if (typeof entry.disableProbe !== 'boolean') {
       throw new Error(`${label} manifests[${index}].disableProbe must be a boolean`)
     }

@@ -24,6 +24,9 @@ type BuiltinModelsManifest struct {
 	// ModelIDs 该入口实际可用的模型 ID 清单。
 	ModelIDs []string `json:"modelIds"`
 
+	// ExcludeModelPatterns 从上游 /v1/models 返回中剔除的模型 ID 正则。
+	ExcludeModelPatterns []string `json:"excludeModelPatterns,omitempty"`
+
 	// DisableProbe 为 true 时 Discovery 流程跳过 GET /v1/models，
 	// 直接用 ModelIDs 生成 ModelProfile[]。
 	DisableProbe bool `json:"disableProbe"`
@@ -58,32 +61,36 @@ var builtinModelsManifests = []BuiltinModelsManifest{
 	// 小米 MiMo Anthropic 兼容入口（来源：provider_templates.go 与 docs/providers/mimo.md）。
 	// Anthropic 协议入口可用性通过 /v1/messages 验证；/v1/models 不作为能力判定依据。
 	{
-		BaseURLPattern: "api.xiaomimimo.com/anthropic",
-		ServiceType:    "messages",
-		PlanHint:       "mimo_payg_anthropic",
-		ModelIDs:       mimoModelIDs(),
-		DisableProbe:   true,
+		BaseURLPattern:       "api.xiaomimimo.com/anthropic",
+		ServiceType:          "messages",
+		PlanHint:             "mimo_payg_anthropic",
+		ModelIDs:             mimoModelIDs(),
+		ExcludeModelPatterns: mimoExcludeModelPatterns(),
+		DisableProbe:         true,
 	},
 	{
-		BaseURLPattern: "token-plan-cn.xiaomimimo.com/anthropic",
-		ServiceType:    "messages",
-		PlanHint:       "mimo_token_plan_cn_anthropic",
-		ModelIDs:       mimoModelIDs(),
-		DisableProbe:   true,
+		BaseURLPattern:       "token-plan-cn.xiaomimimo.com/anthropic",
+		ServiceType:          "messages",
+		PlanHint:             "mimo_token_plan_cn_anthropic",
+		ModelIDs:             mimoModelIDs(),
+		ExcludeModelPatterns: mimoExcludeModelPatterns(),
+		DisableProbe:         true,
 	},
 	{
-		BaseURLPattern: "token-plan-sgp.xiaomimimo.com/anthropic",
-		ServiceType:    "messages",
-		PlanHint:       "mimo_token_plan_sgp_anthropic",
-		ModelIDs:       mimoModelIDs(),
-		DisableProbe:   true,
+		BaseURLPattern:       "token-plan-sgp.xiaomimimo.com/anthropic",
+		ServiceType:          "messages",
+		PlanHint:             "mimo_token_plan_sgp_anthropic",
+		ModelIDs:             mimoModelIDs(),
+		ExcludeModelPatterns: mimoExcludeModelPatterns(),
+		DisableProbe:         true,
 	},
 	{
-		BaseURLPattern: "token-plan-ams.xiaomimimo.com/anthropic",
-		ServiceType:    "messages",
-		PlanHint:       "mimo_token_plan_ams_anthropic",
-		ModelIDs:       mimoModelIDs(),
-		DisableProbe:   true,
+		BaseURLPattern:       "token-plan-ams.xiaomimimo.com/anthropic",
+		ServiceType:          "messages",
+		PlanHint:             "mimo_token_plan_ams_anthropic",
+		ModelIDs:             mimoModelIDs(),
+		ExcludeModelPatterns: mimoExcludeModelPatterns(),
+		DisableProbe:         true,
 	},
 }
 
@@ -91,7 +98,12 @@ func mimoModelIDs() []string {
 	return []string{
 		"mimo-v2.5-pro",
 		"mimo-v2.5",
-		"mimo-v2-flash",
+	}
+}
+
+func mimoExcludeModelPatterns() []string {
+	return []string{
+		`^mimo-v2\.5-(?:asr|tts(?:-.+)?)$`,
 	}
 }
 
@@ -119,11 +131,12 @@ func runtimeBuiltinModelsManifests() []BuiltinModelsManifest {
 	manifests := make([]BuiltinModelsManifest, 0, len(bundle.BuiltinModelsManifests.Manifests))
 	for _, entry := range bundle.BuiltinModelsManifests.Manifests {
 		manifests = append(manifests, BuiltinModelsManifest{
-			BaseURLPattern: entry.BaseURLPattern,
-			ServiceType:    entry.ServiceType,
-			PlanHint:       entry.PlanHint,
-			ModelIDs:       append([]string(nil), entry.ModelIDs...),
-			DisableProbe:   entry.DisableProbe,
+			BaseURLPattern:       entry.BaseURLPattern,
+			ServiceType:          entry.ServiceType,
+			PlanHint:             entry.PlanHint,
+			ModelIDs:             append([]string(nil), entry.ModelIDs...),
+			ExcludeModelPatterns: append([]string(nil), entry.ExcludeModelPatterns...),
+			DisableProbe:         entry.DisableProbe,
 		})
 	}
 	return manifests

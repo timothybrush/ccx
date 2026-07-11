@@ -12,6 +12,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/presetstore"
+	"github.com/BenedictKing/ccx/internal/utils"
 )
 
 // ── 已有测试（保留原样） ─────────────────────────────────────────────────────
@@ -277,6 +278,89 @@ func TestProbeEndpoint_ModelsUsesUnifiedAuthHeader(t *testing.T) {
 	}
 	if result.ModelsCount != 1 || result.Models[0] != "claude-test" {
 		t.Fatalf("models = %v, count=%d", result.Models, result.ModelsCount)
+	}
+}
+
+func TestProbeEndpoint_ManifestExcludePatternsFilterModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[` +
+			`{"id":"mimo-v2.5-tts-voicedesign"},` +
+			`{"id":"mimo-v2.5-tts-voiceclone"},` +
+			`{"id":"mimo-v2.5-tts"},` +
+			`{"id":"mimo-v2.5-pro"},` +
+			`{"id":"mimo-v2.5-asr"},` +
+			`{"id":"mimo-v2.5"}` +
+			`]}`))
+	}))
+	defer srv.Close()
+
+	withTestBuiltinManifest(t, presetstore.BuiltinModelsManifestEntryPreset{
+		BaseURLPattern:       trimTestURLScheme(srv.URL),
+		ServiceType:          "messages",
+		PlanHint:             "test_mimo_models_filter",
+		ModelIDs:             []string{"mimo-v2.5-pro", "mimo-v2.5"},
+		ExcludeModelPatterns: []string{`^mimo-v2\.5-(?:asr|tts(?:-.+)?)$`},
+		DisableProbe:         false,
+	})
+
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	channel := &config.UpstreamConfig{
+		ServiceType: "claude",
+		BaseURL:     srv.URL,
+		APIKeys:     []string{"sk-test"},
+	}
+
+	result := runner.probeEndpoint(context.Background(), srv.Client(), channel, channel.BaseURL, "sk-test")
+	if !result.ProtocolOk {
+		t.Fatalf("ProtocolOk = false, error=%s", result.ErrorMessage)
+	}
+	expected := []string{"mimo-v2.5-pro", "mimo-v2.5"}
+	if len(result.Models) != len(expected) {
+		t.Fatalf("models = %v, want %v", result.Models, expected)
+	}
+	for i, modelID := range expected {
+		if result.Models[i] != modelID {
+			t.Fatalf("models[%d] = %q, want %q; full=%v", i, result.Models[i], modelID, result.Models)
+		}
+	}
+}
+
+func TestWriteProfilesSetsEndpointUID(t *testing.T) {
+	store, err := NewProfileStore(filepath.Join(t.TempDir(), "profiles.db"))
+	if err != nil {
+		t.Fatalf("创建 ProfileStore 失败: %v", err)
+	}
+	defer store.Close()
+
+	runner := NewAutoDiscoveryRunner(store, nil)
+	channelUID := "ch_profile_uid"
+	baseURL := "https://api.example.com"
+	apiKey := "sk-test-key"
+	channel := &config.UpstreamConfig{
+		ChannelUID:  channelUID,
+		ServiceType: "claude",
+		BaseURL:     baseURL,
+		APIKeys:     []string{apiKey},
+	}
+	runner.writeProfiles(channelUID, channel, []EndpointDiscoveryResult{{
+		KeyMask:     utils.MaskAPIKey(apiKey),
+		BaseURL:     baseURL,
+		Models:      []string{"mimo-v2.5-pro"},
+		ModelsCount: 1,
+		ProtocolOk:  true,
+	}}, nil)
+
+	endpointUID := GenerateEndpointUID(channelUID, baseURL, KeyHashFromAPIKey(apiKey))
+	profile := store.Get(endpointUID)
+	if profile == nil {
+		t.Fatalf("未写入 endpoint profile: %s", endpointUID)
+	}
+	if profile.EndpointUID != endpointUID {
+		t.Fatalf("EndpointUID = %q, want %q", profile.EndpointUID, endpointUID)
 	}
 }
 
