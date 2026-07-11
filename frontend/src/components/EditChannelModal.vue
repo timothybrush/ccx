@@ -13,7 +13,9 @@
         :subtitle-classes="subtitleClasses"
         :edit-title="t('addChannel.editTitle')"
         :create-title="t('addChannel.createTitle')"
-        :edit-subtitle="t('addChannel.editSubtitle')"
+        :edit-subtitle="isAutoManagedChannel
+          ? t('channelEditor.managed.editSubtitle', { provider: managedProviderName })
+          : t('addChannel.editSubtitle')"
         :create-subtitle="t('addChannel.quickSubtitle')"
         :test-capability-label="t('addChannel.testCapability')"
         :vision-tooltip="form.noVision ? t('channelCard.noVision') : t('channelCard.hasVision')"
@@ -46,6 +48,8 @@
                 :hide-service-type="isAutoManagedChannel"
                 :hide-base-url="isAutoManagedChannel"
                 :hide-metadata="isAutoManagedChannel"
+                :managed-account="isAutoManagedChannel"
+                :provider-name="managedProviderName"
                 :errors="errors"
                 :rules="rules"
                 @update:form="updateForm"
@@ -405,6 +409,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 // 子组件导入
 import AddChannelHeader from './edit-channel/AddChannelHeader.vue'
 import AddChannelSidebarNav from './edit-channel/AddChannelSidebarNav.vue'
@@ -420,12 +426,14 @@ import AdvancedOptionsSection from './edit-channel/AdvancedOptionsSection.vue'
 import TransportConfigGroup from './edit-channel/TransportConfigGroup.vue'
 import RateLimitGroup from './edit-channel/RateLimitGroup.vue'
 import { useEditChannelModal, type EditChannelModalEmits, type EditChannelModalProps } from '../composables/useEditChannelModal'
+import { providerDisplayName } from '../utils/providerDisplay'
 
 const props = withDefaults(defineProps<EditChannelModalProps>(), {
   channelType: 'messages',
 })
 
 const emit = defineEmits<EditChannelModalEmits>()
+const managedProviderName = computed(() => providerDisplayName(props.channel?.providerId))
 
 const {
   formRef,

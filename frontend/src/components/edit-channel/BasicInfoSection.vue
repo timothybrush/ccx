@@ -1,12 +1,25 @@
 <template>
   <div class="basic-info-section">
+    <div v-if="managedAccount && providerName" class="provider-identity mb-5">
+      <v-icon color="primary" size="22">mdi-domain</v-icon>
+      <div class="flex-grow-1">
+        <div class="text-caption text-medium-emphasis">{{ t('channelEditor.managed.providerLabel') }}</div>
+        <div class="text-body-1 font-weight-bold">
+          {{ t('channelEditor.managed.officialChannel', { provider: providerName }) }}
+        </div>
+      </div>
+      <v-chip color="success" variant="tonal" size="small" prepend-icon="mdi-check-decagram">
+        {{ t('channelEditor.managed.officialBadge') }}
+      </v-chip>
+    </div>
+
     <v-row>
       <!-- 渠道名称 -->
       <v-col cols="12" :sm="hideServiceType ? 12 : 8">
         <v-text-field
           :model-value="form.name"
-          :label="t('channelEditor.basic.name.label')"
-          :placeholder="t('channelEditor.basic.name.placeholder')"
+          :label="managedAccount ? t('channelEditor.basic.accountName.label') : t('channelEditor.basic.name.label')"
+          :placeholder="managedAccount ? t('channelEditor.basic.accountName.placeholder') : t('channelEditor.basic.name.placeholder')"
           prepend-inner-icon="mdi-tag"
           variant="outlined"
           density="comfortable"
@@ -146,6 +159,8 @@ interface Props {
   hideServiceType?: boolean
   hideBaseUrl?: boolean
   hideMetadata?: boolean
+  managedAccount?: boolean
+  providerName?: string
   errors: Record<string, string>
   rules: {
     required: (_value: string) => boolean | string
@@ -175,6 +190,16 @@ const updateField = (field: keyof FormData, value: unknown) => {
   padding: 8px 12px;
   background: rgba(var(--v-theme-surface-variant), 0.3);
   border-radius: 4px;
+}
+
+.provider-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 16px;
+  border-inline-start: 3px solid rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-primary) / 6%);
 }
 
 .expected-request-item {
