@@ -11,6 +11,7 @@
   "app.auth.securityItem4": "Segera ubah konfigurasi server jika ada dugaan kebocoran.",
   "app.auth.securityItem5": "Setelah {attempts} kali gagal, akses dikunci selama 5 menit.",
   "app.tabs.messages": "Claude",
+  "app.tabs.channels": "Channels",
   "app.tabs.chat": "OpenAI Chat",
   "app.tabs.responses": "Codex",
   "app.tabs.gemini": "Gemini",

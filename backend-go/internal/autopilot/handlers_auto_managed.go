@@ -321,6 +321,8 @@ func providerRouteName(baseName string, route config.ProviderRoute, multiRoute b
 		return baseName + "-chat"
 	case "responses":
 		return baseName + "-codex"
+	case "gemini":
+		return baseName + "-gemini"
 	default:
 		return baseName + "-" + route.ChannelKind
 	}

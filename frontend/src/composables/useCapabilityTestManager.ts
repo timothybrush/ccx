@@ -482,21 +482,29 @@ const getCapabilityPreviousJobId = (protocol: string): string | undefined => {
     undefined
 }
 
-const testChannelCapability = async (channelId: number) => {
-  if (!isCapabilityChannelKind(channelStore.activeTab)) {
-    showToast(t('toast.unsupportedProtocol', { protocol: channelStore.activeTab }), 'warning')
+const testChannelCapability = async (target: number | Channel) => {
+  const channelType = typeof target === 'number'
+    ? channelStore.activeTab
+    : (target.routeKind ?? channelStore.activeTab)
+  const channelId = typeof target === 'number'
+    ? target
+    : (target.routeIndex ?? target.index)
+
+  if (!isCapabilityChannelKind(channelType)) {
+    showToast(t('toast.unsupportedProtocol', { protocol: channelType }), 'warning')
     return
   }
 
-  const channel = channelStore.currentChannelsData.channels?.find((ch: Channel) => ch.index === channelId)
+  const channel = typeof target === 'number'
+    ? channelStore.currentChannelsData.channels?.find((ch: Channel) => ch.index === channelId)
+    : target
   if (!channel) {
     console.error('Channel not found:', channelId)
     return
   }
 
   // 从渠道的实际 serviceType 推导 channelKind，而不是从 activeTab
-  const channelType = channelStore.activeTab  // API 路径由渠道配置位置决定
-  const sourceTab = channelStore.activeTab  // 当前查看的 Tab 协议类型
+  const sourceTab = channelType  // 当前查看的 Tab 协议类型
   capabilityTestChannelName.value = channel.name || t('capability.channelFallback', { id: channelId })
   capabilityTestChannelId.value = channelId
   capabilityTestChannelType.value = channelType

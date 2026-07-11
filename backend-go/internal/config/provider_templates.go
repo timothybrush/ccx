@@ -55,12 +55,12 @@ type ProviderCandidate struct {
 //   - GLM:      https://open.bigmodel.cn/api/anthropic
 //
 // Claude route 的 baseURL 使用 Anthropic 兼容入口且不带 /v1（claude provider 会自动补 /v1/messages）。
-// Chat/Responses route 使用 OpenAI Chat 兼容入口 /v1（provider 自动拼 /chat/completions）。
+// Chat/Responses/Gemini route 使用 OpenAI Chat 兼容入口 /v1（provider 自动拼 /chat/completions）。
 var builtinProviderTemplates = []ProviderTemplate{
 	{
 		ProviderID:  "mimo",
 		DisplayName: "小米 MiMo",
-		Description: "sk- 按量付费 / tp- Token Plan 订阅（Claude 走 /anthropic，Chat/Codex 走 /v1）",
+		Description: "sk- 按量付费 / tp- Token Plan 订阅（Claude 走 /anthropic，Chat/Codex/Gemini 走 /v1）",
 		ChannelKind: "messages",
 		ServiceType: "claude",
 		OriginType:  "official_api",
@@ -87,6 +87,12 @@ var builtinProviderTemplates = []ProviderTemplate{
 				ChannelKind: "responses",
 				ServiceType: "openai",
 				Description: "Codex/Responses 请求转换到 OpenAI Chat Completions",
+				Candidates:  mimoChatCandidates(),
+			},
+			{
+				ChannelKind: "gemini",
+				ServiceType: "openai",
+				Description: "Gemini 请求转换到 OpenAI Chat Completions",
 				Candidates:  mimoChatCandidates(),
 			},
 		},

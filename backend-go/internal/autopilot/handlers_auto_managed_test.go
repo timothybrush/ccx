@@ -218,6 +218,7 @@ func TestProviderRouteNameAndPrimaryResult(t *testing.T) {
 		{route: config.ProviderRoute{ChannelKind: "messages"}, want: "mimo-test-claude"},
 		{route: config.ProviderRoute{ChannelKind: "chat"}, want: "mimo-test-chat"},
 		{route: config.ProviderRoute{ChannelKind: "responses"}, want: "mimo-test-codex"},
+		{route: config.ProviderRoute{ChannelKind: "gemini"}, want: "mimo-test-gemini"},
 	}
 	for _, tt := range tests {
 		if got := providerRouteName(base, tt.route, true); got != tt.want {

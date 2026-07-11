@@ -11,6 +11,7 @@
   "app.auth.securityItem4": "Change the server config immediately if you suspect a leak.",
   "app.auth.securityItem5": "After {attempts} failed attempts, access is locked for 5 minutes.",
   "app.tabs.messages": "Claude",
+  "app.tabs.channels": "Channels",
   "app.tabs.chat": "OpenAI Chat",
   "app.tabs.responses": "Codex",
   "app.tabs.gemini": "Gemini",

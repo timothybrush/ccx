@@ -25,7 +25,7 @@
       <v-card-text class="pt-4">
         <ManualIntentForm
           :key="trialFormKey"
-          :prefill-channel-kind="channelType"
+          :prefill-channel-kind="trialChannelKind"
           :prefill-channel-uid="trialChannelUid"
           @created="onTrialCreated"
           @close="showTrialDialog = false"
@@ -54,7 +54,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useChannelStore } from '@/stores/channel'
 import { useDialogStore } from '@/stores/dialog'
 import { api } from '@/services/api'
-import type { ChannelHealthItem } from '@/services/api-types'
+import type { Channel, ChannelHealthItem } from '@/services/api-types'
 import ChannelOrchestration from '@/components/ChannelOrchestration.vue'
 import ManualIntentForm from '@/components/ManualIntentForm.vue'
 import type { ManualRoutingIntent } from '@/services/api-types'
@@ -102,12 +102,12 @@ const emitAddChannel = () => {
 // 试用意图对话框
 const showTrialDialog = ref(false)
 const trialChannelUid = ref<string>('')
+const trialChannelKind = ref(channelType.value)
 const trialFormKey = ref(0)
 
-const openTrialDialog = (channelIndex: number) => {
-  const channels = (channelStore.currentChannelsData as any).channels as Array<{ index: number; channelUid?: string }> | undefined
-  const target = channels?.find(c => c.index === channelIndex)
-  trialChannelUid.value = target?.channelUid ?? ''
+const openTrialDialog = (channel: Channel) => {
+  trialChannelUid.value = channel.channelUid ?? ''
+  trialChannelKind.value = channel.routeKind ?? channelType.value
   trialFormKey.value += 1 // 强制重建表单以刷新预填
   showTrialDialog.value = true
 }

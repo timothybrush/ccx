@@ -7,6 +7,14 @@ import { normalizeLocale } from '@/i18n/core'
 import { translate } from '@/i18n'
 import { registerGlobalTick } from '@/composables/useGlobalTick'
 import { mergeChannelsWithLocalData } from '@/utils/channelMerge'
+import {
+  buildUnifiedChannelsData,
+  isLlmChannelKind,
+  LLM_CHANNEL_KINDS,
+  withRouteKindActivity,
+  withRouteKindMetrics,
+  type LlmChannelKind,
+} from '@/utils/unifiedChannels'
 
 /**
  * 渠道数据管理 Store
@@ -130,12 +138,16 @@ export const useChannelStore = defineStore('channel', () => {
   // ===== 计算属性 =====
 
   // 根据当前 Tab 返回对应的渠道数据
+  const unifiedLlmChannelsData = computed(() => buildUnifiedChannelsData({
+    messages: channelsData.value,
+    chat: chatChannelsData.value,
+    responses: responsesChannelsData.value,
+    gemini: geminiChannelsData.value,
+  }))
+
   const currentChannelsData = computed(() => {
+    if (isLlmChannelKind(activeTab.value)) return unifiedLlmChannelsData.value
     switch (activeTab.value) {
-      case 'messages': return channelsData.value
-      case 'chat': return chatChannelsData.value
-      case 'responses': return responsesChannelsData.value
-      case 'gemini': return geminiChannelsData.value
       case 'images': return imagesChannelsData.value
       case 'vectors': return vectorsChannelsData.value
       default: return channelsData.value
@@ -143,9 +155,19 @@ export const useChannelStore = defineStore('channel', () => {
   })
 
   // 根据当前 Tab 返回对应的 Dashboard 数据（独立缓存，避免切换闪烁）
-  const currentDashboardMetrics = computed(() => dashboardCache.value[activeTab.value].metrics)
+  const currentDashboardMetrics = computed(() => {
+    if (isLlmChannelKind(activeTab.value)) {
+      return LLM_CHANNEL_KINDS.flatMap(kind => withRouteKindMetrics(kind, dashboardCache.value[kind].metrics))
+    }
+    return dashboardCache.value[activeTab.value].metrics
+  })
   const currentDashboardStats = computed(() => dashboardCache.value[activeTab.value].stats)
-  const currentDashboardRecentActivity = computed(() => dashboardCache.value[activeTab.value].recentActivity)
+  const currentDashboardRecentActivity = computed(() => {
+    if (isLlmChannelKind(activeTab.value)) {
+      return LLM_CHANNEL_KINDS.flatMap(kind => withRouteKindActivity(kind, dashboardCache.value[kind].recentActivity))
+    }
+    return dashboardCache.value[activeTab.value].recentActivity
+  })
 
   // 活跃渠道数（仅 active 状态）
   const activeChannelCount = computed(() => {
@@ -265,8 +287,10 @@ export const useChannelStore = defineStore('channel', () => {
       try {
         while (refreshRequested) {
           refreshRequested = false
-          const tab = activeTab.value
-          await doRefresh(tab)
+          const tabs = isLlmChannelKind(activeTab.value)
+            ? LLM_CHANNEL_KINDS
+            : [activeTab.value]
+          await Promise.all(tabs.map(tab => doRefresh(tab)))
         }
       } finally {
         refreshLoopPromise = null
@@ -282,13 +306,14 @@ export const useChannelStore = defineStore('channel', () => {
   async function saveChannel(
     channel: Omit<Channel, 'index' | 'latency' | 'status'>,
     editingChannelIndex: number | null,
-    options?: { isQuickAdd?: boolean }
+    options?: { isQuickAdd?: boolean; channelType?: ApiTab }
   ): Promise<{ success: boolean; message: string; quickAddMessage?: string; channelId?: number }> {
-    const isResponses = activeTab.value === 'responses'
-    const isGemini = activeTab.value === 'gemini'
-    const isChat = activeTab.value === 'chat'
-    const isImages = activeTab.value === 'images'
-    const isVectors = activeTab.value === 'vectors'
+    const targetTab = options?.channelType ?? activeTab.value
+    const isResponses = targetTab === 'responses'
+    const isGemini = targetTab === 'gemini'
+    const isChat = targetTab === 'chat'
+    const isImages = targetTab === 'images'
+    const isVectors = targetTab === 'vectors'
 
     if (editingChannelIndex !== null) {
       // 更新现有渠道
@@ -407,16 +432,16 @@ export const useChannelStore = defineStore('channel', () => {
   /**
    * 删除渠道
    */
-  async function deleteChannel(channelId: number) {
-    if (activeTab.value === 'chat') {
+  async function deleteChannel(channelId: number, channelType: ApiTab = activeTab.value) {
+    if (channelType === 'chat') {
       await api.deleteChatChannel(channelId)
-    } else if (activeTab.value === 'vectors') {
+    } else if (channelType === 'vectors') {
       await api.deleteVectorsChannel(channelId)
-    } else if (activeTab.value === 'images') {
+    } else if (channelType === 'images') {
       await api.deleteImagesChannel(channelId)
-    } else if (activeTab.value === 'gemini') {
+    } else if (channelType === 'gemini') {
       await api.deleteGeminiChannel(channelId)
-    } else if (activeTab.value === 'responses') {
+    } else if (channelType === 'responses') {
       await api.deleteResponsesChannel(channelId)
     } else {
       await api.deleteChannel(channelId)
@@ -428,28 +453,28 @@ export const useChannelStore = defineStore('channel', () => {
   /**
    * 测试单个渠道延迟
    */
-  async function pingChannel(channelId: number) {
-    const result = activeTab.value === 'chat'
+  async function pingChannel(channelId: number, channelType: ApiTab = activeTab.value) {
+    const result = channelType === 'chat'
       ? await api.pingChatChannel(channelId)
-      : activeTab.value === 'vectors'
+      : channelType === 'vectors'
         ? await api.pingVectorsChannel(channelId)
-      : activeTab.value === 'images'
+      : channelType === 'images'
         ? await api.pingImagesChannel(channelId)
-        : activeTab.value === 'gemini'
+        : channelType === 'gemini'
           ? await api.pingGeminiChannel(channelId)
-          : activeTab.value === 'responses'
+          : channelType === 'responses'
             ? await api.pingResponsesChannel(channelId)
             : await api.pingChannel(channelId)
 
-    const data = activeTab.value === 'chat'
+    const data = channelType === 'chat'
       ? chatChannelsData.value
-      : activeTab.value === 'vectors'
+      : channelType === 'vectors'
         ? vectorsChannelsData.value
-      : activeTab.value === 'images'
+      : channelType === 'images'
         ? imagesChannelsData.value
-        : activeTab.value === 'gemini'
+        : channelType === 'gemini'
           ? geminiChannelsData.value
-          : (activeTab.value === 'messages' ? channelsData.value : responsesChannelsData.value)
+          : (channelType === 'messages' ? channelsData.value : responsesChannelsData.value)
 
     const channel = data.channels?.find(c => c.index === channelId)
     if (channel) {
@@ -468,27 +493,26 @@ export const useChannelStore = defineStore('channel', () => {
 
     isPingingAll.value = true
     try {
-      const results = activeTab.value === 'chat'
-        ? await api.pingAllChatChannels()
-        : activeTab.value === 'vectors'
-          ? await api.pingAllVectorsChannels()
-        : activeTab.value === 'images'
-          ? await api.pingAllImagesChannels()
-          : activeTab.value === 'gemini'
-            ? await api.pingAllGeminiChannels()
-            : activeTab.value === 'responses'
-              ? await api.pingAllResponsesChannels()
-              : await api.pingAllChannels()
+      if (isLlmChannelKind(activeTab.value)) {
+        const resultsByKind = await Promise.all(
+          LLM_CHANNEL_KINDS.map(async kind => ({
+            kind,
+            results: await pingAllChannelsForKind(kind),
+          }))
+        )
+        for (const item of resultsByKind) {
+          applyPingResults(item.kind, item.results)
+        }
+        return { success: true }
+      }
 
-      const data = activeTab.value === 'chat'
-        ? chatChannelsData.value
-        : activeTab.value === 'vectors'
-          ? vectorsChannelsData.value
-        : activeTab.value === 'images'
-          ? imagesChannelsData.value
-          : activeTab.value === 'gemini'
-            ? geminiChannelsData.value
-            : (activeTab.value === 'messages' ? channelsData.value : responsesChannelsData.value)
+      const results = activeTab.value === 'vectors'
+          ? await api.pingAllVectorsChannels()
+          : await api.pingAllImagesChannels()
+
+      const data = activeTab.value === 'vectors'
+        ? vectorsChannelsData.value
+        : imagesChannelsData.value
 
       const now = Date.now()
       results.forEach(result => {
@@ -503,6 +527,37 @@ export const useChannelStore = defineStore('channel', () => {
     } finally {
       isPingingAll.value = false
     }
+  }
+
+  async function pingAllChannelsForKind(kind: LlmChannelKind) {
+    switch (kind) {
+      case 'chat':
+        return api.pingAllChatChannels()
+      case 'responses':
+        return api.pingAllResponsesChannels()
+      case 'gemini':
+        return api.pingAllGeminiChannels()
+      default:
+        return api.pingAllChannels()
+    }
+  }
+
+  function applyPingResults(kind: LlmChannelKind, results: Array<{ id: number; latency: number }>) {
+    const data = kind === 'chat'
+      ? chatChannelsData.value
+      : kind === 'responses'
+        ? responsesChannelsData.value
+        : kind === 'gemini'
+          ? geminiChannelsData.value
+          : channelsData.value
+    const now = Date.now()
+    results.forEach(result => {
+      const channel = data.channels?.find(c => c.index === result.id)
+      if (channel) {
+        channel.latency = result.latency
+        channel.latencyTestTime = now
+      }
+    })
   }
 
   /**
@@ -612,6 +667,7 @@ export const useChannelStore = defineStore('channel', () => {
     vectorsChannelsData,
     responsesChannelsData,
     geminiChannelsData,
+    unifiedLlmChannelsData,
     isPingingAll,
     lastRefreshSuccess,
 

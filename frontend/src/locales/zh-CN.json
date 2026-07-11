@@ -11,6 +11,7 @@
   "app.auth.securityItem4": "如果怀疑密钥泄露，请立即更改服务器配置。",
   "app.auth.securityItem5": "连续 {attempts} 次认证失败将锁定 5 分钟。",
   "app.tabs.messages": "Claude",
+  "app.tabs.channels": "渠道",
   "app.tabs.chat": "OpenAI Chat",
   "app.tabs.responses": "Codex",
   "app.tabs.gemini": "Gemini",

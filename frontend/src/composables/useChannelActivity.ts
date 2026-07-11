@@ -7,15 +7,18 @@ import { expandSparseSegments } from '../services/api-helpers'
  * 从 ChannelOrchestration.vue 抽出，降低单文件行数。
  */
 export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>, activityTick?: Ref<number>) {
+  const activityKey = (channelIndex: number, routeKind?: string): string =>
+    routeKind ? `${routeKind}:${channelIndex}` : String(channelIndex)
+
   const activityMap = computed(() => {
-    const map = new Map<number, ChannelRecentActivity>()
+    const map = new Map<string, ChannelRecentActivity>()
     for (const a of recentActivity.value) {
-      map.set(a.channelIndex, a)
+      map.set(activityKey(a.channelIndex, a.routeKind), a)
     }
     return map
   })
 
-  const maxRequestsHistory = ref(new Map<number, { max: number; updatedAt: number }>())
+  const maxRequestsHistory = ref(new Map<string, { max: number; updatedAt: number }>())
   const DECAY_HALF_LIFE = 5 * 60 * 1000  // Half-life: 5 minutes
   const MIN_MAX_REQUESTS = 1  // Minimum baseline value to avoid division by zero
 
@@ -56,16 +59,16 @@ export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>,
     }
   })
 
-  const getChannelActivity = (channelIndex: number): ChannelRecentActivity | undefined => {
-    return activityMap.value.get(channelIndex)
+  const getChannelActivity = (channelIndex: number, routeKind?: string): ChannelRecentActivity | undefined => {
+    return activityMap.value.get(activityKey(channelIndex, routeKind))
   }
 
   type ActivityBar = { x: number; y: number; width: number; height: number; radius: number; g: number; v: 0 | 1 }
 
-  const activityBarsPersistentCache = new Map<number, { segments: ActivitySegment[], bars: ActivityBar[] }>()
+  const activityBarsPersistentCache = new Map<string, { segments: ActivitySegment[], bars: ActivityBar[] }>()
 
   const activityBarsCache = computed(() => {
-    const cache = new Map<number, ActivityBar[]>()
+    const cache = new Map<string, ActivityBar[]>()
     void activityTick?.value
 
     for (const [channelIndex, activity] of activityMap.value.entries()) {
@@ -148,12 +151,12 @@ export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>,
     return cache
   })
 
-  const getActivityBars = (channelIndex: number): ActivityBar[] => {
-    return activityBarsCache.value.get(channelIndex) || []
+  const getActivityBars = (channelIndex: number, routeKind?: string): ActivityBar[] => {
+    return activityBarsCache.value.get(activityKey(channelIndex, routeKind)) || []
   }
 
-  const getActivityPath = (channelIndex: number): string => {
-    const activity = getChannelActivity(channelIndex)
+  const getActivityPath = (channelIndex: number, routeKind?: string): string => {
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity) return ''
     void activityTick?.value
 
@@ -206,11 +209,11 @@ export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>,
     return parts.join(' ')
   }
 
-  const _getActivityAreaPath = (channelIndex: number): string => {
-    const linePath = getActivityPath(channelIndex)
+  const _getActivityAreaPath = (channelIndex: number, routeKind?: string): string => {
+    const linePath = getActivityPath(channelIndex, routeKind)
     if (!linePath) return ''
 
-    const activity = getChannelActivity(channelIndex)
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity) return ''
 
     const segments = expandSparseSegments(activity)
@@ -220,8 +223,8 @@ export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>,
     return `${linePath} L ${numSegments - 1} 100 L 0 100 Z`
   }
 
-  const _getActivityGradient = (channelIndex: number): string => {
-    const activity = getChannelActivity(channelIndex)
+  const _getActivityGradient = (channelIndex: number, routeKind?: string): string => {
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity) return 'transparent'
     void activityTick?.value
 
@@ -269,23 +272,23 @@ export function useChannelActivity(recentActivity: Ref<ChannelRecentActivity[]>,
     return `linear-gradient(to right, ${stops})`
   }
 
-  const formatRPM = (channelIndex: number): string => {
-    const activity = getChannelActivity(channelIndex)
+  const formatRPM = (channelIndex: number, routeKind?: string): string => {
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity || !activity.rpm) return '--'
     if (activity.rpm >= 10) return activity.rpm.toFixed(0)
     return activity.rpm.toFixed(1)
   }
 
-  const formatTPM = (channelIndex: number): string => {
-    const activity = getChannelActivity(channelIndex)
+  const formatTPM = (channelIndex: number, routeKind?: string): string => {
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity || !activity.tpm) return '--'
     if (activity.tpm >= 1000000) return `${(activity.tpm / 1000000).toFixed(1)}M`
     if (activity.tpm >= 1000) return `${(activity.tpm / 1000).toFixed(1)}K`
     return activity.tpm.toFixed(0)
   }
 
-  const hasActivityData = (channelIndex: number): boolean => {
-    const activity = getChannelActivity(channelIndex)
+  const hasActivityData = (channelIndex: number, routeKind?: string): boolean => {
+    const activity = getChannelActivity(channelIndex, routeKind)
     if (!activity) return false
     return activity.rpm > 0 || activity.tpm > 0
   }

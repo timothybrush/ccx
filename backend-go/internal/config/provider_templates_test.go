@@ -42,8 +42,8 @@ func TestProviderTemplateMiMoRoutes(t *testing.T) {
 		t.Fatal("未找到 mimo 模板")
 	}
 	routes := tmpl.AutoAddRoutes()
-	if len(routes) != 3 {
-		t.Fatalf("mimo 应创建 3 条 route，实际 %d: %+v", len(routes), routes)
+	if len(routes) != 4 {
+		t.Fatalf("mimo 应创建 4 条 route，实际 %d: %+v", len(routes), routes)
 	}
 
 	want := map[string]struct {
@@ -53,6 +53,7 @@ func TestProviderTemplateMiMoRoutes(t *testing.T) {
 		"messages":  {serviceType: "claude", baseSuffix: "/anthropic"},
 		"chat":      {serviceType: "openai", baseSuffix: "/v1"},
 		"responses": {serviceType: "openai", baseSuffix: "/v1"},
+		"gemini":    {serviceType: "openai", baseSuffix: "/v1"},
 	}
 	for _, route := range routes {
 		expect, ok := want[route.ChannelKind]
@@ -70,8 +71,8 @@ func TestProviderTemplateMiMoRoutes(t *testing.T) {
 			t.Fatalf("route %s 首选 baseURL=%s, want suffix %s", route.ChannelKind, candidates[0].BaseURL, expect.baseSuffix)
 		}
 	}
-	if !tmpl.SupportsChannelKind("messages") || !tmpl.SupportsChannelKind("chat") || !tmpl.SupportsChannelKind("responses") {
-		t.Fatalf("mimo 应支持 messages/chat/responses routes: %+v", routes)
+	if !tmpl.SupportsChannelKind("messages") || !tmpl.SupportsChannelKind("chat") || !tmpl.SupportsChannelKind("responses") || !tmpl.SupportsChannelKind("gemini") {
+		t.Fatalf("mimo 应支持 messages/chat/responses/gemini routes: %+v", routes)
 	}
 }
 

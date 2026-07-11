@@ -90,11 +90,11 @@
       <!-- Draggable list -->
       <draggable
         v-model="activeChannels"
-        item-key="index"
-        :handle="isSearchActive ? '.no-drag' : '.drag-handle'"
+        :item-key="getChannelUiKey"
+        :handle="isSearchActive || !canReorderList ? '.no-drag' : '.drag-handle'"
         ghost-class="ghost"
         class="channel-list"
-        :disabled="isSearchActive"
+        :disabled="isSearchActive || !canReorderList"
         @change="onDragChange"
       >
         <template #item="{ element, index }">
@@ -103,14 +103,14 @@
               class="channel-row"
               :class="[
                 getChannelRowClass(element),
-                { 'has-open-menu': isChannelMenuOpen('active', element.index) },
+                { 'has-open-menu': isChannelMenuOpen('active', element) },
               ]"
-              @click="toggleChannelChart(element.index)"
+              @click="toggleChannelChart(element)"
             >
               <!-- SVG activity waveform bar chart background -->
               <!-- Gradient 定义在组件顶部一次性渲染（见 .activity-gradient-defs），这里只绘制 rect 并引用共享 gradient -->
               <svg class="activity-chart-bg" preserveAspectRatio="none" viewBox="0 0 150 100">
-                <template v-for="(bar, i) in getActivityBars(element.index)" :key="i">
+                <template v-for="(bar, i) in getActivityBars(getRouteIndex(element), getRouteKind(element))" :key="i">
                   <rect
                     v-if="bar.v"
                     :x="bar.x"
@@ -139,9 +139,9 @@
 
             <!-- Status indicator -->
             <div class="status-badge-wrapper" @click.stop>
-              <ChannelStatusBadge :status="element.status || 'active'" :metrics="getChannelMetrics(element.index)" />
+              <ChannelStatusBadge :status="element.status || 'active'" :metrics="getChannelMetrics(element)" />
               <!-- Health badge (§8.2) -->
-              <ChannelHealthBadge :health="getChannelHealth(element.index) ?? null" />
+              <ChannelHealthBadge :health="getChannelHealth(element) ?? null" />
             </div>
 
             <!-- Channel name and description -->
@@ -181,10 +181,22 @@
                 <v-icon size="14">mdi-open-in-new</v-icon>
               </v-btn>
               <span class="text-caption text-medium-emphasis ml-2">{{ element.serviceType }}</span>
+              <v-chip
+                v-for="capsule in getProtocolCapsules(element)"
+                :key="`${capsule.kind}-${capsule.index}`"
+                size="x-small"
+                :color="getProtocolCapsuleColor(capsule.kind)"
+                variant="tonal"
+                density="comfortable"
+                rounded="pill"
+                class="ml-1 protocol-capsule"
+              >
+                {{ capsule.label }}
+              </v-chip>
               <v-icon v-if="element.noVision" size="14" color="warning" class="ml-1">mdi-eye-off</v-icon>
               <!-- Origin / pool tags (§8.2 标签系统) - only rendered when health data includes originTier/poolTag -->
               <v-chip
-                v-for="tag in getOriginTags(element.index)"
+                v-for="tag in getOriginTags(element)"
                 :key="tag.label"
                 :color="tag.color"
                 size="x-small"
@@ -215,8 +227,8 @@
               <v-icon
                 size="x-small"
                 class="ml-auto expand-icon"
-                :color="expandedChannelIndex === element.index ? 'primary' : 'grey-lighten-1'"
-              >{{ expandedChannelIndex === element.index ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                :color="expandedChannelKey === getChannelUiKey(element) ? 'primary' : 'grey-lighten-1'"
+              >{{ expandedChannelKey === getChannelUiKey(element) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
             </div>
 
             <!-- Metrics display -->
@@ -224,39 +236,39 @@
               tooltip 懒挂载：仅 hover/focus 当前渠道时才渲染 <v-tooltip>，避免 100+ 渠道常驻 overlay
             -->
             <div class="channel-metrics" @click.stop>
-              <template v-if="getChannelMetrics(element.index)">
+              <template v-if="getChannelMetrics(element)">
                 <div
                   class="d-flex align-center metrics-display"
                   tabindex="0"
-                  @mouseenter="hoveredMetricsChannel = element.index"
-                  @mouseleave="hoveredMetricsChannel === element.index && (hoveredMetricsChannel = null)"
-                  @focusin="hoveredMetricsChannel = element.index"
-                  @focusout="hoveredMetricsChannel === element.index && (hoveredMetricsChannel = null)"
+                  @mouseenter="hoveredMetricsChannel = getChannelUiKey(element)"
+                  @mouseleave="hoveredMetricsChannel === getChannelUiKey(element) && (hoveredMetricsChannel = null)"
+                  @focusin="hoveredMetricsChannel = getChannelUiKey(element)"
+                  @focusout="hoveredMetricsChannel === getChannelUiKey(element) && (hoveredMetricsChannel = null)"
                 >
                   <!-- Show success rate when there are requests in the last 15 minutes; otherwise show -- -->
-                  <template v-if="get15mStats(element.index)?.requestCount">
+                  <template v-if="get15mStats(element)?.requestCount">
                     <v-chip
                       size="x-small"
-                      :color="getSuccessRateColor(get15mStats(element.index)?.successRate)"
+                      :color="getSuccessRateColor(get15mStats(element)?.successRate)"
                       variant="tonal"
                       class="metrics-chip success-chip"
                     >
-                      {{ get15mStats(element.index)?.successRate?.toFixed(0) }}%
+                      {{ get15mStats(element)?.successRate?.toFixed(0) }}%
                     </v-chip>
                     <span class="request-summary ml-2 mr-1">
-                      {{ get15mStats(element.index)?.requestCount }} {{ t('orchestration.requests') }}
+                      {{ get15mStats(element)?.requestCount }} {{ t('orchestration.requests') }}
                     </span>
                     <v-chip
-                      v-if="shouldShowCacheHitRate(get15mStats(element.index))"
+                      v-if="shouldShowCacheHitRate(get15mStats(element))"
                       size="x-small"
-                      :color="getCacheHitRateColor(get15mStats(element.index)?.cacheHitRate)"
+                      :color="getCacheHitRateColor(get15mStats(element)?.cacheHitRate)"
                       variant="tonal"
                       class="ml-1 metrics-chip cache-chip"
                     >
-                      {{ t('orchestration.cache') }} {{ get15mStats(element.index)?.cacheHitRate?.toFixed(0) }}%
+                      {{ t('orchestration.cache') }} {{ get15mStats(element)?.cacheHitRate?.toFixed(0) }}%
                     </v-chip>
                     <v-chip
-                      v-if="shouldShowCacheWriteWarning(get15mStats(element.index))"
+                      v-if="shouldShowCacheWriteWarning(get15mStats(element))"
                       size="x-small"
                       color="warning"
                       variant="tonal"
@@ -267,7 +279,7 @@
                   </template>
                   <span v-else class="text-caption text-medium-emphasis">--</span>
                   <v-tooltip
-                    v-if="hoveredMetricsChannel === element.index"
+                    v-if="hoveredMetricsChannel === getChannelUiKey(element)"
                     :model-value="true"
                     activator="parent"
                     location="top"
@@ -278,37 +290,37 @@
                       <div class="text-caption font-weight-bold mb-1">{{ t('orchestration.requestStats') }}</div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.minutes15') }}:</span>
-                        <span>{{ formatStats(get15mStats(element.index)) }}</span>
+                        <span>{{ formatStats(get15mStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hour1') }}:</span>
-                        <span>{{ formatStats(get1hStats(element.index)) }}</span>
+                        <span>{{ formatStats(get1hStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hours6') }}:</span>
-                        <span>{{ formatStats(get6hStats(element.index)) }}</span>
+                        <span>{{ formatStats(get6hStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hours24') }}:</span>
-                        <span>{{ formatStats(get24hStats(element.index)) }}</span>
+                        <span>{{ formatStats(get24hStats(element)) }}</span>
                       </div>
 
                       <div class="text-caption font-weight-bold mt-2 mb-1">{{ t('orchestration.cacheStats') }}</div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.minutes15') }}:</span>
-                        <span>{{ formatCacheStats(get15mStats(element.index)) }}</span>
+                        <span>{{ formatCacheStats(get15mStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hour1') }}:</span>
-                        <span>{{ formatCacheStats(get1hStats(element.index)) }}</span>
+                        <span>{{ formatCacheStats(get1hStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hours6') }}:</span>
-                        <span>{{ formatCacheStats(get6hStats(element.index)) }}</span>
+                        <span>{{ formatCacheStats(get6hStats(element)) }}</span>
                       </div>
                       <div class="metrics-tooltip-row">
                         <span>{{ t('orchestration.hours24') }}:</span>
-                        <span>{{ formatCacheStats(get24hStats(element.index)) }}</span>
+                        <span>{{ formatCacheStats(get24hStats(element)) }}</span>
                       </div>
                     </div>
                   </v-tooltip>
@@ -320,9 +332,9 @@
             <!-- RPM/TPM display -->
             <div class="channel-rpm-tpm" @click.stop>
               <div class="rpm-tpm-values">
-                <span class="rpm-value" :class="{ 'has-data': hasActivityData(element.index) }">{{ formatRPM(element.index) }}</span>
+                <span class="rpm-value" :class="{ 'has-data': hasActivityData(getRouteIndex(element), getRouteKind(element)) }">{{ formatRPM(getRouteIndex(element), getRouteKind(element)) }}</span>
                 <span class="rpm-tpm-separator">/</span>
-                <span class="tpm-value" :class="{ 'has-data': hasActivityData(element.index) }">{{ formatTPM(element.index) }}</span>
+                <span class="tpm-value" :class="{ 'has-data': hasActivityData(getRouteIndex(element), getRouteKind(element)) }">{{ formatTPM(getRouteIndex(element), getRouteKind(element)) }}</span>
               </div>
               <div class="rpm-tpm-labels">
                 <span>RPM</span>
@@ -367,7 +379,7 @@
                 variant="text"
                 color="warning"
                 :title="t('orchestration.resume')"
-                @click="resumeChannel(element.index)"
+                @click="resumeChannel(element)"
               >
                 <v-icon size="small">mdi-refresh</v-icon>
               </v-btn>
@@ -379,7 +391,7 @@
                 variant="text"
                 color="warning"
                 :title="t('orchestration.pause')"
-                @click="setChannelStatus(element.index, 'suspended')"
+                @click="setChannelStatus(element, 'suspended')"
               >
                 <v-icon size="small">mdi-pause-circle</v-icon>
               </v-btn>
@@ -395,24 +407,24 @@
               </v-btn>
 
               <v-menu
-                :model-value="isChannelMenuOpen('active', element.index)"
+                :model-value="isChannelMenuOpen('active', element)"
                 location="bottom end"
                 origin="top end"
                 location-strategy="connected"
                 scroll-strategy="reposition"
                 :offset="6"
-                @update:model-value="open => handleChannelMenuUpdate('active', element.index, open)"
+                @update:model-value="open => handleChannelMenuUpdate('active', element, open)"
               >
                 <template #activator="{ props: menuProps }">
                   <v-btn
                     icon
                     size="x-small"
-                    :variant="copiedChannelIndex === element.index ? 'flat' : 'text'"
-                    :color="copiedChannelIndex === element.index ? 'success' : ''"
+                    :variant="copiedChannelKey === getChannelUiKey(element) ? 'flat' : 'text'"
+                    :color="copiedChannelKey === getChannelUiKey(element) ? 'success' : ''"
                     v-bind="menuProps"
                   >
                     <v-icon size="small">
-                      {{ copiedChannelIndex === element.index ? 'mdi-check-bold' : 'mdi-dots-vertical' }}
+                      {{ copiedChannelKey === getChannelUiKey(element) ? 'mdi-check-bold' : 'mdi-dots-vertical' }}
                     </v-icon>
                   </v-btn>
                 </template>
@@ -423,19 +435,19 @@
                     </template>
                     <v-list-item-title>{{ t('orchestration.edit') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item @click="$emit('ping', element.index)">
+                  <v-list-item @click="$emit('ping', element)">
                     <template #prepend>
                       <v-icon size="small">mdi-speedometer</v-icon>
                     </template>
                     <v-list-item-title>{{ t('app.actions.ping') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item v-if="channelType !== 'images' && channelType !== 'vectors'" @click="$emit('testCapability', element.index)">
+                  <v-list-item v-if="getRouteKind(element) !== 'images' && getRouteKind(element) !== 'vectors'" @click="$emit('testCapability', element)">
                     <template #prepend>
                       <v-icon size="small" color="success">mdi-test-tube</v-icon>
                     </template>
                     <v-list-item-title>{{ t('addChannel.testCapability') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item @click="$emit('trial', element.index)">
+                  <v-list-item @click="$emit('trial', element)">
                     <template #prepend>
                       <v-icon size="small" color="deep-purple">mdi-flask-outline</v-icon>
                     </template>
@@ -453,26 +465,26 @@
                     </template>
                     <v-list-item-title>{{ t('orchestration.promotion') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item v-if="!isFirstActiveChannel(element)" :disabled="isSavingOrder" @click="moveChannelToTop(element.index)">
+                  <v-list-item v-if="!isFirstActiveChannel(element)" :disabled="isSavingOrder || !canReorderList" @click="moveChannelToTop(element)">
                     <template #prepend>
                       <v-icon size="small" color="primary">mdi-arrow-collapse-up</v-icon>
                     </template>
                     <v-list-item-title>{{ t('orchestration.moveTop') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item v-if="!isLastActiveChannel(element)" :disabled="isSavingOrder" @click="moveChannelToBottom(element.index)">
+                  <v-list-item v-if="!isLastActiveChannel(element)" :disabled="isSavingOrder || !canReorderList" @click="moveChannelToBottom(element)">
                     <template #prepend>
                       <v-icon size="small" color="primary">mdi-arrow-collapse-down</v-icon>
                     </template>
                     <v-list-item-title>{{ t('orchestration.moveBottom') }}</v-list-item-title>
                   </v-list-item>
                   <v-divider />
-                  <v-list-item v-if="isBreakerManagedChannel(element)" @click="resumeChannel(element.index)">
+                  <v-list-item v-if="isBreakerManagedChannel(element)" @click="resumeChannel(element)">
                     <template #prepend>
                       <v-icon size="small" color="success">mdi-play-circle</v-icon>
                     </template>
                     <v-list-item-title>{{ t('orchestration.resumeReset') }}</v-list-item-title>
                   </v-list-item>
-                  <v-list-item @click="setChannelStatus(element.index, 'disabled')">
+                  <v-list-item @click="setChannelStatus(element, 'disabled')">
                     <template #prepend>
                       <v-icon size="small" color="error">mdi-stop-circle</v-icon>
                     </template>
@@ -507,12 +519,12 @@
 
           <!-- Expanded chart area -->
           <v-expand-transition>
-            <div v-if="expandedChannelIndex === element.index" class="channel-chart-wrapper">
+            <div v-if="expandedChannelKey === getChannelUiKey(element)" class="channel-chart-wrapper">
               <KeyTrendChart
-                :key="`chart-${channelType}-${element.index}`"
-                :channel-id="element.index"
-                :channel-type="channelType"
-                @close="expandedChannelIndex = null"
+                :key="`chart-${getRouteKind(element)}-${getRouteIndex(element)}`"
+                :channel-id="getRouteIndex(element)"
+                :channel-type="getRouteKind(element)"
+                @close="expandedChannelKey = null"
               />
             </div>
           </v-expand-transition>
@@ -544,9 +556,9 @@
       <div v-if="filteredInactiveChannels.length > 0" class="inactive-pool">
         <div
           v-for="channel in filteredInactiveChannels"
-          :key="channel.index"
+          :key="getChannelUiKey(channel)"
           class="inactive-channel-row"
-          :class="{ 'has-open-menu': isChannelMenuOpen('inactive', channel.index) }"
+          :class="{ 'has-open-menu': isChannelMenuOpen('inactive', channel) }"
         >
           <!-- Channel information -->
           <div class="channel-info">
@@ -560,6 +572,18 @@
                 @keydown.space.prevent="$emit('edit', channel)"
               >{{ channel.name }}</span>
               <span class="text-caption text-disabled ml-2">{{ channel.serviceType }}</span>
+              <v-chip
+                v-for="capsule in getProtocolCapsules(channel)"
+                :key="`${capsule.kind}-${capsule.index}`"
+                size="x-small"
+                :color="getProtocolCapsuleColor(capsule.kind)"
+                variant="tonal"
+                density="comfortable"
+                rounded="pill"
+                class="ml-1 protocol-capsule"
+              >
+                {{ capsule.label }}
+              </v-chip>
               <v-icon v-if="channel.noVision" size="14" color="warning" class="ml-1">mdi-eye-off</v-icon>
             </div>
             <div v-if="channel.description" class="channel-info-desc text-caption text-disabled">
@@ -584,30 +608,30 @@
 
           <!-- Action buttons -->
           <div class="channel-actions">
-            <v-btn size="small" color="success" variant="tonal" @click="enableChannel(channel.index)">
+            <v-btn size="small" color="success" variant="tonal" @click="enableChannel(channel)">
               <v-icon start size="small">mdi-play-circle</v-icon>
               {{ t('orchestration.enable') }}
             </v-btn>
 
             <v-menu
-              :model-value="isChannelMenuOpen('inactive', channel.index)"
+              :model-value="isChannelMenuOpen('inactive', channel)"
               location="bottom end"
               origin="top end"
               location-strategy="connected"
               scroll-strategy="reposition"
               :offset="6"
-              @update:model-value="open => handleChannelMenuUpdate('inactive', channel.index, open)"
+              @update:model-value="open => handleChannelMenuUpdate('inactive', channel, open)"
             >
               <template #activator="{ props: menuProps }">
                 <v-btn
                   icon
                   size="x-small"
-                  :variant="copiedChannelIndex === channel.index ? 'flat' : 'text'"
-                  :color="copiedChannelIndex === channel.index ? 'success' : ''"
+                  :variant="copiedChannelKey === getChannelUiKey(channel) ? 'flat' : 'text'"
+                  :color="copiedChannelKey === getChannelUiKey(channel) ? 'success' : ''"
                   v-bind="menuProps"
                 >
                   <v-icon size="small">
-                    {{ copiedChannelIndex === channel.index ? 'mdi-check-bold' : 'mdi-dots-vertical' }}
+                    {{ copiedChannelKey === getChannelUiKey(channel) ? 'mdi-check-bold' : 'mdi-dots-vertical' }}
                   </v-icon>
                 </v-btn>
               </template>
@@ -618,13 +642,13 @@
                   </template>
                   <v-list-item-title>{{ t('orchestration.edit') }}</v-list-item-title>
                 </v-list-item>
-                <v-list-item v-if="channelType !== 'images' && channelType !== 'vectors'" @click="$emit('testCapability', channel.index)">
+                <v-list-item v-if="getRouteKind(channel) !== 'images' && getRouteKind(channel) !== 'vectors'" @click="$emit('testCapability', channel)">
                   <template #prepend>
                     <v-icon size="small" color="success">mdi-test-tube</v-icon>
                   </template>
                   <v-list-item-title>{{ t('addChannel.testCapability') }}</v-list-item-title>
                 </v-list-item>
-                <v-list-item @click="$emit('trial', channel.index)">
+                <v-list-item @click="$emit('trial', channel)">
                   <template #prepend>
                     <v-icon size="small" color="deep-purple">mdi-flask-outline</v-icon>
                   </template>
@@ -637,13 +661,13 @@
                   <v-list-item-title>{{ t('orchestration.copyConfig') }}</v-list-item-title>
                 </v-list-item>
                 <v-divider />
-                <v-list-item @click="enableChannel(channel.index)">
+                <v-list-item @click="enableChannel(channel)">
                   <template #prepend>
                     <v-icon size="small" color="success">mdi-play-circle</v-icon>
                   </template>
                   <v-list-item-title>{{ t('orchestration.enable') }}</v-list-item-title>
                 </v-list-item>
-                <v-list-item @click="$emit('delete', channel.index)">
+                <v-list-item @click="$emit('delete', channel)">
                   <template #prepend>
                     <v-icon size="small" color="error">mdi-delete</v-icon>
                   </template>
@@ -663,7 +687,7 @@
       v-model="showLogsDialog"
       :channel-index="logsChannelIndex"
       :channel-name="logsChannelName"
-      :channel-type="channelType"
+      :channel-type="logsChannelType"
     />
     <SchedulerDiagnoseDialog
       v-model="showSchedulerDiagnoseDialog"
@@ -675,7 +699,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, nextTick } from 'vue'
 import draggable from 'vuedraggable'
-import { api, type Channel, type ChannelMetrics, type ChannelStatus, type TimeWindowStats, type ChannelRecentActivity, type SchedulerStatsResponse } from '../services/api'
+import { api, type Channel, type ChannelKind, type ChannelMetrics, type ChannelStatus, type TimeWindowStats, type ChannelRecentActivity, type SchedulerStatsResponse } from '../services/api'
 import { getChannelTypeApi } from '../utils/channelTypeApi'
 import { useI18n } from '../i18n'
 import { useGlobalTick } from '../composables/useGlobalTick'
@@ -691,7 +715,7 @@ import SchedulerDiagnoseDialog from './SchedulerDiagnoseDialog.vue'
 const props = defineProps<{
   channels: Channel[]
   currentChannelIndex: number
-  channelType: 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
+  channelType: ChannelKind
   // Optional: metrics and stats passed from the parent component (when using the dashboard API)
   dashboardMetrics?: ChannelMetrics[]
   dashboardStats?: SchedulerStatsResponse
@@ -703,16 +727,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (_e: 'edit', _channel: Channel): void
-  (_e: 'delete', _channelId: number): void
-  (_e: 'ping', _channelId: number): void
-  (_e: 'testCapability', _channelId: number): void
-  (_e: 'trial', _channelId: number): void
+  (_e: 'delete', _channel: Channel): void
+  (_e: 'ping', _channel: Channel): void
+  (_e: 'testCapability', _channel: Channel): void
+  (_e: 'trial', _channel: Channel): void
   (_e: 'refresh'): void
   (_e: 'error', _message: string): void
   (_e: 'success', _message: string): void
 }>()
 const { t } = useI18n()
-const getCurrentChannelTypeApi = () => getChannelTypeApi(api, props.channelType)
+const getRouteKind = (channel?: Channel): ChannelKind => channel?.routeKind ?? props.channelType
+const getRouteIndex = (channel: Channel): number => channel.routeIndex ?? channel.index
+const getChannelUiKey = (channel: Channel): string => channel.displayKey ?? `${getRouteKind(channel)}:${getRouteIndex(channel)}`
+const getCurrentChannelTypeApi = (channel?: Channel) => getChannelTypeApi(api, getRouteKind(channel))
 
 // State
 const metrics = ref<ChannelMetrics[]>([])
@@ -743,9 +770,11 @@ const showSchedulerDiagnoseDialog = ref(false)
 const showLogsDialog = ref(false)
 const logsChannelIndex = ref(0)
 const logsChannelName = ref('')
+const logsChannelType = ref<ChannelKind>(props.channelType)
 const openLogsDialog = (ch: Channel) => {
-  logsChannelIndex.value = ch.index
+  logsChannelIndex.value = getRouteIndex(ch)
   logsChannelName.value = ch.name
+  logsChannelType.value = getRouteKind(ch)
   showLogsDialog.value = true
 }
 
@@ -758,25 +787,25 @@ const currentTime = ref(Date.now())
 const activityUpdateTick = ref(0)
 
 // Chart expansion state
-const expandedChannelIndex = ref<number | null>(null)
+const expandedChannelKey = ref<string | null>(null)
 
 // tooltip 懒挂载：记录当前 hover/focus 的渠道，避免 100+ 渠道每行常驻 <v-tooltip> overlay 实例
-const hoveredMetricsChannel = ref<number | null>(null)
+const hoveredMetricsChannel = ref<string | null>(null)
 
 // Channel config copy state
-const copiedChannelIndex = ref<number | null>(null)
+const copiedChannelKey = ref<string | null>(null)
 let copyTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 type ChannelMenuScope = 'active' | 'inactive'
-type ChannelMenuKey = `${ChannelMenuScope}:${number}`
+type ChannelMenuKey = `${ChannelMenuScope}:${string}`
 const openChannelMenuKey = ref<ChannelMenuKey | null>(null)
 let channelMenuRepositionTimer: ReturnType<typeof setTimeout> | null = null
 
-const getChannelMenuKey = (scope: ChannelMenuScope, channelIndex: number): ChannelMenuKey =>
-  `${scope}:${channelIndex}`
+const getChannelMenuKey = (scope: ChannelMenuScope, channel: Channel): ChannelMenuKey =>
+  `${scope}:${getChannelUiKey(channel)}`
 
-const isChannelMenuOpen = (scope: ChannelMenuScope, channelIndex: number): boolean =>
-  openChannelMenuKey.value === getChannelMenuKey(scope, channelIndex)
+const isChannelMenuOpen = (scope: ChannelMenuScope, channel: Channel): boolean =>
+  openChannelMenuKey.value === getChannelMenuKey(scope, channel)
 
 const dispatchOverlayResize = () => {
   window.dispatchEvent(new Event('resize'))
@@ -799,10 +828,10 @@ const scheduleChannelMenuReposition = () => {
 
 const handleChannelMenuUpdate = (
   scope: ChannelMenuScope,
-  channelIndex: number,
+  channel: Channel,
   open: boolean,
 ) => {
-  const key = getChannelMenuKey(scope, channelIndex)
+  const key = getChannelMenuKey(scope, channel)
 
   if (open) {
     openChannelMenuKey.value = key
@@ -816,8 +845,9 @@ const handleChannelMenuUpdate = (
 }
 
 // Toggle channel chart expansion/collapse
-const toggleChannelChart = (channelIndex: number) => {
-  expandedChannelIndex.value = expandedChannelIndex.value === channelIndex ? null : channelIndex
+const toggleChannelChart = (channel: Channel) => {
+  const key = getChannelUiKey(channel)
+  expandedChannelKey.value = expandedChannelKey.value === key ? null : key
 }
 
 // Copy channel configuration to the clipboard (BaseURL + API keys, one per line)
@@ -846,9 +876,9 @@ const copyChannelInfo = async (channel: Channel) => {
 
   // Set success state and start the timeout
   const setSuccessState = () => {
-    copiedChannelIndex.value = channel.index
+    copiedChannelKey.value = getChannelUiKey(channel)
     copyTimeoutId = setTimeout(() => {
-      copiedChannelIndex.value = null
+      copiedChannelKey.value = null
       copyTimeoutId = null
     }, 2000)
   }
@@ -883,26 +913,26 @@ const copyChannelInfo = async (channel: Channel) => {
 const activeChannels = ref<Channel[]>([])
 
 // 首次渲染时记录内置顺序，用作缺省优先级兜底
-const initialBuiltInOrder = computed(() => props.channels.map(ch => ch.index))
-const lastKnownActiveOrder = ref<number[]>([])
-const lastKnownInactiveOrder = ref<number[]>([])
+const initialBuiltInOrder = computed(() => props.channels.map(getChannelUiKey))
+const lastKnownActiveOrder = ref<string[]>([])
+const lastKnownInactiveOrder = ref<string[]>([])
 
 // 按用户排序/后端 priority 稳定排序；有无 key 只作为缺省顺序的兜底，不覆盖用户排序
 const buildChannelOrder = (
   source: Channel[],
-  fallbackOrder: number[]
+  fallbackOrder: string[]
 ): Channel[] => {
-  const fallbackRank = new Map<number, number>()
-  fallbackOrder.forEach((idx, rank) => fallbackRank.set(idx, rank))
+  const fallbackRank = new Map<string, number>()
+  fallbackOrder.forEach((key, rank) => fallbackRank.set(key, rank))
 
-  const originalRank = new Map<number, number>()
-  initialBuiltInOrder.value.forEach((idx, rank) => originalRank.set(idx, rank))
+  const originalRank = new Map<string, number>()
+  initialBuiltInOrder.value.forEach((key, rank) => originalRank.set(key, rank))
 
   const hasKey = (ch: Channel) =>
     Array.isArray(ch.apiKeys) && ch.apiKeys.length > 0
 
   const getRank = (ch: Channel): number =>
-    ch.priority ?? fallbackRank.get(ch.index) ?? originalRank.get(ch.index) ?? ch.index
+    ch.priority ?? fallbackRank.get(getChannelUiKey(ch)) ?? originalRank.get(getChannelUiKey(ch)) ?? getRouteIndex(ch)
 
   return [...source].sort((a, b) => {
     const rankDiff = getRank(a) - getRank(b)
@@ -912,11 +942,11 @@ const buildChannelOrder = (
     const keyDiff = Number(hasKey(b)) - Number(hasKey(a))
     if (keyDiff !== 0) return keyDiff
 
-    return a.index - b.index
+    return getRouteIndex(a) - getRouteIndex(b)
   })
 }
 
-const isSameIndexOrder = (current: number[], next: number[]) => (
+const isSameKeyOrder = (current: string[], next: string[]) => (
   current.length === next.length && current.every((index, position) => index === next[position])
 )
 
@@ -932,8 +962,8 @@ const filteredInactiveChannels = computed(() => {
 })
 
 watch(inactiveChannels, (channels) => {
-  const nextOrder = channels.map(ch => ch.index)
-  if (!isSameIndexOrder(lastKnownInactiveOrder.value, nextOrder)) {
+  const nextOrder = channels.map(getChannelUiKey)
+  if (!isSameKeyOrder(lastKnownInactiveOrder.value, nextOrder)) {
     lastKnownInactiveOrder.value = nextOrder
   }
 }, { immediate: true })
@@ -955,11 +985,11 @@ const isMultiChannelMode = computed(() => {
 const initActiveChannels = () => {
   const filteredActive = props.channels.filter(ch => ch.status !== 'disabled')
   const newActive = buildChannelOrder(filteredActive, lastKnownActiveOrder.value)
-  lastKnownActiveOrder.value = newActive.map(ch => ch.index)
+  lastKnownActiveOrder.value = newActive.map(getChannelUiKey)
 
   // 通过索引列表比较，判断是否需要整体重建
-  const currentIndexes = activeChannels.value.map(ch => ch.index).join(',')
-  const newIndexes = newActive.map(ch => ch.index).join(',')
+  const currentIndexes = activeChannels.value.map(getChannelUiKey).join(',')
+  const newIndexes = newActive.map(getChannelUiKey).join(',')
 
   if (currentIndexes !== newIndexes) {
     // 结构发生变更（新增/删除/重新排序），需要重建数组
@@ -997,7 +1027,7 @@ watch(() => props.dashboardRecentActivity, (newActivity) => {
 // Watch channelType changes - refresh metrics and collapse charts on switch
 watch(() => props.channelType, () => {
   searchQuery.value = '' // Clear the search when switching tabs
-  expandedChannelIndex.value = null // Collapse the expanded chart
+  expandedChannelKey.value = null // Collapse the expanded chart
   // Refresh locally if dashboard props are not being used
   if (!props.dashboardMetrics) {
     refreshMetrics()
@@ -1005,19 +1035,25 @@ watch(() => props.channelType, () => {
 })
 
 // Fetch channel metrics
-const getChannelMetrics = (channelIndex: number): ChannelMetrics | undefined => {
-  return metrics.value.find(m => m.channelIndex === channelIndex)
+const getChannelMetrics = (channel: Channel): ChannelMetrics | undefined => {
+  const routeKind = getRouteKind(channel)
+  const routeIndex = getRouteIndex(channel)
+  return metrics.value.find(m => {
+    if (m.channelIndex !== routeIndex) return false
+    return !m.routeKind || m.routeKind === routeKind
+  })
 }
 
 // Fetch channel health (§8.2): channelId matches channel.index in the backend config.
-const getChannelHealth = (channelIndex: number): ChannelHealthItem | undefined => {
-  return props.healthMap?.get(channelIndex)
+const getChannelHealth = (channel: Channel): ChannelHealthItem | undefined => {
+  if (getRouteKind(channel) !== props.channelType) return undefined
+  return props.healthMap?.get(getRouteIndex(channel))
 }
 
 // Origin / pool tags for a channel (§8.2 标签系统)
 interface OriginTag { label: string; color: string; icon: string }
-const getOriginTags = (channelIndex: number): OriginTag[] => {
-  const h = getChannelHealth(channelIndex)
+const getOriginTags = (channel: Channel): OriginTag[] => {
+  const h = getChannelHealth(channel)
   if (!h) return []
   const tags: OriginTag[] = []
   if (h.originTier && h.originTier !== 'unknown') {
@@ -1041,20 +1077,42 @@ const getOriginTags = (channelIndex: number): OriginTag[] => {
 }
 
 // Helper method for fetching time-sliced statistics
-const get15mStats = (channelIndex: number) => {
-  return getChannelMetrics(channelIndex)?.timeWindows?.['15m']
+const get15mStats = (channel: Channel) => {
+  return getChannelMetrics(channel)?.timeWindows?.['15m']
 }
 
-const get1hStats = (channelIndex: number) => {
-  return getChannelMetrics(channelIndex)?.timeWindows?.['1h']
+const get1hStats = (channel: Channel) => {
+  return getChannelMetrics(channel)?.timeWindows?.['1h']
 }
 
-const get6hStats = (channelIndex: number) => {
-  return getChannelMetrics(channelIndex)?.timeWindows?.['6h']
+const get6hStats = (channel: Channel) => {
+  return getChannelMetrics(channel)?.timeWindows?.['6h']
 }
 
-const get24hStats = (channelIndex: number) => {
-  return getChannelMetrics(channelIndex)?.timeWindows?.['24h']
+const get24hStats = (channel: Channel) => {
+  return getChannelMetrics(channel)?.timeWindows?.['24h']
+}
+
+const getProtocolCapsules = (channel: Channel) => {
+  if (channel.protocolCapsules?.length) return channel.protocolCapsules
+  return [{
+    kind: getRouteKind(channel),
+    label: getRouteKind(channel),
+    serviceType: channel.serviceType,
+    channelUid: channel.channelUid,
+    index: getRouteIndex(channel),
+    status: channel.status,
+  }]
+}
+
+const getProtocolCapsuleColor = (kind: ChannelKind): string => {
+  switch (kind) {
+    case 'messages': return 'deep-orange'
+    case 'chat': return 'blue'
+    case 'responses': return 'green'
+    case 'gemini': return 'purple'
+    default: return 'grey'
+  }
 }
 
 // Get success-rate color
@@ -1201,8 +1259,13 @@ const refreshMetrics = async () => {
 // 同步 lastKnownActiveOrder 为当前 activeChannels 的顺序
 // 用于在用户主动排序（置顶/置底/拖拽）后，防止自动刷新用旧顺序覆盖
 const syncActiveOrder = () => {
-  lastKnownActiveOrder.value = activeChannels.value.map(ch => ch.index)
+  lastKnownActiveOrder.value = activeChannels.value.map(getChannelUiKey)
 }
+
+const canReorderList = computed(() => {
+  if (activeChannels.value.length === 0) return true
+  return activeChannels.value.every(ch => getRouteKind(ch) === props.channelType)
+})
 
 // Drag change event - auto-save order
 const onDragChange = () => {
@@ -1212,9 +1275,10 @@ const onDragChange = () => {
 
 // Save order
 const saveOrder = async () => {
+  if (!canReorderList.value) return
   isSavingOrder.value = true
   try {
-    const order = activeChannels.value.map(ch => ch.index)
+    const order = activeChannels.value.map(getRouteIndex)
     await getCurrentChannelTypeApi().reorder(order)
     // Do not call emit('refresh') to avoid list flicker caused by parent refresh
   } catch (error) {
@@ -1231,14 +1295,17 @@ const saveOrder = async () => {
 // Whether the channel is the first/last in the full active sequence.
 // 基于完整活跃列表的 index 值判断，避免搜索过滤（v-show）后位置变量 index 失真。
 const isFirstActiveChannel = (channel: Channel): boolean =>
-  activeChannels.value[0]?.index === channel.index
+  activeChannels.value[0] ? getChannelUiKey(activeChannels.value[0]) === getChannelUiKey(channel) : false
 const isLastActiveChannel = (channel: Channel): boolean =>
-  activeChannels.value[activeChannels.value.length - 1]?.index === channel.index
+  activeChannels.value[activeChannels.value.length - 1]
+    ? getChannelUiKey(activeChannels.value[activeChannels.value.length - 1]) === getChannelUiKey(channel)
+    : false
 
 // Move channel to top
-const moveChannelToTop = async (channelIndex: number) => {
-  if (isSavingOrder.value) return
-  const idx = activeChannels.value.findIndex(ch => ch.index === channelIndex)
+const moveChannelToTop = async (target: Channel) => {
+  if (isSavingOrder.value || !canReorderList.value) return
+  const targetKey = getChannelUiKey(target)
+  const idx = activeChannels.value.findIndex(ch => getChannelUiKey(ch) === targetKey)
   if (idx <= 0) return
 
   const [channel] = activeChannels.value.splice(idx, 1)
@@ -1248,9 +1315,10 @@ const moveChannelToTop = async (channelIndex: number) => {
 }
 
 // Move channel to bottom
-const moveChannelToBottom = async (channelIndex: number) => {
-  if (isSavingOrder.value) return
-  const idx = activeChannels.value.findIndex(ch => ch.index === channelIndex)
+const moveChannelToBottom = async (target: Channel) => {
+  if (isSavingOrder.value || !canReorderList.value) return
+  const targetKey = getChannelUiKey(target)
+  const idx = activeChannels.value.findIndex(ch => getChannelUiKey(ch) === targetKey)
   if (idx < 0 || idx >= activeChannels.value.length - 1) return
 
   const [channel] = activeChannels.value.splice(idx, 1)
@@ -1260,21 +1328,21 @@ const moveChannelToBottom = async (channelIndex: number) => {
 }
 
 const setChannelStatusInternal = async (
-  channelId: number,
+  channel: Channel,
   status: ChannelStatus,
   options: { refresh?: boolean } = {}
 ) => {
   const { refresh = true } = options
-  await getCurrentChannelTypeApi().setStatus(channelId, status)
+  await getCurrentChannelTypeApi(channel).setStatus(getRouteIndex(channel), status)
   if (refresh) {
     emit('refresh')
   }
 }
 
 // Set channel status
-const setChannelStatus = async (channelId: number, status: ChannelStatus) => {
+const setChannelStatus = async (channel: Channel, status: ChannelStatus) => {
   try {
-    await setChannelStatusInternal(channelId, status)
+    await setChannelStatusInternal(channel, status)
   } catch (error) {
     console.error('Failed to set channel status:', error)
     const errorMessage = error instanceof Error ? error.message : t('addChannel.unknownError')
@@ -1283,18 +1351,18 @@ const setChannelStatus = async (channelId: number, status: ChannelStatus) => {
 }
 
 // Enable channel (move it from the standby pool to the active sequence)
-const enableChannel = async (channelId: number) => {
-  await setChannelStatus(channelId, 'active')
+const enableChannel = async (channel: Channel) => {
+  await setChannelStatus(channel, 'active')
 }
 
 const resumeChannelInternal = async (
-  channelId: number,
+  channel: Channel,
   options: { refresh?: boolean, notify?: boolean } = {}
 ) => {
   const { refresh = true, notify = true } = options
 
-  const result = await getCurrentChannelTypeApi().resume(channelId)
-  await setChannelStatusInternal(channelId, 'active', { refresh })
+  const result = await getCurrentChannelTypeApi(channel).resume(getRouteIndex(channel))
+  await setChannelStatusInternal(channel, 'active', { refresh })
 
   if (notify) {
     if ((result?.restoredKeys || 0) > 0) {
@@ -1308,12 +1376,12 @@ const resumeChannelInternal = async (
 }
 
 const isTrippedChannel = (channel: Channel): boolean => {
-  const channelMetrics = getChannelMetrics(channel.index)
+  const channelMetrics = getChannelMetrics(channel)
   return channel.status === 'suspended' || channelMetrics?.circuitState === 'open'
 }
 
 const isBreakerManagedChannel = (channel: Channel): boolean => {
-  const channelMetrics = getChannelMetrics(channel.index)
+  const channelMetrics = getChannelMetrics(channel)
   return channel.status === 'suspended' || channelMetrics?.circuitState === 'open'
 }
 
@@ -1324,9 +1392,9 @@ const getChannelRowClass = (channel: Channel) => {
 }
 
 // Resume channel (reset metrics and set it to active)
-const resumeChannel = async (channelId: number) => {
+const resumeChannel = async (channel: Channel) => {
   try {
-    await resumeChannelInternal(channelId)
+    await resumeChannelInternal(channel)
   } catch (error) {
     console.error('Failed to resume channel:', error)
     const errorMessage = error instanceof Error ? error.message : t('addChannel.unknownError')
@@ -1335,8 +1403,8 @@ const resumeChannel = async (channelId: number) => {
 }
 
 // Set channel promotion via the correct API for the current channel type
-const setChannelPromotionInternal = async (channelId: number, durationSeconds: number) => {
-  await getCurrentChannelTypeApi().promote(channelId, durationSeconds)
+const setChannelPromotionInternal = async (channel: Channel, durationSeconds: number) => {
+  await getCurrentChannelTypeApi(channel).promote(getRouteIndex(channel), durationSeconds)
 }
 
 // Set the channel promotion period (boost priority)
@@ -1346,10 +1414,10 @@ const setPromotion = async (channel: Channel) => {
 
     // If the channel is in a breaker-managed state, resume it first
     if (isBreakerManagedChannel(channel)) {
-      await resumeChannelInternal(channel.index, { refresh: false, notify: false })
+      await resumeChannelInternal(channel, { refresh: false, notify: false })
     }
 
-    await setChannelPromotionInternal(channel.index, PROMOTION_DURATION)
+    await setChannelPromotionInternal(channel, PROMOTION_DURATION)
     emit('refresh')
     // Notify the user
     emit('success', t('orchestration.promotionSuccess', { name: channel.name }))
@@ -1384,7 +1452,7 @@ const handleDeleteChannel = (channel: Channel) => {
     emit('error', t('orchestration.deleteActiveGuard'))
     return
   }
-  emit('delete', channel.index)
+  emit('delete', channel)
 }
 
 // Load metrics and start the latency expiry check timer when the component mounts

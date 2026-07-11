@@ -1,7 +1,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from 'vuetify'
-import { api, fetchHealth, ApiError, type Channel } from '../services/api'
+import { api, fetchHealth, ApiError, type Channel, type ChannelKind } from '../services/api'
 import { versionService } from '../services/version'
 import { useAuthStore } from '../stores/auth'
 import { useChannelStore } from '../stores/channel'
@@ -57,12 +57,9 @@ export function useAppController() {
 
   // API 类型 Tab 选项（移动端下拉菜单使用）
   const apiTabOptions = [
-    { value: 'messages', labelKey: 'app.tabs.messages', route: '/channels/messages', icon: 'mdi-code-braces' },
-    { value: 'chat', labelKey: 'app.tabs.chat', route: '/channels/chat', icon: 'mdi-chat-processing-outline' },
+    { value: 'messages', labelKey: 'app.tabs.channels', route: '/channels/messages', icon: 'mdi-server-network' },
     { value: 'images', labelKey: 'app.tabs.images', route: '/channels/images', icon: 'mdi-image-outline' },
     { value: 'vectors', labelKey: 'app.tabs.vectors', route: '/channels/vectors', icon: 'mdi-vector-point' },
-    { value: 'responses', labelKey: 'app.tabs.responses', route: '/channels/responses', icon: 'mdi-console' },
-    { value: 'gemini', labelKey: 'app.tabs.gemini', route: '/channels/gemini', icon: 'mdi-google' },
     { value: 'conversations', labelKey: 'app.tabs.conversations', route: '/conversations', icon: 'mdi-view-dashboard-outline' },
     { value: 'health', labelKey: 'app.tabs.healthCenter', route: '/health', icon: 'mdi-stethoscope' },
     { value: 'subscriptions', labelKey: 'app.tabs.subscriptions', route: '/subscriptions', icon: 'mdi-cash-multiple' },
@@ -82,6 +79,17 @@ export function useAppController() {
   })
 
   const activeTrafficTitle = computed(() => t('app.stats.trafficTitle', { tab: currentTabLabel.value }))
+  const editingChannelType = computed<ChannelKind>(() => {
+    return dialogStore.editingChannel?.routeKind ?? channelStore.activeTab
+  })
+
+  const getChannelRouteKind = (channel?: Channel | null): ChannelKind => {
+    return channel?.routeKind ?? channelStore.activeTab
+  }
+
+  const getChannelRouteIndex = (channel: Channel): number => {
+    return channel.routeIndex ?? channel.index
+  }
 
   const systemStatusText = computed(() => {
     switch (systemStore.systemStatus) {
@@ -128,7 +136,15 @@ export function useAppController() {
 
   const saveChannel = async (channel: Omit<Channel, 'index' | 'latency' | 'status'>, options?: { isQuickAdd?: boolean; triggerCapabilityTest?: boolean }) => {
     try {
-      const result = await channelStore.saveChannel(channel, dialogStore.editingChannel?.index ?? null, options)
+      const editingChannel = dialogStore.editingChannel as Channel | null
+      const result = await channelStore.saveChannel(
+        channel,
+        editingChannel ? getChannelRouteIndex(editingChannel) : null,
+        {
+          ...options,
+          channelType: getChannelRouteKind(editingChannel),
+        },
+      )
       showToast(result.message, 'success')
       if (result.quickAddMessage) {
         showToast(result.quickAddMessage, 'info')
@@ -138,7 +154,12 @@ export function useAppController() {
       await refreshChannels()
 
       if (options?.triggerCapabilityTest && result.channelId !== undefined) {
-        testChannelCapability(result.channelId)
+        testChannelCapability({
+          ...(channel as Channel),
+          index: result.channelId,
+          routeIndex: result.channelId,
+          routeKind: getChannelRouteKind(editingChannel),
+        })
       }
 
       return result
@@ -158,7 +179,7 @@ export function useAppController() {
     dialogStore.openEditChannelModal(channel)
   }
 
-  const deleteChannel = async (channelId: number) => {
+  const deleteChannel = async (target: number | Channel) => {
     const ok = await dialogStore.confirm({
       message: t('toast.confirmDeleteChannel'),
       confirmText: t('app.actions.delete'),
@@ -166,7 +187,9 @@ export function useAppController() {
     if (!ok) return
 
     try {
-      const result = await channelStore.deleteChannel(channelId)
+      const channelId = typeof target === 'number' ? target : getChannelRouteIndex(target)
+      const channelType = typeof target === 'number' ? channelStore.activeTab : getChannelRouteKind(target)
+      const result = await channelStore.deleteChannel(channelId, channelType)
       showToast(result.message, 'success')
     } catch (error) {
       handleAuthError(error)
@@ -234,9 +257,11 @@ export function useAppController() {
     }
   }
 
-  const pingChannel = async (channelId: number) => {
+  const pingChannel = async (target: number | Channel) => {
     try {
-      await channelStore.pingChannel(channelId)
+      const channelId = typeof target === 'number' ? target : getChannelRouteIndex(target)
+      const channelType = typeof target === 'number' ? channelStore.activeTab : getChannelRouteKind(target)
+      await channelStore.pingChannel(channelId, channelType)
       // 不再使用 Toast，延迟结果直接显示在渠道列表中
     } catch (error) {
       showToast(t('toast.latencyFailed', { message: error instanceof Error ? error.message : t('system.unknown') }), 'error')
@@ -891,6 +916,7 @@ export function useAppController() {
     currentLocale,
     currentLanguageShortLabel,
     translatedApiTabOptions,
+    editingChannelType,
     isDesktopWebUI,
     activeTrafficTitle,
     systemStatusText,

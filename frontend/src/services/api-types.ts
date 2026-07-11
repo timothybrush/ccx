@@ -48,6 +48,7 @@ export interface CopilotUserResponse {
 
 export interface ChannelMetrics {
   channelIndex: number
+  routeKind?: ChannelKind
   requestCount: number
   successCount: number
   failureCount: number
@@ -136,6 +137,13 @@ export interface ModelPricingTier {
 export interface Channel {
   name: string
   channelUid?: string                // 渠道稳定身份标识（创建后不因重排/改名/Key 变更而改变）
+  providerId?: string                // 官方 provider 模板 ID（如 mimo/deepseek）
+  routeKind?: ChannelKind            // 前端统一列表中真实所属的后端渠道类型
+  routeIndex?: number                // 前端统一列表中真实后端渠道索引
+  logicalName?: string               // 前端统一列表中的逻辑渠道名称
+  displayKey?: string                // 前端统一列表中的稳定展示 key
+  protocolCapsules?: ChannelProtocolCapsule[]
+  protocolRoutes?: ChannelProtocolRoute[]
   serviceType: 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot'
   authHeader?: ChannelAuthHeader | ''
   baseUrl: string
@@ -204,8 +212,27 @@ export interface Channel {
   compactModel?: string                      // 本地 compact 时使用的上游模型名（不经过 modelMapping，为空则使用原始请求的模型）
   autoManaged?: boolean                      // 启用自动托管
   autoManagedAt?: string                     // 开始托管时间（ISO 格式）
+  originType?: string                        // 渠道来源类型
+  originTier?: string                        // 渠道来源可信层级
   rpm?: number                // 能力测试发送速率（仅影响能力测试）
   tags?: string[]             // 用户自定义标签（自由文本，与 PoolTag 完全独立）
+}
+
+export interface ChannelProtocolCapsule {
+  kind: ChannelKind
+  label: string
+  serviceType: string
+  channelUid?: string
+  index: number
+  status?: ChannelStatus | 'healthy' | 'error' | 'unknown' | ''
+}
+
+export interface ChannelProtocolRoute {
+  kind: ChannelKind
+  index: number
+  name: string
+  serviceType: string
+  channelUid?: string
 }
 
 export interface ChannelsResponse {
@@ -644,6 +671,7 @@ export interface ActivitySegment {
 // 渠道最近活跃度数据（稀疏格式，减少 JSON 体积）
 export interface ChannelRecentActivity {
   channelIndex: number
+  routeKind?: ChannelKind
   segments: Record<number, ActivitySegment> | ActivitySegment[]  // 稀疏 Map 或数组格式（兼容旧版）
   totalSegs: number                                               // 总段数（固定 150）
   rpm: number                                                     // 15分钟平均 RPM

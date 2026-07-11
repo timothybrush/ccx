@@ -99,11 +99,7 @@
         <!-- 桌面端：平铺链接 -->
         <div v-else class="text-h6 font-weight-bold d-flex align-center">
           <router-link to="/channels/messages" class="api-type-text" :class="{ active: channelStore.activeTab === 'messages' && route.path !== '/conversations' }">
-            {{ t('app.tabs.messages') }}
-          </router-link>
-          <span class="api-type-text separator">/</span>
-          <router-link to="/channels/chat" class="api-type-text" :class="{ active: channelStore.activeTab === 'chat' && route.path !== '/conversations' }">
-            {{ t('app.tabs.chat') }}
+            {{ t('app.tabs.channels') }}
           </router-link>
           <span class="api-type-text separator">/</span>
           <router-link to="/channels/images" class="api-type-text" :class="{ active: channelStore.activeTab === 'images' && route.path !== '/conversations' }">
@@ -112,14 +108,6 @@
           <span class="api-type-text separator">/</span>
           <router-link to="/channels/vectors" class="api-type-text" :class="{ active: channelStore.activeTab === 'vectors' && route.path !== '/conversations' }">
             {{ t('app.tabs.vectors') }}
-          </router-link>
-          <span class="api-type-text separator">/</span>
-          <router-link to="/channels/responses" class="api-type-text" :class="{ active: channelStore.activeTab === 'responses' && route.path !== '/conversations' }">
-            {{ t('app.tabs.responses') }}
-          </router-link>
-          <span class="api-type-text separator">/</span>
-          <router-link to="/channels/gemini" class="api-type-text" :class="{ active: channelStore.activeTab === 'gemini' && route.path !== '/conversations' }">
-            {{ t('app.tabs.gemini') }}
           </router-link>
           <span class="api-type-text separator">/</span>
           <router-link to="/conversations" class="api-type-text" :class="{ active: route.path === '/conversations' }">
@@ -417,7 +405,7 @@
     <EditChannelModal
       v-model:show="dialogStore.showEditChannelModal"
       :channel="dialogStore.editingChannel"
-      :channel-type="channelStore.activeTab"
+      :channel-type="editingChannelType"
       @save="saveChannel"
       @test-capability="testChannelCapability"
       @error="showErrorToast"
@@ -428,7 +416,7 @@
       ref="capabilityTestDialogRef"
       v-model="showCapabilityTestDialog"
       :channel-name="capabilityTestChannelName"
-      :current-tab="channelStore.activeTab"
+      :current-tab="capabilityTestSourceTab"
       :capability-job="capabilityTestJob"
       :capability-rpm="capabilityTestRpm"
       @update:capability-rpm="capabilityTestRpm = $event"
@@ -748,6 +736,7 @@ const {
   currentLocale,
   currentLanguageShortLabel,
   translatedApiTabOptions,
+  editingChannelType,
   isDesktopWebUI,
   activeTrafficTitle,
   systemStatusText,
