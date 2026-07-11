@@ -109,7 +109,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
 
   const {
     activeSection,
-    sections,
+    sections: allSections,
     scrollToSection,
     setSectionRef,
     attachScrollListener,
@@ -118,6 +118,10 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
 
   const { isAnySelectMenuOpen, suppressDialogEscapeUntil, onMenuUpdate } = useDialogMenuWorkaround()
   const isAutoManagedChannel = computed(() => !!props.channel?.autoManaged)
+  const sections = computed(() => {
+    if (!isAutoManagedChannel.value) return allSections
+    return allSections.filter(section => section.id === 'basic' || section.id === 'auth')
+  })
 
   const supportsOpenAIAdvancedOptions = computed(() => props.channelType !== 'vectors' && supportsAdvancedChannelOptions(form.serviceType))
   const supportsReasoningMappingOptions = computed(() => props.channelType !== 'vectors' && supportsReasoningMapping(form.serviceType))
@@ -689,14 +693,60 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   const isFormValid = computed(() => {
     const hasValidBaseUrl = isAutoManagedChannel.value || form.serviceType === 'copilot' || (!!form.baseUrl.trim() && isValidUrl(form.baseUrl))
     const hasValidApiKeys = form.serviceType === 'copilot' || hasConfigurableKeys.value
+    const hasValidModelConfig = isAutoManagedChannel.value || (!modelCapabilitiesError.value && !embeddingCapabilitiesError.value)
     return (
-      !!form.name.trim() && !!form.serviceType && hasValidBaseUrl && hasValidApiKeys && !modelCapabilitiesError.value && !embeddingCapabilitiesError.value
+      !!form.name.trim() && !!form.serviceType && hasValidBaseUrl && hasValidApiKeys && hasValidModelConfig
     )
   })
 
   const buildSubmitPayload = () => {
     const payload = buildChannelPayload(form, { channelType: props.channelType })
     if (isAutoManagedChannel.value && props.channel) {
+      Object.assign(payload, {
+        modelMapping: { ...(props.channel.modelMapping || {}) },
+        modelCapabilities: { ...(props.channel.modelCapabilities || {}) },
+        embeddingCapabilities: { ...(props.channel.embeddingCapabilities || {}) },
+        defaultCapability: { ...(props.channel.defaultCapability || {}) },
+        allowUnknownContext: !!props.channel.allowUnknownContext,
+        reasoningMapping: { ...(props.channel.reasoningMapping || {}) },
+        reasoningParamStyle: props.channel.reasoningParamStyle,
+        textVerbosity: props.channel.textVerbosity,
+        fastMode: !!props.channel.fastMode,
+        supportedModels: [...(props.channel.supportedModels || [])],
+        noVision: !!props.channel.noVision,
+        noVisionModels: [...(props.channel.noVisionModels || [])],
+        visionFallbackModel: props.channel.visionFallbackModel || '',
+        lowQuality: !!props.channel.lowQuality,
+        injectDummyThoughtSignature: !!props.channel.injectDummyThoughtSignature,
+        stripThoughtSignature: !!props.channel.stripThoughtSignature,
+        passbackReasoningContent: !!props.channel.passbackReasoningContent,
+        passbackThinkingBlocks: !!props.channel.passbackThinkingBlocks,
+        autoBlacklistBalance: props.channel.autoBlacklistBalance,
+        normalizeMetadataUserId: props.channel.normalizeMetadataUserId,
+        stripBillingHeader: props.channel.stripBillingHeader,
+        stripEmptyTextBlocks: props.channel.stripEmptyTextBlocks,
+        normalizeSystemRoleToTopLevel: props.channel.normalizeSystemRoleToTopLevel,
+        codexNativeToolPassthrough: props.channel.codexNativeToolPassthrough,
+        codexToolCompat: props.channel.codexToolCompat,
+        normalizeNonstandardChatRoles: props.channel.normalizeNonstandardChatRoles,
+        stripCodexClientTools: props.channel.stripCodexClientTools,
+        stripImageGenerationTool: props.channel.stripImageGenerationTool,
+        convertImageUrlToB64Json: props.channel.convertImageUrlToB64Json,
+        historicalImageTurnLimit: props.channel.historicalImageTurnLimit,
+        customHeaders: { ...(props.channel.customHeaders || {}) },
+        proxyUrl: props.channel.proxyUrl || '',
+        routePrefix: props.channel.routePrefix || '',
+        requestTimeoutMs: props.channel.requestTimeoutMs,
+        responseHeaderTimeoutMs: props.channel.responseHeaderTimeoutMs,
+        streamFirstContentTimeoutMs: props.channel.streamFirstContentTimeoutMs,
+        streamInactivityTimeoutMs: props.channel.streamInactivityTimeoutMs,
+        streamToolCallIdleTimeoutMs: props.channel.streamToolCallIdleTimeoutMs,
+        rateLimitRpm: props.channel.rateLimitRpm,
+        rateLimitWindowMinutes: props.channel.rateLimitWindowMinutes,
+        rateLimitBurst: props.channel.rateLimitBurst,
+        rateLimitMaxConcurrent: props.channel.rateLimitMaxConcurrent,
+        rateLimitAutoFromHeaders: props.channel.rateLimitAutoFromHeaders,
+      })
       payload.serviceType = props.channel.serviceType
       payload.baseUrl = props.channel.baseUrl
       if (props.channel.baseUrls?.length) {
@@ -710,6 +760,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
       } else {
         delete payload.authHeader
       }
+      return payload
     }
     applyVisionFallbackReasoning(payload)
     if (!form.streamFirstContentTimeoutEnabled) {
@@ -1060,19 +1111,21 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   const handleSubmit = async () => {
     if (!formRef.value) return
 
-    if (props.channelType === 'vectors') {
-      syncEmbeddingCapabilitiesFromMapping()
-    } else {
-      syncModelCapabilitiesFromMapping()
+    if (!isAutoManagedChannel.value) {
+      if (props.channelType === 'vectors') {
+        syncEmbeddingCapabilitiesFromMapping()
+      } else {
+        syncModelCapabilitiesFromMapping()
+      }
     }
 
     const { valid } = await formRef.value.validate()
     if (!valid) return
-    if (modelCapabilitiesError.value) return
-    if (embeddingCapabilitiesError.value) return
+    if (!isAutoManagedChannel.value && (modelCapabilitiesError.value || embeddingCapabilitiesError.value)) return
 
-    // 将模型映射行同步到 form 对象
-    syncModelMappingToForm()
+    if (!isAutoManagedChannel.value) {
+      syncModelMappingToForm()
+    }
 
     const channelData = buildSubmitPayload()
 

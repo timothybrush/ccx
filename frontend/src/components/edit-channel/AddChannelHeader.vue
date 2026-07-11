@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <div v-if="isEditing && channelType !== 'images' && channelType !== 'vectors'" class="header-capability-actions">
+    <div v-if="isEditing && !hideCapabilityActions && channelType !== 'images' && channelType !== 'vectors'" class="header-capability-actions">
       <v-tooltip location="bottom" :text="visionTooltip" :open-delay="150" content-class="key-tooltip">
         <template #activator="{ props: tip }">
           <v-btn
@@ -49,6 +49,7 @@
 
 interface Props {
   isEditing: boolean
+  hideCapabilityActions?: boolean
   channelType?: 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
   noVision?: boolean
   headerClasses?: string | Record<string, boolean> | Array<string | Record<string, boolean>>
@@ -65,6 +66,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   channelType: 'messages',
+  hideCapabilityActions: false,
   noVision: false,
   avatarColor: 'primary',
 })

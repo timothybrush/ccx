@@ -5,6 +5,7 @@
       <AddChannelHeader
         :is-editing="isEditing"
         :channel-type="props.channelType"
+        :hide-capability-actions="isAutoManagedChannel"
         :no-vision="form.noVision"
         :header-classes="headerClasses"
         :avatar-color="avatarColor"
@@ -70,7 +71,7 @@
             </section>
 
             <!-- 模型重定向（模型映射 + Vision 回退 + 模型过滤） -->
-            <section :ref="(el: any) => setSectionRef('redirect', el)" data-section-id="redirect" class="pa-6 scroll-mt-4">
+            <section v-if="!isAutoManagedChannel" :ref="(el: any) => setSectionRef('redirect', el)" data-section-id="redirect" class="pa-6 scroll-mt-4">
               <v-alert
                 v-if="supportsChannelDiscovery"
                 class="mb-4"
@@ -325,7 +326,7 @@
             </section>
 
             <!-- 高级选项 -->
-            <section :ref="(el: any) => setSectionRef('advanced', el)" data-section-id="advanced" class="pa-6 scroll-mt-4">
+            <section v-if="!isAutoManagedChannel" :ref="(el: any) => setSectionRef('advanced', el)" data-section-id="advanced" class="pa-6 scroll-mt-4">
               <AdvancedOptionsSection
                 :form="form"
                 :channel-type="props.channelType"
@@ -343,7 +344,7 @@
             </section>
 
             <!-- 自定义参数（自定义请求头 + 流式超时） -->
-            <section :ref="(el: any) => setSectionRef('custom', el)" data-section-id="custom" class="pa-6 scroll-mt-4">
+            <section v-if="!isAutoManagedChannel" :ref="(el: any) => setSectionRef('custom', el)" data-section-id="custom" class="pa-6 scroll-mt-4">
               <CustomHeadersSection
                 :headers="customHeadersArray"
                 @update:headers="updateCustomHeaders"
