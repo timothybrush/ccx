@@ -232,6 +232,8 @@ import {
   mdiClockAlert,
   mdiSteering,
   mdiConnection,
+  mdiDomain,
+  mdiCheckDecagram,
 } from '@mdi/js'
 
 // 图标名称到 SVG path 的映射 (使用 kebab-case)
@@ -333,6 +335,8 @@ const iconMap: Record<string, string> = {
   'key': mdiKey,
   'key-plus': mdiKeyPlus,
   'key-chain': mdiKeyChain,
+  'domain': mdiDomain,
+  'check-decagram': mdiCheckDecagram,
   'speedometer': mdiSpeedometer,
   'speedometer-slow': mdiSpeedometerSlow,
   'rocket-launch': mdiRocketLaunch,
