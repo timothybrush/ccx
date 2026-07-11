@@ -363,6 +363,9 @@ func HasClaudeSemanticContent(event string) bool {
 func responseItemCarriesSemanticContent(item map[string]interface{}) bool {
 	itemType, _ := item["type"].(string)
 	switch itemType {
+	case "output_text", "text":
+		text, _ := item["text"].(string)
+		return strings.TrimSpace(text) != ""
 	case "compaction", "compaction_summary":
 		encryptedContent, _ := item["encrypted_content"].(string)
 		return strings.TrimSpace(encryptedContent) != ""
@@ -396,6 +399,11 @@ func HasResponsesSemanticContent(event string) bool {
 		case "response.output_item.added", "response.output_item.done":
 			item, _ := data["item"].(map[string]interface{})
 			if responseItemCarriesSemanticContent(item) {
+				return true
+			}
+		case "response.content_part.added", "response.content_part.delta", "response.content_part.done":
+			part, _ := data["part"].(map[string]interface{})
+			if responseItemCarriesSemanticContent(part) {
 				return true
 			}
 		case "response.completed":

@@ -99,6 +99,13 @@ func TestHasResponsesSemanticContent(t *testing.T) {
 			t.Fatal("expected _output suffixed item to be treated as semantic content")
 		}
 	})
+
+	t.Run("content part added output text", func(t *testing.T) {
+		event := "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"part text\"}}\n\n"
+		if !common.HasResponsesSemanticContent(event) {
+			t.Fatal("expected content_part.added output_text to be treated as semantic content")
+		}
+	})
 }
 
 func TestExtractResponsesTextFromEventUnknownTypes(t *testing.T) {
@@ -206,6 +213,8 @@ func TestFirstUnknownResponsesEventType_AllowsResponsesLifecycleAndErrorTypes(t 
 	eventTypes := []string{
 		"response.created",
 		"response.in_progress",
+		"response.content_part.added",
+		"response.content_part.done",
 		"keepalive",
 		"response.error",
 		"response.failed",
