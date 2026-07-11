@@ -497,6 +497,7 @@ async function startPolling(kind: ChannelType, channelId: number) {
         autoStatus.status = 'done'
         autoStatus.endpoints = discovery.endpoints || []
         submitting.value = false
+        emit('added', channelId)
       } else if (discovery.status === 'failed') {
         stopPolling()
         autoStatus.status = 'failed'
@@ -542,9 +543,8 @@ async function handleSubmit() {
     } else {
       autoStatus.status = ''
       submitting.value = false
+      emit('added', result.index)
     }
-
-    emit('added', result.index)
   } catch (err) {
     stopPolling()
     submitting.value = false

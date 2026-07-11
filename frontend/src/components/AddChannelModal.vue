@@ -488,7 +488,9 @@ function handleSubmitByMode() {
 
 function onQuickAddSuccess(channelId: number) {
   emit('autoAdded', channelId)
-  // 快速添加模式下不自动关闭弹窗，保留发现状态面板供用户查看进度
+  quickAddFormRef.value?.resetForm()
+  resetQuickState()
+  quickAddMode.value = false
 }
 
 function handleCancel() {

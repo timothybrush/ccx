@@ -148,6 +148,12 @@ export function useAppController() {
     }
   }
 
+  const handleAutoAddedChannel = async (_channelId: number) => {
+    dialogStore.closeAddChannelModal()
+    showToast(t('store.channel.added'), 'success')
+    await refreshChannels()
+  }
+
   const editChannel = (channel: Channel) => {
     dialogStore.openEditChannelModal(channel)
   }
@@ -897,6 +903,7 @@ export function useAppController() {
     showSuccessToast,
     refreshChannels,
     saveChannel,
+    handleAutoAddedChannel,
     editChannel,
     deleteChannel,
     openAddChannelModal,

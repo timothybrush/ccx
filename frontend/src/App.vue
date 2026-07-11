@@ -409,6 +409,7 @@
       v-model:show="dialogStore.showAddChannelModal"
       :channel-type="channelStore.activeTab"
       @save="saveChannel"
+      @auto-added="handleAutoAddedChannel"
       @error="showErrorToast"
     />
 
@@ -759,6 +760,7 @@ const {
   showSuccessToast,
   refreshChannels,
   saveChannel,
+  handleAutoAddedChannel,
   editChannel,
   deleteChannel,
   openAddChannelModal,
