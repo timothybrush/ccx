@@ -919,6 +919,33 @@ export interface EndpointDetailItem {
   consecutiveFail: number
   lastSuccessAt?: string
   updatedAt?: string
+  tokenPlanUsageSupported?: boolean
+  miniMaxTokenPlanUsage?: MiniMaxTokenPlanUsage
+  miniMaxTokenPlanUsageError?: string
+}
+
+export interface MiniMaxTokenPlanModelUsage {
+  modelName: string
+  currentIntervalUsageCount: number
+  currentIntervalTotalCount: number
+  currentIntervalRemainingPercent: number
+  currentWeeklyUsageCount: number
+  currentWeeklyTotalCount: number
+  currentWeeklyRemainingPercent: number
+  remainsTimeMs: number
+  weeklyStartTime?: string
+  weeklyEndTime?: string
+}
+
+export interface MiniMaxTokenPlanUsage {
+  models: MiniMaxTokenPlanModelUsage[]
+  fetchedAt: string
+  sourceUrl: string
+}
+
+export interface TokenPlanUsageRefreshResponse {
+  usage: MiniMaxTokenPlanUsage
+  cached: boolean
 }
 
 export interface HealthCenterEndpointsResponse {

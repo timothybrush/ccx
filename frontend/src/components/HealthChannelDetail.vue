@@ -64,8 +64,40 @@
           <v-expansion-panel-title class="text-caption">
             <v-icon size="16" class="mr-2" :color="stateColor(ep.healthState)">{{ stateIcon(ep.healthState) }}</v-icon>
             {{ ep.keyHash }} -- {{ ep.healthState }}
+            <v-chip v-if="ep.tokenPlanUsageSupported" size="x-small" color="primary" variant="tonal" class="ml-2">Token Plan</v-chip>
           </v-expansion-panel-title>
           <v-expansion-panel-text>
+            <div v-if="ep.miniMaxTokenPlanUsage?.models.length" class="mb-3">
+              <div class="text-caption font-weight-bold mb-1">{{ t('healthCenter.detail.tokenPlanUsage') }}</div>
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th>{{ t('healthCenter.detail.model') }}</th>
+                    <th>{{ t('healthCenter.detail.currentWindow') }}</th>
+                    <th>{{ t('healthCenter.detail.weeklyWindow') }}</th>
+                    <th>{{ t('healthCenter.detail.resetsIn') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="quota in ep.miniMaxTokenPlanUsage.models" :key="quota.modelName">
+                    <td class="font-weight-medium">{{ quota.modelName }}</td>
+                    <td :class="quotaColor(quota.currentIntervalRemainingPercent)">
+                      {{ formatQuota(quota.currentIntervalRemainingPercent, quota.currentIntervalUsageCount, quota.currentIntervalTotalCount) }}
+                    </td>
+                    <td :class="quotaColor(quota.currentWeeklyRemainingPercent)">
+                      {{ formatQuota(quota.currentWeeklyRemainingPercent, quota.currentWeeklyUsageCount, quota.currentWeeklyTotalCount) }}
+                    </td>
+                    <td>{{ formatRemainsTime(quota.remainsTimeMs) }}</td>
+                  </tr>
+                </tbody>
+              </v-table>
+              <div class="text-caption text-medium-emphasis mt-1">
+                {{ t('healthCenter.detail.updatedAt') }}: {{ formatDateTime(ep.miniMaxTokenPlanUsage.fetchedAt) }}
+              </div>
+            </div>
+            <div v-else-if="ep.miniMaxTokenPlanUsageError" class="text-caption text-error mb-3">
+              {{ t('healthCenter.detail.tokenPlanUsageError') }}: {{ ep.miniMaxTokenPlanUsageError }}
+            </div>
             <div v-if="ep.healthEvidence" class="mb-2">
               <div class="text-caption font-weight-bold mb-1">{{ t('healthCenter.detail.evidence') }}</div>
               <div class="text-body-2" style="white-space: pre-wrap;">{{ ep.healthEvidence }}</div>
@@ -96,21 +128,30 @@ const { t } = useI18n()
 const endpoints = ref<EndpointDetailItem[]>([])
 const loading = ref(true)
 
+const loadEndpoints = async () => {
+  const resp = await api.getHealthCenterChannelEndpoints(props.channelUid)
+  endpoints.value = resp.endpoints
+}
+
 onMounted(async () => {
   try {
-    const resp = await api.getHealthCenterChannelEndpoints(props.channelUid)
-    endpoints.value = resp.endpoints
+    await loadEndpoints()
+    const tokenPlanEndpoints = endpoints.value.filter(ep => ep.tokenPlanUsageSupported)
+    if (tokenPlanEndpoints.length > 0) {
+      await Promise.allSettled(tokenPlanEndpoints.map(ep => api.refreshEndpointTokenPlanUsage(ep.endpointUid)))
+      await loadEndpoints()
+    }
   } finally {
     loading.value = false
   }
 })
 
 const hasEvidence = computed(() =>
-  endpoints.value.some(ep => ep.healthEvidence || ep.suggestedAction)
+  endpoints.value.some(ep => ep.healthEvidence || ep.suggestedAction || ep.tokenPlanUsageSupported)
 )
 
 const endpointWithEvidence = computed(() =>
-  endpoints.value.filter(ep => ep.healthEvidence || ep.suggestedAction)
+  endpoints.value.filter(ep => ep.healthEvidence || ep.suggestedAction || ep.tokenPlanUsageSupported)
 )
 
 function stateColor(state: HealthState): string {
@@ -147,5 +188,28 @@ function rateColor(rate?: number): string {
   if (rate >= 0.95) return 'text-success'
   if (rate >= 0.8) return 'text-warning'
   return 'text-error'
+}
+
+function formatQuota(remainingPercent: number, used: number, total: number): string {
+  const percent = Math.max(0, Math.min(100, remainingPercent)).toFixed(0)
+  return total > 0 ? `${percent}% (${used}/${total})` : `${percent}%`
+}
+
+function quotaColor(remainingPercent: number): string {
+  if (remainingPercent >= 50) return 'text-success'
+  if (remainingPercent >= 20) return 'text-warning'
+  return 'text-error'
+}
+
+function formatRemainsTime(milliseconds: number): string {
+  if (milliseconds <= 0) return t('healthCenter.detail.resetSoon')
+  const minutes = Math.floor(milliseconds / 60000)
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString()
 }
 </script>

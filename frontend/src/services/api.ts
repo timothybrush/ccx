@@ -48,6 +48,7 @@ import type {
   HealthCenterOverview,
   HealthCenterChannelsResponse,
   HealthCenterEndpointsResponse,
+  TokenPlanUsageRefreshResponse,
   SmartRoutingConfig,
   AutopilotTraceListResponse,
   AutopilotTraceStats,
@@ -1163,6 +1164,12 @@ export class ApiService {
 
   async getHealthCenterChannelEndpoints(channelUid: string): Promise<HealthCenterEndpointsResponse> {
     return this.request(`/health-center/channels/${encodeURIComponent(channelUid)}/endpoints`)
+  }
+
+  async refreshEndpointTokenPlanUsage(endpointUid: string): Promise<TokenPlanUsageRefreshResponse> {
+    return this.request(`/health-center/endpoints/${encodeURIComponent(endpointUid)}/token-plan-usage/refresh`, {
+      method: 'POST'
+    })
   }
 
   // ============== 订阅中心 API ==============

@@ -248,6 +248,10 @@ type KeyEndpointProfile struct {
 	// ── 用量窗口（§3.2.4）──
 	UsageWindows []UsageWindow `json:"usageWindows,omitempty"` // 该 endpoint 的用量窗口列表
 
+	// ── Provider 套餐用量 ──
+	MiniMaxTokenPlanUsage      *MiniMaxTokenPlanUsage `json:"miniMaxTokenPlanUsage,omitempty"`
+	MiniMaxTokenPlanUsageError string                 `json:"miniMaxTokenPlanUsageError,omitempty"`
+
 	// ── L2 探测结果 ──
 	LastProbeAt             *time.Time `json:"lastProbeAt,omitempty"`             // 最近一次 L2 探测时间
 	ProbeSuccess            bool       `json:"probeSuccess"`                      // 最近一次 L2 探测是否成功

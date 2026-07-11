@@ -76,6 +76,9 @@ func TestCarryForwardDiscoveryFields_CopiesDiscoveryFields(t *testing.T) {
 	old.AvailableModels = []string{"mimo-v2-flash", "mimo-v2-pro"}
 	old.ModelListHash = "models-hash"
 	old.ModelMapping = map[string]string{"mimo-v2": "mimo-v2-pro"}
+	old.MiniMaxTokenPlanUsage = &MiniMaxTokenPlanUsage{
+		Models: []MiniMaxTokenPlanModelUsage{{ModelName: "MiniMax-M3", CurrentIntervalRemainingPercent: 80}},
+	}
 
 	current := newTestProfile("ep-1", "ch-1", "messages", "https://example.com")
 	current.HealthState = HealthStateDegraded
@@ -95,13 +98,17 @@ func TestCarryForwardDiscoveryFields_CopiesDiscoveryFields(t *testing.T) {
 	if current.ModelMapping["mimo-v2"] != "mimo-v2-pro" {
 		t.Fatalf("ModelMapping 未搬运: %v", current.ModelMapping)
 	}
+	if current.MiniMaxTokenPlanUsage == nil || current.MiniMaxTokenPlanUsage.Models[0].ModelName != "MiniMax-M3" {
+		t.Fatalf("MiniMax Token Plan 用量未搬运: %+v", current.MiniMaxTokenPlanUsage)
+	}
 	if current.HealthState != HealthStateDegraded || current.HealthConfidence != 0.5 {
 		t.Fatalf("L1 健康字段不应被覆盖: state=%s confidence=%f", current.HealthState, current.HealthConfidence)
 	}
 
 	current.AvailableModels[0] = "changed"
 	current.ModelMapping["mimo-v2"] = "changed"
-	if old.AvailableModels[0] != "mimo-v2-flash" || old.ModelMapping["mimo-v2"] != "mimo-v2-pro" {
+	current.MiniMaxTokenPlanUsage.Models[0].ModelName = "changed"
+	if old.AvailableModels[0] != "mimo-v2-flash" || old.ModelMapping["mimo-v2"] != "mimo-v2-pro" || old.MiniMaxTokenPlanUsage.Models[0].ModelName != "MiniMax-M3" {
 		t.Fatal("自动发现字段必须深拷贝，不能修改旧画像")
 	}
 }

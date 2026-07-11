@@ -75,9 +75,12 @@ type EndpointDetailItem struct {
 	LastGroupChange *GroupChangeResult `json:"lastGroupChange,omitempty"`
 
 	// Phase 1 新增字段：用量窗口 + 订阅继承 + 能力漂移（向后兼容，omitempty）
-	UsageWindows              []UsageWindow           `json:"usageWindows,omitempty"`
-	InheritedFromSubscription bool                    `json:"inheritedFromSubscription,omitempty"`
-	EndpointInconsistencies   []EndpointInconsistency `json:"endpointInconsistencies,omitempty"`
+	UsageWindows               []UsageWindow           `json:"usageWindows,omitempty"`
+	InheritedFromSubscription  bool                    `json:"inheritedFromSubscription,omitempty"`
+	EndpointInconsistencies    []EndpointInconsistency `json:"endpointInconsistencies,omitempty"`
+	MiniMaxTokenPlanUsage      *MiniMaxTokenPlanUsage  `json:"miniMaxTokenPlanUsage,omitempty"`
+	MiniMaxTokenPlanUsageError string                  `json:"miniMaxTokenPlanUsageError,omitempty"`
+	TokenPlanUsageSupported    bool                    `json:"tokenPlanUsageSupported,omitempty"`
 }
 
 // EndpointsResponse GET /api/health-center/channels/:channelUid/endpoints 返回结构。
@@ -95,6 +98,7 @@ func RegisterRoutes(router gin.IRouter, mgr *Manager) {
 		group.GET("/overview", handleOverview(mgr))
 		group.GET("/channels", handleChannels(mgr))
 		group.GET("/channels/:channelUid/endpoints", handleEndpoints(mgr))
+		group.POST("/endpoints/:endpointUid/token-plan-usage/refresh", handleRefreshTokenPlanUsage(mgr))
 
 		// Phase 3A：画像变更事件（只读展示，不影响调度）
 		group.GET("/changelog", handleChangelog(mgr))
@@ -180,6 +184,11 @@ func handleEndpoints(mgr *Manager) gin.HandlerFunc {
 		profiles := mgr.ProfileStore().ListByChannel(channelUID)
 		endpoints := make([]EndpointDetailItem, 0, len(profiles))
 		for _, p := range profiles {
+			keyHash := p.KeyHash
+			if keyHash == "" {
+				keyHash = p.MetricsKey
+			}
+			apiKey, hasAPIKey := mgr.ResolveAPIKey(p.ChannelUID, keyHash)
 			item := EndpointDetailItem{
 				EndpointUID:      p.EndpointUID,
 				ChannelUID:       p.ChannelUID,
@@ -212,9 +221,12 @@ func handleEndpoints(mgr *Manager) gin.HandlerFunc {
 				LastGroupChange: p.LastGroupChange,
 
 				// Phase 1 新增：用量窗口 + 订阅继承 + 能力漂移
-				UsageWindows:              p.UsageWindows,
-				InheritedFromSubscription: p.InheritedFromSubscription,
-				EndpointInconsistencies:   p.EndpointInconsistencies,
+				UsageWindows:               p.UsageWindows,
+				InheritedFromSubscription:  p.InheritedFromSubscription,
+				EndpointInconsistencies:    p.EndpointInconsistencies,
+				MiniMaxTokenPlanUsage:      cloneMiniMaxTokenPlanUsage(p.MiniMaxTokenPlanUsage),
+				MiniMaxTokenPlanUsageError: p.MiniMaxTokenPlanUsageError,
+				TokenPlanUsageSupported:    hasAPIKey && isMiniMaxTokenPlanKey(apiKey) && len(miniMaxTokenPlanUsageEndpoints(p.BaseURL)) > 0,
 			}
 			if p.LastSuccessAt != nil {
 				item.LastSuccessAt = p.LastSuccessAt.Format("2006-01-02T15:04:05Z07:00")
@@ -232,6 +244,28 @@ func handleEndpoints(mgr *Manager) gin.HandlerFunc {
 			ChannelUID: channelUID,
 			Endpoints:  endpoints,
 		})
+	}
+}
+
+func handleRefreshTokenPlanUsage(mgr *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		endpointUID := strings.TrimSpace(c.Param("endpointUid"))
+		if endpointUID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "endpointUid 不能为空"})
+			return
+		}
+		usage, cached, err := mgr.RefreshMiniMaxTokenPlanUsage(c.Request.Context(), endpointUID, c.Query("force") == "true")
+		if err != nil {
+			status := http.StatusBadGateway
+			if strings.Contains(err.Error(), "不存在") {
+				status = http.StatusNotFound
+			} else if strings.Contains(err.Error(), "不是 MiniMax Token Plan") || strings.Contains(err.Error(), "无法解析") {
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"usage": usage, "cached": cached})
 	}
 }
 
