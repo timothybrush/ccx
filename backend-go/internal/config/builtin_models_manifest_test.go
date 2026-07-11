@@ -170,6 +170,28 @@ func TestLookupBuiltinManifest_ModelIDsContent(t *testing.T) {
 	}
 }
 
+func TestLookupBuiltinManifest_MiMoAnthropicTokenPlan(t *testing.T) {
+	manifest, found := LookupBuiltinManifest("https://token-plan-cn.xiaomimimo.com/anthropic", "messages")
+	if !found {
+		t.Fatal("MiMo token plan Anthropic 清单应存在")
+	}
+	if !manifest.DisableProbe {
+		t.Fatal("MiMo Anthropic 清单应跳过 /v1/models 探测")
+	}
+	if manifest.PlanHint != "mimo_token_plan_cn_anthropic" {
+		t.Fatalf("planHint = %q, want mimo_token_plan_cn_anthropic", manifest.PlanHint)
+	}
+	expected := []string{"mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"}
+	if len(manifest.ModelIDs) != len(expected) {
+		t.Fatalf("ModelIDs len = %d, want %d", len(manifest.ModelIDs), len(expected))
+	}
+	for i, modelID := range expected {
+		if manifest.ModelIDs[i] != modelID {
+			t.Fatalf("ModelIDs[%d] = %q, want %q", i, manifest.ModelIDs[i], modelID)
+		}
+	}
+}
+
 func TestMatchManifestPattern(t *testing.T) {
 	tests := []struct {
 		name    string

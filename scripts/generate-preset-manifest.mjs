@@ -179,8 +179,8 @@ function validateBuiltinManifest(value, label) {
     if (!Array.isArray(entry.modelIds) || entry.modelIds.length === 0 || entry.modelIds.some(model => typeof model !== 'string' || model.trim() === '')) {
       throw new Error(`${label} manifests[${index}].modelIds must be a non-empty string array`)
     }
-    if (entry.disableProbe !== false) {
-      throw new Error(`${label} manifests[${index}].disableProbe must be false`)
+    if (typeof entry.disableProbe !== 'boolean') {
+      throw new Error(`${label} manifests[${index}].disableProbe must be a boolean`)
     }
   }
   return manifest

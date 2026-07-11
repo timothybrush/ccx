@@ -40,13 +40,13 @@ type EndpointDiscoveryResult struct {
 
 // DiscoveryTask 单渠道发现任务的运行时状态。
 type DiscoveryTask struct {
-	ChannelUID   string                      `json:"channelUid"`
-	Status       DiscoveryStatus             `json:"status"`
-	StartedAt    *time.Time                  `json:"startedAt,omitempty"`
-	FinishedAt   *time.Time                  `json:"finishedAt,omitempty"`
-	Error        string                      `json:"error,omitempty"`
-	Endpoints    []EndpointDiscoveryResult    `json:"endpoints"`
-	cancel       context.CancelFunc          `json:"-"`
+	ChannelUID string                    `json:"channelUid"`
+	Status     DiscoveryStatus           `json:"status"`
+	StartedAt  *time.Time                `json:"startedAt,omitempty"`
+	FinishedAt *time.Time                `json:"finishedAt,omitempty"`
+	Error      string                    `json:"error,omitempty"`
+	Endpoints  []EndpointDiscoveryResult `json:"endpoints"`
+	cancel     context.CancelFunc        `json:"-"`
 }
 
 // AutoDiscoveryRunner 自动发现执行器。
@@ -222,11 +222,36 @@ func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *co
 }
 
 // probeEndpoint 探测单个 (baseURL, key) 组合。
-// MVP 实现：调 GET /v1/models 检查协议可达性和模型列表。
+// 优先遵循内置模型清单；否则调 GET /v1/models 检查协议可达性和模型列表。
 func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Client, channel *config.UpstreamConfig, baseURL, apiKey string) EndpointDiscoveryResult {
 	result := EndpointDiscoveryResult{
 		KeyMask: utils.MaskAPIKey(apiKey),
 		BaseURL: baseURL,
+	}
+	if channel == nil {
+		result.ErrorMessage = "渠道配置为空"
+		return result
+	}
+
+	manifest, hasManifest := lookupDiscoveryBuiltinManifest(channel, baseURL)
+	if hasManifest && manifest.DisableProbe {
+		if discoveryManifestServiceType(channel.ServiceType) != "messages" {
+			applyBuiltinModels(&result, manifest, "内置模型清单")
+			return result
+		}
+		verify := VerifyClaudeEndpoint(ctx, baseURL, apiKey, channel.AuthHeader)
+		if verify.OK {
+			applyBuiltinModels(&result, manifest, "内置模型清单")
+			return result
+		}
+		result.ErrorMessage = verify.Message
+		if result.ErrorMessage == "" && verify.Err != nil {
+			result.ErrorMessage = verify.Err.Error()
+		}
+		if result.ErrorMessage == "" {
+			result.ErrorMessage = fmt.Sprintf("HTTP %d", verify.StatusCode)
+		}
+		return result
 	}
 
 	// 构建 models URL
@@ -246,16 +271,7 @@ func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Cl
 	}
 
 	// 设置认证头
-	authHeader := channel.AuthHeader
-	if authHeader == "" {
-		authHeader = "bearer"
-	}
-	switch strings.ToLower(authHeader) {
-	case "x-api-key":
-		req.Header.Set("x-api-key", apiKey)
-	default:
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
+	utils.SetAuthenticationHeaderWithOverride(req.Header, apiKey, channel.AuthHeader)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -265,6 +281,10 @@ func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Cl
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if hasManifest && resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
+			applyBuiltinModels(&result, manifest, fmt.Sprintf("models 端点返回 HTTP %d，已回退内置模型清单", resp.StatusCode))
+			return result
+		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		result.ErrorMessage = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body))
 		return result
@@ -278,11 +298,42 @@ func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Cl
 	}
 
 	models := parseModelsResponse(body)
+	if len(models) == 0 && hasManifest {
+		applyBuiltinModels(&result, manifest, "models 端点返回空列表，已回退内置模型清单")
+		return result
+	}
 	result.ModelsCount = len(models)
 	result.Models = models
 	result.ProtocolOk = true
 
 	return result
+}
+
+func lookupDiscoveryBuiltinManifest(channel *config.UpstreamConfig, baseURL string) (config.BuiltinModelsManifest, bool) {
+	if channel == nil {
+		return config.BuiltinModelsManifest{}, false
+	}
+	serviceType := discoveryManifestServiceType(channel.ServiceType)
+	if serviceType == "" {
+		return config.BuiltinModelsManifest{}, false
+	}
+	return config.LookupBuiltinManifest(baseURL, serviceType)
+}
+
+func discoveryManifestServiceType(serviceType string) string {
+	switch strings.ToLower(strings.TrimSpace(serviceType)) {
+	case "claude":
+		return "messages"
+	default:
+		return strings.ToLower(strings.TrimSpace(serviceType))
+	}
+}
+
+func applyBuiltinModels(result *EndpointDiscoveryResult, manifest config.BuiltinModelsManifest, message string) {
+	result.Models = append([]string(nil), manifest.ModelIDs...)
+	result.ModelsCount = len(result.Models)
+	result.ProtocolOk = len(result.Models) > 0
+	result.ErrorMessage = message
 }
 
 // parseModelsResponse 解析 OpenAI /v1/models 响应体。
@@ -418,9 +469,9 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 
 // maybeAutoWriteChannelConfig 在发现完成后，检查是否可以将一致模型列表写入渠道配置。
 // 安全守则：
-//   1. 仅当所有成功探测的 endpoint 返回完全相同的模型列表（集合相等，顺序无关）时才写入
-//   2. 不覆盖用户已有的手动配置（SupportedModels 或 ModelMapping 非空时不写入）
-//   3. ModelMapping 不自动写入（比 SupportedModels 更容易出错，留给用户手动确认）
+//  1. 仅当所有成功探测的 endpoint 返回完全相同的模型列表（集合相等，顺序无关）时才写入
+//  2. 不覆盖用户已有的手动配置（SupportedModels 或 ModelMapping 非空时不写入）
+//  3. ModelMapping 不自动写入（比 SupportedModels 更容易出错，留给用户手动确认）
 func (r *AutoDiscoveryRunner) maybeAutoWriteChannelConfig(channelUID string, channel *config.UpstreamConfig, endpoints []EndpointDiscoveryResult, cfgManager *config.ConfigManager) {
 	// cfgManager 为 nil 时直接返回（runDiscovery 入口已有 guard，此处防御直接调用）
 	if cfgManager == nil {

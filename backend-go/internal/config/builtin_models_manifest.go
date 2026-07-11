@@ -55,6 +55,44 @@ var builtinModelsManifests = []BuiltinModelsManifest{
 		},
 		DisableProbe: false,
 	},
+	// 小米 MiMo Anthropic 兼容入口（来源：provider_templates.go 与 docs/providers/mimo.md）。
+	// Anthropic 协议入口可用性通过 /v1/messages 验证；/v1/models 不作为能力判定依据。
+	{
+		BaseURLPattern: "api.xiaomimimo.com/anthropic",
+		ServiceType:    "messages",
+		PlanHint:       "mimo_payg_anthropic",
+		ModelIDs:       mimoModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "token-plan-cn.xiaomimimo.com/anthropic",
+		ServiceType:    "messages",
+		PlanHint:       "mimo_token_plan_cn_anthropic",
+		ModelIDs:       mimoModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "token-plan-sgp.xiaomimimo.com/anthropic",
+		ServiceType:    "messages",
+		PlanHint:       "mimo_token_plan_sgp_anthropic",
+		ModelIDs:       mimoModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "token-plan-ams.xiaomimimo.com/anthropic",
+		ServiceType:    "messages",
+		PlanHint:       "mimo_token_plan_ams_anthropic",
+		ModelIDs:       mimoModelIDs(),
+		DisableProbe:   true,
+	},
+}
+
+func mimoModelIDs() []string {
+	return []string{
+		"mimo-v2.5-pro",
+		"mimo-v2.5",
+		"mimo-v2-flash",
+	}
 }
 
 // LookupBuiltinManifest 根据上游 baseURL 和 serviceType 查找匹配的内置清单。

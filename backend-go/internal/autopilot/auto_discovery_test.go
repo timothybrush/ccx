@@ -1,12 +1,17 @@
 package autopilot
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/presetstore"
 )
 
 // ── 已有测试（保留原样） ─────────────────────────────────────────────────────
@@ -166,6 +171,133 @@ func TestEndpointDiscoveryResult_KeyMask(t *testing.T) {
 	}
 }
 
+func TestProbeEndpoint_DisableProbeUsesBuiltinManifest(t *testing.T) {
+	modelsRequested := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/anthropic/v1/messages":
+			if got := r.Header.Get("authorization"); got != "Bearer sk-test" {
+				t.Errorf("authorization = %q, want Bearer sk-test", got)
+			}
+			w.WriteHeader(http.StatusBadRequest)
+		case "/anthropic/v1/models":
+			modelsRequested = true
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	withTestBuiltinManifest(t, presetstore.BuiltinModelsManifestEntryPreset{
+		BaseURLPattern: trimTestURLScheme(srv.URL) + "/anthropic",
+		ServiceType:    "messages",
+		PlanHint:       "test_disable_probe",
+		ModelIDs:       []string{"mimo-v2.5-pro", "mimo-v2.5"},
+		DisableProbe:   true,
+	})
+
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	channel := &config.UpstreamConfig{
+		ServiceType: "claude",
+		BaseURL:     srv.URL + "/anthropic",
+		APIKeys:     []string{"sk-test"},
+	}
+
+	result := runner.probeEndpoint(context.Background(), srv.Client(), channel, channel.BaseURL, "sk-test")
+	if modelsRequested {
+		t.Fatal("disableProbe=true 时不应请求 /v1/models")
+	}
+	if !result.ProtocolOk {
+		t.Fatalf("ProtocolOk = false, error=%s", result.ErrorMessage)
+	}
+	if result.ModelsCount != 2 {
+		t.Fatalf("ModelsCount = %d, want 2", result.ModelsCount)
+	}
+}
+
+func TestProbeEndpoint_BuiltinManifestDoesNotHideAuthFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"bad key"}`))
+	}))
+	defer srv.Close()
+
+	withTestBuiltinManifest(t, presetstore.BuiltinModelsManifestEntryPreset{
+		BaseURLPattern: trimTestURLScheme(srv.URL),
+		ServiceType:    "messages",
+		PlanHint:       "test_fallback",
+		ModelIDs:       []string{"claude-test"},
+		DisableProbe:   false,
+	})
+
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	channel := &config.UpstreamConfig{
+		ServiceType: "claude",
+		BaseURL:     srv.URL,
+		APIKeys:     []string{"sk-test"},
+	}
+
+	result := runner.probeEndpoint(context.Background(), srv.Client(), channel, channel.BaseURL, "sk-test")
+	if result.ProtocolOk {
+		t.Fatal("401 不应回退内置模型清单并标记成功")
+	}
+	if result.ModelsCount != 0 {
+		t.Fatalf("ModelsCount = %d, want 0", result.ModelsCount)
+	}
+}
+
+func TestProbeEndpoint_ModelsUsesUnifiedAuthHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("x-api-key"); got != "sk-ant-test" {
+			t.Errorf("x-api-key = %q, want sk-ant-test", got)
+		}
+		if got := r.Header.Get("authorization"); got != "" {
+			t.Errorf("authorization = %q, want empty", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-test"}]}`))
+	}))
+	defer srv.Close()
+
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	channel := &config.UpstreamConfig{
+		ServiceType: "claude",
+		BaseURL:     srv.URL,
+		APIKeys:     []string{"sk-ant-test"},
+	}
+
+	result := runner.probeEndpoint(context.Background(), srv.Client(), channel, channel.BaseURL, "sk-ant-test")
+	if !result.ProtocolOk {
+		t.Fatalf("ProtocolOk = false, error=%s", result.ErrorMessage)
+	}
+	if result.ModelsCount != 1 || result.Models[0] != "claude-test" {
+		t.Fatalf("models = %v, count=%d", result.Models, result.ModelsCount)
+	}
+}
+
+func withTestBuiltinManifest(t *testing.T, manifest presetstore.BuiltinModelsManifestEntryPreset) {
+	t.Helper()
+	previous := presetstore.Default()
+	bundle := previous.Get()
+	bundle.BuiltinModelsManifests = &presetstore.BuiltinModelsManifestPreset{
+		SchemaVersion: 1,
+		Manifests:     []presetstore.BuiltinModelsManifestEntryPreset{manifest},
+	}
+	presetstore.SetDefault(presetstore.NewPresetStore(bundle))
+	t.Cleanup(func() {
+		presetstore.SetDefault(previous)
+	})
+}
+
+func trimTestURLScheme(rawURL string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(rawURL, "http://"), "https://")
+}
+
 // ── maybeAutoWriteChannelConfig 测试 ──────────────────────────────────────────
 
 // setupTestConfigManagerForDiscovery 创建带指定 messages 渠道的临时 ConfigManager。
@@ -223,11 +355,11 @@ func TestMaybeAutoWriteChannelConfig_TableDriven(t *testing.T) {
 	tests := []struct {
 		name            string
 		channelUID      string
-		supportedModels []string                // 渠道当前 SupportedModels
-		modelMapping    map[string]string        // 渠道当前 ModelMapping
+		supportedModels []string          // 渠道当前 SupportedModels
+		modelMapping    map[string]string // 渠道当前 ModelMapping
 		endpoints       []EndpointDiscoveryResult
-		wantWritten     bool                     // 是否应写入
-		wantModels      []string                 // 期望写入的模型（wantWritten=true 时检查）
+		wantWritten     bool     // 是否应写入
+		wantModels      []string // 期望写入的模型（wantWritten=true 时检查）
 	}{
 		{
 			name:            "全部一致且配置为空 -> 写入 SupportedModels",
@@ -485,11 +617,11 @@ func TestSortModels(t *testing.T) {
 
 func TestFindChannelIndexAndKind(t *testing.T) {
 	tests := []struct {
-		name        string
-		cfg         config.Config
-		channelUID  string
-		wantIndex   int
-		wantKind    string
+		name       string
+		cfg        config.Config
+		channelUID string
+		wantIndex  int
+		wantKind   string
 	}{
 		{
 			name: "找到 messages 渠道",
