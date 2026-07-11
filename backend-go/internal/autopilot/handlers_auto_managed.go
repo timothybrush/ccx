@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -84,13 +86,69 @@ type AutoManagedDeps struct {
 // 注意：必须为每个 kind 显式注册静态路径，不能用 `:kind` 参数，
 // 否则会与现有的 `/messages/channels/...` 等静态路由在 Gin radix tree 中冲突。
 func RegisterAutoManagedRoutes(apiGroup *gin.RouterGroup, deps *AutoManagedDeps) {
+	apiGroup.GET("/accounts", handleListAccounts(deps))
 	apiGroup.PUT("/accounts/:accountUid", handleUpdateAccount(deps))
 	apiGroup.DELETE("/accounts/:accountUid", handleDeleteAccount(deps))
+	apiGroup.POST("/accounts/:accountUid/credentials", handleAddAccountCredentials(deps))
+	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid", handleDeleteAccountCredential(deps))
 	kinds := []string{"messages", "chat", "responses", "gemini", "images", "vectors"}
 	for _, kind := range kinds {
 		apiGroup.POST("/"+kind+"/channels/auto-add", handleAutoAdd(deps))
 		apiGroup.POST("/"+kind+"/channels/:id/auto-discover", handleAutoDiscover(deps))
 		apiGroup.GET("/"+kind+"/channels/:id/auto-status", handleAutoStatus(deps))
+	}
+}
+
+type managedAccountCredentialView struct {
+	CredentialUID string `json:"credentialUid"`
+	KeyMask       string `json:"keyMask"`
+}
+
+type managedAccountChannelView struct {
+	Kind        string `json:"kind"`
+	ChannelUID  string `json:"channelUid"`
+	Name        string `json:"name"`
+	ServiceType string `json:"serviceType"`
+	Status      string `json:"status"`
+}
+
+type managedAccountView struct {
+	AccountUID    string                         `json:"accountUid"`
+	ProviderID    string                         `json:"providerId"`
+	Name          string                         `json:"name"`
+	Credentials   []managedAccountCredentialView `json:"credentials"`
+	Channels      []managedAccountChannelView    `json:"channels"`
+	EndpointCount int                            `json:"endpointCount"`
+}
+
+func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		cfg := deps.CfgManager.GetConfig()
+		accounts := make([]managedAccountView, 0, len(cfg.ManagedAccounts))
+		for _, account := range cfg.ManagedAccounts {
+			view := managedAccountView{AccountUID: account.AccountUID, ProviderID: account.ProviderID, Name: account.Name}
+			for _, credential := range account.Credentials {
+				view.Credentials = append(view.Credentials, managedAccountCredentialView{
+					CredentialUID: credential.CredentialUID,
+					KeyMask:       utils.MaskAPIKey(credential.APIKey),
+				})
+			}
+			for _, channel := range deps.CfgManager.GetAccountChannels(account.AccountUID) {
+				view.Channels = append(view.Channels, managedAccountChannelView{
+					Kind: channel.Kind, ChannelUID: channel.Upstream.ChannelUID, Name: channel.Upstream.Name,
+					ServiceType: channel.Upstream.ServiceType, Status: channel.Upstream.Status,
+				})
+			}
+			if deps.Runner != nil && deps.Runner.store != nil {
+				view.EndpointCount = len(deps.Runner.store.ListByAccount(account.AccountUID))
+			}
+			accounts = append(accounts, view)
+		}
+		c.JSON(http.StatusOK, gin.H{"accounts": accounts})
 	}
 }
 
@@ -149,112 +207,187 @@ type updateAccountResponse struct {
 // handleUpdateAccount 在账号范围原子替换凭证集合，并只为新增 Key 探测各协议 route。
 func handleUpdateAccount(deps *AutoManagedDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if deps == nil || deps.CfgManager == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
-			return
-		}
-		accountUID := strings.TrimSpace(c.Param("accountUid"))
 		var req updateAccountRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
 			return
 		}
-		req.APIKeys = uniqueNonEmptyStrings(req.APIKeys)
-		if len(req.APIKeys) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "apiKeys 不能为空"})
+		response, status, err := applyManagedAccountUpdate(c.Request.Context(), deps, strings.TrimSpace(c.Param("accountUid")), req)
+		if err != nil {
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
+		c.JSON(http.StatusOK, response)
+	}
+}
 
+func applyManagedAccountUpdate(ctx context.Context, deps *AutoManagedDeps, accountUID string, req updateAccountRequest) (updateAccountResponse, int, error) {
+	if deps == nil || deps.CfgManager == nil {
+		return updateAccountResponse{}, http.StatusServiceUnavailable, fmt.Errorf("配置管理器不可用")
+	}
+	req.APIKeys = uniqueNonEmptyStrings(req.APIKeys)
+	if len(req.APIKeys) == 0 {
+		return updateAccountResponse{}, http.StatusBadRequest, fmt.Errorf("apiKeys 不能为空")
+	}
+	channels := deps.CfgManager.GetAccountChannels(accountUID)
+	if len(channels) == 0 {
+		return updateAccountResponse{}, http.StatusNotFound, fmt.Errorf("账号不存在")
+	}
+	providerID := channels[0].Upstream.ProviderID
+	tmpl, ok := config.GetProviderTemplate(providerID)
+	if !ok || providerID == "" {
+		return updateAccountResponse{}, http.StatusBadRequest, fmt.Errorf("仅 provider 自动托管账号支持账号级更新")
+	}
+	baseName := strings.TrimSpace(req.Name)
+	if baseName == "" {
+		baseName = strings.TrimSuffix(channels[0].Upstream.Name, accountRouteSuffix(channels[0].Kind))
+	}
+	updates := make([]config.AccountChannelUpdate, 0, len(channels))
+	for _, accountChannel := range channels {
+		channel := accountChannel.Upstream
+		if !channel.AutoManaged || channel.ProviderID != providerID {
+			return updateAccountResponse{}, http.StatusConflict, fmt.Errorf("账号包含非托管渠道或 provider 不一致")
+		}
+		route, found := providerRouteForChannel(tmpl, accountChannel.Kind, channel.ServiceType)
+		if !found {
+			return updateAccountResponse{}, http.StatusConflict, fmt.Errorf("provider %s 缺少 %s route", providerID, accountChannel.Kind)
+		}
+		existing := make(map[string]config.APIKeyConfig, len(channel.APIKeyConfigs))
+		for _, keyConfig := range channel.APIKeyConfigs {
+			existing[keyConfig.Key] = keyConfig
+		}
+		var added []string
+		for _, key := range req.APIKeys {
+			if _, exists := existing[key]; !exists {
+				added = append(added, key)
+			}
+		}
+		if len(added) > 0 {
+			verified, _, err := verifyProviderRouteKeys(ctx, tmpl, route, added)
+			if err != nil {
+				return updateAccountResponse{}, http.StatusBadRequest, err
+			}
+			for _, keyConfig := range verified {
+				existing[keyConfig.Key] = keyConfig
+			}
+		}
+		configs := make([]config.APIKeyConfig, 0, len(req.APIKeys))
+		baseURLs := make([]string, 0, len(req.APIKeys))
+		for _, key := range req.APIKeys {
+			keyConfig, exists := existing[key]
+			if !exists {
+				keyConfig = config.APIKeyConfig{Key: key, BaseURL: channel.BoundBaseURLForKey(key)}
+			}
+			if keyConfig.CredentialUID == "" {
+				keyConfig.CredentialUID = config.GenerateCredentialUID(accountUID, key)
+			}
+			configs = append(configs, keyConfig)
+			if keyConfig.BaseURL != "" {
+				baseURLs = append(baseURLs, keyConfig.BaseURL)
+			}
+		}
+		updates = append(updates, config.AccountChannelUpdate{
+			ChannelUID: channel.ChannelUID, Name: providerRouteName(baseName, route, len(channels) > 1),
+			APIKeys: append([]string(nil), req.APIKeys...), APIKeyConfig: configs, BaseURLs: uniqueNonEmptyStrings(baseURLs),
+		})
+	}
+	if err := deps.CfgManager.UpdateAccountChannels(accountUID, updates); err != nil {
+		return updateAccountResponse{}, http.StatusInternalServerError, err
+	}
+	started := 0
+	for _, accountChannel := range channels {
+		if triggerDiscoveryForChannel(deps, accountChannel.Kind, accountChannel.Upstream.ChannelUID) {
+			started++
+		}
+	}
+	return updateAccountResponse{AccountUID: accountUID, KeyCount: len(req.APIKeys), ChannelCount: len(channels), DiscoveryStarted: started}, http.StatusOK, nil
+}
+
+func handleAddAccountCredentials(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		var req struct {
+			APIKeys []string `json:"apiKeys"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
+			return
+		}
+		accountUID := strings.TrimSpace(c.Param("accountUid"))
 		channels := deps.CfgManager.GetAccountChannels(accountUID)
 		if len(channels) == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "账号不存在"})
 			return
 		}
-		providerID := channels[0].Upstream.ProviderID
-		tmpl, ok := config.GetProviderTemplate(providerID)
-		if !ok || providerID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "仅 provider 自动托管账号支持账号级更新"})
+		desired := append([]string(nil), channels[0].Upstream.APIKeys...)
+		desired = append(desired, req.APIKeys...)
+		response, status, err := applyManagedAccountUpdate(c.Request.Context(), deps, accountUID, updateAccountRequest{APIKeys: desired})
+		if err != nil {
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
+		c.JSON(http.StatusCreated, response)
+	}
+}
 
-		baseName := strings.TrimSpace(req.Name)
-		if baseName == "" {
-			baseName = strings.TrimSuffix(channels[0].Upstream.Name, accountRouteSuffix(channels[0].Kind))
-		}
-		updates := make([]config.AccountChannelUpdate, 0, len(channels))
-		for _, accountChannel := range channels {
-			channel := accountChannel.Upstream
-			if !channel.AutoManaged || channel.ProviderID != providerID {
-				c.JSON(http.StatusConflict, gin.H{"error": "账号包含非托管渠道或 provider 不一致"})
-				return
-			}
-			route, found := providerRouteForChannel(tmpl, accountChannel.Kind, channel.ServiceType)
-			if !found {
-				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("provider %s 缺少 %s route", providerID, accountChannel.Kind)})
-				return
-			}
-
-			existing := make(map[string]config.APIKeyConfig, len(channel.APIKeyConfigs))
-			for _, keyConfig := range channel.APIKeyConfigs {
-				existing[keyConfig.Key] = keyConfig
-			}
-			var added []string
-			for _, key := range req.APIKeys {
-				if _, exists := existing[key]; !exists {
-					added = append(added, key)
-				}
-			}
-			if len(added) > 0 {
-				verified, _, err := verifyProviderRouteKeys(c.Request.Context(), tmpl, route, added)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				for _, keyConfig := range verified {
-					existing[keyConfig.Key] = keyConfig
-				}
-			}
-
-			configs := make([]config.APIKeyConfig, 0, len(req.APIKeys))
-			baseURLs := make([]string, 0, len(req.APIKeys))
-			for _, key := range req.APIKeys {
-				keyConfig, exists := existing[key]
-				if !exists {
-					keyConfig = config.APIKeyConfig{Key: key, BaseURL: channel.BoundBaseURLForKey(key)}
-				}
-				if keyConfig.CredentialUID == "" {
-					keyConfig.CredentialUID = config.GenerateCredentialUID(accountUID, key)
-				}
-				configs = append(configs, keyConfig)
-				if keyConfig.BaseURL != "" {
-					baseURLs = append(baseURLs, keyConfig.BaseURL)
-				}
-			}
-			updates = append(updates, config.AccountChannelUpdate{
-				ChannelUID:   channel.ChannelUID,
-				Name:         providerRouteName(baseName, route, len(channels) > 1),
-				APIKeys:      append([]string(nil), req.APIKeys...),
-				APIKeyConfig: configs,
-				BaseURLs:     uniqueNonEmptyStrings(baseURLs),
-			})
-		}
-
-		if err := deps.CfgManager.UpdateAccountChannels(accountUID, updates); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+func handleDeleteAccountCredential(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
 			return
 		}
-		started := 0
-		for _, accountChannel := range channels {
-			if triggerDiscoveryForChannel(deps, accountChannel.Kind, accountChannel.Upstream.ChannelUID) {
-				started++
+		accountUID := strings.TrimSpace(c.Param("accountUid"))
+		credentialUID := strings.TrimSpace(c.Param("credentialUid"))
+		channels := deps.CfgManager.GetAccountChannels(accountUID)
+		if len(channels) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "账号不存在"})
+			return
+		}
+		var removeKey string
+		for _, keyConfig := range channels[0].Upstream.APIKeyConfigs {
+			if keyConfig.CredentialUID == credentialUID {
+				removeKey = keyConfig.Key
+				break
 			}
 		}
-		c.JSON(http.StatusOK, updateAccountResponse{
-			AccountUID:       accountUID,
-			KeyCount:         len(req.APIKeys),
-			ChannelCount:     len(channels),
-			DiscoveryStarted: started,
-		})
+		if removeKey == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "凭证不存在"})
+			return
+		}
+		var desired []string
+		for _, key := range channels[0].Upstream.APIKeys {
+			if key != removeKey {
+				desired = append(desired, key)
+			}
+		}
+		if len(desired) == 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "不能删除账号的最后一个 Key，请删除整个账号"})
+			return
+		}
+		response, status, err := applyManagedAccountUpdate(c.Request.Context(), deps, accountUID, updateAccountRequest{APIKeys: desired})
+		if err != nil {
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		if deps.Runner != nil && deps.Runner.store != nil {
+			if err := deps.Runner.store.DeleteByCredential(accountUID, credentialUID); err != nil {
+				log.Printf("[AutoManaged-CredentialDelete] 清理凭证画像失败 account=%s credential=%s: %v", accountUID, credentialUID, err)
+			}
+			keyHash := KeyHashFromAPIKey(removeKey)
+			for _, channel := range channels {
+				for _, profile := range deps.Runner.store.ListByChannel(channel.Upstream.ChannelUID) {
+					if profile.CredentialUID == credentialUID || profile.KeyHash == keyHash {
+						if err := deps.Runner.store.Delete(profile.EndpointUID); err != nil {
+							log.Printf("[AutoManaged-CredentialDelete] 清理旧凭证画像失败 endpoint=%s: %v", profile.EndpointUID, err)
+						}
+					}
+				}
+			}
+		}
+		c.JSON(http.StatusOK, response)
 	}
 }
 

@@ -63,6 +63,12 @@ func TestProfileStoreListByAccount(t *testing.T) {
 	if got := store.ListByAccount(first.AccountUID); len(got) != 2 {
 		t.Fatalf("ListByAccount 返回 %d 条，want 2", len(got))
 	}
+	if err := store.DeleteByCredential(first.AccountUID, first.CredentialUID); err != nil {
+		t.Fatalf("DeleteByCredential 失败: %v", err)
+	}
+	if got := store.ListByAccount(first.AccountUID); len(got) != 1 {
+		t.Fatalf("DeleteByCredential 后返回 %d 条，want 1", len(got))
+	}
 	if err := store.DeleteByAccount(first.AccountUID); err != nil {
 		t.Fatalf("DeleteByAccount 失败: %v", err)
 	}

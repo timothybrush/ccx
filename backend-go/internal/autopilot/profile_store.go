@@ -271,6 +271,28 @@ func (s *ProfileStore) DeleteByAccount(accountUID string) error {
 	return nil
 }
 
+// DeleteByCredential 删除账号内指定凭证的全部 endpoint 画像。
+func (s *ProfileStore) DeleteByCredential(accountUID, credentialUID string) error {
+	s.mu.Lock()
+	var endpointUIDs []string
+	for endpointUID, profile := range s.cache {
+		if profile.AccountUID == accountUID && profile.CredentialUID == credentialUID {
+			delete(s.cache, endpointUID)
+			endpointUIDs = append(endpointUIDs, endpointUID)
+		}
+	}
+	s.mu.Unlock()
+	s.flushMu.Lock()
+	for _, endpointUID := range endpointUIDs {
+		delete(s.dirtyKeys, endpointUID)
+	}
+	s.flushMu.Unlock()
+	if _, err := s.db.Exec("DELETE FROM autopilot_endpoint_profiles WHERE account_uid = ? AND credential_uid = ?", accountUID, credentialUID); err != nil {
+		return fmt.Errorf("[ProfileStore-DeleteByCredential] 删除失败 account=%s credential=%s: %w", accountUID, credentialUID, err)
+	}
+	return nil
+}
+
 // Flush 将内存中标记为 dirty 的画像批量写入 SQLite。
 // 非 dirty 的画像不重复写入；已删除的画像由 Delete 即时落盘。
 func (s *ProfileStore) Flush() error {

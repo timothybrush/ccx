@@ -54,6 +54,7 @@ import type {
   AutoAddChannelRequest,
   AutoAddChannelResponse,
   UpdateManagedAccountResponse,
+  ManagedAccountsResponse,
   ChannelAutoStatusResponse,
   ProviderTemplatesResponse,
   CostReportResponse,
@@ -1321,6 +1322,26 @@ export class ApiService {
     return this.request(`/accounts/${encodeURIComponent(accountUid)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    })
+  }
+
+  /** 获取自动托管账号及掩码凭证，不返回明文 Key。 */
+  async getManagedAccounts(): Promise<ManagedAccountsResponse> {
+    return this.request('/accounts')
+  }
+
+  /** 向账号增量添加一批凭证。 */
+  async addManagedAccountCredentials(accountUid: string, apiKeys: string[]): Promise<UpdateManagedAccountResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKeys }),
+    })
+  }
+
+  /** 按稳定凭证 ID 删除账号中的单个 Key。 */
+  async deleteManagedAccountCredential(accountUid: string, credentialUid: string): Promise<UpdateManagedAccountResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}`, {
+      method: 'DELETE',
     })
   }
 

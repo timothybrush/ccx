@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +21,38 @@ func setupAutoManagedRouter(deps *AutoManagedDeps) *gin.Engine {
 	// 直接在根引擎注册路由，模拟 apiGroup 注册
 	RegisterAutoManagedRoutes(r.Group("/api"), deps)
 	return r
+}
+
+func TestListAccountsMasksCredentials(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts": [{"accountUid":"acct_test","providerId":"mimo","name":"mimo-main","credentials":[{"credentialUid":"cred_test","apiKey":"sk-secret-value"}]}],
+  "upstream": [{"accountUid":"acct_test","channelUid":"ch_messages","providerId":"mimo","name":"mimo-main-claude","serviceType":"claude","baseUrl":"https://example.com/anthropic","apiKeyConfigs":[{"credentialUid":"cred_test","baseUrl":"https://example.com/anthropic"}],"autoManaged":true,"status":"active"}],
+  "responsesUpstream": [], "geminiUpstream": [], "chatUpstream": [], "imagesUpstream": [], "vectorsUpstream": []
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatalf("写测试配置失败: %v", err)
+	}
+	cfgManager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatalf("NewConfigManager 失败: %v", err)
+	}
+	t.Cleanup(func() { _ = cfgManager.Close() })
+	router := setupAutoManagedRouter(&AutoManagedDeps{CfgManager: cfgManager})
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/accounts status=%d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "sk-secret-value") {
+		t.Fatalf("账号列表泄露明文 Key: %s", body)
+	}
+	if !strings.Contains(body, "cred_test") || !strings.Contains(body, "keyMask") {
+		t.Fatalf("账号列表缺少凭证掩码信息: %s", body)
+	}
 }
 
 func TestAutoAddRequest_Binding(t *testing.T) {

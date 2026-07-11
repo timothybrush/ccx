@@ -1339,6 +1339,32 @@ export interface UpdateManagedAccountResponse {
   discoveryStarted: number
 }
 
+export interface ManagedAccountCredential {
+  credentialUid: string
+  keyMask: string
+}
+
+export interface ManagedAccountChannel {
+  kind: ChannelKind
+  channelUid: string
+  name: string
+  serviceType: string
+  status: string
+}
+
+export interface ManagedAccount {
+  accountUid: string
+  providerId: string
+  name: string
+  credentials: ManagedAccountCredential[]
+  channels: ManagedAccountChannel[]
+  endpointCount: number
+}
+
+export interface ManagedAccountsResponse {
+  accounts: ManagedAccount[]
+}
+
 // Endpoint 发现信息
 export interface EndpointDiscoveryInfo {
   keyMask: string
