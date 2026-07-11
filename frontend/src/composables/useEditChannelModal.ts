@@ -703,6 +703,9 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     const payload = buildChannelPayload(form, { channelType: props.channelType })
     if (isAutoManagedChannel.value && props.channel) {
       Object.assign(payload, {
+        website: props.channel.website || '',
+        description: props.channel.description || '',
+        tags: [...(props.channel.tags || [])],
         modelMapping: { ...(props.channel.modelMapping || {}) },
         modelCapabilities: { ...(props.channel.modelCapabilities || {}) },
         embeddingCapabilities: { ...(props.channel.embeddingCapabilities || {}) },

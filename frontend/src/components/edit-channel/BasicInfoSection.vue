@@ -63,7 +63,7 @@
       </v-col>
 
       <!-- 官网/控制台 -->
-      <v-col cols="12">
+      <v-col v-if="!hideMetadata" cols="12">
         <v-text-field
           :model-value="form.website"
           :label="t('channelEditor.basic.website.label')"
@@ -79,7 +79,7 @@
       </v-col>
 
       <!-- 描述 -->
-      <v-col cols="12">
+      <v-col v-if="!hideMetadata" cols="12">
         <v-textarea
           :model-value="form.description"
           :label="t('addChannel.descriptionLabel')"
@@ -95,7 +95,7 @@
       </v-col>
 
       <!-- 用户自定义标签 -->
-      <v-col cols="12">
+      <v-col v-if="!hideMetadata" cols="12">
         <v-combobox
           :model-value="form.tags ?? []"
           :label="t('channelEditor.basic.tags.label')"
@@ -145,6 +145,7 @@ interface Props {
   serviceTypeOptions: Array<{ title: string; value: string }>
   hideServiceType?: boolean
   hideBaseUrl?: boolean
+  hideMetadata?: boolean
   errors: Record<string, string>
   rules: {
     required: (_value: string) => boolean | string

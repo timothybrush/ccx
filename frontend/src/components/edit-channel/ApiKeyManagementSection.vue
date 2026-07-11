@@ -87,7 +87,7 @@
                 <div class="d-flex align-center ga-1">
                   <!-- 置顶/置底：仅首尾密钥显示 -->
                   <v-tooltip
-                    v-if="index === apiKeys.length - 1 && apiKeys.length > 1"
+                    v-if="!isAutoManaged && index === apiKeys.length - 1 && apiKeys.length > 1"
                     :text="t('channelCard.moveTop')"
                     location="top"
                     :open-delay="150"
@@ -108,7 +108,7 @@
                     </template>
                   </v-tooltip>
                   <v-tooltip
-                    v-if="index === 0 && apiKeys.length > 1"
+                    v-if="!isAutoManaged && index === 0 && apiKeys.length > 1"
                     :text="t('channelCard.moveBottom')"
                     location="top"
                     :open-delay="150"
@@ -394,6 +394,7 @@ interface Props {
   isEditing: boolean
   restoringKey: string
   serviceType?: string
+  isAutoManaged?: boolean
   channelId?: number
   proxyUrl?: string
 }
