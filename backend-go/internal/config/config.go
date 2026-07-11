@@ -153,6 +153,7 @@ type ManagedAccountCredential struct {
 	CredentialUID       string                   `json:"credentialUid"`
 	APIKey              string                   `json:"apiKey"`
 	VolcengineAccessKey *VolcengineAccessKeyPair `json:"volcengineAccessKey,omitempty"`
+	MiMoConsole         *MiMoConsoleCredential   `json:"mimoConsole,omitempty"`
 }
 
 // VolcengineAccessKeyPair 是火山云管控面签名凭证，用于 Agent/Coding Plan 识别与模型发现。
@@ -163,6 +164,25 @@ type VolcengineAccessKeyPair struct {
 	Plan            string `json:"plan,omitempty"`
 	PlanTier        string `json:"planTier,omitempty"`
 	PlanStatus      string `json:"planStatus,omitempty"`
+}
+
+// MiMoConsoleCredential 保存 MiMo 控制台登录态与最近一次套餐用量快照。
+// Cookie 属于敏感凭证，只能持久化，管理 API 不得回显。
+type MiMoConsoleCredential struct {
+	Cookie           string                  `json:"cookie"`
+	PlanCode         string                  `json:"planCode,omitempty"`
+	PlanName         string                  `json:"planName,omitempty"`
+	CurrentPeriodEnd string                  `json:"currentPeriodEnd,omitempty"`
+	Expired          bool                    `json:"expired,omitempty"`
+	MonthUsage       MiMoTokenPlanUsageQuota `json:"monthUsage"`
+	CurrentUsage     MiMoTokenPlanUsageQuota `json:"currentUsage"`
+	ValidatedAt      time.Time               `json:"validatedAt"`
+}
+
+type MiMoTokenPlanUsageQuota struct {
+	Used        int64   `json:"used"`
+	Limit       int64   `json:"limit"`
+	UsedPercent float64 `json:"usedPercent"`
 }
 
 // CredentialUIDForKey 返回账号内 API Key 的稳定凭证身份。
@@ -649,6 +669,10 @@ func (cm *ConfigManager) GetConfig() Config {
 				if credential.VolcengineAccessKey != nil {
 					pair := *credential.VolcengineAccessKey
 					cloned.ManagedAccounts[i].Credentials[j].VolcengineAccessKey = &pair
+				}
+				if credential.MiMoConsole != nil {
+					console := *credential.MiMoConsole
+					cloned.ManagedAccounts[i].Credentials[j].MiMoConsole = &console
 				}
 			}
 		}

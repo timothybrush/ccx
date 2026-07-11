@@ -1347,6 +1347,34 @@ export interface ManagedAccountCredential {
   volcenginePlan?: 'agent_plan' | 'coding_plan'
   volcenginePlanTier?: string
   volcenginePlanStatus?: string
+  hasMiMoConsoleCookie?: boolean
+  mimoTokenPlan?: MiMoTokenPlanSnapshot
+}
+
+export interface MiMoTokenPlanQuota {
+  used: number
+  limit: number
+  usedPercent: number
+}
+
+export interface MiMoTokenPlanSnapshot {
+  planCode: string
+  planName: string
+  currentPeriodEnd: string
+  expired: boolean
+  monthUsage: MiMoTokenPlanQuota
+  currentUsage: MiMoTokenPlanQuota
+  validatedAt: string
+}
+
+export interface MiMoConsoleCookieResponse {
+  accountUid: string
+  credentialUid: string
+  keyAdopted: boolean
+  keyMask: string
+  adoptedApiKey?: string
+  tokenPlan: MiMoTokenPlanSnapshot
+  discoveryStarted: number
 }
 
 export interface VolcengineAccessKeyResponse {

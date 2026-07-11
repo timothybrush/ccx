@@ -400,6 +400,76 @@ func TestSetVolcengineAccessKeyDetectsPlanBeforePersisting(t *testing.T) {
 	}
 }
 
+func TestSetMiMoConsoleCookieRequiresConfirmationBeforeAdoptingKey(t *testing.T) {
+	const oldKey = "tp-old-1234567890123456789012345678901234567890"
+	const cookieKey = "tp-new-1234567890123456789012345678901234567890"
+	console := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "api-platform_serviceToken=session; userId=42" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v1/userProfile":
+			_, _ = w.Write([]byte(`{"code":0,"data":{"userId":"42"}}`))
+		case "/api/v1/tokenPlan/detail":
+			_, _ = w.Write([]byte(`{"code":0,"data":{"planCode":"max","planName":"Max","currentPeriodEnd":"2026-07-29 23:59:59"}}`))
+		case "/api/v1/tokenPlan/usage":
+			_, _ = w.Write([]byte(`{"code":0,"data":{"monthUsage":{"percent":0.25,"items":[{"used":25,"limit":100}]},"usage":{"percent":0.5,"items":[{"used":50,"limit":100}]}}}`))
+		case "/api/v1/tokenPlan/apiKey/raw":
+			_, _ = w.Write([]byte(`{"code":0,"data":"` + cookieKey + `"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer console.Close()
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts":[{"accountUid":"acct_mimo","providerId":"mimo","name":"mimo","credentials":[{"credentialUid":"cred_mimo","apiKey":"` + oldKey + `"}]}],
+  "upstream":[{"accountUid":"acct_mimo","channelUid":"ch_mimo","providerId":"mimo","name":"mimo","serviceType":"claude","autoManaged":true,"baseUrl":"https://token-plan-cn.xiaomimimo.com/anthropic","apiKeyConfigs":[{"credentialUid":"cred_mimo","baseUrl":"https://token-plan-cn.xiaomimimo.com/anthropic"}]}],
+  "chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[],"vectorsUpstream":[]
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	deps := &AutoManagedDeps{CfgManager: manager, MiMoConsoleClient: &MiMoConsoleClient{HTTPClient: console.Client(), BaseURL: console.URL}}
+	router := setupAutoManagedRouter(deps)
+	body := `{"cookie":"api-platform_serviceToken=session; userId=42"}`
+	request := func(payload string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/api/accounts/acct_mimo/credentials/cred_mimo/mimo-console-cookie", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+	w := request(body)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"mimo_cookie_key_mismatch"`) {
+		t.Fatalf("未要求确认: status=%d body=%s", w.Code, w.Body.String())
+	}
+	credential, _ := manager.GetManagedAccountCredential("acct_mimo", "cred_mimo")
+	if credential.APIKey != oldKey || credential.MiMoConsole != nil {
+		t.Fatalf("确认前不应修改配置: %+v", credential)
+	}
+	w = request(`{"cookie":"api-platform_serviceToken=session; userId=42","adoptCookieKey":true}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"keyAdopted":true`) {
+		t.Fatalf("确认采用失败: status=%d body=%s", w.Code, w.Body.String())
+	}
+	credential, _ = manager.GetManagedAccountCredential("acct_mimo", "cred_mimo")
+	if credential.APIKey != cookieKey || credential.MiMoConsole == nil {
+		t.Fatalf("确认后未采用 Cookie Key: %+v", credential)
+	}
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	if strings.Contains(list.Body.String(), "api-platform_serviceToken") || strings.Contains(list.Body.String(), cookieKey) {
+		t.Fatalf("账号列表泄漏 Cookie 或原始 Key: %s", list.Body.String())
+	}
+}
+
 func TestProviderAutoAddReusesExistingAccount(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")

@@ -58,11 +58,122 @@ func (cm *ConfigManager) GetManagedAccountCredential(accountUID, credentialUID s
 					pair := *credential.VolcengineAccessKey
 					credential.VolcengineAccessKey = &pair
 				}
+				if credential.MiMoConsole != nil {
+					console := *credential.MiMoConsole
+					credential.MiMoConsole = &console
+				}
 				return credential, true
 			}
 		}
 	}
 	return ManagedAccountCredential{}, false
+}
+
+// BindManagedAccountMiMoConsole 绑定 MiMo 控制台 Cookie，并可原子采用 Cookie 所属的 Token Plan Key。
+func (cm *ConfigManager) BindManagedAccountMiMoConsole(accountUID, credentialUID, replacementKey string, console MiMoConsoleCredential) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	var credential *ManagedAccountCredential
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		if account.ProviderID != "mimo" {
+			return fmt.Errorf("仅 MiMo 自动托管账号支持绑定控制台 Cookie")
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID == credentialUID {
+				credential = &account.Credentials[j]
+				break
+			}
+		}
+		if credential == nil {
+			return fmt.Errorf("凭证 %s 不存在", credentialUID)
+		}
+		break
+	}
+	if credential == nil {
+		return fmt.Errorf("账号 %s 不存在", accountUID)
+	}
+	replacementKey = strings.TrimSpace(replacementKey)
+	oldKey := credential.APIKey
+	if replacementKey != "" && replacementKey != oldKey {
+		for _, account := range cm.config.ManagedAccounts {
+			if account.AccountUID != accountUID {
+				continue
+			}
+			for _, existing := range account.Credentials {
+				if existing.CredentialUID != credentialUID && existing.APIKey == replacementKey {
+					return fmt.Errorf("Cookie 所属 Key 已存在于当前账号")
+				}
+			}
+		}
+		replaceKey := func(channels []UpstreamConfig) {
+			for i := range channels {
+				channel := &channels[i]
+				if channel.AccountUID != accountUID {
+					continue
+				}
+				replaced := false
+				for j := range channel.APIKeys {
+					if channel.APIKeys[j] == oldKey {
+						channel.APIKeys[j] = replacementKey
+						replaced = true
+					}
+				}
+				for j := range channel.APIKeyConfigs {
+					cfg := &channel.APIKeyConfigs[j]
+					if cfg.CredentialUID == credentialUID || cfg.Key == oldKey {
+						cfg.Key = replacementKey
+						cfg.CredentialUID = credentialUID
+						replaced = true
+					}
+				}
+				if replaced && oldKey != "" && !accountContainsString(channel.HistoricalAPIKeys, oldKey) {
+					channel.HistoricalAPIKeys = append(channel.HistoricalAPIKeys, oldKey)
+				}
+			}
+		}
+		replaceKey(cm.config.Upstream)
+		replaceKey(cm.config.ChatUpstream)
+		replaceKey(cm.config.ResponsesUpstream)
+		replaceKey(cm.config.GeminiUpstream)
+		replaceKey(cm.config.ImagesUpstream)
+		replaceKey(cm.config.VectorsUpstream)
+		credential.APIKey = replacementKey
+	}
+	console.Cookie = strings.TrimSpace(console.Cookie)
+	credential.MiMoConsole = &console
+	return cm.saveConfigLocked(cm.config)
+}
+
+func (cm *ConfigManager) ClearManagedAccountMiMoConsole(accountUID, credentialUID string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID == credentialUID {
+				account.Credentials[j].MiMoConsole = nil
+				return cm.saveConfigLocked(cm.config)
+			}
+		}
+		return fmt.Errorf("凭证 %s 不存在", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
+func accountContainsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // SetManagedAccountVolcengineAccessKey 为一个推理 Key 绑定火山云签名凭证。

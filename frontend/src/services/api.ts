@@ -55,6 +55,7 @@ import type {
   AutoAddChannelResponse,
   UpdateManagedAccountResponse,
   ManagedAccountsResponse,
+  MiMoConsoleCookieResponse,
   VolcengineAccessKeyResponse,
   ChannelAutoStatusResponse,
   ProviderTemplatesResponse,
@@ -1380,6 +1381,29 @@ export class ApiService {
   /** 删除火山套餐推理 Key 绑定的管控面 AK/SK。 */
   async clearVolcengineAccessKey(accountUid: string, credentialUid: string): Promise<void> {
     await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/volcengine-access-key`, {
+      method: 'DELETE',
+    })
+  }
+
+  async setMiMoConsoleCookie(
+    accountUid: string,
+    credentialUid: string,
+    data: { cookie: string; adoptCookieKey?: boolean }
+  ): Promise<MiMoConsoleCookieResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/mimo-console-cookie`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async refreshMiMoConsoleCookie(accountUid: string, credentialUid: string): Promise<{ tokenPlan: MiMoConsoleCookieResponse['tokenPlan'] }> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/mimo-console-cookie/refresh`, {
+      method: 'POST',
+    })
+  }
+
+  async clearMiMoConsoleCookie(accountUid: string, credentialUid: string): Promise<void> {
+    await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/mimo-console-cookie`, {
       method: 'DELETE',
     })
   }

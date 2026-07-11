@@ -274,6 +274,111 @@
           </div>
         </div>
 
+        <div v-if="providerId === 'mimo' && accountUid" class="mimo-console-cookies mb-5">
+          <v-divider class="mb-4" />
+          <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-2">
+            <div class="d-flex align-center ga-2">
+              <v-icon color="primary" size="small">mdi-cookie-cog-outline</v-icon>
+              <span class="text-body-2 font-weight-medium">{{ t('mimoConsoleCookie.title') }}</span>
+            </div>
+            <v-btn
+              href="https://platform.xiaomimimo.com/console/plan-manage"
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              variant="text"
+              color="primary"
+            >
+              <v-icon start size="small">mdi-open-in-new</v-icon>
+              {{ t('mimoConsoleCookie.openConsole') }}
+            </v-btn>
+          </div>
+          <div class="text-caption text-medium-emphasis mb-3">{{ t('mimoConsoleCookie.hint') }}</div>
+          <v-progress-linear v-if="mimoCredentialsLoading" indeterminate color="primary" class="mb-3" />
+          <v-alert v-if="mimoCredentialsError" color="error" variant="tonal" density="compact" class="mb-3">
+            {{ mimoCredentialsError }}
+          </v-alert>
+          <div v-for="credential in mimoCredentials" :key="credential.credentialUid" class="volcengine-credential py-3">
+            <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
+              <code class="text-caption">{{ credential.keyMask }}</code>
+              <div class="d-flex align-center ga-2">
+                <v-chip v-if="credential.mimoTokenPlan" size="x-small" color="success" variant="tonal">
+                  {{ credential.mimoTokenPlan.planName }}
+                </v-chip>
+                <v-chip :color="credential.hasMiMoConsoleCookie ? 'info' : 'warning'" size="x-small" variant="tonal">
+                  {{ credential.hasMiMoConsoleCookie
+                    ? t('mimoConsoleCookie.configured')
+                    : t('mimoConsoleCookie.notConfigured') }}
+                </v-chip>
+              </div>
+            </div>
+            <div v-if="credential.mimoTokenPlan" class="mimo-usage-grid mb-3">
+              <div>
+                <div class="text-caption text-medium-emphasis">{{ t('mimoConsoleCookie.currentRemaining') }}</div>
+                <div class="text-body-2 font-weight-medium">{{ formatMiMoQuota(credential.mimoTokenPlan.currentUsage) }}</div>
+              </div>
+              <div>
+                <div class="text-caption text-medium-emphasis">{{ t('mimoConsoleCookie.monthRemaining') }}</div>
+                <div class="text-body-2 font-weight-medium">{{ formatMiMoQuota(credential.mimoTokenPlan.monthUsage) }}</div>
+              </div>
+              <div>
+                <div class="text-caption text-medium-emphasis">{{ t('mimoConsoleCookie.expiresAt') }}</div>
+                <div class="text-body-2 font-weight-medium">{{ credential.mimoTokenPlan.currentPeriodEnd }}</div>
+              </div>
+            </div>
+            <div v-if="mimoForms[credential.credentialUid]" class="d-flex flex-column ga-2">
+              <v-text-field
+                v-model="mimoForms[credential.credentialUid].cookie"
+                :label="t('mimoConsoleCookie.cookie')"
+                :placeholder="t('mimoConsoleCookie.cookiePlaceholder')"
+                type="password"
+                variant="outlined"
+                density="compact"
+                autocomplete="new-password"
+                hide-details
+              />
+              <v-alert v-if="mimoForms[credential.credentialUid].error" color="error" variant="tonal" density="compact">
+                {{ mimoForms[credential.credentialUid].error }}
+              </v-alert>
+              <div class="d-flex align-center justify-end ga-2 flex-wrap">
+                <v-btn
+                  v-if="credential.hasMiMoConsoleCookie"
+                  size="small"
+                  variant="text"
+                  color="secondary"
+                  :loading="mimoForms[credential.credentialUid].refreshing"
+                  @click="refreshMiMoConsoleCookie(credential)"
+                >
+                  <v-icon start size="small">mdi-refresh</v-icon>
+                  {{ t('mimoConsoleCookie.refresh') }}
+                </v-btn>
+                <v-btn
+                  v-if="credential.hasMiMoConsoleCookie"
+                  size="small"
+                  variant="text"
+                  color="error"
+                  :loading="mimoForms[credential.credentialUid].clearing"
+                  @click="clearMiMoConsoleCookie(credential)"
+                >
+                  <v-icon start size="small">mdi-delete-outline</v-icon>
+                  {{ t('mimoConsoleCookie.clear') }}
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="primary"
+                  :loading="mimoForms[credential.credentialUid].saving"
+                  :disabled="!mimoForms[credential.credentialUid].cookie.trim()"
+                  @click="saveMiMoConsoleCookie(credential)"
+                >
+                  <v-icon start size="small">mdi-check-decagram-outline</v-icon>
+                  {{ t('mimoConsoleCookie.verifyAndSave') }}
+                </v-btn>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 添加新密钥 -->
         <div class="d-flex align-start ga-3">
           <v-text-field
@@ -475,8 +580,8 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from '../../i18n'
-import { ApiService } from '../../services/api'
-import type { ManagedAccountCredential } from '../../services/api-types'
+import { ApiError, ApiService } from '../../services/api'
+import type { ManagedAccountCredential, MiMoTokenPlanQuota } from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
 
 interface KeyModelsStatus {
@@ -534,6 +639,18 @@ const volcengineCredentials = ref<ManagedAccountCredential[]>([])
 const volcengineCredentialsLoading = ref(false)
 const volcengineCredentialsError = ref('')
 const volcengineForms = ref<Record<string, VolcengineCredentialForm>>({})
+interface MiMoCredentialForm {
+  cookie: string
+  saving: boolean
+  refreshing: boolean
+  clearing: boolean
+  error: string
+}
+
+const mimoCredentials = ref<ManagedAccountCredential[]>([])
+const mimoCredentialsLoading = ref(false)
+const mimoCredentialsError = ref('')
+const mimoForms = ref<Record<string, MiMoCredentialForm>>({})
 interface CopilotDiagnoseResponse {
   githubUser?: {
     login?: string
@@ -603,6 +720,133 @@ watch(
   () => { void loadVolcengineCredentials() },
   { immediate: true }
 )
+
+const loadMiMoCredentials = async () => {
+  mimoCredentials.value = []
+  mimoCredentialsError.value = ''
+  if (props.providerId !== 'mimo' || !props.accountUid) return
+  mimoCredentialsLoading.value = true
+  try {
+    const response = await apiService.getManagedAccounts()
+    const account = response.accounts.find(item => item.accountUid === props.accountUid)
+    if (!account) {
+      mimoCredentialsError.value = t('mimoConsoleCookie.accountNotFound')
+      return
+    }
+    mimoCredentials.value = account.credentials
+    const nextForms: Record<string, MiMoCredentialForm> = {}
+    for (const credential of account.credentials) {
+      nextForms[credential.credentialUid] = mimoForms.value[credential.credentialUid] ?? {
+        cookie: '', saving: false, refreshing: false, clearing: false, error: '',
+      }
+    }
+    mimoForms.value = nextForms
+  } catch (err) {
+    mimoCredentialsError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    mimoCredentialsLoading.value = false
+  }
+}
+
+watch(
+  () => [props.providerId, props.accountUid],
+  () => { void loadMiMoCredentials() },
+  { immediate: true }
+)
+
+const applyMiMoCookieResponse = (credential: ManagedAccountCredential, response: Awaited<ReturnType<ApiService['setMiMoConsoleCookie']>>) => {
+  if (response.keyAdopted && response.adoptedApiKey) {
+    const keyIndex = props.apiKeys.findIndex(key => maskApiKey(key) === credential.keyMask)
+    if (keyIndex >= 0) {
+      const updated = [...props.apiKeys]
+      updated[keyIndex] = response.adoptedApiKey
+      emit('update:apiKeys', updated)
+    }
+    credential.keyMask = response.keyMask
+  }
+  credential.hasMiMoConsoleCookie = true
+  credential.mimoTokenPlan = response.tokenPlan
+  mimoForms.value[credential.credentialUid].cookie = ''
+}
+
+const bindMiMoConsoleCookie = async (credential: ManagedAccountCredential, adoptCookieKey: boolean) => {
+  if (!props.accountUid) return
+  const form = mimoForms.value[credential.credentialUid]
+  const response = await apiService.setMiMoConsoleCookie(props.accountUid, credential.credentialUid, {
+    cookie: form.cookie.trim(),
+    adoptCookieKey,
+  })
+  applyMiMoCookieResponse(credential, response)
+}
+
+const saveMiMoConsoleCookie = async (credential: ManagedAccountCredential) => {
+  const form = mimoForms.value[credential.credentialUid]
+  if (!form?.cookie.trim()) return
+  form.saving = true
+  form.error = ''
+  try {
+    await bindMiMoConsoleCookie(credential, false)
+  } catch (err) {
+    const details = err instanceof ApiError && typeof err.details === 'object' && err.details
+      ? err.details as { code?: string; currentKeyMask?: string; cookieKeyMask?: string }
+      : null
+    if (err instanceof ApiError && err.status === 409 && details?.code === 'mimo_cookie_key_mismatch') {
+      const confirmed = window.confirm(t('mimoConsoleCookie.keyMismatchConfirm', {
+        currentKey: details.currentKeyMask ?? '-',
+        cookieKey: details.cookieKeyMask ?? '-',
+      }))
+      if (confirmed) {
+        try {
+          await bindMiMoConsoleCookie(credential, true)
+          return
+        } catch (adoptError) {
+          form.error = adoptError instanceof Error ? adoptError.message : String(adoptError)
+          return
+        }
+      }
+    }
+    form.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    form.saving = false
+  }
+}
+
+const refreshMiMoConsoleCookie = async (credential: ManagedAccountCredential) => {
+  if (!props.accountUid) return
+  const form = mimoForms.value[credential.credentialUid]
+  form.refreshing = true
+  form.error = ''
+  try {
+    const response = await apiService.refreshMiMoConsoleCookie(props.accountUid, credential.credentialUid)
+    credential.mimoTokenPlan = response.tokenPlan
+  } catch (err) {
+    form.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    form.refreshing = false
+  }
+}
+
+const clearMiMoConsoleCookie = async (credential: ManagedAccountCredential) => {
+  if (!props.accountUid || !window.confirm(t('mimoConsoleCookie.clearConfirm'))) return
+  const form = mimoForms.value[credential.credentialUid]
+  form.clearing = true
+  form.error = ''
+  try {
+    await apiService.clearMiMoConsoleCookie(props.accountUid, credential.credentialUid)
+    credential.hasMiMoConsoleCookie = false
+    credential.mimoTokenPlan = undefined
+  } catch (err) {
+    form.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    form.clearing = false
+  }
+}
+
+const formatMiMoQuota = (quota: MiMoTokenPlanQuota) => {
+  const remainingPercent = Math.max(0, Math.min(100, (1 - quota.usedPercent) * 100)).toFixed(1)
+  const remaining = Math.max(0, quota.limit - quota.used)
+  return `${remainingPercent}% · ${Intl.NumberFormat().format(remaining)} tokens`
+}
 
 const planDisplayName = (plan?: string) => plan === 'agent_plan' ? 'Agent Plan' : 'Coding Plan'
 
@@ -858,8 +1102,18 @@ const getDisabledKeyLabel = (reason: string) => {
   gap: 12px;
 }
 
+.mimo-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 700px) {
   .volcengine-key-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mimo-usage-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

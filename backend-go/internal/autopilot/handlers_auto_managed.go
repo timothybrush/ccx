@@ -2,6 +2,8 @@ package autopilot
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"log"
 	"net/http"
@@ -76,8 +78,9 @@ type EndpointDiscoveryInfo struct {
 
 // AutoManagedDeps 自动托管路由的依赖注入。
 type AutoManagedDeps struct {
-	CfgManager *config.ConfigManager
-	Runner     *AutoDiscoveryRunner
+	CfgManager        *config.ConfigManager
+	Runner            *AutoDiscoveryRunner
+	MiMoConsoleClient *MiMoConsoleClient
 }
 
 // RegisterAutoManagedRoutes 注册自动托管 API 路由。
@@ -95,6 +98,9 @@ func RegisterAutoManagedRoutes(apiGroup *gin.RouterGroup, deps *AutoManagedDeps)
 	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid", handleDeleteAccountCredential(deps))
 	apiGroup.PUT("/accounts/:accountUid/credentials/:credentialUid/volcengine-access-key", handleSetVolcengineAccessKey(deps))
 	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid/volcengine-access-key", handleClearVolcengineAccessKey(deps))
+	apiGroup.PUT("/accounts/:accountUid/credentials/:credentialUid/mimo-console-cookie", handleSetMiMoConsoleCookie(deps))
+	apiGroup.POST("/accounts/:accountUid/credentials/:credentialUid/mimo-console-cookie/refresh", handleRefreshMiMoConsoleCookie(deps))
+	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid/mimo-console-cookie", handleClearMiMoConsoleCookie(deps))
 	kinds := []string{"messages", "chat", "responses", "gemini", "images", "vectors"}
 	for _, kind := range kinds {
 		apiGroup.POST("/"+kind+"/channels/auto-add", handleAutoAdd(deps))
@@ -126,13 +132,25 @@ func handleRenameAccount(deps *AutoManagedDeps) gin.HandlerFunc {
 }
 
 type managedAccountCredentialView struct {
-	CredentialUID             string `json:"credentialUid"`
-	KeyMask                   string `json:"keyMask"`
-	HasVolcengineAccessKey    bool   `json:"hasVolcengineAccessKey,omitempty"`
-	VolcengineAccessKeyIDMask string `json:"volcengineAccessKeyIdMask,omitempty"`
-	VolcenginePlan            string `json:"volcenginePlan,omitempty"`
-	VolcenginePlanTier        string `json:"volcenginePlanTier,omitempty"`
-	VolcenginePlanStatus      string `json:"volcenginePlanStatus,omitempty"`
+	CredentialUID             string                    `json:"credentialUid"`
+	KeyMask                   string                    `json:"keyMask"`
+	HasVolcengineAccessKey    bool                      `json:"hasVolcengineAccessKey,omitempty"`
+	VolcengineAccessKeyIDMask string                    `json:"volcengineAccessKeyIdMask,omitempty"`
+	VolcenginePlan            string                    `json:"volcenginePlan,omitempty"`
+	VolcenginePlanTier        string                    `json:"volcenginePlanTier,omitempty"`
+	VolcenginePlanStatus      string                    `json:"volcenginePlanStatus,omitempty"`
+	HasMiMoConsoleCookie      bool                      `json:"hasMiMoConsoleCookie,omitempty"`
+	MiMoTokenPlan             *managedMiMoTokenPlanView `json:"mimoTokenPlan,omitempty"`
+}
+
+type managedMiMoTokenPlanView struct {
+	PlanCode         string                         `json:"planCode"`
+	PlanName         string                         `json:"planName"`
+	CurrentPeriodEnd string                         `json:"currentPeriodEnd"`
+	Expired          bool                           `json:"expired"`
+	MonthUsage       config.MiMoTokenPlanUsageQuota `json:"monthUsage"`
+	CurrentUsage     config.MiMoTokenPlanUsageQuota `json:"currentUsage"`
+	ValidatedAt      time.Time                      `json:"validatedAt"`
 }
 
 type managedAccountChannelView struct {
@@ -174,6 +192,10 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 					credentialView.VolcenginePlanTier = credential.VolcengineAccessKey.PlanTier
 					credentialView.VolcenginePlanStatus = credential.VolcengineAccessKey.PlanStatus
 				}
+				if credential.MiMoConsole != nil {
+					credentialView.HasMiMoConsoleCookie = true
+					credentialView.MiMoTokenPlan = mimoTokenPlanView(credential.MiMoConsole)
+				}
 				view.Credentials = append(view.Credentials, credentialView)
 			}
 			for _, channel := range deps.CfgManager.GetAccountChannels(account.AccountUID) {
@@ -189,6 +211,139 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"accounts": accounts})
 	}
+}
+
+func mimoTokenPlanView(source *config.MiMoConsoleCredential) *managedMiMoTokenPlanView {
+	if source == nil {
+		return nil
+	}
+	return &managedMiMoTokenPlanView{
+		PlanCode: source.PlanCode, PlanName: source.PlanName, CurrentPeriodEnd: source.CurrentPeriodEnd,
+		Expired: source.Expired, MonthUsage: source.MonthUsage, CurrentUsage: source.CurrentUsage, ValidatedAt: source.ValidatedAt,
+	}
+}
+
+func handleSetMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Cookie         string `json:"cookie"`
+			AdoptCookieKey bool   `json:"adoptCookieKey"`
+		}
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
+			return
+		}
+		accountUID, credentialUID := strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))
+		credential, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID)
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "推理 Key 凭证不存在"})
+			return
+		}
+		channels := deps.CfgManager.GetAccountChannels(accountUID)
+		if len(channels) == 0 || channels[0].Upstream.ProviderID != "mimo" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "仅 MiMo 自动托管账号支持绑定控制台 Cookie"})
+			return
+		}
+		verification, err := mimoConsoleClient(deps).Verify(c.Request.Context(), req.Cookie)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		matches := mimoKeysEqual(credential.APIKey, verification.APIKey)
+		if !matches && !req.AdoptCookieKey {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Cookie 所属 Token Plan Key 与当前渠道 Key 不一致",
+				"code":  "mimo_cookie_key_mismatch", "currentKeyMask": utils.MaskAPIKey(credential.APIKey),
+				"cookieKeyMask": utils.MaskAPIKey(verification.APIKey),
+			})
+			return
+		}
+		replacementKey := ""
+		if !matches {
+			replacementKey = verification.APIKey
+		}
+		if err := deps.CfgManager.BindManagedAccountMiMoConsole(accountUID, credentialUID, replacementKey, verification.Snapshot); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		started := 0
+		if replacementKey != "" {
+			for _, channel := range deps.CfgManager.GetAccountChannels(accountUID) {
+				if triggerDiscoveryForChannel(deps, channel.Kind, channel.Upstream.ChannelUID) {
+					started++
+				}
+			}
+		}
+		response := gin.H{
+			"accountUid": accountUID, "credentialUid": credentialUID, "keyAdopted": replacementKey != "",
+			"keyMask": utils.MaskAPIKey(verification.APIKey), "tokenPlan": mimoTokenPlanView(&verification.Snapshot),
+			"discoveryStarted": started,
+		}
+		if replacementKey != "" {
+			response["adoptedApiKey"] = replacementKey
+		}
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+func handleRefreshMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		accountUID, credentialUID := strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))
+		credential, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID)
+		if !ok || credential.MiMoConsole == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "未绑定 MiMo 控制台 Cookie"})
+			return
+		}
+		verification, err := mimoConsoleClient(deps).Verify(c.Request.Context(), credential.MiMoConsole.Cookie)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !mimoKeysEqual(credential.APIKey, verification.APIKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cookie 所属 Key 已变化，请重新绑定并确认是否采用新 Key", "code": "mimo_cookie_key_mismatch"})
+			return
+		}
+		if err := deps.CfgManager.BindManagedAccountMiMoConsole(accountUID, credentialUID, "", verification.Snapshot); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"tokenPlan": mimoTokenPlanView(&verification.Snapshot)})
+	}
+}
+
+func handleClearMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		if err := deps.CfgManager.ClearManagedAccountMiMoConsole(strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func mimoConsoleClient(deps *AutoManagedDeps) *MiMoConsoleClient {
+	if deps != nil && deps.MiMoConsoleClient != nil {
+		return deps.MiMoConsoleClient
+	}
+	return &MiMoConsoleClient{HTTPClient: &http.Client{Timeout: 10 * time.Second}}
+}
+
+func mimoKeysEqual(left, right string) bool {
+	leftHash := sha256.Sum256([]byte(left))
+	rightHash := sha256.Sum256([]byte(right))
+	return subtle.ConstantTimeCompare(leftHash[:], rightHash[:]) == 1
 }
 
 func handleSetVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {
