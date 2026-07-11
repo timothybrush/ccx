@@ -400,6 +400,17 @@ func TestProbeEndpoint_ManifestExcludePatternsFilterModels(t *testing.T) {
 	}
 }
 
+func TestLookupDiscoveryBuiltinManifestMatchesCanonicalOpenAIBaseURL(t *testing.T) {
+	channel := &config.UpstreamConfig{ServiceType: "openai"}
+	manifest, ok := lookupDiscoveryBuiltinManifest(channel, "https://token-plan-sgp.xiaomimimo.com")
+	if !ok {
+		t.Fatal("规范化后不含 /v1 的 MiMo OpenAI BaseURL 应命中内置清单")
+	}
+	if len(manifest.ExcludeModelPatterns) == 0 {
+		t.Fatal("MiMo OpenAI 清单缺少 ASR/TTS 排除规则")
+	}
+}
+
 func TestWriteProfilesSetsEndpointUID(t *testing.T) {
 	store, err := NewProfileStore(filepath.Join(t.TempDir(), "profiles.db"))
 	if err != nil {

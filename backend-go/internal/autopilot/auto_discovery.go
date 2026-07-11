@@ -336,7 +336,15 @@ func lookupDiscoveryBuiltinManifest(channel *config.UpstreamConfig, baseURL stri
 	if serviceType == "" {
 		return config.BuiltinModelsManifest{}, false
 	}
-	return config.LookupBuiltinManifest(baseURL, serviceType)
+	if manifest, ok := config.LookupBuiltinManifest(baseURL, serviceType); ok {
+		return manifest, true
+	}
+	// OpenAI 兼容渠道在运行时会把末尾 /v1 规范化掉，但清单按实际 models
+	// 端点记录为 host/v1。仅在直接匹配失败时补 /v1 重试。
+	if serviceType == "openai" {
+		return config.LookupBuiltinManifest(strings.TrimRight(baseURL, "/")+"/v1", serviceType)
+	}
+	return config.BuiltinModelsManifest{}, false
 }
 
 func discoveryManifestServiceType(serviceType string) string {

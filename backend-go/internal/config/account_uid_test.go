@@ -69,6 +69,37 @@ func TestMergeManagedProviderAccountsCombinesKeysAndRoutes(t *testing.T) {
 	}
 }
 
+func TestLoadConfigMergesPersistedProviderCredentialsWithoutLoss(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/config.json"
+	data := `{
+  "managedAccounts": [
+    {"accountUid":"acct-old","providerId":"mimo","name":"mimo-old","credentials":[{"credentialUid":"cred-old","apiKey":"sk-old"}]},
+    {"accountUid":"acct-new","providerId":"mimo","name":"mimo-new","credentials":[{"credentialUid":"cred-new","apiKey":"sk-new"}]}
+  ],
+  "upstream": [
+    {"accountUid":"acct-old","channelUid":"ch-old","providerId":"mimo","name":"mimo-old","serviceType":"claude","autoManaged":true,"status":"active","baseUrl":"https://old.example/anthropic","apiKeyConfigs":[{"credentialUid":"cred-old","baseUrl":"https://old.example/anthropic"}]},
+    {"accountUid":"acct-new","channelUid":"ch-new","providerId":"mimo","name":"mimo-new","serviceType":"claude","autoManaged":true,"status":"active","baseUrl":"https://new.example/anthropic","apiKeyConfigs":[{"credentialUid":"cred-new","baseUrl":"https://new.example/anthropic"}]}
+  ],
+  "chatUpstream": [], "responsesUpstream": [], "geminiUpstream": [], "imagesUpstream": [], "vectorsUpstream": []
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cm, err := NewConfigManager(configPath, dir+"/backups")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cm.Close() })
+	cfg := cm.GetConfig()
+	if len(cfg.ManagedAccounts) != 1 || len(cfg.ManagedAccounts[0].Credentials) != 2 {
+		t.Fatalf("持久化凭证迁移丢失: %+v", cfg.ManagedAccounts)
+	}
+	if len(cfg.Upstream) != 1 || len(cfg.Upstream[0].APIKeys) != 2 {
+		t.Fatalf("route 运行时 Key 迁移丢失: %+v", cfg.Upstream)
+	}
+}
+
 func TestUpdateAccountChannelsUpdatesAllRoutes(t *testing.T) {
 	cm := &ConfigManager{config: Config{
 		Upstream:     []UpstreamConfig{{AccountUID: "acct_test", ChannelUID: "ch_messages", ServiceType: "claude", ProviderID: "mimo", AutoManaged: true}},

@@ -69,6 +69,49 @@ func TestCarryForwardProbeFields_CopiesProbeFields(t *testing.T) {
 	}
 }
 
+func TestCarryForwardDiscoveryFields_CopiesDiscoveryFields(t *testing.T) {
+	old := newTestProfile("ep-1", "ch-1", "messages", "https://example.com")
+	old.AccountUID = "acct-1"
+	old.CredentialUID = "cred-1"
+	old.AvailableModels = []string{"mimo-v2-flash", "mimo-v2-pro"}
+	old.ModelListHash = "models-hash"
+	old.ModelMapping = map[string]string{"mimo-v2": "mimo-v2-pro"}
+
+	current := newTestProfile("ep-1", "ch-1", "messages", "https://example.com")
+	current.HealthState = HealthStateDegraded
+	current.HealthConfidence = 0.5
+
+	carryForwardDiscoveryFields(old, current)
+
+	if current.AccountUID != "acct-1" || current.CredentialUID != "cred-1" {
+		t.Fatalf("账号绑定字段未搬运: account=%q credential=%q", current.AccountUID, current.CredentialUID)
+	}
+	if len(current.AvailableModels) != 2 || current.AvailableModels[1] != "mimo-v2-pro" {
+		t.Fatalf("AvailableModels 未搬运: %v", current.AvailableModels)
+	}
+	if current.ModelListHash != "models-hash" {
+		t.Fatalf("ModelListHash 未搬运: %q", current.ModelListHash)
+	}
+	if current.ModelMapping["mimo-v2"] != "mimo-v2-pro" {
+		t.Fatalf("ModelMapping 未搬运: %v", current.ModelMapping)
+	}
+	if current.HealthState != HealthStateDegraded || current.HealthConfidence != 0.5 {
+		t.Fatalf("L1 健康字段不应被覆盖: state=%s confidence=%f", current.HealthState, current.HealthConfidence)
+	}
+
+	current.AvailableModels[0] = "changed"
+	current.ModelMapping["mimo-v2"] = "changed"
+	if old.AvailableModels[0] != "mimo-v2-flash" || old.ModelMapping["mimo-v2"] != "mimo-v2-pro" {
+		t.Fatal("自动发现字段必须深拷贝，不能修改旧画像")
+	}
+}
+
+func TestCarryForwardDiscoveryFields_NilInputsAreNoop(t *testing.T) {
+	current := newTestProfile("ep-1", "ch-1", "messages", "https://example.com")
+	carryForwardDiscoveryFields(nil, current)
+	carryForwardDiscoveryFields(current, nil)
+}
+
 // TestCarryForwardProbeFields_SurvivesL1OverwriteBug 回归测试：
 // 模拟 collectAll 每轮调用 DeriveEndpointProfile 构造全新 struct 后 Upsert 的场景。
 // 若不 carry-forward，Probe* 字段会在 L1 循环中被无声清零，破坏 scanAndEnqueue 的冷却期判定。

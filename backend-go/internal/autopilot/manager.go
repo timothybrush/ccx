@@ -750,6 +750,8 @@ func (m *Manager) collectAll() {
 				entry.OriginType,
 				entry.OriginTier,
 			)
+			oldProfile := m.store.Get(profile.EndpointUID)
+			carryForwardDiscoveryFields(oldProfile, &profile)
 			profiled++
 
 			// 收集被动信号并诊断
@@ -832,7 +834,6 @@ func (m *Manager) collectAll() {
 			// LastProbeAt/ConsecutiveProbeSuccess 等会被本轮 Upsert 整行覆盖清零，
 			// 导致 scanAndEnqueue 的探测冷却期形同虚设。HealthState/HealthConfidence
 			// 等 L1 诊断字段不受影响，继续以本轮真实流量信号为准。
-			oldProfile := m.store.Get(profile.EndpointUID)
 			carryForwardProbeFields(oldProfile, &profile)
 
 			// StabilityTier 晋降级滞后：连续 N 轮（N = stabilityHysteresisWindows）
@@ -894,6 +895,23 @@ func (m *Manager) collectAll() {
 	if !m.cfg.QuietLogs {
 		log.Printf("[Autopilot-Worker] 本轮完成: 渠道=%d, 画像=%d, 诊断=%d, 耗时=%s",
 			len(entries), profiled, diagnosed, elapsed.Truncate(time.Millisecond))
+	}
+}
+
+// carryForwardDiscoveryFields 保留由自动发现写入、L1 流量画像无法重新推导的字段。
+func carryForwardDiscoveryFields(old *KeyEndpointProfile, current *KeyEndpointProfile) {
+	if old == nil || current == nil {
+		return
+	}
+	current.AccountUID = old.AccountUID
+	current.CredentialUID = old.CredentialUID
+	current.AvailableModels = append([]string(nil), old.AvailableModels...)
+	current.ModelListHash = old.ModelListHash
+	if old.ModelMapping != nil {
+		current.ModelMapping = make(map[string]string, len(old.ModelMapping))
+		for source, target := range old.ModelMapping {
+			current.ModelMapping[source] = target
+		}
 	}
 }
 
