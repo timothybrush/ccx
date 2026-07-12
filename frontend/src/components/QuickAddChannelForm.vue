@@ -16,8 +16,8 @@
         density="compact"
         hide-details
         :menu-props="{ contentClass: 'upstream-select-menu' }"
-        class="service-type-select"
-        @update:model-value="onProviderChange"
+        class="provider-select"
+        @update:model-value="clearSubmitError"
       />
     </div>
 
@@ -31,27 +31,6 @@
     >
       {{ selectedProvider.description }}
     </v-alert>
-
-    <!-- 服务类型选择（自定义模式；provider 模式下由模板锁定，隐藏） -->
-    <div v-if="!isProviderMode" class="d-flex align-center ga-2">
-      <v-icon :color="serviceTypeColor" size="20">{{ serviceTypeIcon }}</v-icon>
-      <div class="text-caption text-medium-emphasis flex-shrink-0">
-        {{ t('channelEditor.basic.serviceType.label') }}
-      </div>
-      <v-spacer />
-      <v-select
-        v-model="serviceType"
-        :items="serviceTypeItems"
-        item-title="title"
-        item-value="value"
-        variant="outlined"
-        density="compact"
-        hide-details
-        :menu-props="{ contentClass: 'upstream-select-menu' }"
-        class="service-type-select"
-        @update:model-value="onServiceTypeChange"
-      />
-    </div>
 
     <!-- 名称（可选） -->
     <v-text-field
@@ -77,11 +56,7 @@
         </v-btn>
       </div>
       <div class="d-flex flex-column ga-2">
-        <div
-          v-for="(url, idx) in baseUrls"
-          :key="'url-' + idx"
-          class="d-flex align-center ga-2"
-        >
+        <div v-for="(url, idx) in baseUrls" :key="'url-' + idx" class="d-flex align-center ga-2">
           <v-text-field
             v-model="baseUrls[idx]"
             :placeholder="t('addChannel.baseUrl') + ' ' + (idx + 1)"
@@ -91,34 +66,19 @@
             class="flex-grow-1"
             @input="validateForm"
           />
-          <v-btn
-            v-if="baseUrls.length > 1"
-            size="small"
-            icon
-            variant="text"
-            color="error"
-            @click="removeBaseUrl(idx)"
-          >
+          <v-btn v-if="baseUrls.length > 1" size="small" icon variant="text" color="error" @click="removeBaseUrl(idx)">
             <v-icon size="small">mdi-close</v-icon>
           </v-btn>
         </div>
       </div>
     </div>
 
-    <!-- API Key 输入（Copilot 模式下可选） -->
+    <!-- API Key 输入 -->
     <div>
       <div class="d-flex align-center justify-space-between mb-2">
         <div class="d-flex align-center ga-2">
           <v-icon size="16" color="medium-emphasis">mdi-key</v-icon>
           <span class="text-body-2 font-weight-medium">{{ t('addChannel.apiKeys') }}</span>
-          <v-chip
-            v-if="isCopilot"
-            size="x-small"
-            color="info"
-            variant="tonal"
-          >
-            {{ t('autopilot.quickAdd.optionalForCopilot') }}
-          </v-chip>
         </div>
         <v-btn size="small" variant="text" color="primary" @click="addApiKey">
           <v-icon start size="small">mdi-plus</v-icon>
@@ -126,11 +86,7 @@
         </v-btn>
       </div>
       <div class="d-flex flex-column ga-2">
-        <div
-          v-for="(key, idx) in apiKeys"
-          :key="'key-' + idx"
-          class="d-flex align-center ga-2"
-        >
+        <div v-for="(key, idx) in apiKeys" :key="'key-' + idx" class="d-flex align-center ga-2">
           <v-text-field
             v-model="apiKeys[idx]"
             :placeholder="'sk-...' + (idx + 1)"
@@ -142,38 +98,17 @@
             @input="validateForm"
           >
             <template #append-inner>
-              <v-icon
-                size="small"
-                class="cursor-pointer"
-                @click="toggleKeyVisibility(idx)"
-              >
+              <v-icon size="small" class="cursor-pointer" @click="toggleKeyVisibility(idx)">
                 {{ showKeys[idx] ? 'mdi-eye-off' : 'mdi-eye' }}
               </v-icon>
             </template>
           </v-text-field>
-          <v-btn
-            v-if="apiKeys.length > 1"
-            size="small"
-            icon
-            variant="text"
-            color="error"
-            @click="removeApiKey(idx)"
-          >
+          <v-btn v-if="apiKeys.length > 1" size="small" icon variant="text" color="error" @click="removeApiKey(idx)">
             <v-icon size="small">mdi-close</v-icon>
           </v-btn>
         </div>
       </div>
     </div>
-
-    <!-- Copilot OAuth 提示 -->
-    <v-alert
-      v-if="isCopilot"
-      color="info"
-      variant="tonal"
-      density="comfortable"
-    >
-      {{ t('copilotOAuth.quickAddHint') }}
-    </v-alert>
 
     <!-- 自动托管开关 -->
     <v-card variant="outlined" class="auto-managed-card" rounded="lg">
@@ -200,13 +135,7 @@
     </v-card>
 
     <!-- 提交错误（provider 模式 key 无效等） -->
-    <v-alert
-      v-if="submitError"
-      color="error"
-      variant="tonal"
-      density="comfortable"
-      icon="mdi-alert-circle-outline"
-    >
+    <v-alert v-if="submitError" color="error" variant="tonal" density="comfortable" icon="mdi-alert-circle-outline">
       {{ submitError }}
     </v-alert>
 
@@ -229,11 +158,7 @@
         <template v-if="autoStatus.endpoints.length > 0">
           <v-divider class="mb-3" />
           <div class="d-flex flex-column ga-2">
-            <div
-              v-for="(ep, idx) in autoStatus.endpoints"
-              :key="idx"
-              class="d-flex align-center ga-2 text-caption"
-            >
+            <div v-for="(ep, idx) in autoStatus.endpoints" :key="idx" class="d-flex align-center ga-2 text-caption">
               <v-icon size="14" :color="ep.protocolOk ? 'success' : 'error'">
                 {{ ep.protocolOk ? 'mdi-check-circle' : 'mdi-close-circle' }}
               </v-icon>
@@ -253,14 +178,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from '../i18n'
-import {
-  autoAddChannel,
-  getChannelAutoStatus,
-  getProviderTemplates,
-} from '../services/autopilot-api'
+import { autoAddChannel, getChannelAutoStatus, getProviderTemplates } from '../services/autopilot-api'
 import type { ProviderTemplate } from '../services/autopilot-api'
 
-type ServiceType = 'openai' | 'gemini' | 'claude' | 'responses' | 'copilot'
 type ChannelType = 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
 
 interface Props {
@@ -277,7 +197,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 // ---- 表单状态 ----
-const serviceType = ref<ServiceType>(getDefaultServiceType())
 const channelName = ref('')
 const baseUrls = ref<string[]>([''])
 const apiKeys = ref<string[]>([''])
@@ -296,64 +215,24 @@ import type { AutoEndpointStatus } from '../services/autopilot-api'
 
 const autoStatus = reactive({
   status: '' as 'discovering' | 'done' | 'failed' | '',
-  endpoints: [] as AutoEndpointStatus[],
+  endpoints: [] as AutoEndpointStatus[]
 })
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-// ---- 常量 ----
-const serviceTypeItems = computed(() => {
-  if (props.channelType === 'images' || props.channelType === 'vectors') {
-    return [{ title: 'OpenAI Images', value: 'openai' as const }]
-  }
-  return [
-    { title: 'Claude', value: 'claude' as const },
-    { title: 'OpenAI Chat', value: 'openai' as const },
-    { title: 'Gemini', value: 'gemini' as const },
-    { title: 'Responses (Codex)', value: 'responses' as const },
-    { title: 'GitHub Copilot', value: 'copilot' as const },
-  ]
-})
-
-const serviceTypeIcon = computed(() => {
-  const map: Record<ServiceType, string> = {
-    openai: 'mdi-robot',
-    claude: 'mdi-message-processing',
-    gemini: 'mdi-diamond-stone',
-    responses: 'mdi-rocket-launch',
-    copilot: 'mdi-code-braces',
-  }
-  return map[serviceType.value] || 'mdi-api'
-})
-
-const serviceTypeColor = computed(() => {
-  const map: Record<ServiceType, string> = {
-    openai: 'info',
-    claude: 'orange',
-    gemini: 'purple',
-    responses: 'success',
-    copilot: 'grey-darken-2',
-  }
-  return map[serviceType.value] || 'primary'
-})
-
-const isCopilot = computed(() => serviceType.value === 'copilot')
-
 // ---- Provider 模板计算属性 ----
 // 仅展示与当前渠道类型匹配的 provider；多 route provider 只要包含当前 tab 即可显示。
 const availableProviders = computed(() =>
-  providerTemplates.value.filter(p => providerSupportsChannel(p, props.channelType)),
+  providerTemplates.value.filter(p => providerSupportsChannel(p, props.channelType))
 )
 
 // 选择项：首项为「自定义」（value=''），其余为官方 provider
 const providerItems = computed(() => [
   { title: t('autopilot.quickAdd.provider.custom'), value: '' },
-  ...availableProviders.value.map(p => ({ title: p.displayName, value: p.providerId })),
+  ...availableProviders.value.map(p => ({ title: p.displayName, value: p.providerId }))
 ])
 
-const selectedProvider = computed(() =>
-  availableProviders.value.find(p => p.providerId === providerId.value),
-)
+const selectedProvider = computed(() => availableProviders.value.find(p => p.providerId === providerId.value))
 
 const isProviderMode = computed(() => providerId.value !== '')
 
@@ -362,58 +241,30 @@ const isFormValid = computed(() => {
   // provider 模式：baseURL 由后端判定，只需 key
   if (isProviderMode.value) return hasKey
   const hasUrl = baseUrls.value.some(u => u.trim() !== '')
-  if (isCopilot.value) return hasUrl
   return hasUrl && hasKey
 })
 
 const statusText = computed(() => {
   switch (autoStatus.status) {
-    case 'discovering': return t('autopilot.quickAdd.discovering')
-    case 'done': return t('autopilot.quickAdd.discoveryDone')
-    case 'failed': return t('autopilot.quickAdd.discoveryFailed')
-    default: return ''
+    case 'discovering':
+      return t('autopilot.quickAdd.discovering')
+    case 'done':
+      return t('autopilot.quickAdd.discoveryDone')
+    case 'failed':
+      return t('autopilot.quickAdd.discoveryFailed')
+    default:
+      return ''
   }
 })
 
 // ---- 方法 ----
-function providerRouteForChannel(provider: ProviderTemplate | undefined, channelType: ChannelType) {
-  if (!provider) return undefined
-  const route = provider.routes?.find(item => item.channelKind === channelType)
-  if (route) return route
-  if (!provider.channelKind || provider.channelKind === channelType) {
-    return {
-      channelKind: provider.channelKind,
-      serviceType: provider.serviceType,
-    }
-  }
-  return undefined
-}
-
 function providerSupportsChannel(provider: ProviderTemplate, channelType: ChannelType): boolean {
-  return providerRouteForChannel(provider, channelType) !== undefined
+  if (provider.routes?.some(route => route.channelKind === channelType)) return true
+  return !provider.channelKind || provider.channelKind === channelType
 }
 
-function getDefaultServiceType(): ServiceType {
-  if (props.channelType === 'chat') return 'openai'
-  if (props.channelType === 'gemini') return 'gemini'
-  if (props.channelType === 'responses') return 'responses'
-  if (props.channelType === 'images' || props.channelType === 'vectors') return 'openai'
-  return 'claude'
-}
-
-function onServiceTypeChange() {
-  if (isCopilot.value && baseUrls.value.length === 1 && !baseUrls.value[0]) {
-    baseUrls.value = ['https://api.githubcopilot.com']
-  }
-}
-
-// 切换 provider：选中官方 provider 时锁定其 serviceType（baseURL 由后端判定）
-function onProviderChange() {
+function clearSubmitError() {
   submitError.value = ''
-  const route = providerRouteForChannel(selectedProvider.value, props.channelType)
-  if (route?.serviceType) {
-    serviceType.value = route.serviceType as ServiceType
-  }
 }
 
 async function loadProviderTemplates() {
@@ -544,13 +395,13 @@ async function handleSubmit() {
         ? {
             name: finalName,
             providerId: providerId.value,
-            apiKeys: getFilteredApiKeys(),
+            apiKeys: getFilteredApiKeys()
           }
         : {
             name: finalName,
             baseUrls: getFilteredBaseUrls(),
-            apiKeys: getFilteredApiKeys(),
-          },
+            apiKeys: getFilteredApiKeys()
+          }
     )
 
     const currentChannel = result.channels?.find(ch => ch.channelKind === props.channelType)
@@ -592,7 +443,6 @@ function extractErrorMessage(err: unknown): string {
 
 function resetForm() {
   providerId.value = ''
-  serviceType.value = getDefaultServiceType()
   channelName.value = ''
   baseUrls.value = ['']
   apiKeys.value = ['']
@@ -623,7 +473,7 @@ defineExpose({ handleSubmit, resetForm, isFormValid, submitting })
   min-height: 0;
 }
 
-.service-type-select {
+.provider-select {
   min-width: 200px;
   max-width: 260px;
 }

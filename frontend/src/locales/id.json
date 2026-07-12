@@ -1187,7 +1187,6 @@
   "autopilot.quickAdd.namePlaceholder": "Opsional, otomatis jika kosong",
   "autopilot.quickAdd.addUrl": "Tambah URL",
   "autopilot.quickAdd.addKey": "Tambah Kunci",
-  "autopilot.quickAdd.optionalForCopilot": "Opsional untuk Copilot",
   "autopilot.quickAdd.autoManaged": "Kelola Otomatis",
   "autopilot.quickAdd.autoManagedHint": "Sistem akan menemukan protokol, model, dan memantau kesehatan",
   "autopilot.quickAdd.discovering": "Menemukan...",

@@ -1188,7 +1188,6 @@
   "autopilot.quickAdd.namePlaceholder": "可选，留空自动生成",
   "autopilot.quickAdd.addUrl": "添加地址",
   "autopilot.quickAdd.addKey": "添加密钥",
-  "autopilot.quickAdd.optionalForCopilot": "Copilot 可选",
   "autopilot.quickAdd.autoManaged": "自动托管",
   "autopilot.quickAdd.autoManagedHint": "系统将自动探测协议、发现模型、持续监控健康",
   "autopilot.quickAdd.discovering": "探测中...",

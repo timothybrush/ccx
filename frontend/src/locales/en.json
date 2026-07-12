@@ -1188,7 +1188,6 @@
   "autopilot.quickAdd.namePlaceholder": "Optional, auto-generated if empty",
   "autopilot.quickAdd.addUrl": "Add URL",
   "autopilot.quickAdd.addKey": "Add Key",
-  "autopilot.quickAdd.optionalForCopilot": "Optional for Copilot",
   "autopilot.quickAdd.autoManaged": "Auto-managed",
   "autopilot.quickAdd.autoManagedHint": "System will auto-discover protocols, models, and monitor health",
   "autopilot.quickAdd.discovering": "Discovering...",
