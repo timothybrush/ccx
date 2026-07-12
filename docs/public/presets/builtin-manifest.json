@@ -122,6 +122,86 @@
         "^mimo-v2\\.5-(?:asr|tts(?:-.+)?)$"
       ],
       "disableProbe": false
+    },
+    {
+      "baseUrlPattern": "ark.cn-beijing.volces.com/api/plan",
+      "serviceType": "messages",
+      "planHint": "volcengine_plan_anthropic",
+      "modelIds": [
+        "doubao-seed-2.0-code",
+        "doubao-seed-2.0-pro",
+        "doubao-seed-2.0-lite",
+        "doubao-seed-code",
+        "minimax-m2.7",
+        "minimax-m3",
+        "glm-5.2",
+        "glm-latest",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "kimi-k2.6",
+        "kimi-k2.7-code"
+      ],
+      "disableProbe": true
+    },
+    {
+      "baseUrlPattern": "ark.cn-beijing.volces.com/api/coding",
+      "serviceType": "messages",
+      "planHint": "volcengine_coding_anthropic",
+      "modelIds": [
+        "doubao-seed-2.0-code",
+        "doubao-seed-2.0-pro",
+        "doubao-seed-2.0-lite",
+        "doubao-seed-code",
+        "minimax-m2.7",
+        "minimax-m3",
+        "glm-5.2",
+        "glm-latest",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "kimi-k2.6",
+        "kimi-k2.7-code"
+      ],
+      "disableProbe": true
+    },
+    {
+      "baseUrlPattern": "ark.cn-beijing.volces.com/api/plan",
+      "serviceType": "openai",
+      "planHint": "volcengine_plan_openai",
+      "modelIds": [
+        "doubao-seed-2.0-code",
+        "doubao-seed-2.0-pro",
+        "doubao-seed-2.0-lite",
+        "doubao-seed-code",
+        "minimax-m2.7",
+        "minimax-m3",
+        "glm-5.2",
+        "glm-latest",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "kimi-k2.6",
+        "kimi-k2.7-code"
+      ],
+      "disableProbe": true
+    },
+    {
+      "baseUrlPattern": "ark.cn-beijing.volces.com/api/coding",
+      "serviceType": "openai",
+      "planHint": "volcengine_coding_openai",
+      "modelIds": [
+        "doubao-seed-2.0-code",
+        "doubao-seed-2.0-pro",
+        "doubao-seed-2.0-lite",
+        "doubao-seed-code",
+        "minimax-m2.7",
+        "minimax-m3",
+        "glm-5.2",
+        "glm-latest",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "kimi-k2.6",
+        "kimi-k2.7-code"
+      ],
+      "disableProbe": true
     }
   ]
 }

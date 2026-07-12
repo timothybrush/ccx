@@ -245,13 +245,22 @@ func (r *AutoDiscoveryRunner) discoverVolcenginePlanEndpoint(
 	cfgManager *config.ConfigManager,
 ) EndpointDiscoveryResult {
 	result := EndpointDiscoveryResult{KeyMask: utils.MaskAPIKey(apiKey), BaseURL: baseURL}
+
+	// 缺少账号上下文或未绑定 Access Key 时，回退到内置兜底模型清单，
+	// 让渠道立即可用（绑定 Access Key 后会由管控面 FetchModels 覆盖为真实清单）。
 	if cfgManager == nil || channel == nil || channel.AccountUID == "" {
+		if r.applyVolcengineFallback(&result, channel, baseURL, "缺少自动托管账号上下文，已回退内置模型清单") {
+			return result
+		}
 		result.ErrorMessage = "火山套餐模型发现需要自动托管账号上下文"
 		return result
 	}
 	credentialUID := channel.CredentialUIDForKey(apiKey)
 	credential, ok := cfgManager.GetManagedAccountCredential(channel.AccountUID, credentialUID)
 	if !ok || credential.VolcengineAccessKey == nil {
+		if r.applyVolcengineFallback(&result, channel, baseURL, "未绑定火山云 Access Key，已回退内置模型清单") {
+			return result
+		}
 		result.ErrorMessage = "请先为该推理 Key 绑定火山云 Access Key ID 与 Secret Access Key"
 		return result
 	}
@@ -261,11 +270,17 @@ func (r *AutoDiscoveryRunner) discoverVolcenginePlanEndpoint(
 	}
 	plan, err := planClient.DetectPlan(ctx, credential.VolcengineAccessKey, volcenginePlanFromBaseURL(baseURL))
 	if err != nil {
+		if r.applyVolcengineFallback(&result, channel, baseURL, fmt.Sprintf("套餐识别失败(%v)，已回退内置模型清单", err)) {
+			return result
+		}
 		result.ErrorMessage = err.Error()
 		return result
 	}
 	models, err := planClient.FetchModels(ctx, credential.VolcengineAccessKey, plan.Plan)
 	if err != nil {
+		if r.applyVolcengineFallback(&result, channel, baseURL, fmt.Sprintf("模型发现失败(%v)，已回退内置模型清单", err)) {
+			return result
+		}
 		result.ErrorMessage = err.Error()
 		return result
 	}
@@ -276,6 +291,17 @@ func (r *AutoDiscoveryRunner) discoverVolcenginePlanEndpoint(
 	result.ModelsCount = len(models)
 	result.ProtocolOk = true
 	return result
+}
+
+// applyVolcengineFallback 在无法通过火山管控面发现模型时，尝试命中内置兜底清单。
+// 命中则填充 result（ProtocolOk=true）并返回 true；未命中返回 false。
+func (r *AutoDiscoveryRunner) applyVolcengineFallback(result *EndpointDiscoveryResult, channel *config.UpstreamConfig, baseURL, message string) bool {
+	manifest, ok := lookupDiscoveryBuiltinManifest(channel, baseURL)
+	if !ok || len(manifest.ModelIDs) == 0 {
+		return false
+	}
+	applyBuiltinModels(result, manifest, message)
+	return result.ProtocolOk
 }
 
 // probeEndpoint 探测单个 (baseURL, key) 组合。

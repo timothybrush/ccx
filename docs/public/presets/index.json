@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "dataVersion": "v2.9.37+20260711",
+  "dataVersion": "v2.9.37+20260712",
   "shards": [
     {
       "kind": "subscriptionPreset",
@@ -23,8 +23,8 @@
     {
       "kind": "builtinManifest",
       "url": "./builtin-manifest.json",
-      "sha256": "d8f043ee9307eb173d749b73195a5a98be31d889967ac8ce3912f4fb46cf90e9",
-      "sizeBytes": 3212
+      "sha256": "7c63f3d3d5586800b0f1138ed05ca3440eb083dafd266890e3832d42750beef2",
+      "sizeBytes": 5302
     }
   ]
 }

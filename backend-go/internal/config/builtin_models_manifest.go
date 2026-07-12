@@ -126,12 +126,65 @@ var builtinModelsManifests = []BuiltinModelsManifest{
 		ExcludeModelPatterns: mimoExcludeModelPatterns(),
 		DisableProbe:         false,
 	},
+	// 火山方舟 Agent/Coding Plan 套餐入口（来源：provider_templates.go volcengine 模板）。
+	// 套餐模型发现依赖火山云管控面签名接口，普通推理 Key 无法通过 /v1/models 探测；
+	// 未绑定 Access Key 时用此清单兜底，让渠道立即可用。DisableProbe=true。
+	// BaseURLPattern 用 host+path 前缀（不含版本段），以同时匹配 openai 入口的 /v3 后缀。
+	{
+		BaseURLPattern: "ark.cn-beijing.volces.com/api/plan",
+		ServiceType:    "messages",
+		PlanHint:       "volcengine_plan_anthropic",
+		ModelIDs:       volcengineFallbackModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "ark.cn-beijing.volces.com/api/coding",
+		ServiceType:    "messages",
+		PlanHint:       "volcengine_coding_anthropic",
+		ModelIDs:       volcengineFallbackModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "ark.cn-beijing.volces.com/api/plan",
+		ServiceType:    "openai",
+		PlanHint:       "volcengine_plan_openai",
+		ModelIDs:       volcengineFallbackModelIDs(),
+		DisableProbe:   true,
+	},
+	{
+		BaseURLPattern: "ark.cn-beijing.volces.com/api/coding",
+		ServiceType:    "openai",
+		PlanHint:       "volcengine_coding_openai",
+		ModelIDs:       volcengineFallbackModelIDs(),
+		DisableProbe:   true,
+	},
 }
 
 func mimoModelIDs() []string {
 	return []string{
 		"mimo-v2.5-pro",
 		"mimo-v2.5",
+	}
+}
+
+// volcengineFallbackModelIDs 火山方舟套餐入口的兜底模型清单。
+// 当用户未绑定火山云 Access Key（无法调用管控面模型发现接口）时，
+// 用此清单让渠道立即可用；绑定 Access Key 后由 FetchModels 覆盖为真实清单。
+// 清单来源：火山方舟 Agent/Coding Plan 2026-07 公布的套餐可用模型。
+func volcengineFallbackModelIDs() []string {
+	return []string{
+		"doubao-seed-2.0-code",
+		"doubao-seed-2.0-pro",
+		"doubao-seed-2.0-lite",
+		"doubao-seed-code",
+		"minimax-m2.7",
+		"minimax-m3",
+		"glm-5.2",
+		"glm-latest",
+		"deepseek-v4-flash",
+		"deepseek-v4-pro",
+		"kimi-k2.6",
+		"kimi-k2.7-code",
 	}
 }
 
