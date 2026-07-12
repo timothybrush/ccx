@@ -330,9 +330,6 @@ export const useChannelStore = defineStore('channel', () => {
           if (addApiKeys.length > 0 || removeCredentialUids.length > 0) {
             await api.patchManagedAccountCredentials(options.accountUid, { addApiKeys, removeCredentialUids })
           }
-          if (channel.name !== original.name) {
-            await api.renameManagedAccount(options.accountUid, channel.name)
-          }
         } else {
           await api.updateManagedAccount(options.accountUid, { name: channel.name, apiKeys: channel.apiKeys })
         }

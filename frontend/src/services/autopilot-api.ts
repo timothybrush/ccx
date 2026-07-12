@@ -96,7 +96,7 @@ export interface ChannelAutoStatusResponse {
 function getAuthHeaders(): Record<string, string> {
   const authStore = useAuthStore()
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json'
   }
   const apiKey = authStore.apiKey as unknown as string | null
   if (apiKey) {
@@ -105,21 +105,20 @@ function getAuthHeaders(): Record<string, string> {
   return headers
 }
 
+let providerTemplatesRequest: Promise<ProviderTemplate[]> | null = null
+
 // ─── API 方法 ───
 
 /**
  * 快速添加渠道（自动托管模式）
  * POST /api/{kind}/channels/auto-add
  */
-export async function autoAddChannel(
-  kind: string,
-  request: AutoAddChannelRequest,
-): Promise<AutoAddChannelResponse> {
+export async function autoAddChannel(kind: string, request: AutoAddChannelRequest): Promise<AutoAddChannelResponse> {
   const url = `${API_BASE}/${kind}/channels/auto-add`
   const response = await fetch(url, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify(request),
+    body: JSON.stringify(request)
   })
 
   if (!response.ok) {
@@ -134,14 +133,11 @@ export async function autoAddChannel(
  * 查询渠道自动托管状态
  * GET /api/{kind}/channels/{id}/auto-status
  */
-export async function getChannelAutoStatus(
-  kind: string,
-  channelId: number,
-): Promise<ChannelAutoStatusResponse> {
+export async function getChannelAutoStatus(kind: string, channelId: number): Promise<ChannelAutoStatusResponse> {
   const url = `${API_BASE}/${kind}/channels/${channelId}/auto-status`
   const response = await fetch(url, {
     method: 'GET',
-    headers: getAuthHeaders(),
+    headers: getAuthHeaders()
   })
 
   if (!response.ok) {
@@ -156,11 +152,11 @@ export async function getChannelAutoStatus(
  * 获取内置 provider 模板（模板化添加：选 provider + 输 key）
  * GET /api/channels/provider-templates
  */
-export async function getProviderTemplates(): Promise<ProviderTemplate[]> {
+async function fetchProviderTemplates(): Promise<ProviderTemplate[]> {
   const url = `${API_BASE}/channels/provider-templates`
   const response = await fetch(url, {
     method: 'GET',
-    headers: getAuthHeaders(),
+    headers: getAuthHeaders()
   })
 
   if (!response.ok) {
@@ -170,4 +166,22 @@ export async function getProviderTemplates(): Promise<ProviderTemplate[]> {
 
   const data = await response.json()
   return data.providers ?? []
+}
+
+export function getProviderTemplates(): Promise<ProviderTemplate[]> {
+  if (!providerTemplatesRequest) {
+    providerTemplatesRequest = fetchProviderTemplates().catch(error => {
+      providerTemplatesRequest = null
+      throw error
+    })
+  }
+  return providerTemplatesRequest
+}
+
+/** 提前加载静态 provider 模板；预取失败不打断调用方。 */
+export function preloadProviderTemplates(): Promise<void> {
+  return getProviderTemplates().then(
+    () => undefined,
+    () => undefined
+  )
 }

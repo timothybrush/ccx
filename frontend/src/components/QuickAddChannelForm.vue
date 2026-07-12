@@ -1,7 +1,7 @@
 <template>
   <div class="quick-add-form d-flex flex-column ga-4">
     <!-- Provider 选择（模板化添加：选 provider + 输 key，系统自动判别 plan/baseURL） -->
-    <div v-if="providerItems.length > 1" class="d-flex align-center ga-2">
+    <div class="d-flex align-center ga-2">
       <v-icon color="primary" size="20">mdi-shape-outline</v-icon>
       <div class="text-caption text-medium-emphasis flex-shrink-0">
         {{ t('autopilot.quickAdd.provider.label') }}
@@ -15,6 +15,8 @@
         variant="outlined"
         density="compact"
         hide-details
+        :disabled="providerTemplatesLoading"
+        :loading="providerTemplatesLoading"
         :menu-props="{ contentClass: 'upstream-select-menu' }"
         class="provider-select"
         @update:model-value="clearSubmitError"
@@ -32,8 +34,9 @@
       {{ selectedProvider.description }}
     </v-alert>
 
-    <!-- 名称（可选） -->
+    <!-- 名称（仅自定义模式可选） -->
     <v-text-field
+      v-if="!isProviderMode"
       v-model="channelName"
       :label="t('addChannel.channelName')"
       :placeholder="t('autopilot.quickAdd.namePlaceholder')"
@@ -209,6 +212,7 @@ const submitError = ref('')
 // '' 表示自定义模式（手填 baseURL）；非空表示选中某官方 provider（模板化添加）
 const providerId = ref('')
 const providerTemplates = ref<ProviderTemplate[]>([])
+const providerTemplatesLoading = ref(true)
 
 // ---- 发现状态 ----
 import type { AutoEndpointStatus } from '../services/autopilot-api'
@@ -268,11 +272,19 @@ function clearSubmitError() {
 }
 
 async function loadProviderTemplates() {
+  providerTemplatesLoading.value = true
   try {
     providerTemplates.value = await getProviderTemplates()
-  } catch (err) {
-    console.error('[QuickAdd-Provider] 加载 provider 模板失败:', err)
-    providerTemplates.value = []
+  } catch {
+    try {
+      // 预取可能因瞬时认证状态失败；当前表单内受控重试一次。
+      providerTemplates.value = await getProviderTemplates()
+    } catch (err) {
+      console.error('[QuickAdd-Provider] 加载 provider 模板失败:', err)
+      providerTemplates.value = []
+    }
+  } finally {
+    providerTemplatesLoading.value = false
   }
 }
 
@@ -320,10 +332,6 @@ function generateRandomSuffix(length = 6): string {
 }
 
 function getGeneratedName(): string {
-  // provider 模式：baseURL 由后端判定，用 providerId 生成名称
-  if (isProviderMode.value) {
-    return `${providerId.value}-${generateRandomSuffix()}`
-  }
   const filtered = getFilteredBaseUrls()
   const first = filtered[0] || ''
   try {
@@ -386,19 +394,16 @@ async function handleSubmit() {
   autoStatus.status = 'discovering'
   autoStatus.endpoints = []
 
-  const finalName = channelName.value.trim() || getGeneratedName()
-
   try {
     const result = await autoAddChannel(
       props.channelType,
       isProviderMode.value
         ? {
-            name: finalName,
             providerId: providerId.value,
             apiKeys: getFilteredApiKeys()
           }
         : {
-            name: finalName,
+            name: channelName.value.trim() || getGeneratedName(),
             baseUrls: getFilteredBaseUrls(),
             apiKeys: getFilteredApiKeys()
           }

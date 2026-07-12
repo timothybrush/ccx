@@ -692,11 +692,12 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   const { headerClasses, avatarColor, headerIconStyle, subtitleClasses } = useChannelEditorHeaderState(theme)
 
   const isFormValid = computed(() => {
+    const hasValidName = isAutoManagedChannel.value || !!form.name.trim()
     const hasValidBaseUrl = isAutoManagedChannel.value || form.serviceType === 'copilot' || (!!form.baseUrl.trim() && isValidUrl(form.baseUrl))
     const hasValidApiKeys = form.serviceType === 'copilot' || hasConfigurableKeys.value
     const hasValidModelConfig = isAutoManagedChannel.value || (!modelCapabilitiesError.value && !embeddingCapabilitiesError.value)
     return (
-      !!form.name.trim() && !!form.serviceType && hasValidBaseUrl && hasValidApiKeys && hasValidModelConfig
+      hasValidName && !!form.serviceType && hasValidBaseUrl && hasValidApiKeys && hasValidModelConfig
     )
   })
 

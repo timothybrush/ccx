@@ -1339,14 +1339,6 @@ export class ApiService {
     return this.request('/accounts')
   }
 
-  /** 重命名账号及其全部协议渠道。 */
-  async renameManagedAccount(accountUid: string, name: string): Promise<void> {
-    await this.request(`/accounts/${encodeURIComponent(accountUid)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name }),
-    })
-  }
-
   /** 向账号增量添加一批凭证。 */
   async addManagedAccountCredentials(accountUid: string, apiKeys: string[]): Promise<UpdateManagedAccountResponse> {
     return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials`, {

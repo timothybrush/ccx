@@ -899,10 +899,8 @@ func handleProviderAutoAdd(c *gin.Context, deps *AutoManagedDeps, requestKind st
 		return
 	}
 
-	baseName := req.Name
-	if baseName == "" {
-		baseName = fmt.Sprintf("%s-%d", tmpl.ProviderID, time.Now().UnixMilli()%100000)
-	}
+	// provider 账号是按 providerId 唯一的官方托管资源，不接受客户端自定义名称。
+	baseName := fmt.Sprintf("%s-%d", tmpl.ProviderID, time.Now().UnixMilli()%100000)
 
 	cfg := deps.CfgManager.GetConfig()
 	for _, route := range routes {

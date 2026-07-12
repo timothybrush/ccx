@@ -15,11 +15,11 @@
 
     <v-row>
       <!-- 渠道名称 -->
-      <v-col cols="12" :sm="hideServiceType ? 12 : 8">
+      <v-col v-if="!managedAccount" cols="12" :sm="hideServiceType ? 12 : 8">
         <v-text-field
           :model-value="form.name"
-          :label="managedAccount ? t('channelEditor.basic.accountName.label') : t('channelEditor.basic.name.label')"
-          :placeholder="managedAccount ? t('channelEditor.basic.accountName.placeholder') : t('channelEditor.basic.name.placeholder')"
+          :label="t('channelEditor.basic.name.label')"
+          :placeholder="t('channelEditor.basic.name.placeholder')"
           prepend-inner-icon="mdi-tag"
           variant="outlined"
           density="comfortable"
@@ -124,14 +124,7 @@
           @update:model-value="updateField('tags', $event)"
         >
           <template #chip="{ props, item }">
-            <v-chip
-              v-bind="props"
-              :text="item.value"
-              color="teal"
-              size="small"
-              variant="tonal"
-              closable
-            />
+            <v-chip v-bind="props" :text="item.value" color="teal" size="small" variant="tonal" closable />
           </template>
         </v-combobox>
       </v-col>

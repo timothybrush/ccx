@@ -6,7 +6,7 @@ const PROVIDER_BRAND_NAMES: Record<string, string> = {
   deepseek: 'DeepSeek',
   gemini: 'Gemini',
   anthropic: 'Anthropic',
-  volcengine: '火山方舟',
+  volcengine: '火山方舟'
 }
 
 export const providerDisplayName = (providerId?: string): string => {
@@ -22,5 +22,5 @@ export const providerDisplayName = (providerId?: string): string => {
 }
 
 export const isManagedProviderChannel = (channel?: Channel | null): boolean => {
-  return !!channel && (!!channel.autoManaged || (!!channel.providerId && !!channel.accountUid))
+  return !!channel?.providerId && !!channel.accountUid
 }

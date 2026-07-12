@@ -15,7 +15,7 @@ describe('providerDisplayName', () => {
 
   it('通过 provider 和 account 身份识别聚合托管渠道', () => {
     expect(isManagedProviderChannel({ providerId: 'mimo', accountUid: 'acct-1' } as never)).toBe(true)
-    expect(isManagedProviderChannel({ autoManaged: true } as never)).toBe(true)
+    expect(isManagedProviderChannel({ autoManaged: true } as never)).toBe(false)
     expect(isManagedProviderChannel({ providerId: 'mimo' } as never)).toBe(false)
   })
 })

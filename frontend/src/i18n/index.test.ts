@@ -53,7 +53,7 @@ describe('JSON locale files', () => {
       'addChannel.targetModelPlaceholderVectors',
       'chart.traffic',
       'chart.tokens',
-      'app.auth.submit',
+      'app.auth.submit'
     ]
     for (const key of requiredKeys) {
       expect((en as Record<string, string>)[key]).toBeTruthy()
@@ -81,15 +81,37 @@ describe('localized components', () => {
       },
       {
         file: 'components/GlobalStatsChart.vue',
-        forbidden: ["seriesName: '输入 Token'", "seriesName: '输出 Token'", '获取全局统计数据失败', '合计: ${dp.requestCount} 请求']
+        forbidden: [
+          "seriesName: '输入 Token'",
+          "seriesName: '输出 Token'",
+          '获取全局统计数据失败',
+          '合计: ${dp.requestCount} 请求'
+        ]
       },
       {
         file: 'components/KeyTrendChart.vue',
-        forbidden: ['获取 Key 历史数据失败', '合计: ${grandTotal} 请求', '失败 (${grandFailureRate}%)', '${Math.round(val)} 请求']
+        forbidden: [
+          '获取 Key 历史数据失败',
+          '合计: ${grandTotal} 请求',
+          '失败 (${grandFailureRate}%)',
+          '${Math.round(val)} 请求'
+        ]
       },
       {
         file: 'components/AddChannelModal.vue',
-        forbidden: ['label="源模型名"', 'label="目标模型名"', '跳过 TLS 证书验证</div>', '>          创建渠道', "'此字段为必填项'"]
+        forbidden: [
+          'label="源模型名"',
+          'label="目标模型名"',
+          '跳过 TLS 证书验证</div>',
+          '>          创建渠道',
+          "'此字段为必填项'",
+          'v-model="quickServiceType"',
+          'headerServiceTypeItems'
+        ]
+      },
+      {
+        file: 'components/QuickAddChannelForm.vue',
+        forbidden: ['v-model="serviceType"', 'serviceTypeItems']
       }
     ] as const
 
@@ -99,5 +121,16 @@ describe('localized components', () => {
         expect(content).not.toContain(text)
       }
     }
+  })
+})
+
+describe('official provider naming constraints', () => {
+  it('官方 provider 添加与编辑均不暴露名称输入', () => {
+    const quickAdd = readFileSync(resolve(__dirname, '../components/QuickAddChannelForm.vue'), 'utf8')
+    const basicInfo = readFileSync(resolve(__dirname, '../components/edit-channel/BasicInfoSection.vue'), 'utf8')
+
+    expect(quickAdd).toContain('v-if="!isProviderMode"\n      v-model="channelName"')
+    expect(basicInfo).toContain('<v-col v-if="!managedAccount"')
+    expect(basicInfo).not.toContain('channelEditor.basic.accountName')
   })
 })
