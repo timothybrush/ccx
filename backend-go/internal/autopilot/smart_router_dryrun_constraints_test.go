@@ -1,12 +1,16 @@
 package autopilot
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/scheduler"
+	"github.com/gin-gonic/gin"
 )
 
 func TestBuildPlanMatchesAutoHardConstraintSemantics(t *testing.T) {
@@ -153,5 +157,98 @@ func TestBuildPlanExcludesInactiveOrCredentiallessChannels(t *testing.T) {
 	})
 	if len(plan.Candidates) != 1 || plan.Candidates[0].ChannelUID != "ch_active" {
 		t.Fatalf("configured candidates = %+v, want only ch_active", plan.Candidates)
+	}
+}
+
+func TestDryRunUsesCanonicalRequestProfileBuilder(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{RoutingMode: "shadow"}
+	cfgManager, cleanup := createTestConfigManager(t, cfg)
+	defer cleanup()
+
+	router := gin.New()
+	RegisterDryRunRoutes(router, NewSmartRouter(nil, nil, nil, cfgManager))
+	body, err := json.Marshal(DryRunRequest{
+		Model: "claude-sonnet-5", ChannelKind: "messages", Operation: "completion",
+		HasImage: true, EstTokens: 1234,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/smart-routing/diagnose", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	var response DryRunResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if response.Plan == nil || response.Plan.RequestProfile == nil {
+		t.Fatalf("response plan = %+v", response.Plan)
+	}
+	profile := response.Plan.RequestProfile
+	if profile.QualityNeed != QualityTierHigh || profile.ContextNeed != 1234 || !profile.VisionNeed {
+		t.Fatalf("request profile quality=%q context=%d vision=%v, want high/1234/true",
+			profile.QualityNeed, profile.ContextNeed, profile.VisionNeed)
+	}
+	if profile.TaskClass != TaskClassVision {
+		t.Fatalf("TaskClass = %q, want %q", profile.TaskClass, TaskClassVision)
+	}
+}
+
+func TestShadowTraceCandidatesAfterReflectsHardConstraintResult(t *testing.T) {
+	cfg := baseTestConfig()
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{RoutingMode: "shadow"}
+	cfg.Upstream[0].ChannelUID = "ch_vision"
+	cfg.Upstream[1].ChannelUID = "ch_text_1"
+	cfg.Upstream[1].NoVision = true
+	cfg.Upstream[2].ChannelUID = "ch_text_2"
+	cfg.Upstream[2].NoVision = true
+	cfgManager, cleanup := createTestConfigManager(t, cfg)
+	defer cleanup()
+	traceStore, err := NewTraceStoreWithDB(nil)
+	if err != nil {
+		t.Fatalf("NewTraceStoreWithDB() error = %v", err)
+	}
+	router := NewSmartRouter(nil, nil, traceStore, cfgManager)
+	profile := BuildRequestProfile(RequestProfileFeatures{
+		Model: "mimo-v2.5", ChannelKind: "messages", Operation: "completion",
+		HasImage: true, EstTokens: 1000,
+	})
+	filter := router.CandidateFilterFor(&profile)
+	if filter == nil {
+		t.Fatal("shadow mode should return a candidate filter")
+	}
+
+	channels := []scheduler.ChannelInfo{
+		{Index: 0, Name: cfg.Upstream[0].Name, Status: "active"},
+		{Index: 1, Name: cfg.Upstream[1].Name, Status: "active"},
+		{Index: 2, Name: cfg.Upstream[2].Name, Status: "active"},
+	}
+	processed := cfgManager.GetConfig()
+	result, err := filter(
+		channels,
+		func(ch scheduler.ChannelInfo) *config.UpstreamConfig { return &processed.Upstream[ch.Index] },
+		func(_ scheduler.ChannelInfo, upstream *config.UpstreamConfig) bool { return upstream != nil },
+	)
+	if err != nil {
+		t.Fatalf("filter error = %v", err)
+	}
+	if len(result) != len(channels) {
+		t.Fatalf("shadow result len = %d, want unchanged %d", len(result), len(channels))
+	}
+
+	traces := traceStore.ListRecent(1)
+	if len(traces) != 1 {
+		t.Fatalf("trace count = %d, want 1", len(traces))
+	}
+	trace := traces[0]
+	if trace.CandidatesBefore != 3 || trace.CandidatesAfter != 1 {
+		t.Fatalf("candidate counts = %d/%d, want 3/1", trace.CandidatesBefore, trace.CandidatesAfter)
 	}
 }

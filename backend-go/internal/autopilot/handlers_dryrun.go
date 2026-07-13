@@ -86,8 +86,9 @@ func handleDryRunRoute(smartRouter *SmartRouter) gin.HandlerFunc {
 			return
 		}
 
-		// 构建 RequestProfile
-		profile := &RequestProfile{
+		// 与真实协议入口复用同一画像构建器，保证质量档、上下文默认值、
+		// 图片能力需求和任务分类的推导语义一致。
+		profile := BuildRequestProfile(RequestProfileFeatures{
 			Model:         req.Model,
 			ChannelKind:   req.ChannelKind,
 			Operation:     req.Operation,
@@ -101,9 +102,9 @@ func handleDryRunRoute(smartRouter *SmartRouter) gin.HandlerFunc {
 			ToolUseNeed:   req.ToolUseNeed,
 			ReasoningNeed: req.ReasoningNeed,
 			ContextNeed:   req.ContextNeed,
-		}
+		})
 
-		plan := smartRouter.BuildPlan(profile)
+		plan := smartRouter.BuildPlan(&profile)
 		c.JSON(http.StatusOK, DryRunResponse{
 			Plan: plan,
 			Mode: mode,

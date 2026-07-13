@@ -773,7 +773,9 @@ func (r *SmartRouter) executeFilter(
 
 	// 记录 trace 信息
 	trace.Candidates = candidates
-	trace.CandidatesAfter = len(candidates)
+	// result 表示 SmartRouter 模拟/生效后的候选集合：部分硬过滤时只计
+	// 通过者，全部被过滤并 fail-open 时则恢复为完整候选数。
+	trace.CandidatesAfter = len(result)
 	trace.SortReasons = []string{"smart_routing_score"}
 	if matchedIntent != nil {
 		trace.SortReasons = append(trace.SortReasons, "intent_promote")
