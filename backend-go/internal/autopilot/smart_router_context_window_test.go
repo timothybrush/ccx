@@ -87,8 +87,89 @@ func TestResolvedContextWindowFeedsAutoHardConstraint(t *testing.T) {
 		nil,
 	)
 
-	reasons := autoHardConstraintReasons(&RequestProfile{ContextNeed: 4097}, &entry)
+	reasons := routingHardConstraintReasons(&RequestProfile{ContextNeed: 4097}, &entry)
 	if len(reasons) != 1 || reasons[0] != "上下文窗口不满足" {
-		t.Fatalf("autoHardConstraintReasons() = %v, want [上下文窗口不满足]", reasons)
+		t.Fatalf("routingHardConstraintReasons() = %v, want [上下文窗口不满足]", reasons)
+	}
+}
+
+func TestShadowSimulatesContextHardConstraintWithoutChangingCandidates(t *testing.T) {
+	const (
+		model       = "shadow-context-model"
+		shortUID    = "ch_shadow_short"
+		longUID     = "ch_shadow_long"
+		contextNeed = 8192
+	)
+
+	cfg := baseTestConfig()
+	cfg.Upstream = cfg.Upstream[:2]
+	cfg.Upstream[0].ChannelUID = shortUID
+	cfg.Upstream[0].ModelCapabilities = map[string]config.UpstreamModelCapability{
+		model: {ContextWindowTokens: 4096},
+	}
+	cfg.Upstream[1].ChannelUID = longUID
+	cfg.Upstream[1].ModelCapabilities = map[string]config.UpstreamModelCapability{
+		model: {ContextWindowTokens: 16384},
+	}
+	cfg.AutopilotRouting = config.AutopilotRoutingConfig{RoutingMode: "shadow"}
+
+	cfgManager, cleanup := createTestConfigManager(t, cfg)
+	defer cleanup()
+	traceStore, err := NewTraceStoreWithDB(nil)
+	if err != nil {
+		t.Fatalf("NewTraceStoreWithDB() error = %v", err)
+	}
+	router := NewSmartRouter(nil, nil, traceStore, cfgManager)
+	filter, observeActual := router.CandidateFilterForWithActual(&RequestProfile{
+		Model: model, ChannelKind: "messages", Operation: "completion",
+		EstTokens: 1000, ContextNeed: contextNeed,
+	})
+	if filter == nil || observeActual == nil {
+		t.Fatal("shadow mode should return filter and actual-channel observer")
+	}
+
+	processed := cfgManager.GetConfig()
+	channels := []scheduler.ChannelInfo{
+		{Index: 0, Name: processed.Upstream[0].Name, Status: "active"},
+		{Index: 1, Name: processed.Upstream[1].Name, Status: "active"},
+	}
+	result, err := filter(
+		channels,
+		func(ch scheduler.ChannelInfo) *config.UpstreamConfig { return &processed.Upstream[ch.Index] },
+		func(_ scheduler.ChannelInfo, upstream *config.UpstreamConfig) bool { return upstream != nil },
+	)
+	if err != nil {
+		t.Fatalf("shadow filter error = %v", err)
+	}
+	if len(result) != len(channels) || result[0].Index != channels[0].Index || result[1].Index != channels[1].Index {
+		t.Fatalf("shadow changed real candidates: got %v, want %v", result, channels)
+	}
+
+	traces := traceStore.ListRecent(1)
+	if len(traces) != 1 {
+		t.Fatalf("trace count = %d, want 1", len(traces))
+	}
+	trace := traces[0]
+	if trace.ShadowChannelUID != longUID || trace.SelectedChannelUID != longUID {
+		t.Fatalf("shadow recommendation = %q/%q, want %q", trace.ShadowChannelUID, trace.SelectedChannelUID, longUID)
+	}
+	if !containsString(trace.SortReasons, "shadow_auto_filter_simulation") {
+		t.Fatalf("sort reasons = %v, want shadow_auto_filter_simulation", trace.SortReasons)
+	}
+	if len(trace.Candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2", len(trace.Candidates))
+	}
+	if trace.Candidates[0].ChannelUID != shortUID || trace.Candidates[0].Selected ||
+		len(trace.Candidates[0].FilterReasons) != 1 || trace.Candidates[0].FilterReasons[0] != "上下文窗口不满足" {
+		t.Fatalf("short candidate trace = %+v", trace.Candidates[0])
+	}
+	if trace.Candidates[1].ChannelUID != longUID || !trace.Candidates[1].Selected {
+		t.Fatalf("long candidate trace = %+v", trace.Candidates[1])
+	}
+
+	observeActual(shortUID)
+	trace = traceStore.ListRecent(1)[0]
+	if trace.ActualChannelUID != shortUID || trace.Match {
+		t.Fatalf("shadow comparison actual=%q match=%v, want actual=%q match=false", trace.ActualChannelUID, trace.Match, shortUID)
 	}
 }

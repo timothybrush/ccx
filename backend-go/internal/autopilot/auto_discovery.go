@@ -547,10 +547,29 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		profile.EndpointUID = endpointUID
 		profile.AccountUID = channel.AccountUID
 		profile.ChannelUID = channelUID
+		profile.ChannelID = channelID
 		if channelKind != "" {
-			profile.ServiceType = channelKind
-		} else if profile.ServiceType == "" {
+			profile.ChannelKind = channelKind
+		}
+		if channel.ServiceType != "" {
 			profile.ServiceType = channel.ServiceType
+		}
+		// Discovery 只证明端点和模型列表可达，不应把尚未经过 L1 profiler 的空档位
+		// 解释为 low/unstable。使用与 SmartRouter 无画像路径相同的中性默认值。
+		if profile.HealthState == "" {
+			profile.HealthState = HealthStateUnknown
+		}
+		if profile.QualityTier == "" {
+			profile.QualityTier = QualityTierNormal
+		}
+		if profile.StabilityTier == "" {
+			profile.StabilityTier = StabilityTierNormal
+		}
+		if profile.SpeedTier == "" {
+			profile.SpeedTier = SpeedTierNormal
+		}
+		if profile.CostTier == "" {
+			profile.CostTier = CostTierNormal
 		}
 		profile.BaseURL = ep.BaseURL
 		profile.KeyMask = ep.KeyMask

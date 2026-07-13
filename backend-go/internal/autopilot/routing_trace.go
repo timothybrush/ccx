@@ -44,7 +44,7 @@ type RoutingCandidate struct {
 	TotalScore float64          `json:"totalScore"`
 	Scores     []CandidateScore `json:"scores,omitempty"`
 
-	// 是否被选中
+	// 是否通过当前模式的硬约束；shadow 中仅表示模拟结果，不改变真实调度。
 	Selected bool `json:"selected"`
 
 	// 被过滤的原因列表（非空表示该候选被过滤掉）

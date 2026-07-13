@@ -13,6 +13,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/presetstore"
+	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/utils"
 )
 
@@ -411,7 +412,7 @@ func TestLookupDiscoveryBuiltinManifestMatchesCanonicalOpenAIBaseURL(t *testing.
 	}
 }
 
-func TestWriteProfilesSetsEndpointUID(t *testing.T) {
+func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 	store, err := NewProfileStore(filepath.Join(t.TempDir(), "profiles.db"))
 	if err != nil {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
@@ -430,6 +431,7 @@ func TestWriteProfilesSetsEndpointUID(t *testing.T) {
 		APIKeys:     []string{apiKey},
 	}
 	cfgManager := setupTestConfigManagerForDiscovery(t, channelUID, nil, nil)
+	defer cfgManager.Close()
 	runner.writeProfiles(channelUID, channel, []EndpointDiscoveryResult{{
 		KeyMask:     utils.MaskAPIKey(apiKey),
 		BaseURL:     baseURL,
@@ -446,16 +448,74 @@ func TestWriteProfilesSetsEndpointUID(t *testing.T) {
 	if profile.EndpointUID != endpointUID {
 		t.Fatalf("EndpointUID = %q, want %q", profile.EndpointUID, endpointUID)
 	}
+	if profile.ChannelKind != "messages" {
+		t.Fatalf("ChannelKind = %q, want messages", profile.ChannelKind)
+	}
+	if profile.ServiceType != "claude" {
+		t.Fatalf("ServiceType = %q, want claude", profile.ServiceType)
+	}
+	if profile.QualityTier != QualityTierNormal || profile.StabilityTier != StabilityTierNormal ||
+		profile.SpeedTier != SpeedTierNormal || profile.CostTier != CostTierNormal {
+		t.Fatalf("discovery profile should use neutral tiers: %+v", profile)
+	}
 	var persistedCount int
 	if err := store.db.QueryRow(`
 SELECT COUNT(*) FROM autopilot_endpoint_profiles
 WHERE endpoint_uid = ? AND account_uid = ? AND service_type = ?
+  AND json_extract(profile_json, '$.channelKind') = ?
   AND json_array_length(json_extract(profile_json, '$.availableModels')) = 1
-`, endpointUID, "acct-profile", "messages").Scan(&persistedCount); err != nil {
+`, endpointUID, "acct-profile", "claude", "messages").Scan(&persistedCount); err != nil {
 		t.Fatalf("查询持久化画像失败: %v", err)
 	}
 	if persistedCount != 1 {
 		t.Fatal("自动发现返回前应持久化账号、协议和模型列表")
+	}
+}
+
+func TestWriteProfilesBackfillsLegacyChannelKindForRouting(t *testing.T) {
+	store, err := NewProfileStore(filepath.Join(t.TempDir(), "profiles.db"))
+	if err != nil {
+		t.Fatalf("创建 ProfileStore 失败: %v", err)
+	}
+	defer store.Close()
+
+	const (
+		channelUID = "ch_legacy_profile"
+		baseURL    = "https://legacy.example.com"
+		apiKey     = "sk-legacy"
+	)
+	endpointUID := GenerateEndpointUID(channelUID, baseURL, KeyHashFromAPIKey(apiKey))
+	if err := store.Upsert(&KeyEndpointProfile{
+		EndpointUID: endpointUID, ChannelUID: channelUID, ServiceType: "messages",
+		BaseURL: baseURL, KeyHash: KeyHashFromAPIKey(apiKey),
+		HealthState: HealthStateHealthy, QualityTier: QualityTierHigh,
+		StabilityTier: StabilityTierStable, SpeedTier: SpeedTierFast, CostTier: CostTierCheap,
+	}); err != nil {
+		t.Fatalf("写入 legacy profile 失败: %v", err)
+	}
+
+	cfgManager := setupTestConfigManagerForDiscovery(t, channelUID, nil, nil)
+	defer cfgManager.Close()
+	channel := &config.UpstreamConfig{
+		ChannelUID: channelUID, ServiceType: "claude", BaseURL: baseURL, APIKeys: []string{apiKey},
+	}
+	runner := NewAutoDiscoveryRunner(store, nil)
+	runner.writeProfiles(channelUID, channel, []EndpointDiscoveryResult{{
+		KeyMask: utils.MaskAPIKey(apiKey), BaseURL: baseURL,
+		Models: []string{"claude-test"}, ModelsCount: 1, ProtocolOk: true,
+	}}, cfgManager)
+
+	profile := store.Get(endpointUID)
+	if profile == nil || profile.ChannelKind != "messages" || profile.ServiceType != "claude" {
+		t.Fatalf("legacy profile identity not backfilled: %+v", profile)
+	}
+	processed := cfgManager.GetConfig()
+	entry := NewSmartRouter(store, nil, nil, cfgManager).buildChannelEntry(
+		scheduler.ChannelInfo{Index: 0, Name: processed.Upstream[0].Name, Status: "active"},
+		&processed.Upstream[0], "messages", "", nil,
+	)
+	if entry.ScoringCandidate.QualityTier != QualityTierHigh {
+		t.Fatalf("discovery profile was not used by routing: quality=%s", entry.ScoringCandidate.QualityTier)
 	}
 }
 

@@ -668,12 +668,15 @@ func (r *SmartRouter) executeFilter(
 		}
 	}
 
-	// ── auto 模式：硬约束过滤 + fail-open ──
+	// ── auto 生效 / shadow 模拟：硬约束过滤 + fail-open ──
+	// shadow/dry-run 只把模拟结果写入 trace，函数末尾仍返回原始候选列表。
+	// 这样 shadow 推荐与未来切换到 auto 后的决策语义一致，同时不影响真实调度。
 	fallbackUsed := false
-	if mode == RoutingModeAuto {
+	simulateAuto := mode == RoutingModeAuto || mode == RoutingModeShadow || mode == RoutingModeDryRun
+	if simulateAuto {
 		filteredResult := make([]scheduler.ChannelInfo, 0, len(scoredEntries))
 		for i, se := range scoredEntries {
-			reasons := autoHardConstraintReasons(profile, &se.entry)
+			reasons := routingHardConstraintReasons(profile, &se.entry)
 
 			// advisor hint 的 MinQualityTier 约束（只在 auto 模式生效，且 hint 真正 Applied 时才非零值）
 			if advisorMinQualityTier != "" {
@@ -716,7 +719,8 @@ func (r *SmartRouter) executeFilter(
 			trace.GlobalFilterReasons["auto_failopen"] = []string{
 				fmt.Sprintf("所有 %d 个候选均被硬约束过滤，回退到重排模式", len(scoredEntries)),
 			}
-			log.Printf("[SmartRouter-AutoFailOpen] taskClass=%s 全部候选被过滤，回退到重排", string(profile.TaskClass))
+			log.Printf("[SmartRouter-HardConstraintFailOpen] mode=%s taskClass=%s 全部候选被过滤，回退到重排",
+				string(mode), string(profile.TaskClass))
 			// result 保持重排后的完整列表
 		}
 
@@ -743,12 +747,12 @@ func (r *SmartRouter) executeFilter(
 						matchedIntent.Intent.IntentUID, intentTargetUID),
 				}
 				matchedIntent.FallbackUsed = true
-				if r.intentStore != nil {
+				if mode == RoutingModeAuto && r.intentStore != nil {
 					r.intentStore.RecordFallback(matchedIntent.Intent.IntentUID)
 				}
 				log.Printf("[SmartRouter-IntentFallback] uid=%s target=%s filtered by hard constraints",
 					matchedIntent.Intent.IntentUID, intentTargetUID)
-			} else if r.intentStore != nil {
+			} else if mode == RoutingModeAuto && r.intentStore != nil {
 				r.intentStore.RecordHit(matchedIntent.Intent.IntentUID, true, 0)
 			}
 		}
@@ -776,12 +780,30 @@ func (r *SmartRouter) executeFilter(
 		} else {
 			trace.SortReasons = append(trace.SortReasons, "auto_filter_and_reorder")
 		}
+	} else if mode == RoutingModeShadow || mode == RoutingModeDryRun {
+		if fallbackUsed {
+			trace.SortReasons = append(trace.SortReasons, "shadow_auto_failopen_simulation")
+		} else {
+			trace.SortReasons = append(trace.SortReasons, "shadow_auto_filter_simulation")
+		}
 	}
 
-	if len(candidates) > 0 {
-		trace.SelectedChannelUID = candidates[0].ChannelUID
-		trace.SelectedMetricsKey = candidates[0].MetricsKey
-		trace.SelectedOriginTier = candidates[0].OriginTier
+	selectedCandidateIndex := -1
+	for i := range candidates {
+		if candidates[i].Selected {
+			selectedCandidateIndex = i
+			break
+		}
+	}
+	// 全部候选被硬约束过滤时，auto 会 fail-open 到原始评分首位；trace 必须反映同一结果。
+	if selectedCandidateIndex < 0 && fallbackUsed && len(candidates) > 0 {
+		selectedCandidateIndex = 0
+	}
+	if selectedCandidateIndex >= 0 {
+		selected := candidates[selectedCandidateIndex]
+		trace.SelectedChannelUID = selected.ChannelUID
+		trace.SelectedMetricsKey = selected.MetricsKey
+		trace.SelectedOriginTier = selected.OriginTier
 	}
 
 	// 计算耗时
@@ -789,8 +811,8 @@ func (r *SmartRouter) executeFilter(
 	trace.CreatedAt = time.Now().UTC()
 
 	// shadow/dryrun 模式：记录 shadow 建议的渠道
-	if mode == RoutingModeShadow && len(candidates) > 0 {
-		trace.ShadowChannelUID = candidates[0].ChannelUID
+	if mode == RoutingModeShadow && trace.SelectedChannelUID != "" {
+		trace.ShadowChannelUID = trace.SelectedChannelUID
 		trace.Match = true // 先假设匹配，实际填充时更新
 	}
 
@@ -933,14 +955,15 @@ func (r *SmartRouter) buildChannelEntry(
 	return entry
 }
 
-// autoHardConstraintReasons 检查 auto 模式的硬约束，返回不满足的原因列表。
+// routingHardConstraintReasons 检查自动路由硬约束，返回不满足的原因列表。
+// auto 模式据此过滤真实候选；shadow/dry-run 模式仅据此生成模拟 trace。
 // 空列表表示该渠道满足所有硬约束。
 // 当前硬约束（逐批扩展）：
 //   - vision 请求但渠道不支持识图
 //   - CapabilityFloor：请求需要推理但渠道不支持（画像数据可用时）
 //   - CapabilityFloor：请求需要工具调用但渠道不支持
 //   - CapabilityFloor：上下文窗口需求大于渠道容量
-func autoHardConstraintReasons(profile *RequestProfile, entry *channelScoreEntry) []string {
+func routingHardConstraintReasons(profile *RequestProfile, entry *channelScoreEntry) []string {
 	var reasons []string
 
 	// 识图硬约束

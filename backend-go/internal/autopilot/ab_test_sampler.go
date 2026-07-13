@@ -86,8 +86,8 @@ func (b *shadowRequestBudget) Used() int {
 // ShadowCandidateCache 缓存 SmartRouter 最近排名的候选列表。
 // key = model:channelKind，value = 排名后的候选。
 type ShadowCandidateCache struct {
-	mu       sync.RWMutex
-	latest   map[string][]RoutingCandidate
+	mu     sync.RWMutex
+	latest map[string][]RoutingCandidate
 }
 
 func NewShadowCandidateCache() *ShadowCandidateCache {
@@ -134,12 +134,12 @@ const DefaultABTestMaxShadowPerHour = 60
 // ABTestSampler 低比例统计抽样双发采样器。
 // 主请求路径完全不变：影子请求在主响应返回后异步发起，不影响主请求延迟或结果。
 type ABTestSampler struct {
-	store   *ABTestStore
-	cache   *ShadowCandidateCache
-	budget  *shadowRequestBudget
-	config  func() ABTestSamplerConfig // 动态配置读取
-	client  *http.Client
-	timeFn  func() time.Time
+	store  *ABTestStore
+	cache  *ShadowCandidateCache
+	budget *shadowRequestBudget
+	config func() ABTestSamplerConfig // 动态配置读取
+	client *http.Client
+	timeFn func() time.Time
 }
 
 // NewABTestSampler 创建 ABTestSampler。
@@ -220,21 +220,8 @@ func (s *ABTestSampler) ExecuteShadowRequest(
 		return
 	}
 
-	// 选取 shadow 候选：排除主渠道，取排名最高的 N 个
-	shadowCount := cfg.ShadowCandidateCount
-	if shadowCount <= 0 {
-		shadowCount = 1
-	}
-	shadowCandidates := make([]RoutingCandidate, 0, shadowCount)
-	for _, cand := range candidates {
-		if cand.ChannelUID == primaryChannelUID {
-			continue
-		}
-		shadowCandidates = append(shadowCandidates, cand)
-		if len(shadowCandidates) >= shadowCount {
-			break
-		}
-	}
+	// 选取 shadow 候选：排除主渠道和未通过硬约束的候选，取排名最高的 N 个。
+	shadowCandidates := selectShadowCandidates(candidates, primaryChannelUID, cfg.ShadowCandidateCount)
 	if len(shadowCandidates) == 0 {
 		return
 	}
@@ -269,6 +256,23 @@ func (s *ABTestSampler) ExecuteShadowRequest(
 			}
 		}
 	}()
+}
+
+func selectShadowCandidates(candidates []RoutingCandidate, primaryChannelUID string, limit int) []RoutingCandidate {
+	if limit <= 0 {
+		limit = 1
+	}
+	selected := make([]RoutingCandidate, 0, limit)
+	for _, candidate := range candidates {
+		if !candidate.Selected || candidate.ChannelUID == primaryChannelUID {
+			continue
+		}
+		selected = append(selected, candidate)
+		if len(selected) >= limit {
+			break
+		}
+	}
+	return selected
 }
 
 // executeShadowHTTPRequest 执行单个影子 HTTP 请求并返回记录。

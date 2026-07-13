@@ -109,6 +109,23 @@ func TestShadowCandidateCache_ReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestSelectShadowCandidatesSkipsHardConstraintFailures(t *testing.T) {
+	candidates := []RoutingCandidate{
+		{ChannelUID: "filtered-top", Selected: false},
+		{ChannelUID: "primary", Selected: true},
+		{ChannelUID: "eligible-1", Selected: true},
+		{ChannelUID: "eligible-2", Selected: true},
+	}
+
+	selected := selectShadowCandidates(candidates, "primary", 2)
+	if len(selected) != 2 || selected[0].ChannelUID != "eligible-1" || selected[1].ChannelUID != "eligible-2" {
+		t.Fatalf("selected shadow candidates = %v", selected)
+	}
+	if got := selectShadowCandidates(candidates[:1], "primary", 1); len(got) != 0 {
+		t.Fatalf("all filtered candidates should disable shadow request: %v", got)
+	}
+}
+
 // ── ABTestSampler 测试 ──
 
 func newTestABTestSampler(t *testing.T, enabled bool, sampleRatio float64) (*ABTestSampler, *ABTestStore) {
@@ -304,26 +321,26 @@ func TestABTestStore_RecordAndGetStats(t *testing.T) {
 
 	// 写入几条记录
 	store.Record(&ABTestRecord{
-		RecordUID:        "r1",
-		Model:            "test-model",
-		ChannelKind:      "messages",
+		RecordUID:         "r1",
+		Model:             "test-model",
+		ChannelKind:       "messages",
 		PrimaryChannelUID: "primary",
-		PrimarySuccess:   true,
-		ShadowChannelUID: "shadow",
-		ShadowSuccess:    true,
-		ShadowLatencyMs:  200,
-		ShadowCostUSD:    0.001,
+		PrimarySuccess:    true,
+		ShadowChannelUID:  "shadow",
+		ShadowSuccess:     true,
+		ShadowLatencyMs:   200,
+		ShadowCostUSD:     0.001,
 	})
 	store.Record(&ABTestRecord{
-		RecordUID:        "r2",
-		Model:            "test-model",
-		ChannelKind:      "messages",
+		RecordUID:         "r2",
+		Model:             "test-model",
+		ChannelKind:       "messages",
 		PrimaryChannelUID: "primary",
-		PrimarySuccess:   true,
-		ShadowChannelUID: "shadow",
-		ShadowSuccess:    false,
-		ShadowLatencyMs:  500,
-		ShadowCostUSD:    0.002,
+		PrimarySuccess:    true,
+		ShadowChannelUID:  "shadow",
+		ShadowSuccess:     false,
+		ShadowLatencyMs:   500,
+		ShadowCostUSD:     0.002,
 	})
 
 	stats := store.GetStats()
@@ -377,21 +394,21 @@ func TestABTestStore_ByChannelStats(t *testing.T) {
 	}
 
 	store.Record(&ABTestRecord{
-		RecordUID:       "r1",
+		RecordUID:        "r1",
 		ShadowChannelUID: "ch-a",
 		ShadowSuccess:    true,
 		ShadowLatencyMs:  100,
 		ShadowCostUSD:    0.001,
 	})
 	store.Record(&ABTestRecord{
-		RecordUID:       "r2",
+		RecordUID:        "r2",
 		ShadowChannelUID: "ch-a",
 		ShadowSuccess:    false,
 		ShadowLatencyMs:  300,
 		ShadowCostUSD:    0.002,
 	})
 	store.Record(&ABTestRecord{
-		RecordUID:       "r3",
+		RecordUID:        "r3",
 		ShadowChannelUID: "ch-b",
 		ShadowSuccess:    true,
 		ShadowLatencyMs:  200,

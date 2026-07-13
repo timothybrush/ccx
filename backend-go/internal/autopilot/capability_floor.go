@@ -22,7 +22,9 @@ func CapabilityFloorReasons(caps CandidateCapabilities, profile *RequestProfile)
 		reasons = append(reasons, "推理能力不满足")
 	}
 
-	// 上下文窗口硬约束：只在双方都有明确数值时检查
+	// 上下文窗口硬约束：只在双方都有明确数值时检查。
+	// ContextNeed 与 ContextWindowTokens 均表示输入 token；输出上限已由前置 scheduler
+	// 单独校验，此处不得再次叠加输出预留，否则会造成二次扣减。
 	// profile.ContextNeed=0 表示请求无上下文需求，跳过检查
 	// caps.ContextWindowTokens=0 表示候选画像未知，跳过检查（避免误杀）
 	if profile.ContextNeed > 0 && caps.ContextWindowTokens > 0 && caps.ContextWindowTokens < profile.ContextNeed {

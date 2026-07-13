@@ -14,9 +14,9 @@ type RequestProfile struct {
 	HasImage    bool   // 是否包含图片
 	EstTokens   int    // 估算输入 token 数（基于字符估算的保守上界）
 
-	// ── 来自模型注册表 ──
+	// ── 路由能力下界 ──
 	QualityNeed        QualityTier // 该模型对应的质量需求
-	ContextNeed        int         // 最小上下文窗口
+	ContextNeed        int         // 估算输入 token 数；输出上限由 scheduler 独立校验
 	VisionNeed         bool        // 是否需要识图
 	ImageGenNeed       bool        // 是否需要原生生图端点
 	EmbeddingNeed      bool        // 是否需要原生 embedding 端点
@@ -47,8 +47,8 @@ type ClassifierInput struct {
 	HasImage  bool // 是否包含图片内容
 	EstTokens int  // 估算输入 token 数（字符级估算，非精确计费）
 
-	// ── 模型注册表能力 ──
-	ContextNeed   int  // 最小上下文窗口要求（0 = 未知）
+	// ── 路由能力下界 ──
+	ContextNeed   int  // 估算输入 token 数（0 = 未知），与 scheduler 的输入窗口过滤语义一致
 	VisionNeed    bool // 模型需要识图能力
 	ImageGenNeed  bool // 需要原生生图端点
 	EmbeddingNeed bool // 需要原生 embedding 端点
