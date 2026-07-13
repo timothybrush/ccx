@@ -139,6 +139,26 @@ func (r *ModelResolver) ResolveModelAnyEndpoint(
 	channelUID string,
 	channelKind string,
 ) (mappedModel string, found bool, reason string) {
+	return r.resolveModelAnyEndpoint(requestModel, channelUID, channelKind, CapabilityFloor{})
+}
+
+// ResolveModelAnyEndpointWithFloor 在渠道所有 endpoint 中预览满足完整能力下界的映射。
+// 仅供 dry-run/shadow 诊断使用；它不修改配置，也不把候选注入真实 scheduler。
+func (r *ModelResolver) ResolveModelAnyEndpointWithFloor(
+	requestModel string,
+	channelUID string,
+	channelKind string,
+	floor CapabilityFloor,
+) (mappedModel string, found bool, reason string) {
+	return r.resolveModelAnyEndpoint(requestModel, channelUID, channelKind, floor)
+}
+
+func (r *ModelResolver) resolveModelAnyEndpoint(
+	requestModel string,
+	channelUID string,
+	channelKind string,
+	floor CapabilityFloor,
+) (mappedModel string, found bool, reason string) {
 	if r.profileStore == nil {
 		return requestModel, false, "model_profile_store_unavailable"
 	}
@@ -158,13 +178,6 @@ func (r *ModelResolver) ResolveModelAnyEndpoint(
 		return requestModel, false, "no_probed_model_profiles"
 	}
 
-	for _, p := range candidates {
-		if strings.EqualFold(p.ModelID, requestModel) {
-			return p.ModelID, true, fmt.Sprintf("found_model_in_profile (endpoint=%s)", p.MetricsKey)
-		}
-	}
-
-	floor := CapabilityFloor{}
 	if r.cfgManager != nil {
 		routingCfg := r.cfgManager.GetAutopilotRouting()
 		if routingCfg.ModelMapping.CapabilityFloorEnabled {
@@ -175,6 +188,11 @@ func (r *ModelResolver) ResolveModelAnyEndpoint(
 	}
 	if len(candidates) == 0 {
 		return requestModel, false, "no_capable_model"
+	}
+	for _, p := range candidates {
+		if strings.EqualFold(p.ModelID, requestModel) {
+			return p.ModelID, true, "found_model_in_profile"
+		}
 	}
 
 	best := rankBySimilarity(candidates, requestModel, floor)

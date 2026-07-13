@@ -19,6 +19,9 @@ type RoutingPlanCandidate struct {
 	ScoredCandidate
 	Selected      bool     `json:"selected"`
 	FilterReasons []string `json:"filterReasons,omitempty"`
+	MappedModel   string   `json:"mappedModel,omitempty"`
+	MappingSource string   `json:"mappingSource,omitempty"`
+	MappingReason string   `json:"mappingReason,omitempty"`
 }
 
 // RoutingPlan 一次请求的路由计划（§4.6.1）。
@@ -26,6 +29,7 @@ type RoutingPlan struct {
 	RequestProfile     *RequestProfile        `json:"requestProfile"`
 	Candidates         []RoutingPlanCandidate `json:"candidates"`
 	SelectedChannelUID string                 `json:"selectedChannelUid,omitempty"`
+	SelectedModel      string                 `json:"selectedModel,omitempty"`
 	FallbackUsed       bool                   `json:"fallbackUsed"`
 	SortReasons        []string               `json:"sortReasons,omitempty"`
 	Mode               RoutingMode            `json:"mode"`
@@ -44,6 +48,7 @@ type SmartRouter struct {
 	advisor           *TrustedRoutingAdvisor // Phase 2: 可信路由顾问（nil = 不启用）
 	decisionStore     *AdvisorDecisionStore  // Phase 2: advisor 决策记录存储
 	localRuntimeStore *LocalRuntimeStore     // Phase 2: 本地运行时存储（nil = 不纳入本地候选）
+	modelResolver     *ModelResolver         // dry-run 自动模型映射预览（nil = 不扩展候选）
 
 	// onCandidatesRanked Phase 4 Item 8: 候选排名回调（A/B 测试用）。
 	// executeFilter 完成评分排序后调用，传入 ranked candidates。
@@ -100,6 +105,12 @@ func (r *SmartRouter) SetLocalRuntimeStore(store *LocalRuntimeStore) {
 	r.localRuntimeStore = store
 }
 
+// SetModelResolver 设置 dry-run 使用的自动模型映射器。
+// 该依赖只扩展诊断计划，不会向真实 scheduler 注入额外候选。
+func (r *SmartRouter) SetModelResolver(resolver *ModelResolver) {
+	r.modelResolver = resolver
+}
+
 // SetOnCandidatesRanked 设置候选排名回调（Phase 4 Item 8: A/B 测试用）。
 // executeFilter 完成评分排序后调用，将排名结果传递给调用方。
 func (r *SmartRouter) SetOnCandidatesRanked(fn func(model, channelKind string, candidates []RoutingCandidate)) {
@@ -151,7 +162,7 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 	familyPrefs := r.loadFamilyPrefs(autopilotCfg.ModelFamilyPreference)
 
 	// 收集并评分候选
-	entries := r.collectChannelEntries(profile.ChannelKind, profile.Model)
+	entries := r.collectChannelEntries(profile)
 
 	// P1.5：按 channel 禁用——与 executeFilter（真实路由路径）保持一致。
 	// 注意：这里只过滤"禁用渠道"这个硬约束，不像 kill switch/mode==off 那样
@@ -208,6 +219,9 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 			ScoredCandidate: se.scored,
 			Selected:        len(reasons) == 0,
 			FilterReasons:   reasons,
+			MappedModel:     se.entry.MappedModel,
+			MappingSource:   se.entry.MappingSource,
+			MappingReason:   se.entry.MappingReason,
 		}
 		if candidate.Selected {
 			selectedCandidates = append(selectedCandidates, candidate)
@@ -219,11 +233,13 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 	fallbackUsed := len(selectedCandidates) == 0 && len(filteredCandidates) > 0
 	candidates := make([]RoutingPlanCandidate, 0, len(scoredEntries))
 	selectedChannelUID := ""
+	selectedModel := ""
 	sortReasons := []string{"smart_routing_dryrun"}
 	if fallbackUsed {
 		// 与 auto 一致：全部候选不满足硬约束时，不返回空计划，而是回退到原评分顺序。
 		candidates = append(candidates, filteredCandidates...)
 		selectedChannelUID = candidates[0].ChannelUID
+		selectedModel = resolvedCandidateModel(profile.Model, candidates[0].MappedModel)
 		sortReasons = append(sortReasons, "dryrun_auto_failopen_simulation")
 	} else {
 		// 通过硬约束的候选排在前面；过滤候选保留在尾部供诊断。
@@ -231,14 +247,22 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 		candidates = append(candidates, filteredCandidates...)
 		if len(selectedCandidates) > 0 {
 			selectedChannelUID = selectedCandidates[0].ChannelUID
+			selectedModel = resolvedCandidateModel(profile.Model, selectedCandidates[0].MappedModel)
 		}
 		sortReasons = append(sortReasons, "dryrun_auto_filter_simulation")
+	}
+	for _, candidate := range candidates {
+		if candidate.MappingSource == "auto_resolve_preview" {
+			sortReasons = append(sortReasons, "dryrun_auto_resolve_preview")
+			break
+		}
 	}
 
 	return &RoutingPlan{
 		RequestProfile:     profile,
 		Candidates:         candidates,
 		SelectedChannelUID: selectedChannelUID,
+		SelectedModel:      selectedModel,
 		FallbackUsed:       fallbackUsed,
 		SortReasons:        sortReasons,
 		Mode:               RoutingModeDryRun,
@@ -867,6 +891,9 @@ type channelScoreEntry struct {
 	ChannelUID          string
 	ChannelKind         string
 	MetricsKey          string
+	MappedModel         string
+	MappingSource       string
+	MappingReason       string
 	OriginTier          ChannelOriginTier
 	HealthState         HealthState
 	EstimatedCost       float64
@@ -892,6 +919,13 @@ func sortScoredChannelEntries(entries []scoredChannelEntry) {
 		}
 		return originTierRank(entries[i].entry.OriginTier) > originTierRank(entries[j].entry.OriginTier)
 	})
+}
+
+func resolvedCandidateModel(requestModel, mappedModel string) string {
+	if mappedModel != "" {
+		return mappedModel
+	}
+	return requestModel
 }
 
 // buildChannelEntry 从 ChannelInfo + UpstreamConfig 构建评分输入。
@@ -1046,9 +1080,15 @@ func classifyTokenBucket(estTokens int) string {
 	return "<1k"
 }
 
-// collectChannelEntries 收集指定 kind 的所有渠道条目。
-// 仅用于 dry-run API（需要知道候选列表，但不依赖 scheduler）。
-func (r *SmartRouter) collectChannelEntries(channelKind, model string) []channelScoreEntry {
+// collectChannelEntries 收集指定请求的 dry-run 渠道条目。
+// 对不直接支持请求模型的 autoManaged 渠道，可通过 ModelResolver 增加只读预览候选；
+// 该函数不参与真实 scheduler，因而不会改变 shadow 的实际候选集合。
+func (r *SmartRouter) collectChannelEntries(profile *RequestProfile) []channelScoreEntry {
+	if profile == nil {
+		return nil
+	}
+	channelKind := profile.ChannelKind
+	model := profile.Model
 	cfg := r.configManager.GetConfig()
 	var upstreams []config.UpstreamConfig
 	switch channelKind {
@@ -1077,10 +1117,38 @@ func (r *SmartRouter) collectChannelEntries(channelKind, model string) []channel
 		if status != "active" || len(upstream.APIKeys) == 0 {
 			continue
 		}
-		// 模型过滤
+		entryModel := model
+		mappedModel := ""
+		mappingSource := ""
+		mappingReason := ""
+
+		// 模型过滤；诊断模式允许预览 autoManaged 渠道的 request-scoped 自动映射。
 		if model != "" {
-			if supported, _ := upstream.ExplainModelSupport(model); !supported {
-				continue
+			if supported, _ := upstream.ExplainModelSupport(model); supported {
+				resolved := config.ResolveUpstreamCapability(model, &upstream, cfg.UpstreamModelCapabilities)
+				if resolved.ActualModel != "" && resolved.ActualModel != model {
+					entryModel = resolved.ActualModel
+					mappedModel = resolved.ActualModel
+					mappingSource = "explicit_mapping"
+					mappingReason = "matched configured model mapping"
+				}
+			} else {
+				if !upstream.AutoManaged || r.modelResolver == nil {
+					continue
+				}
+				mapped, found, reason := r.modelResolver.ResolveModelAnyEndpointWithFloor(
+					model,
+					upstream.ChannelUID,
+					channelKind,
+					BuildCapabilityFloorFromRequestProfile(profile),
+				)
+				if !found || mapped == "" {
+					continue
+				}
+				entryModel = mapped
+				mappedModel = mapped
+				mappingSource = "auto_resolve_preview"
+				mappingReason = reason
 			}
 		}
 		ch := scheduler.ChannelInfo{
@@ -1089,7 +1157,10 @@ func (r *SmartRouter) collectChannelEntries(channelKind, model string) []channel
 			Priority: upstream.Priority,
 			Status:   status,
 		}
-		entry := r.buildChannelEntry(ch, &upstream, channelKind, model, cfg.UpstreamModelCapabilities)
+		entry := r.buildChannelEntry(ch, &upstream, channelKind, entryModel, cfg.UpstreamModelCapabilities)
+		entry.MappedModel = mappedModel
+		entry.MappingSource = mappingSource
+		entry.MappingReason = mappingReason
 		entries = append(entries, entry)
 	}
 	return entries

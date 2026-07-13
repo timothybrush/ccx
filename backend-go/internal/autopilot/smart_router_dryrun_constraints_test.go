@@ -119,8 +119,11 @@ func TestRoutingPlanCandidateJSONKeepsScoreFields(t *testing.T) {
 			ScoredCandidate: ScoredCandidate{ChannelUID: "ch_json", Score: 1.5},
 			Selected:        false,
 			FilterReasons:   []string{"上下文窗口不满足"},
+			MappedModel:     "glm-5.2",
+			MappingSource:   "auto_resolve_preview",
 		}},
 		SelectedChannelUID: "ch_json",
+		SelectedModel:      "glm-5.2",
 		FallbackUsed:       true,
 	}
 	data, err := json.Marshal(plan)
@@ -136,8 +139,12 @@ func TestRoutingPlanCandidateJSONKeepsScoreFields(t *testing.T) {
 		t.Fatalf("candidates payload = %#v", payload["candidates"])
 	}
 	candidate := candidates[0].(map[string]interface{})
-	if candidate["channelUid"] != "ch_json" || candidate["score"] != 1.5 || candidate["selected"] != false {
+	if candidate["channelUid"] != "ch_json" || candidate["score"] != 1.5 || candidate["selected"] != false ||
+		candidate["mappedModel"] != "glm-5.2" || candidate["mappingSource"] != "auto_resolve_preview" {
 		t.Fatalf("candidate JSON fields = %#v", candidate)
+	}
+	if payload["selectedModel"] != "glm-5.2" {
+		t.Fatalf("selectedModel = %#v", payload["selectedModel"])
 	}
 }
 
