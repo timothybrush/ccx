@@ -53,7 +53,28 @@ type volcengineResponse struct {
 		Datas    []struct {
 			ModelID string `json:"ModelID"`
 		} `json:"Datas"`
+		// Agent Plan GetAFPUsage 用量窗口。
+		AFPFiveHour *volcengineAFPWindow `json:"AFPFiveHour,omitempty"`
+		AFPDaily    *volcengineAFPWindow `json:"AFPDaily,omitempty"`
+		AFPWeekly   *volcengineAFPWindow `json:"AFPWeekly,omitempty"`
+		AFPMonthly  *volcengineAFPWindow `json:"AFPMonthly,omitempty"`
+		// Coding Plan GetSeatInfoUsage 用量。
+		SeatInfoUsage *volcengineSeatInfoUsage `json:"SeatInfoUsage,omitempty"`
 	} `json:"Result"`
+}
+
+// volcengineAFPWindow 是 Agent Plan AFP 单窗口用量。
+type volcengineAFPWindow struct {
+	Quota     float64 `json:"Quota"`
+	Used      float64 `json:"Used"`
+	ResetTime int64   `json:"ResetTime"`
+}
+
+// volcengineSeatInfoUsage 是 Coding Plan 个人席位用量（仅已用量，无额度）。
+type volcengineSeatInfoUsage struct {
+	ShortTermUsage float64 `json:"ShortTermUsage"`
+	WeeklyUsage    float64 `json:"WeeklyUsage"`
+	MonthlyUsage   float64 `json:"MonthlyUsage"`
 }
 
 type volcengineAPIError struct {
@@ -154,6 +175,57 @@ func (c *volcenginePlanClient) FetchModels(ctx context.Context, pair *config.Vol
 	}
 	sort.Strings(models)
 	return models, nil
+}
+
+// FetchUsage 查询火山套餐用量快照。
+// Agent Plan 走 GetAFPUsage(service ark)，返回含额度的四窗口；
+// Coding Plan 走 GetSeatInfoUsage(service ark_stg, ProjectName=default)，仅返回已用量。
+func (c *volcenginePlanClient) FetchUsage(ctx context.Context, pair *config.VolcengineAccessKeyPair, plan string) (*config.VolcenginePlanUsage, error) {
+	plan = normalizeVolcenginePlan(plan)
+	usage := &config.VolcenginePlanUsage{FetchedAt: c.now()}
+	switch plan {
+	case volcenginePlanAgent:
+		var decoded volcengineResponse
+		if err := c.doAction(ctx, pair, "GetAFPUsage", "ark", struct{}{}, &decoded); err != nil {
+			return nil, err
+		}
+		usage.FiveHour = afpWindow(decoded.Result.AFPFiveHour)
+		usage.Daily = afpWindow(decoded.Result.AFPDaily)
+		usage.Weekly = afpWindow(decoded.Result.AFPWeekly)
+		usage.Monthly = afpWindow(decoded.Result.AFPMonthly)
+		return usage, nil
+	case volcenginePlanCoding:
+		var decoded volcengineResponse
+		if err := c.doAction(ctx, pair, "GetSeatInfoUsage", "ark_stg", map[string]string{"ProjectName": "default"}, &decoded); err != nil {
+			return nil, err
+		}
+		seat := decoded.Result.SeatInfoUsage
+		if seat == nil {
+			return nil, fmt.Errorf("火山 Coding Plan 未返回席位用量")
+		}
+		usage.FiveHour = &config.VolcenginePlanUsageWindow{Used: seat.ShortTermUsage}
+		usage.Weekly = &config.VolcenginePlanUsageWindow{Used: seat.WeeklyUsage}
+		usage.Monthly = &config.VolcenginePlanUsageWindow{Used: seat.MonthlyUsage}
+		return usage, nil
+	default:
+		return nil, fmt.Errorf("未知的火山套餐类型: %s", plan)
+	}
+}
+
+// afpWindow 将火山 AFP 窗口转换为通用用量窗口；nil 输入返回 nil。
+func afpWindow(w *volcengineAFPWindow) *config.VolcenginePlanUsageWindow {
+	if w == nil {
+		return nil
+	}
+	return &config.VolcenginePlanUsageWindow{Quota: w.Quota, Used: w.Used, ResetTime: w.ResetTime}
+}
+
+// now 返回客户端时钟（便于测试注入）。
+func (c *volcenginePlanClient) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
 }
 
 func (c *volcenginePlanClient) doAction(ctx context.Context, pair *config.VolcengineAccessKeyPair, action, service string, payload any, target *volcengineResponse) error {

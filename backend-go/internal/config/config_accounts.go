@@ -249,6 +249,28 @@ func (cm *ConfigManager) SetManagedAccountVolcenginePlan(accountUID, credentialU
 	return fmt.Errorf("账号 %s 不存在", accountUID)
 }
 
+// SetManagedAccountVolcenginePlanUsage 保存火山管控面查询到的套餐用量快照。
+func (cm *ConfigManager) SetManagedAccountVolcenginePlanUsage(accountUID, credentialUID string, usage *VolcenginePlanUsage) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		for j := range account.Credentials {
+			credential := &account.Credentials[j]
+			if credential.CredentialUID != credentialUID || credential.VolcengineAccessKey == nil {
+				continue
+			}
+			credential.VolcengineAccessKey.Usage = usage
+			return cm.saveConfigLocked(cm.config)
+		}
+		return fmt.Errorf("凭证 %s 不存在或未绑定火山 Access Key", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
 // mergeManagedProviderAccounts 将同一官方 provider 的历史自动托管账号归并为一个凭证池。
 // provider 模板已经描述完整协议 routes，因此账号身份应是 provider 级，而不是每个 Key 一份。
 func (cm *ConfigManager) mergeManagedProviderAccounts() bool {

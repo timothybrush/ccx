@@ -218,6 +218,39 @@
                 </v-chip>
               </div>
             </div>
+            <div v-if="credential.hasVolcengineAccessKey" class="volcengine-usage mb-3">
+              <div class="d-flex align-center justify-space-between ga-2 mb-2">
+                <span class="text-caption text-medium-emphasis">{{ t('volcengineAccessKey.usageTitle') }}</span>
+                <div class="d-flex align-center ga-2">
+                  <span
+                    v-if="credential.volcenginePlanUsage?.fetchedAt && !credential.volcenginePlanUsage.error"
+                    class="text-caption text-disabled"
+                  >
+                    {{ t('volcengineAccessKey.usageFetchedAt') }} {{ formatVolcengineTime(credential.volcenginePlanUsage.fetchedAt) }}
+                  </span>
+                  <v-btn
+                    icon
+                    size="x-small"
+                    variant="text"
+                    :loading="volcengineUsageRefreshing[credential.credentialUid]"
+                    :title="t('volcengineAccessKey.refresh')"
+                    @click="refreshVolcengineUsage(credential)"
+                  >
+                    <v-icon size="small">mdi-refresh</v-icon>
+                  </v-btn>
+                </div>
+              </div>
+              <div
+                v-if="hasVolcengineUsageData(credential.volcenginePlanUsage)"
+                class="volcengine-usage-grid"
+              >
+                <div v-for="win in volcengineUsageWindows(credential.volcenginePlanUsage)" :key="win.labelKey">
+                  <div class="text-caption text-medium-emphasis">{{ t(win.labelKey) }}</div>
+                  <div class="text-body-2 font-weight-medium" :class="win.colorClass">{{ win.text }}</div>
+                </div>
+              </div>
+              <div v-else class="text-caption text-disabled">{{ t('volcengineAccessKey.noUsageData') }}</div>
+            </div>
             <div v-if="volcengineForms[credential.credentialUid]" class="d-flex flex-column ga-2">
               <div class="volcengine-key-fields">
                 <v-text-field
@@ -581,7 +614,7 @@
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from '../../i18n'
 import { ApiError, ApiService } from '../../services/api'
-import type { ManagedAccountCredential, MiMoTokenPlanQuota } from '../../services/api-types'
+import type { ManagedAccountCredential, MiMoTokenPlanQuota, VolcenginePlanUsage, VolcenginePlanUsageWindow } from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
 
 interface KeyModelsStatus {
@@ -639,6 +672,7 @@ const volcengineCredentials = ref<ManagedAccountCredential[]>([])
 const volcengineCredentialsLoading = ref(false)
 const volcengineCredentialsError = ref('')
 const volcengineForms = ref<Record<string, VolcengineCredentialForm>>({})
+const volcengineUsageRefreshing = ref<Record<string, boolean>>({})
 interface MiMoCredentialForm {
   cookie: string
   saving: boolean
@@ -708,6 +742,12 @@ const loadVolcengineCredentials = async () => {
       }
     }
     volcengineForms.value = nextForms
+    // 打开编辑框时对已绑定 AK 的凭证自动刷新用量（后端 TTL 兜底避免频繁请求）。
+    void Promise.allSettled(
+      account.credentials
+        .filter(credential => credential.hasVolcengineAccessKey)
+        .map(credential => refreshVolcengineUsage(credential))
+    )
   } catch (err) {
     volcengineCredentialsError.value = err instanceof Error ? err.message : String(err)
   } finally {
@@ -850,6 +890,78 @@ const formatMiMoQuota = (quota: MiMoTokenPlanQuota) => {
 
 const planDisplayName = (plan?: string) => plan === 'agent_plan' ? 'Agent Plan' : 'Coding Plan'
 
+interface VolcengineUsageCell {
+  labelKey: string
+  text: string
+  colorClass: string
+}
+
+const numberFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 })
+
+const hasVolcengineUsageData = (usage?: VolcenginePlanUsage) => {
+  if (!usage || usage.error) return false
+  return !!(usage.fiveHour || usage.daily || usage.weekly || usage.monthly)
+}
+
+// 根据剩余百分比着色（仅 Agent Plan 有额度）：低于 20% 红，低于 50% 橙。
+const volcengineUsageColor = (remainingPercent: number): string => {
+  if (remainingPercent < 20) return 'text-error'
+  if (remainingPercent < 50) return 'text-warning'
+  return ''
+}
+
+// 单窗口展示：Agent Plan 有 quota 时显示 "剩余% · 已用/额度"，Coding Plan 仅显示已用量。
+const volcengineWindowCell = (labelKey: string, win?: VolcenginePlanUsageWindow): VolcengineUsageCell | null => {
+  if (!win) return null
+  if (win.quota && win.quota > 0) {
+    const remaining = Math.max(0, win.quota - win.used)
+    const remainingPercent = Math.max(0, Math.min(100, (remaining / win.quota) * 100))
+    return {
+      labelKey,
+      text: `${remainingPercent.toFixed(1)}% · ${numberFmt.format(win.used)}/${numberFmt.format(win.quota)}`,
+      colorClass: volcengineUsageColor(remainingPercent),
+    }
+  }
+  return {
+    labelKey,
+    text: `${t('volcengineAccessKey.used')} ${numberFmt.format(win.used)}`,
+    colorClass: '',
+  }
+}
+
+const volcengineUsageWindows = (usage?: VolcenginePlanUsage): VolcengineUsageCell[] => {
+  if (!usage) return []
+  return [
+    volcengineWindowCell('volcengineAccessKey.fiveHourWindow', usage.fiveHour),
+    volcengineWindowCell('volcengineAccessKey.dailyWindow', usage.daily),
+    volcengineWindowCell('volcengineAccessKey.weeklyWindow', usage.weekly),
+    volcengineWindowCell('volcengineAccessKey.monthlyWindow', usage.monthly),
+  ].filter((cell): cell is VolcengineUsageCell => cell !== null)
+}
+
+const formatVolcengineTime = (iso: string): string => {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString()
+}
+
+const refreshVolcengineUsage = async (credential: ManagedAccountCredential) => {
+  if (!props.accountUid || !credential.hasVolcengineAccessKey) return
+  volcengineUsageRefreshing.value[credential.credentialUid] = true
+  try {
+    const response = await apiService.refreshVolcenginePlanUsage(props.accountUid, credential.credentialUid)
+    credential.volcenginePlanUsage = response.usage
+  } catch (err) {
+    // 用量刷新失败降级为快照 error，不打断编辑框其它操作。
+    credential.volcenginePlanUsage = {
+      fetchedAt: new Date().toISOString(),
+      error: err instanceof Error ? err.message : String(err),
+    }
+  } finally {
+    volcengineUsageRefreshing.value[credential.credentialUid] = false
+  }
+}
+
 const canSaveVolcengineCredential = (credentialUid: string) => {
   const form = volcengineForms.value[credentialUid]
   return !!form?.accessKeyId.trim() && !!form?.secretAccessKey.trim() && !form.saving
@@ -871,6 +983,7 @@ const saveVolcengineAccessKey = async (credential: ManagedAccountCredential) => 
     credential.volcenginePlan = response.plan
     credential.volcenginePlanTier = response.planTier
     credential.volcenginePlanStatus = response.planStatus
+    credential.volcenginePlanUsage = response.usage
     form.accessKeyId = ''
     form.secretAccessKey = ''
   } catch (err) {
@@ -893,6 +1006,7 @@ const clearVolcengineAccessKey = async (credential: ManagedAccountCredential) =>
     credential.volcenginePlan = undefined
     credential.volcenginePlanTier = undefined
     credential.volcenginePlanStatus = undefined
+    credential.volcenginePlanUsage = undefined
   } catch (err) {
     form.error = err instanceof Error ? err.message : String(err)
   } finally {
@@ -1105,6 +1219,12 @@ const getDisabledKeyLabel = (reason: string) => {
 .mimo-usage-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.volcengine-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 12px;
 }
 

@@ -159,11 +159,32 @@ type ManagedAccountCredential struct {
 // VolcengineAccessKeyPair 是火山云管控面签名凭证，用于 Agent/Coding Plan 识别与模型发现。
 // SecretAccessKey 与推理 API Key 一样只持久化在 0600 配置文件中，管理 API 不得回显。
 type VolcengineAccessKeyPair struct {
-	AccessKeyID     string `json:"accessKeyId"`
-	SecretAccessKey string `json:"secretAccessKey"`
-	Plan            string `json:"plan,omitempty"`
-	PlanTier        string `json:"planTier,omitempty"`
-	PlanStatus      string `json:"planStatus,omitempty"`
+	AccessKeyID     string               `json:"accessKeyId"`
+	SecretAccessKey string               `json:"secretAccessKey"`
+	Plan            string               `json:"plan,omitempty"`
+	PlanTier        string               `json:"planTier,omitempty"`
+	PlanStatus      string               `json:"planStatus,omitempty"`
+	Usage           *VolcenginePlanUsage `json:"usage,omitempty"`
+}
+
+// VolcenginePlanUsageWindow 描述火山套餐单个时间窗口的用量。
+// Agent Plan 返回 Quota+Used（可算余量）；Coding Plan 仅返回 Used（无额度）。
+type VolcenginePlanUsageWindow struct {
+	Quota     float64 `json:"quota,omitempty"`
+	Used      float64 `json:"used"`
+	ResetTime int64   `json:"resetTime,omitempty"`
+}
+
+// VolcenginePlanUsage 是火山套餐用量快照。
+// Agent Plan 填充 FiveHour/Daily/Weekly/Monthly（含 Quota）；
+// Coding Plan 填充 FiveHour(=ShortTerm)/Weekly/Monthly（仅 Used）。
+type VolcenginePlanUsage struct {
+	FiveHour  *VolcenginePlanUsageWindow `json:"fiveHour,omitempty"`
+	Daily     *VolcenginePlanUsageWindow `json:"daily,omitempty"`
+	Weekly    *VolcenginePlanUsageWindow `json:"weekly,omitempty"`
+	Monthly   *VolcenginePlanUsageWindow `json:"monthly,omitempty"`
+	FetchedAt time.Time                  `json:"fetchedAt"`
+	Error     string                     `json:"error,omitempty"`
 }
 
 // MiMoConsoleCredential 保存 MiMo 控制台登录态与最近一次套餐用量快照。

@@ -1374,8 +1374,35 @@ export interface ManagedAccountCredential {
   volcenginePlan?: 'agent_plan' | 'coding_plan'
   volcenginePlanTier?: string
   volcenginePlanStatus?: string
+  volcenginePlanUsage?: VolcenginePlanUsage
   hasMiMoConsoleCookie?: boolean
   mimoTokenPlan?: MiMoTokenPlanSnapshot
+}
+
+/** 火山套餐单个时间窗口用量。Agent Plan 含 quota（可算余量），Coding Plan 仅 used。 */
+export interface VolcenginePlanUsageWindow {
+  quota?: number
+  used: number
+  resetTime?: number
+}
+
+/**
+ * 火山套餐用量快照。
+ * Agent Plan 填充 fiveHour/daily/weekly/monthly（含 quota）；
+ * Coding Plan 填充 fiveHour/weekly/monthly（仅 used）。
+ */
+export interface VolcenginePlanUsage {
+  fiveHour?: VolcenginePlanUsageWindow
+  daily?: VolcenginePlanUsageWindow
+  weekly?: VolcenginePlanUsageWindow
+  monthly?: VolcenginePlanUsageWindow
+  fetchedAt: string
+  error?: string
+}
+
+export interface VolcenginePlanUsageRefreshResponse {
+  usage: VolcenginePlanUsage
+  cached: boolean
 }
 
 export interface MiMoTokenPlanQuota {
@@ -1411,6 +1438,7 @@ export interface VolcengineAccessKeyResponse {
   plan: 'agent_plan' | 'coding_plan'
   planTier: string
   planStatus: string
+  usage?: VolcenginePlanUsage
   discoveryStarted: number
 }
 

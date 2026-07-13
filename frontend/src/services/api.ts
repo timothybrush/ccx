@@ -58,6 +58,7 @@ import type {
   ManagedAccountsResponse,
   MiMoConsoleCookieResponse,
   VolcengineAccessKeyResponse,
+  VolcenginePlanUsageRefreshResponse,
   ChannelAutoStatusResponse,
   ProviderTemplatesResponse,
   CostReportResponse,
@@ -1381,6 +1382,13 @@ export class ApiService {
   async clearVolcengineAccessKey(accountUid: string, credentialUid: string): Promise<void> {
     await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/volcengine-access-key`, {
       method: 'DELETE',
+    })
+  }
+
+  /** 刷新火山套餐用量快照（后端带 TTL 缓存）。 */
+  async refreshVolcenginePlanUsage(accountUid: string, credentialUid: string): Promise<VolcenginePlanUsageRefreshResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/volcengine-plan-usage/refresh`, {
+      method: 'POST',
     })
   }
 

@@ -100,6 +100,74 @@ func TestVolcenginePlanClientUsesBaseURLHintWhenBothPlansExist(t *testing.T) {
 	}
 }
 
+func TestVolcenginePlanClientFetchUsage(t *testing.T) {
+	t.Run("Agent Plan 返回 AFP 四窗口含额度", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if action := r.URL.Query().Get("Action"); action != "GetAFPUsage" {
+				t.Errorf("action=%s", action)
+			}
+			_, _ = w.Write([]byte(`{"Result":{"PlanType":"Large",
+				"AFPFiveHour":{"Quota":50,"Used":12.5,"ResetTime":1778806800000},
+				"AFPDaily":{"Quota":100,"Used":22.5,"ResetTime":1778803200000},
+				"AFPWeekly":{"Quota":500,"Used":150,"ResetTime":1779062400000},
+				"AFPMonthly":{"Quota":2000,"Used":850.5,"ResetTime":1780531200000}}}`))
+		}))
+		defer server.Close()
+		client := &volcenginePlanClient{Endpoint: server.URL, HTTPClient: server.Client()}
+		usage, err := client.FetchUsage(context.Background(), &config.VolcengineAccessKeyPair{AccessKeyID: "AK", SecretAccessKey: "SK"}, volcenginePlanAgent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if usage.FiveHour == nil || usage.FiveHour.Quota != 50 || usage.FiveHour.Used != 12.5 {
+			t.Fatalf("fiveHour=%+v", usage.FiveHour)
+		}
+		if usage.Monthly == nil || usage.Monthly.Quota != 2000 || usage.Monthly.Used != 850.5 {
+			t.Fatalf("monthly=%+v", usage.Monthly)
+		}
+	})
+
+	t.Run("Coding Plan 仅返回已用量", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if action := r.URL.Query().Get("Action"); action != "GetSeatInfoUsage" {
+				t.Errorf("action=%s", action)
+			}
+			var body struct{ ProjectName string }
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body.ProjectName != "default" {
+				t.Errorf("ProjectName=%s", body.ProjectName)
+			}
+			_, _ = w.Write([]byte(`{"Result":{"SeatInfoUsage":{"ShortTermUsage":567.06,"WeeklyUsage":158.8,"MonthlyUsage":460.45}}}`))
+		}))
+		defer server.Close()
+		client := &volcenginePlanClient{Endpoint: server.URL, HTTPClient: server.Client()}
+		usage, err := client.FetchUsage(context.Background(), &config.VolcengineAccessKeyPair{AccessKeyID: "AK", SecretAccessKey: "SK"}, volcenginePlanCoding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if usage.FiveHour == nil || usage.FiveHour.Used != 567.06 || usage.FiveHour.Quota != 0 {
+			t.Fatalf("fiveHour=%+v", usage.FiveHour)
+		}
+		if usage.Weekly == nil || usage.Weekly.Used != 158.8 || usage.Monthly == nil || usage.Monthly.Used != 460.45 {
+			t.Fatalf("weekly=%+v monthly=%+v", usage.Weekly, usage.Monthly)
+		}
+		if usage.Daily != nil {
+			t.Fatalf("Coding Plan 不应有 daily 窗口: %+v", usage.Daily)
+		}
+	})
+
+	t.Run("接口 4xx 返回错误", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"ResponseMetadata":{"Error":{"Code":"MissingParameter.ProjectName","Message":"missing"}}}`))
+		}))
+		defer server.Close()
+		client := &volcenginePlanClient{Endpoint: server.URL, HTTPClient: server.Client()}
+		if _, err := client.FetchUsage(context.Background(), &config.VolcengineAccessKeyPair{AccessKeyID: "AK", SecretAccessKey: "SK"}, volcenginePlanCoding); err == nil {
+			t.Fatal("期望返回错误")
+		}
+	})
+}
+
 func TestVolcengineAutoDiscoveryUsesControlPlaneModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("Action") {
