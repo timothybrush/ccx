@@ -30,6 +30,9 @@
         @update:config="handleConfigUpdate"
       />
 
+      <!-- 路由诊断（dry-run，不发送真实上游请求） -->
+      <AutopilotDiagnosePanel class="mt-6" />
+
       <!-- Trace 统计 -->
       <AutopilotTraceStats
         v-if="traceStats"
@@ -41,8 +44,8 @@
       <AutopilotTraceTable
         :traces="traces"
         :loading="tracesLoading"
-        @refresh="fetchTraces"
         class="mt-4"
+        @refresh="fetchTraces"
       />
     </template>
   </div>
@@ -53,6 +56,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
 import AutopilotModePanel from '@/components/AutopilotModePanel.vue'
+import AutopilotDiagnosePanel from '@/components/AutopilotDiagnosePanel.vue'
 import AutopilotTraceStats from '@/components/AutopilotTraceStats.vue'
 import AutopilotTraceTable from '@/components/AutopilotTraceTable.vue'
 import type {

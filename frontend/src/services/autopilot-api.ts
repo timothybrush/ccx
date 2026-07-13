@@ -91,6 +91,82 @@ export interface ChannelAutoStatusResponse {
   discovery?: AutoDiscoveryStatus
 }
 
+export type SmartRoutingDiagnoseChannelKind =
+  | 'messages'
+  | 'chat'
+  | 'responses'
+  | 'gemini'
+  | 'images'
+  | 'vectors'
+
+/** 智能路由 dry-run 请求。 */
+export interface SmartRoutingDiagnoseRequest {
+  model: string
+  channelKind: SmartRoutingDiagnoseChannelKind
+  operation?: string
+  agentRole?: 'main' | 'subagent' | ''
+  agentType?: string
+  hasImage?: boolean
+  estTokens?: number
+  visionNeed?: boolean
+  imageGenNeed?: boolean
+  embeddingNeed?: boolean
+  toolUseNeed?: boolean
+  reasoningNeed?: boolean
+  contextNeed?: number
+}
+
+/** 后端 RequestProfile 当前使用 Go 字段名序列化。 */
+export interface SmartRoutingDiagnoseProfile {
+  Model: string
+  ChannelKind: string
+  Operation: string
+  AgentRole: string
+  AgentType: string
+  HasImage: boolean
+  EstTokens: number
+  QualityNeed: string
+  ContextNeed: number
+  VisionNeed: boolean
+  ImageGenNeed: boolean
+  EmbeddingNeed: boolean
+  ToolUseNeed: boolean
+  ReasoningNeed: boolean
+  TaskClass: string
+  TaskDomain: string
+}
+
+export interface SmartRoutingDiagnoseCandidate {
+  channelUid: string
+  score: number
+  qualityScore: number
+  stabilityScore: number
+  speedScore: number
+  costScore: number
+  savingsScore: number
+  selected: boolean
+  filterReasons?: string[]
+  mappedModel?: string
+  mappingSource?: string
+  mappingReason?: string
+}
+
+export interface SmartRoutingDiagnosePlan {
+  requestProfile: SmartRoutingDiagnoseProfile
+  candidates: SmartRoutingDiagnoseCandidate[]
+  selectedChannelUid?: string
+  selectedModel?: string
+  fallbackUsed: boolean
+  sortReasons?: string[]
+  mode: string
+}
+
+export interface SmartRoutingDiagnoseResponse {
+  plan: SmartRoutingDiagnosePlan | null
+  mode: string
+  message?: string
+}
+
 // ─── 辅助方法 ───
 
 function getAuthHeaders(): Record<string, string> {
@@ -184,4 +260,25 @@ export function preloadProviderTemplates(): Promise<void> {
     () => undefined,
     () => undefined
   )
+}
+
+/**
+ * 智能路由诊断，不发送真实上游请求，也不改变调度结果。
+ * POST /api/smart-routing/diagnose
+ */
+export async function diagnoseSmartRouting(
+  request: SmartRoutingDiagnoseRequest
+): Promise<SmartRoutingDiagnoseResponse> {
+  const response = await fetch(`${API_BASE}/smart-routing/diagnose`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(request)
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.statusText)
+    throw new Error(`smart-routing diagnose failed (${response.status}): ${text}`)
+  }
+
+  return response.json()
 }

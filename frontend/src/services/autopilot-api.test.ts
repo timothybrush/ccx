@@ -50,3 +50,46 @@ describe('provider templates cache', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('smart routing diagnose', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('应使用管理密钥提交结构化 dry-run 请求', async () => {
+    const payload = {
+      mode: 'shadow',
+      plan: {
+        requestProfile: { Model: 'claude-sonnet-5', TaskClass: 'supervisor' },
+        candidates: [],
+        fallbackUsed: false,
+        mode: 'dry_run'
+      }
+    }
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(payload)
+    } as unknown as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { diagnoseSmartRouting } = await import('./autopilot-api')
+    const request = {
+      model: 'claude-sonnet-5',
+      channelKind: 'messages' as const,
+      operation: 'completion',
+      estTokens: 20_000,
+      toolUseNeed: true
+    }
+    await expect(diagnoseSmartRouting(request)).resolves.toEqual(payload)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/smart-routing/diagnose')
+    expect(options.method).toBe('POST')
+    expect(options.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'x-api-key': 'test-admin-key'
+    })
+    expect(JSON.parse(options.body as string)).toEqual(request)
+  })
+})
