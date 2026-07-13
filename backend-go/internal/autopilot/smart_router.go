@@ -856,9 +856,9 @@ type channelScoreEntry struct {
 	HealthState         HealthState
 	EstimatedCost       float64
 	ChannelIndex        int
-	SupportsVision      bool // 渠道是否支持识图（来自画像聚合 + 手动配置覆盖）
-	SupportsToolCalls   bool // 渠道是否支持工具调用（来自画像聚合）
-	SupportsReasoning   bool // 渠道是否支持推理（来自画像聚合）
+	SupportsVision      bool // 渠道是否支持识图（模型注册表 + 画像聚合 + 手动配置覆盖）
+	SupportsToolCalls   bool // 渠道是否支持工具调用（模型注册表 + 画像聚合）
+	SupportsReasoning   bool // 渠道是否支持推理（模型注册表 + 画像聚合）
 	ContextWindowTokens int  // 渠道上下文窗口大小（0 = 未知，来自模型能力注册表）
 	ScoringCandidate    ScoringCandidate
 }
@@ -886,11 +886,21 @@ func (r *SmartRouter) buildChannelEntry(
 		HealthState:  HealthStateUnknown,
 		OriginTier:   OriginTierUnknown, // 无画像时默认 unknown
 	}
+	actualModel := model
 	if model != "" {
 		resolved := config.ResolveUpstreamCapability(model, upstream, upstreamModelCapabilities)
+		actualModel = resolved.ActualModel
 		if resolved.Known {
-			entry.ContextWindowTokens = resolved.Capability.ContextWindowTokens
+			capability := resolved.Capability
+			entry.ContextWindowTokens = capability.ContextWindowTokens
+			entry.SupportsVision = capability.Capabilities["vision"]
+			entry.SupportsToolCalls = capability.Capabilities["toolCalls"]
+			entry.SupportsReasoning = capability.ThinkingMode != "" || len(capability.ReasoningEfforts) > 0
 		}
+	}
+	visionDisabled := upstream.NoVision || containsString(upstream.NoVisionModels, actualModel)
+	if visionDisabled {
+		entry.SupportsVision = false
 	}
 
 	// 从 ProfileStore 读取画像
@@ -913,15 +923,12 @@ func (r *SmartRouter) buildChannelEntry(
 			entry.OriginTier = ChannelOriginTier(agg.OriginTier)
 			entry.MetricsKey = matchingProfiles[0].MetricsKey
 
-			// 识图能力：画像聚合（Layer 1）+ 手动配置覆盖（Layer 0 优先级最高）
-			entry.SupportsVision = agg.SupportsVision
-			if upstream.NoVision {
-				entry.SupportsVision = false
+			// 注册表与画像都是正向能力证据；手动禁用视觉始终优先。
+			if !visionDisabled {
+				entry.SupportsVision = entry.SupportsVision || agg.SupportsVision
 			}
-
-			// 工具调用、推理能力来自 endpoint 画像；上下文窗口来自模型能力注册表。
-			entry.SupportsToolCalls = agg.SupportsToolCalls
-			entry.SupportsReasoning = agg.SupportsReasoning
+			entry.SupportsToolCalls = entry.SupportsToolCalls || agg.SupportsToolCalls
+			entry.SupportsReasoning = entry.SupportsReasoning || agg.SupportsReasoning
 
 			entry.ScoringCandidate = ScoringCandidate{
 				ChannelUID:                channelUID,
