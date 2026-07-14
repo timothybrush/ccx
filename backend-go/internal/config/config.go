@@ -283,6 +283,20 @@ type UpstreamModelCapability struct {
 	Sources                 []string        `json:"sources,omitempty"`
 }
 
+// ModelBenchmarkProfile 描述规范模型在独立基准中的能力上界证据。
+// 该结构只用于 Autopilot 软评分，不参与模型支持、上下文或协议能力等硬过滤。
+type ModelBenchmarkProfile struct {
+	CanonicalModel       string             `json:"canonicalModel"`
+	OverallScore         float64            `json:"overallScore,omitempty"`   // 0-100，仅用于展示
+	CategoryScores       map[string]float64 `json:"categoryScores,omitempty"` // 0-100，保留来源领域向量
+	Sources              []string           `json:"sources,omitempty"`
+	VerifiedAt           string             `json:"verifiedAt,omitempty"` // YYYY-MM-DD
+	Lane                 string             `json:"lane,omitempty"`       // provisional | verified
+	SharedResults        int                `json:"sharedResults,omitempty"`
+	ComparableCategories int                `json:"comparableCategories,omitempty"`
+	TotalCategories      int                `json:"totalCategories,omitempty"`
+}
+
 type EmbeddingCapability struct {
 	EmbeddingSpaceID    string `json:"embeddingSpaceId,omitempty"`
 	Dimensions          int    `json:"dimensions,omitempty"`

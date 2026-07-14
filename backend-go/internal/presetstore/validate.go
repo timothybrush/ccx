@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // knownTiers 是允许的信任等级白名单。
@@ -98,6 +99,9 @@ func validateModelRegistryPreset(preset *ModelRegistryPreset) error {
 			if strings.TrimSpace(pattern) == "" {
 				return fmt.Errorf("[presetstore] modelRegistry.upstreamCapabilities[%d].patterns[%d] 不能为空", idx, patternIdx)
 			}
+			if err := validateModelPattern(pattern); err != nil {
+				return fmt.Errorf("[presetstore] modelRegistry.upstreamCapabilities[%d].patterns[%d] 非法: %w", idx, patternIdx, err)
+			}
 		}
 		if err := validateNonNegativeInt("contextWindowTokens", capability.ContextWindowTokens); err != nil {
 			return fmt.Errorf("[presetstore] modelRegistry.upstreamCapabilities[%d].%w", idx, err)
@@ -139,6 +143,68 @@ func validateModelRegistryPreset(preset *ModelRegistryPreset) error {
 				}
 			}
 		}
+	}
+	for idx, benchmark := range preset.BenchmarkProfiles {
+		prefix := fmt.Sprintf("[presetstore] modelRegistry.benchmarkProfiles[%d]", idx)
+		if len(benchmark.Patterns) == 0 {
+			return fmt.Errorf("%s.patterns 不能为空", prefix)
+		}
+		for patternIdx, pattern := range benchmark.Patterns {
+			if strings.TrimSpace(pattern) == "" {
+				return fmt.Errorf("%s.patterns[%d] 不能为空", prefix, patternIdx)
+			}
+			if err := validateModelPattern(pattern); err != nil {
+				return fmt.Errorf("%s.patterns[%d] 非法: %w", prefix, patternIdx, err)
+			}
+		}
+		if strings.TrimSpace(benchmark.CanonicalModel) == "" {
+			return fmt.Errorf("%s.canonicalModel 不能为空", prefix)
+		}
+		if err := validateBenchmarkScore("overallScore", benchmark.OverallScore); err != nil {
+			return fmt.Errorf("%s.%w", prefix, err)
+		}
+		if len(benchmark.CategoryScores) == 0 {
+			return fmt.Errorf("%s.categoryScores 不能为空", prefix)
+		}
+		for category, score := range benchmark.CategoryScores {
+			if strings.TrimSpace(category) == "" {
+				return fmt.Errorf("%s.categoryScores 包含空类别", prefix)
+			}
+			if err := validateBenchmarkScore("categoryScores."+category, score); err != nil {
+				return fmt.Errorf("%s.%w", prefix, err)
+			}
+		}
+		if len(benchmark.Sources) == 0 {
+			return fmt.Errorf("%s.sources 不能为空", prefix)
+		}
+		if _, err := time.Parse("2006-01-02", benchmark.VerifiedAt); err != nil {
+			return fmt.Errorf("%s.verifiedAt 必须是 YYYY-MM-DD: %w", prefix, err)
+		}
+		if benchmark.Lane != "provisional" && benchmark.Lane != "verified" {
+			return fmt.Errorf("%s.lane=%q，仅支持 provisional 或 verified", prefix, benchmark.Lane)
+		}
+		if benchmark.SharedResults <= 0 || benchmark.ComparableCategories <= 0 || benchmark.TotalCategories <= 0 {
+			return fmt.Errorf("%s 的证据计数字段必须为正数", prefix)
+		}
+		if benchmark.TotalCategories > 0 && benchmark.ComparableCategories > benchmark.TotalCategories {
+			return fmt.Errorf("%s.comparableCategories 不能大于 totalCategories", prefix)
+		}
+	}
+	return nil
+}
+
+func validateModelPattern(pattern string) error {
+	rePattern := "(?i)" + pattern
+	if idx := strings.LastIndex(rePattern, "(?="); idx >= 0 && strings.HasSuffix(rePattern[idx:], ")") {
+		rePattern = rePattern[:idx]
+	}
+	_, err := regexp.Compile(rePattern)
+	return err
+}
+
+func validateBenchmarkScore(field string, value float64) error {
+	if value < 0 || value > 100 {
+		return fmt.Errorf("%s 必须在 0-100 之间", field)
 	}
 	return nil
 }

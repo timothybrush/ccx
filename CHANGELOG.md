@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 新增
+
+- **Autopilot 规范模型能力基准** - 模型注册表新增独立 benchmark 领域向量，按渠道质量证据向下折算并写入路由 trace；首批覆盖 Claude Opus 4.8、GPT-5.6 Terra 与 GPT-5.6 Sol
+
 ### 修复
 
 - **Autopilot 配置迁移与运行态隔离** - 旧配置块解析或升级失败时回退安全默认值，支持结构体指针叠加，并避免环境急停经管理 API 写回配置文件

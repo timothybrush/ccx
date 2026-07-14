@@ -35,6 +35,7 @@ type ModelRegistryPreset struct {
 	SchemaVersion        int                             `json:"schemaVersion"`
 	PricingUnit          string                          `json:"pricingUnit,omitempty"`
 	UpstreamCapabilities []ModelRegistryCapabilityPreset `json:"upstreamCapabilities"`
+	BenchmarkProfiles    []ModelBenchmarkProfilePreset   `json:"benchmarkProfiles,omitempty"`
 }
 
 type ModelRegistryCapabilityPreset struct {
@@ -51,6 +52,19 @@ type ModelRegistryCapabilityPreset struct {
 	Capabilities            map[string]bool     `json:"capabilities,omitempty"`
 	Pricing                 *ModelPricingPreset `json:"pricing,omitempty"`
 	Sources                 []string            `json:"sources,omitempty"`
+}
+
+type ModelBenchmarkProfilePreset struct {
+	Patterns             []string           `json:"patterns"`
+	CanonicalModel       string             `json:"canonicalModel"`
+	OverallScore         float64            `json:"overallScore,omitempty"`
+	CategoryScores       map[string]float64 `json:"categoryScores,omitempty"`
+	Sources              []string           `json:"sources,omitempty"`
+	VerifiedAt           string             `json:"verifiedAt,omitempty"`
+	Lane                 string             `json:"lane,omitempty"`
+	SharedResults        int                `json:"sharedResults,omitempty"`
+	ComparableCategories int                `json:"comparableCategories,omitempty"`
+	TotalCategories      int                `json:"totalCategories,omitempty"`
 }
 
 type ModelPricingPreset struct {

@@ -436,6 +436,23 @@ func TestBuiltinUpstreamModelCapabilities_ReturnsDeepCopy(t *testing.T) {
 	}
 }
 
+func TestResolveUpstreamCapability_BuiltinResultIsDeepCopy(t *testing.T) {
+	resolved := ResolveUpstreamCapability("mimo-v2.5", nil, nil)
+	if !resolved.Known || !resolved.Capability.Capabilities["vision"] {
+		t.Fatalf("resolved = %+v, want vision capability", resolved)
+	}
+	resolved.Capability.Capabilities["vision"] = false
+	resolved.Capability.ReasoningEfforts[0] = "mutated"
+
+	again := ResolveUpstreamCapability("mimo-v2.5", nil, nil)
+	if !again.Capability.Capabilities["vision"] {
+		t.Fatal("修改解析结果不应污染内置能力快照")
+	}
+	if len(again.Capability.ReasoningEfforts) == 0 || again.Capability.ReasoningEfforts[0] == "mutated" {
+		t.Fatalf("ReasoningEfforts 未深拷贝: %v", again.Capability.ReasoningEfforts)
+	}
+}
+
 func TestCurrentBuiltinSnapshot_RebuildsAfterSetDefault(t *testing.T) {
 	original := presetstore.Default()
 	defer presetstore.SetDefault(original)
@@ -459,5 +476,98 @@ func TestCurrentBuiltinSnapshot_RebuildsAfterSetDefault(t *testing.T) {
 	resolved := ResolveUpstreamCapability("custom-runtime-model", nil, nil)
 	if !resolved.Known || resolved.Capability.ContextWindowTokens != 777 {
 		t.Fatalf("resolved = %+v, want runtime rebuilt capability", resolved)
+	}
+}
+
+func TestResolveModelBenchmarkProfile_DistinguishesGPT56Variants(t *testing.T) {
+	tests := []struct {
+		model        string
+		canonical    string
+		codingScore  float64
+		reasoningRaw float64
+	}{
+		{model: "claude-opus-4-8-20260713", canonical: "claude-opus-4-8", codingScore: 76.4, reasoningRaw: 53.9},
+		{model: "gpt-5.6-terra", canonical: "gpt-5.6-terra", codingScore: 63.4, reasoningRaw: 80.8},
+		{model: "gpt-5.6-sol", canonical: "gpt-5.6-sol", codingScore: 64.6, reasoningRaw: 87.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			resolved := ResolveModelBenchmarkProfile(tt.model)
+			if !resolved.Known || resolved.Source != "builtin" {
+				t.Fatalf("resolved = %+v, want builtin benchmark", resolved)
+			}
+			if resolved.Profile.CanonicalModel != tt.canonical {
+				t.Fatalf("CanonicalModel = %q, want %q", resolved.Profile.CanonicalModel, tt.canonical)
+			}
+			if got := resolved.Profile.CategoryScores["coding"]; got != tt.codingScore {
+				t.Fatalf("coding score = %v, want %v", got, tt.codingScore)
+			}
+			if got := resolved.Profile.CategoryScores["math"]; got != tt.reasoningRaw {
+				t.Fatalf("math score = %v, want %v", got, tt.reasoningRaw)
+			}
+			if resolved.Profile.Lane != "provisional" || resolved.Profile.VerifiedAt != "2026-07-13" {
+				t.Fatalf("evidence metadata = lane %q date %q", resolved.Profile.Lane, resolved.Profile.VerifiedAt)
+			}
+		})
+	}
+
+	if resolved := ResolveModelBenchmarkProfile("gpt-5.6-luna"); resolved.Known {
+		t.Fatalf("Luna 不应复用 Sol/Terra 的基准: %+v", resolved)
+	}
+}
+
+func TestResolveModelBenchmarkProfile_RuntimeRegistryOverride(t *testing.T) {
+	store := presetstore.Default()
+	original := store.Get()
+	store.Swap(&presetstore.PresetBundle{
+		SchemaVersion: original.SchemaVersion,
+		DataVersion:   "runtime-benchmark-test",
+		Subscription:  original.Subscription,
+		ModelRegistry: &presetstore.ModelRegistryPreset{
+			SchemaVersion: 1,
+			BenchmarkProfiles: []presetstore.ModelBenchmarkProfilePreset{{
+				Patterns:             []string{`(?:^|[-/])runtime-benchmark(?=$|@)`},
+				CanonicalModel:       "runtime-benchmark",
+				OverallScore:         90,
+				CategoryScores:       map[string]float64{"coding": 91},
+				Sources:              []string{"https://example.test/benchmark"},
+				VerifiedAt:           "2026-07-14",
+				Lane:                 "verified",
+				SharedResults:        1,
+				ComparableCategories: 1,
+				TotalCategories:      1,
+			}},
+		},
+	})
+	defer store.Swap(original)
+
+	resolved := ResolveModelBenchmarkProfile("runtime-benchmark")
+	if !resolved.Known || resolved.Profile.CategoryScores["coding"] != 91 {
+		t.Fatalf("resolved = %+v, want runtime benchmark", resolved)
+	}
+	if fallback := ResolveModelBenchmarkProfile("gpt-5.6-sol"); fallback.Known {
+		t.Fatal("运行时基准存在时应由运行时列表整体接管")
+	}
+}
+
+func TestBuiltinModelBenchmarkProfiles_ReturnsDeepCopy(t *testing.T) {
+	profiles := BuiltinModelBenchmarkProfiles()
+	for pattern, profile := range profiles {
+		if profile.CanonicalModel != "gpt-5.6-sol" {
+			continue
+		}
+		profile.CategoryScores["coding"] = 1
+		profile.Sources[0] = "mutated"
+		profiles[pattern] = profile
+		break
+	}
+
+	resolved := ResolveModelBenchmarkProfile("gpt-5.6-sol")
+	if got := resolved.Profile.CategoryScores["coding"]; got != 64.6 {
+		t.Fatalf("coding score = %v, want 64.6", got)
+	}
+	if len(resolved.Profile.Sources) == 0 || resolved.Profile.Sources[0] == "mutated" {
+		t.Fatalf("Sources 未深拷贝: %v", resolved.Profile.Sources)
 	}
 }

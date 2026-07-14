@@ -2013,7 +2013,7 @@ Score = w_quality * qualityScore
 
 **w_provider_quality 权重约束验证**：`w_provider_quality × (1.0 − 0.0) = 1.0`，而 `w_stability × 2.0 = 2.0`。因此 stable 的低供应商质量实现仍优于 unstable 的高质量实现，供应商质量只在同等稳定性内打破平局。
 
-**w_domain 权重约束验证**：`w_domain` 统一取 0.5（embedding/image_generation 取 0），`w_domain × (1.0 − 0.0) = 0.5 < w_stability × 2.0`。任务域优势只在同等稳定性/健康度内影响排序，不会让"审美好但不稳定"的渠道胜出。TaskDomain 无法确定时 domainStrengthScore 一律取 0.5 中性值，该项对所有候选贡献相同、等效于不存在。
+**w_domain 权重约束验证**：`w_domain` 统一取 0.5（embedding/image_generation 取 0），`w_domain × (1.0 − 0.0) = 0.5 < w_stability × 2.0`。任务域优势只在同等稳定性/健康度内影响排序，不会让"审美好但不稳定"的渠道胜出。TaskDomain 无法细分时进入 `general`；有规范 Knowledge 基准则使用其软评分，缺少直接证据时仍取 0.5 中性值。
 
 **ProviderQualityScore 推导规则**：
 
@@ -2292,7 +2292,7 @@ const (
     TaskDomainWriting      TaskDomain = "writing"       // 文案/长文写作
     TaskDomainTranslation  TaskDomain = "translation"   // 翻译
     TaskDomainAgentic      TaskDomain = "agentic"       // 多步工具调用/agent 编排
-    TaskDomainGeneral      TaskDomain = "general"       // 无法判定，中性
+    TaskDomainGeneral      TaskDomain = "general"       // 无法细分的通用任务；缺少基准证据时中性
 )
 ```
 
@@ -2308,7 +2308,7 @@ const (
 3. 工具集特征：请求携带的 tools 列表特征（如仅有 read/grep 类只读工具 + diff 上下文→code_review）
 4. 消息内容特征：首条 user 消息的文件扩展名分布（.vue/.css→aesthetics_ui）
 
-任何信号都不足时 → general（中性），domainStrengthScore 对所有候选取 0.5，该项失效。
+任何信号都不足时 → general；有规范 Knowledge 基准时使用其软评分，缺少直接证据时取 0.5 中性。
 误判代价有界：w_domain=0.5 上限远低于稳定性/质量权重，误判最多影响同档候选的相对顺序。
 ```
 
@@ -2329,15 +2329,33 @@ deepseek           0.55          0.75      0.80     0.85       0.65
 
 ```text
 domainStrengthScore = ModelProfile.TaskDomainStrengths[domain]
+                      ?? canonicalBenchmark[model][domain] * providerQualityFactor
                       ?? seedMatrix[family][domain]
                       ?? 0.5
 
-来源优先级：用户配置覆盖 > ModelProfile 探测/反馈值 > 种子矩阵 > 0.5
+来源优先级：用户配置覆盖 > ModelProfile 探测/反馈值 > 规范模型基准 > 种子矩阵 > 0.5
 用户反馈通路与 ProviderQualityScore 相同：UI 标记"这个模型做 X 类任务很好/很差"，
 写入 ModelProfile.TaskDomainStrengths，TTL 90 天（域优势比供应商质量稳定，衰减更慢）。
 ```
 
 同版本迭代说明：同族不同版本的域优势也会漂移（如 gpt 新版审美追上），因此种子矩阵按 `family + 主版本` 建键（如 `openai/gpt-5.x`），注册表更新时同步刷新种子值。
+
+#### 5.7.4 规范模型能力基准
+
+`shared/model-registry/ccx_model_registry.json` 的 `benchmarkProfiles` 独立保存规范模型能力上界，不与 `upstreamCapabilities` 混合。后者仍是 context、vision、tool calls 等硬能力的事实源；benchmark 只参与 Autopilot 软评分和 trace 解释，绝不改变 `supportedModels` 或 CapabilityFloor。
+
+```text
+EffectiveCapability[domain]
+  = CanonicalCeiling[model, domain]
+  × ProviderQualityFactor[endpoint]
+
+ProviderQualityFactor = 1 - confidence × (1 - providerQualityScore)
+无渠道质量证据或 confidence<0.5 时 factor=1；可信证据只能从规范模型上界向下折算。
+```
+
+基准数据必须保留领域向量、来源、核验日期、lane、共享结果数和可比类别覆盖率，不能只保存站点 Overall。当前 BenchLM 接入为 `provisional`：Claude Opus 4.8、GPT-5.6 Terra、GPT-5.6 Sol 各有 30 个共享结果，8 类中 5 类可比，核验日期为 2026-07-13。
+
+领域映射：Knowledge → `general`，Math → `reasoning`，Coding → `coding` / `code_review`，Agentic → `agentic`，Multimodal → `aesthetics_ui`（仅弱代理，解释置信度减半）。Writing / Translation 没有直接类别证据时继续回退家族种子或 0.5。BenchLM 的 cohort 归一化、缺失项插补和外部校准决定了 Overall 不是绝对能力值，因此路由只消费可映射的原始类别分。
 
 ### 5.8 思考等级差异 (Reasoning Effort Levels)
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,7 @@ type SmartRouter struct {
 	decisionStore     *AdvisorDecisionStore  // Phase 2: advisor 决策记录存储
 	localRuntimeStore *LocalRuntimeStore     // Phase 2: 本地运行时存储（nil = 不纳入本地候选）
 	modelResolver     *ModelResolver         // dry-run 自动模型映射预览（nil = 不扩展候选）
+	modelProfileStore *ModelProfileStore     // endpoint 模型质量/任务域覆盖（nil = 仅用规范基准与种子）
 
 	// onCandidatesRanked Phase 4 Item 8: 候选排名回调（A/B 测试用）。
 	// executeFilter 完成评分排序后调用，传入 ranked candidates。
@@ -109,6 +111,11 @@ func (r *SmartRouter) SetLocalRuntimeStore(store *LocalRuntimeStore) {
 // 该依赖只扩展诊断计划，不会向真实 scheduler 注入额外候选。
 func (r *SmartRouter) SetModelResolver(resolver *ModelResolver) {
 	r.modelResolver = resolver
+}
+
+// SetModelProfileStore 设置 endpoint 模型画像，用于规范能力上界的渠道质量折算。
+func (r *SmartRouter) SetModelProfileStore(store *ModelProfileStore) {
+	r.modelProfileStore = store
 }
 
 // SetOnCandidatesRanked 设置候选排名回调（Phase 4 Item 8: A/B 测试用）。
@@ -206,6 +213,7 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 	scoredEntries := make([]scoredChannelEntry, 0, len(entries))
 	for _, e := range entries {
 		e.ScoringCandidate.SavingsScore = savingsMap[e.ChannelUID]
+		applyDomainStrength(&e, ctx.TaskDomain)
 		scored := ScoreCandidate(e.ScoringCandidate, ctx)
 		scoredEntries = append(scoredEntries, scoredChannelEntry{entry: e, scored: scored})
 	}
@@ -480,6 +488,7 @@ func (r *SmartRouter) executeFilter(
 	scoredEntries := make([]scoredChannelEntry, 0, len(entries))
 	for _, e := range entries {
 		e.ScoringCandidate.SavingsScore = savingsMap[e.ChannelUID]
+		applyDomainStrength(&e, scoringCtx.TaskDomain)
 		scored := ScoreCandidate(e.ScoringCandidate, scoringCtx)
 		scoredEntries = append(scoredEntries, scoredChannelEntry{entry: e, scored: scored})
 	}
@@ -682,12 +691,13 @@ func (r *SmartRouter) executeFilter(
 		e := se.entry
 		sc := se.scored
 		candidates = append(candidates, RoutingCandidate{
-			ChannelUID:  e.ChannelUID,
-			MetricsKey:  SanitizeMetricsKey(e.MetricsKey),
-			OriginTier:  string(e.OriginTier),
-			ChannelKind: e.ChannelKind,
-			HealthState: string(e.HealthState),
-			TotalScore:  sc.Score,
+			ChannelUID:     e.ChannelUID,
+			MetricsKey:     SanitizeMetricsKey(e.MetricsKey),
+			OriginTier:     string(e.OriginTier),
+			ChannelKind:    e.ChannelKind,
+			HealthState:    string(e.HealthState),
+			TotalScore:     sc.Score,
+			DomainEvidence: sc.DomainEvidence,
 			Scores: []CandidateScore{
 				{Dimension: "quality", Score: sc.QualityScore, Weight: weights.WQuality},
 				{Dimension: "stability", Score: sc.StabilityScore, Weight: weights.WStability},
@@ -928,6 +938,8 @@ type channelScoreEntry struct {
 	HealthState         HealthState
 	EstimatedCost       float64
 	ChannelIndex        int
+	ModelID             string
+	DomainProfiles      []ModelProfile
 	SupportsVision      bool // 渠道是否支持识图（模型注册表 + 画像聚合 + 手动配置覆盖）
 	SupportsToolCalls   bool // 渠道是否支持工具调用（模型注册表 + 画像聚合）
 	SupportsReasoning   bool // 渠道是否支持推理（模型注册表 + 画像聚合）
@@ -982,17 +994,21 @@ func (r *SmartRouter) buildChannelEntry(
 		OriginTier:   OriginTierUnknown, // 无画像时默认 unknown
 	}
 	actualModel := model
+	modelProvider := ""
 	if model != "" {
 		resolved := config.ResolveUpstreamCapability(model, upstream, upstreamModelCapabilities)
 		actualModel = resolved.ActualModel
 		if resolved.Known {
 			capability := resolved.Capability
+			modelProvider = capability.Provider
 			entry.ContextWindowTokens = capability.ContextWindowTokens
 			entry.SupportsVision = capability.Capabilities["vision"]
 			entry.SupportsToolCalls = capability.Capabilities["toolCalls"]
 			entry.SupportsReasoning = capability.ThinkingMode != "" || len(capability.ReasoningEfforts) > 0
 		}
 	}
+	entry.ModelID = actualModel
+	modelFamily := InferModelFamily(actualModel, modelProvider)
 	visionDisabled := upstream.NoVision || containsString(upstream.NoVisionModels, actualModel)
 	if visionDisabled {
 		entry.SupportsVision = false
@@ -1034,9 +1050,11 @@ func (r *SmartRouter) buildChannelEntry(
 				HealthState:               agg.HealthState,
 				ProviderQualityScore:      0.5,
 				ProviderQualityConfidence: 0.3,
+				ModelFamily:               modelFamily,
 				SavingsScore:              0.5,
 				DomainStrengthScore:       0.5,
 			}
+			r.attachDomainProfiles(&entry, modelProvider)
 			return entry
 		}
 	}
@@ -1051,10 +1069,75 @@ func (r *SmartRouter) buildChannelEntry(
 		HealthState:               HealthStateUnknown,
 		ProviderQualityScore:      0.5,
 		ProviderQualityConfidence: 0.3,
+		ModelFamily:               modelFamily,
 		SavingsScore:              0.5,
 		DomainStrengthScore:       0.5,
 	}
+	r.attachDomainProfiles(&entry, modelProvider)
 	return entry
+}
+
+func (r *SmartRouter) attachDomainProfiles(entry *channelScoreEntry, provider string) {
+	if entry == nil {
+		return
+	}
+	if r.modelProfileStore != nil && entry.ChannelUID != "" && entry.ModelID != "" {
+		for _, profile := range r.modelProfileStore.ListByChannel(entry.ChannelUID) {
+			if profile.ChannelKind != entry.ChannelKind || !strings.EqualFold(profile.ModelID, entry.ModelID) {
+				continue
+			}
+			if profile.ModelFamily == ModelFamilyUnknown || profile.ModelFamily == "" {
+				profile.ModelFamily = InferModelFamily(profile.ModelID, provider)
+			}
+			entry.DomainProfiles = append(entry.DomainProfiles, profile)
+		}
+		sort.SliceStable(entry.DomainProfiles, func(i, j int) bool {
+			if entry.DomainProfiles[i].MetricsKey != entry.DomainProfiles[j].MetricsKey {
+				return entry.DomainProfiles[i].MetricsKey < entry.DomainProfiles[j].MetricsKey
+			}
+			return entry.DomainProfiles[i].UpdatedAt.Before(entry.DomainProfiles[j].UpdatedAt)
+		})
+	}
+	if len(entry.DomainProfiles) == 0 {
+		entry.DomainProfiles = []ModelProfile{{
+			ChannelUID:  entry.ChannelUID,
+			ChannelKind: entry.ChannelKind,
+			ModelID:     entry.ModelID,
+			ModelFamily: InferModelFamily(entry.ModelID, provider),
+		}}
+	}
+}
+
+func applyDomainStrength(entry *channelScoreEntry, domain TaskDomain) {
+	if entry == nil {
+		return
+	}
+	profiles := entry.DomainProfiles
+	if len(profiles) == 0 {
+		profiles = []ModelProfile{{ModelID: entry.ModelID, ModelFamily: entry.ScoringCandidate.ModelFamily}}
+	}
+
+	selected := profiles[0]
+	best := ResolveDomainStrength(&selected, domain)
+	for i := 1; i < len(profiles); i++ {
+		candidate := ResolveDomainStrength(&profiles[i], domain)
+		if candidate.Score > best.Score ||
+			(candidate.Score == best.Score && candidate.EvidenceConfidence > best.EvidenceConfidence) {
+			selected = profiles[i]
+			best = candidate
+		}
+	}
+
+	entry.ScoringCandidate.DomainStrengthScore = best.Score
+	evidence := best
+	entry.ScoringCandidate.DomainEvidence = &evidence
+	if selected.ModelFamily != "" && selected.ModelFamily != ModelFamilyUnknown {
+		entry.ScoringCandidate.ModelFamily = selected.ModelFamily
+	}
+	if selected.ProviderQualityConfidence > 0 {
+		entry.ScoringCandidate.ProviderQualityScore = selected.ProviderQualityScore
+		entry.ScoringCandidate.ProviderQualityConfidence = selected.ProviderQualityConfidence
+	}
 }
 
 // routingHardConstraintReasons 检查自动路由硬约束，返回不满足的原因列表。

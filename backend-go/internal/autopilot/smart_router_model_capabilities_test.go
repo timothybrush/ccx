@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 
@@ -66,6 +67,64 @@ func TestBuildChannelEntryUsesRegistryCapabilities(t *testing.T) {
 					tt.wantVision, tt.wantTools, tt.wantReasoning)
 			}
 		})
+	}
+}
+
+func TestSmartRouterAppliesCanonicalBenchmarkToDomainScore(t *testing.T) {
+	router := NewSmartRouter(nil, nil, nil, nil)
+	entry := router.buildChannelEntry(
+		scheduler.ChannelInfo{Index: 0, Name: "sol", Status: "active"},
+		&config.UpstreamConfig{ChannelUID: "ch_sol"}, "responses", "gpt-5.6-sol", nil,
+	)
+	applyDomainStrength(&entry, TaskDomainReasoning)
+
+	if math.Abs(entry.ScoringCandidate.DomainStrengthScore-0.875) > 1e-9 {
+		t.Fatalf("DomainStrengthScore = %v, want 0.875", entry.ScoringCandidate.DomainStrengthScore)
+	}
+	if entry.ScoringCandidate.DomainEvidence == nil ||
+		entry.ScoringCandidate.DomainEvidence.Source != "canonical_benchmark" ||
+		entry.ScoringCandidate.DomainEvidence.CanonicalModel != "gpt-5.6-sol" {
+		t.Fatalf("DomainEvidence = %+v", entry.ScoringCandidate.DomainEvidence)
+	}
+
+	scored := ScoreCandidate(entry.ScoringCandidate, ScoringContext{Weights: DefaultTaskWeights()[TaskClassWorker]})
+	if scored.DomainEvidence == nil || scored.DomainEvidence.CanonicalCeiling != 0.875 {
+		t.Fatalf("scored DomainEvidence = %+v", scored.DomainEvidence)
+	}
+}
+
+func TestSmartRouterPrefersEndpointDomainOverrideAndAppliesProviderFactor(t *testing.T) {
+	profile := &ModelProfile{
+		ChannelUID:                "ch_sol",
+		ChannelKind:               "responses",
+		MetricsKey:                "endpoint-a",
+		ModelID:                   "gpt-5.6-sol",
+		ModelFamily:               ModelFamilyOpenAI,
+		ProviderQualityScore:      0.8,
+		ProviderQualityConfidence: 0.75,
+	}
+	store := &ModelProfileStore{cache: map[string]*ModelProfile{"sol": profile}}
+	router := NewSmartRouter(nil, nil, nil, nil)
+	router.SetModelProfileStore(store)
+
+	entry := router.buildChannelEntry(
+		scheduler.ChannelInfo{Index: 0, Name: "sol", Status: "active"},
+		&config.UpstreamConfig{ChannelUID: "ch_sol"}, "responses", "gpt-5.6-sol", nil,
+	)
+	applyDomainStrength(&entry, TaskDomainReasoning)
+	if math.Abs(entry.ScoringCandidate.DomainStrengthScore-0.74375) > 1e-9 {
+		t.Fatalf("quality-adjusted DomainStrengthScore = %v, want 0.74375", entry.ScoringCandidate.DomainStrengthScore)
+	}
+
+	profile.TaskDomainStrengths = map[TaskDomain]float64{TaskDomainReasoning: 0.97}
+	entry = router.buildChannelEntry(
+		scheduler.ChannelInfo{Index: 0, Name: "sol", Status: "active"},
+		&config.UpstreamConfig{ChannelUID: "ch_sol"}, "responses", "gpt-5.6-sol", nil,
+	)
+	applyDomainStrength(&entry, TaskDomainReasoning)
+	if entry.ScoringCandidate.DomainStrengthScore != 0.97 ||
+		entry.ScoringCandidate.DomainEvidence.Source != "endpoint_override" {
+		t.Fatalf("endpoint override evidence = %+v", entry.ScoringCandidate.DomainEvidence)
 	}
 }
 

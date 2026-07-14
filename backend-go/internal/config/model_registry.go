@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"regexp"
 	"sort"
 	"strings"
@@ -85,6 +84,15 @@ type ResolvedUpstreamCapability struct {
 	Capability     UpstreamModelCapability
 	RequestModel   string
 	ActualModel    string
+	MatchedPattern string
+	Source         string
+	Known          bool
+}
+
+// ResolvedModelBenchmarkProfile 描述规范模型能力基准的匹配结果。
+type ResolvedModelBenchmarkProfile struct {
+	Profile        ModelBenchmarkProfile
+	Model          string
 	MatchedPattern string
 	Source         string
 	Known          bool
@@ -294,19 +302,27 @@ func BuiltinAgentModelProfiles() map[string]AgentModelProfile {
 // BuiltinUpstreamModelCapabilities 返回 CCX 内置的实际上游模型能力知识库。
 var (
 	builtinOnce       sync.Once
+	builtinRebuildMu  sync.Mutex
 	builtinSnapshotMu sync.RWMutex
 	builtinSnapshot   upstreamCapabilitySnapshot
+	builtinObservers  sync.Map
 )
 
 type upstreamCapabilitySnapshot struct {
-	store        *presetstore.PresetStore
-	fingerprint  string
-	capabilities map[string]UpstreamModelCapability
-	patternCache map[string]*compiledBuiltinPattern
+	store                 *presetstore.PresetStore
+	capabilities          map[string]UpstreamModelCapability
+	patternCache          map[string]*compiledBuiltinPattern
+	benchmarks            map[string]ModelBenchmarkProfile
+	benchmarkPatternCache map[string]*compiledBuiltinPattern
 }
 
 func BuiltinUpstreamModelCapabilities() map[string]UpstreamModelCapability {
 	return cloneCapabilitiesMap(currentBuiltinSnapshot().capabilities)
+}
+
+// BuiltinModelBenchmarkProfiles 返回规范模型能力基准的深拷贝。
+func BuiltinModelBenchmarkProfiles() map[string]ModelBenchmarkProfile {
+	return cloneBenchmarkProfilesMap(currentBuiltinSnapshot().benchmarks)
 }
 
 func currentBuiltinSnapshot() upstreamCapabilitySnapshot {
@@ -325,43 +341,58 @@ func shouldRebuildBuiltinSnapshot(snapshot upstreamCapabilitySnapshot, store *pr
 	if store == nil {
 		return snapshot.store != nil || len(snapshot.capabilities) == 0
 	}
-	if snapshot.store != store {
-		return true
-	}
-	bundle := store.Get()
-	return snapshot.fingerprint != bundleFingerprint(bundle)
+	return snapshot.store != store || len(snapshot.capabilities) == 0
 }
 
 func getBuiltinSnapshot() upstreamCapabilitySnapshot {
 	builtinSnapshotMu.RLock()
 	defer builtinSnapshotMu.RUnlock()
-	return cloneBuiltinSnapshotLocked(builtinSnapshot)
+	// snapshot 发布后保持不可变；浅拷贝持有旧 map 引用在并发替换后仍然安全，
+	// 避免每次模型解析都深拷贝整个注册表。
+	return builtinSnapshot
 }
 
 func rebuildBuiltinSnapshotForStore(store *presetstore.PresetStore) {
+	builtinRebuildMu.Lock()
+	defer builtinRebuildMu.Unlock()
 	if store == nil {
 		store = presetstore.Default()
+	}
+	if _, loaded := builtinObservers.LoadOrStore(store, struct{}{}); !loaded {
+		store.RegisterOnChange(func(*presetstore.PresetBundle) {
+			rebuildBuiltinSnapshotForStore(store)
+		})
 	}
 	bundle := store.Get()
 	capabilities := generatedBuiltinUpstreamModelCapabilities()
 	if runtimeCapabilities := convertRuntimeCapabilities(bundle.ModelRegistry); len(runtimeCapabilities) > 0 {
 		capabilities = runtimeCapabilities
 	}
+	benchmarks := generatedBuiltinModelBenchmarkProfiles()
+	if runtimeBenchmarks := convertRuntimeBenchmarkProfiles(bundle.ModelRegistry); len(runtimeBenchmarks) > 0 {
+		benchmarks = runtimeBenchmarks
+	}
 	snapshot := upstreamCapabilitySnapshot{
-		store:        store,
-		fingerprint:  bundleFingerprint(bundle),
-		capabilities: cloneCapabilitiesMap(capabilities),
-		patternCache: buildPatternCache(precisionKeys(capabilities)),
+		store:                 store,
+		capabilities:          cloneCapabilitiesMap(capabilities),
+		patternCache:          buildPatternCache(precisionKeys(capabilities)),
+		benchmarks:            cloneBenchmarkProfilesMap(benchmarks),
+		benchmarkPatternCache: buildPatternCache(benchmarkPatternKeys(benchmarks)),
 	}
 	builtinSnapshotMu.Lock()
 	builtinSnapshot = snapshot
 	builtinSnapshotMu.Unlock()
-	store.RegisterOnChange(func(*presetstore.PresetBundle) {
-		rebuildBuiltinSnapshotForStore(store)
-	})
 }
 
 func precisionKeys(m map[string]UpstreamModelCapability) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func benchmarkPatternKeys(m map[string]ModelBenchmarkProfile) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -379,15 +410,6 @@ func buildPatternCache(patterns []string) map[string]*compiledBuiltinPattern {
 		cache[p] = compiled
 	}
 	return cache
-}
-
-func cloneBuiltinSnapshotLocked(snapshot upstreamCapabilitySnapshot) upstreamCapabilitySnapshot {
-	return upstreamCapabilitySnapshot{
-		store:        snapshot.store,
-		fingerprint:  snapshot.fingerprint,
-		capabilities: cloneCapabilitiesMap(snapshot.capabilities),
-		patternCache: clonePatternCache(snapshot.patternCache),
-	}
 }
 
 func cloneCapabilitiesMap(src map[string]UpstreamModelCapability) map[string]UpstreamModelCapability {
@@ -440,6 +462,31 @@ func cloneCapability(src UpstreamModelCapability) UpstreamModelCapability {
 	return dst
 }
 
+func cloneBenchmarkProfilesMap(src map[string]ModelBenchmarkProfile) map[string]ModelBenchmarkProfile {
+	if len(src) == 0 {
+		return map[string]ModelBenchmarkProfile{}
+	}
+	dst := make(map[string]ModelBenchmarkProfile, len(src))
+	for pattern, profile := range src {
+		dst[pattern] = cloneBenchmarkProfile(profile)
+	}
+	return dst
+}
+
+func cloneBenchmarkProfile(src ModelBenchmarkProfile) ModelBenchmarkProfile {
+	dst := src
+	if len(src.CategoryScores) > 0 {
+		dst.CategoryScores = make(map[string]float64, len(src.CategoryScores))
+		for category, score := range src.CategoryScores {
+			dst.CategoryScores[category] = score
+		}
+	}
+	if len(src.Sources) > 0 {
+		dst.Sources = append([]string(nil), src.Sources...)
+	}
+	return dst
+}
+
 func clonePricingTier(src ModelPricingTier) ModelPricingTier {
 	dst := src
 	if src.InputCacheHitPrice != nil {
@@ -453,21 +500,6 @@ func clonePricingTier(src ModelPricingTier) ModelPricingTier {
 	if src.OutputPrice != nil {
 		v := *src.OutputPrice
 		dst.OutputPrice = &v
-	}
-	return dst
-}
-
-func clonePatternCache(src map[string]*compiledBuiltinPattern) map[string]*compiledBuiltinPattern {
-	if len(src) == 0 {
-		return map[string]*compiledBuiltinPattern{}
-	}
-	dst := make(map[string]*compiledBuiltinPattern, len(src))
-	for pattern, compiled := range src {
-		if compiled == nil {
-			continue
-		}
-		copyCompiled := *compiled
-		dst[pattern] = &copyCompiled
 	}
 	return dst
 }
@@ -525,6 +557,35 @@ func convertRuntimeCapabilities(preset *presetstore.ModelRegistryPreset) map[str
 	return capabilities
 }
 
+func convertRuntimeBenchmarkProfiles(preset *presetstore.ModelRegistryPreset) map[string]ModelBenchmarkProfile {
+	if preset == nil || len(preset.BenchmarkProfiles) == 0 {
+		return nil
+	}
+	profiles := make(map[string]ModelBenchmarkProfile)
+	for _, entry := range preset.BenchmarkProfiles {
+		profile := ModelBenchmarkProfile{
+			CanonicalModel:       entry.CanonicalModel,
+			OverallScore:         entry.OverallScore,
+			Sources:              append([]string(nil), entry.Sources...),
+			VerifiedAt:           entry.VerifiedAt,
+			Lane:                 entry.Lane,
+			SharedResults:        entry.SharedResults,
+			ComparableCategories: entry.ComparableCategories,
+			TotalCategories:      entry.TotalCategories,
+		}
+		if len(entry.CategoryScores) > 0 {
+			profile.CategoryScores = make(map[string]float64, len(entry.CategoryScores))
+			for category, score := range entry.CategoryScores {
+				profile.CategoryScores[category] = score
+			}
+		}
+		for _, pattern := range entry.Patterns {
+			profiles[pattern] = cloneBenchmarkProfile(profile)
+		}
+	}
+	return profiles
+}
+
 func cloneFloatPointer(src *float64) *float64 {
 	if src == nil {
 		return nil
@@ -538,17 +599,6 @@ func coalesceString(primary, fallback string) string {
 		return primary
 	}
 	return fallback
-}
-
-func bundleFingerprint(bundle *presetstore.PresetBundle) string {
-	if bundle == nil {
-		return ""
-	}
-	data, err := json.Marshal(bundle)
-	if err != nil {
-		panic("failed to fingerprint preset bundle: " + err.Error())
-	}
-	return string(data)
 }
 
 // ResolveAgentModelProfile 解析下游 agent 模型语义。
@@ -576,12 +626,32 @@ func ResolveUpstreamCapability(requestModel string, upstream *UpstreamConfig, gl
 	}
 	snapshot := currentBuiltinSnapshot()
 	if capability, pattern, ok := resolveCapabilityForModelsFold(actualModel, requestModel, snapshot.capabilities, snapshot.patternCache); ok {
-		return ResolvedUpstreamCapability{Capability: capability, RequestModel: requestModel, ActualModel: actualModel, MatchedPattern: pattern, Source: "builtin", Known: true}
+		return ResolvedUpstreamCapability{Capability: cloneCapability(capability), RequestModel: requestModel, ActualModel: actualModel, MatchedPattern: pattern, Source: "builtin", Known: true}
 	}
 	if upstream != nil && (upstream.DefaultCapability.ContextWindowTokens > 0 || upstream.DefaultCapability.MaxOutputTokens > 0) {
 		return ResolvedUpstreamCapability{Capability: upstream.DefaultCapability, RequestModel: requestModel, ActualModel: actualModel, Source: "channel_default", Known: true}
 	}
 	return ResolvedUpstreamCapability{RequestModel: requestModel, ActualModel: actualModel}
+}
+
+// ResolveModelBenchmarkProfile 解析规范模型的能力上界证据。
+// 基准只提供软评分依据，不参与 supportedModels 或能力下界判断。
+func ResolveModelBenchmarkProfile(model string) ResolvedModelBenchmarkProfile {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ResolvedModelBenchmarkProfile{}
+	}
+	snapshot := currentBuiltinSnapshot()
+	if profile, pattern, ok := resolvePatternValueFold(model, snapshot.benchmarks, snapshot.benchmarkPatternCache); ok {
+		return ResolvedModelBenchmarkProfile{
+			Profile:        cloneBenchmarkProfile(profile),
+			Model:          model,
+			MatchedPattern: pattern,
+			Source:         "builtin",
+			Known:          true,
+		}
+	}
+	return ResolvedModelBenchmarkProfile{Model: model}
 }
 
 func resolveCapabilityForModels(actualModel, requestModel string, capabilities map[string]UpstreamModelCapability) (UpstreamModelCapability, string, bool) {

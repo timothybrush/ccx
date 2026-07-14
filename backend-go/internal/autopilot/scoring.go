@@ -151,6 +151,7 @@ type ScoringCandidate struct {
 	// DomainStrengthScore 是该模型在当前任务域的优势分（0.0-1.0，0.5=中性）。
 	// 调用方应使用 BuildDomainStrengthScore 预计算。
 	DomainStrengthScore float64
+	DomainEvidence      *DomainStrengthEvidence
 }
 
 // ScoringContext 是评分时的上下文信息（来自请求/策略）。
@@ -172,16 +173,17 @@ type ScoredCandidate struct {
 	Score      float64 `json:"score"` // 最终总分
 
 	// ── 分项明细（供 trace 展示）──
-	QualityScore         float64 `json:"qualityScore"`
-	StabilityScore       float64 `json:"stabilityScore"`
-	SpeedScore           float64 `json:"speedScore"`
-	CostScore            float64 `json:"costScore"`
-	SavingsScore         float64 `json:"savingsScore"`
-	TierMatchBonus       float64 `json:"tierMatchBonus"`
-	FamilyPrefScore      float64 `json:"familyPrefScore"`
-	ProviderQualityScore float64 `json:"providerQualityScore"`
-	DomainStrengthScore  float64 `json:"domainStrengthScore"`
-	Penalty              float64 `json:"penalty"`
+	QualityScore         float64                 `json:"qualityScore"`
+	StabilityScore       float64                 `json:"stabilityScore"`
+	SpeedScore           float64                 `json:"speedScore"`
+	CostScore            float64                 `json:"costScore"`
+	SavingsScore         float64                 `json:"savingsScore"`
+	TierMatchBonus       float64                 `json:"tierMatchBonus"`
+	FamilyPrefScore      float64                 `json:"familyPrefScore"`
+	ProviderQualityScore float64                 `json:"providerQualityScore"`
+	DomainStrengthScore  float64                 `json:"domainStrengthScore"`
+	DomainEvidence       *DomainStrengthEvidence `json:"domainEvidence,omitempty"`
+	Penalty              float64                 `json:"penalty"`
 }
 
 // ── 评分公式 ──
@@ -279,6 +281,7 @@ func ScoreCandidate(candidate ScoringCandidate, ctx ScoringContext) ScoredCandid
 		FamilyPrefScore:      fps,
 		ProviderQualityScore: pqs,
 		DomainStrengthScore:  dss,
+		DomainEvidence:       candidate.DomainEvidence,
 		Penalty:              penalty,
 	}
 }

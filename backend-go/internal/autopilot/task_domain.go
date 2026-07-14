@@ -3,6 +3,8 @@ package autopilot
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/BenedictKing/ccx/internal/config"
 )
 
 // ── 种子矩阵（§5.7.3）──
@@ -242,23 +244,118 @@ func inferFromExtensions(exts []string) TaskDomain {
 
 // ── DomainStrength 查询（§5.7.3）──
 
+// DomainStrengthEvidence 解释任务域强度的来源及规范基准折算过程。
+// Benchmark 字段只在 source=canonical_benchmark 时填写。
+type DomainStrengthEvidence struct {
+	Source                string   `json:"source"`
+	Score                 float64  `json:"score"`
+	CanonicalCeiling      float64  `json:"canonicalCeiling,omitempty"`
+	ProviderQualityFactor float64  `json:"providerQualityFactor,omitempty"`
+	CanonicalModel        string   `json:"canonicalModel,omitempty"`
+	BenchmarkCategory     string   `json:"benchmarkCategory,omitempty"`
+	BenchmarkSources      []string `json:"benchmarkSources,omitempty"`
+	BenchmarkVerifiedAt   string   `json:"benchmarkVerifiedAt,omitempty"`
+	BenchmarkLane         string   `json:"benchmarkLane,omitempty"`
+	EvidenceConfidence    float64  `json:"evidenceConfidence,omitempty"`
+}
+
+type benchmarkDomainMapping struct {
+	category   string
+	confidence float64
+}
+
+// benchmarkDomainMappings 保持基准原始类别与 CCX 任务域的映射集中、可审计。
+// aesthetics_ui 仅借用多模态分作为弱代理信号，因此解释置信度减半。
+var benchmarkDomainMappings = map[TaskDomain]benchmarkDomainMapping{
+	TaskDomainGeneral:      {category: "knowledge", confidence: 1.0},
+	TaskDomainReasoning:    {category: "math", confidence: 1.0},
+	TaskDomainCoding:       {category: "coding", confidence: 1.0},
+	TaskDomainCodeReview:   {category: "coding", confidence: 1.0},
+	TaskDomainAgentic:      {category: "agentic", confidence: 1.0},
+	TaskDomainAestheticsUI: {category: "multimodal", confidence: 0.5},
+	TaskDomainTranslation:  {category: "multilingual", confidence: 0.8},
+	TaskDomainWriting:      {category: "writing", confidence: 1.0},
+}
+
 // DomainStrength 返回指定模型在给定任务域的优势分。
-// 覆盖优先级：ModelProfile 级值 > 种子矩阵 > 0.5 中性。
+// 覆盖优先级：ModelProfile 级值 > 规范模型基准 > 种子矩阵 > 0.5 中性。
 func DomainStrength(profile *ModelProfile, domain TaskDomain) float64 {
+	return ResolveDomainStrength(profile, domain).Score
+}
+
+// ResolveDomainStrength 返回任务域强度及其可解释证据。
+// 规范基准代表模型能力上界；有可信渠道质量证据时只允许向下折算。
+func ResolveDomainStrength(profile *ModelProfile, domain TaskDomain) DomainStrengthEvidence {
+	if profile == nil {
+		return DomainStrengthEvidence{Source: "neutral", Score: 0.5}
+	}
+
 	// 优先级 1：ModelProfile 级覆盖
 	if profile.TaskDomainStrengths != nil {
 		if score, ok := profile.TaskDomainStrengths[domain]; ok {
-			return score
+			return DomainStrengthEvidence{Source: "endpoint_override", Score: clampUnit(score)}
 		}
 	}
 
-	// 优先级 2：种子矩阵（family + 主版本）
-	if score := seedLookup(profile.ModelFamily, profile.ModelID, domain); score > 0 {
-		return score
+	// 优先级 2：规范模型基准。缺少当前任务域的直接/代理类别时继续回退。
+	if mapping, ok := benchmarkDomainMappings[domain]; ok {
+		resolved := config.ResolveModelBenchmarkProfile(profile.ModelID)
+		if resolved.Known {
+			if rawScore, found := resolved.Profile.CategoryScores[mapping.category]; found {
+				ceiling := clampUnit(rawScore / 100)
+				providerFactor := providerQualityFactor(profile)
+				confidence := benchmarkEvidenceConfidence(resolved.Profile) * mapping.confidence
+				return DomainStrengthEvidence{
+					Source:                "canonical_benchmark",
+					Score:                 clampUnit(ceiling * providerFactor),
+					CanonicalCeiling:      ceiling,
+					ProviderQualityFactor: providerFactor,
+					CanonicalModel:        resolved.Profile.CanonicalModel,
+					BenchmarkCategory:     mapping.category,
+					BenchmarkSources:      append([]string(nil), resolved.Profile.Sources...),
+					BenchmarkVerifiedAt:   resolved.Profile.VerifiedAt,
+					BenchmarkLane:         resolved.Profile.Lane,
+					EvidenceConfidence:    clampUnit(confidence),
+				}
+			}
+		}
 	}
 
-	// 优先级 3：中性默认
-	return 0.5
+	// 优先级 3：种子矩阵（family + 主版本）
+	if score := seedLookup(profile.ModelFamily, profile.ModelID, domain); score > 0 {
+		return DomainStrengthEvidence{Source: "family_seed", Score: clampUnit(score)}
+	}
+
+	// 优先级 4：中性默认
+	return DomainStrengthEvidence{Source: "neutral", Score: 0.5}
+}
+
+// providerQualityFactor 将渠道质量证据折算为 [0,1] 的保守下调因子。
+// 无证据时因子为 1；置信度越高，越接近观测到的 providerQualityScore。
+func providerQualityFactor(profile *ModelProfile) float64 {
+	if profile == nil || profile.ProviderQualityConfidence < 0.5 {
+		return 1
+	}
+	quality := clampUnit(profile.ProviderQualityScore)
+	confidence := clampUnit(profile.ProviderQualityConfidence)
+	return clampUnit(1 - confidence*(1-quality))
+}
+
+func benchmarkEvidenceConfidence(profile config.ModelBenchmarkProfile) float64 {
+	if profile.TotalCategories <= 0 || profile.ComparableCategories <= 0 {
+		return 0
+	}
+	return clampUnit(float64(profile.ComparableCategories) / float64(profile.TotalCategories))
+}
+
+func clampUnit(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
 }
 
 // seedLookup 从种子矩阵中查找 family + 主版本 对应的域优势值。

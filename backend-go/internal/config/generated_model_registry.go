@@ -70,3 +70,11 @@ func generatedBuiltinUpstreamModelCapabilities() map[string]UpstreamModelCapabil
 		"(?:^|[-/])agnes-video-v2\\.0(?=$|@)":                                                       UpstreamModelCapability{Provider: "agnes", DisplayName: "Agnes Video V2.0", Description: "Production-grade video generation model by Sapiens AI. Supports text-to-video, image-to-video, multi-image video, and keyframe animation. Uses async task API (POST /v1/videos to create, GET to poll). Supports up to 441 frames (approx 18s at 24fps). Standard price $0.005/second.", Capabilities: map[string]bool{"videoGeneration": true}, Sources: []string{"https://agnes-ai.com/zh-Hans/docs/agnes-video-v20"}},
 	}
 }
+
+func generatedBuiltinModelBenchmarkProfiles() map[string]ModelBenchmarkProfile {
+	return map[string]ModelBenchmarkProfile{
+		"(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": ModelBenchmarkProfile{CanonicalModel: "claude-opus-4-8", OverallScore: 85, CategoryScores: map[string]float64{"agentic": 80.3, "coding": 76.4, "knowledge": 62.7, "math": 53.9, "multimodal": 77}, Sources: []string{"https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra", "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol", "https://benchlm.ai/methodology"}, VerifiedAt: "2026-07-13", Lane: "provisional", SharedResults: 30, ComparableCategories: 5, TotalCategories: 8},
+		"(?:^|[-/])gpt-5\\.6-terra(?=$|@)":                                     ModelBenchmarkProfile{CanonicalModel: "gpt-5.6-terra", OverallScore: 85, CategoryScores: map[string]float64{"agentic": 87.4, "coding": 63.4, "knowledge": 92.9, "math": 80.8, "multimodal": 80.7}, Sources: []string{"https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra", "https://benchlm.ai/methodology"}, VerifiedAt: "2026-07-13", Lane: "provisional", SharedResults: 30, ComparableCategories: 5, TotalCategories: 8},
+		"(?:^|[-/])gpt-5\\.6-sol(?=$|@)":                                       ModelBenchmarkProfile{CanonicalModel: "gpt-5.6-sol", OverallScore: 86, CategoryScores: map[string]float64{"agentic": 92, "coding": 64.6, "knowledge": 94.6, "math": 87.5, "multimodal": 83}, Sources: []string{"https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol", "https://benchlm.ai/methodology"}, VerifiedAt: "2026-07-13", Lane: "provisional", SharedResults: 30, ComparableCategories: 5, TotalCategories: 8},
+	}
+}

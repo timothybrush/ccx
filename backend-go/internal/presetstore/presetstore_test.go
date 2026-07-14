@@ -86,6 +86,55 @@ func TestValidateAcceptsBuiltinManifestOpenAIServiceType(t *testing.T) {
 	}
 }
 
+func TestValidateModelBenchmarkProfiles(t *testing.T) {
+	validBenchmark := ModelBenchmarkProfilePreset{
+		Patterns:             []string{"gpt-5.6-sol"},
+		CanonicalModel:       "gpt-5.6-sol",
+		OverallScore:         86,
+		CategoryScores:       map[string]float64{"coding": 64.6},
+		Sources:              []string{"https://benchlm.ai/methodology"},
+		VerifiedAt:           "2026-07-13",
+		Lane:                 "provisional",
+		SharedResults:        30,
+		ComparableCategories: 5,
+		TotalCategories:      8,
+	}
+
+	b := validBundle()
+	b.ModelRegistry = &ModelRegistryPreset{SchemaVersion: 1, BenchmarkProfiles: []ModelBenchmarkProfilePreset{validBenchmark}}
+	if err := Validate(b); err != nil {
+		t.Fatalf("合法 benchmark profile 未通过校验: %v", err)
+	}
+
+	tests := map[string]func(*ModelBenchmarkProfilePreset){
+		"缺少 pattern":         func(p *ModelBenchmarkProfilePreset) { p.Patterns = nil },
+		"pattern 非法":         func(p *ModelBenchmarkProfilePreset) { p.Patterns = []string{"("} },
+		"缺少 canonical model": func(p *ModelBenchmarkProfilePreset) { p.CanonicalModel = "" },
+		"总分越界":               func(p *ModelBenchmarkProfilePreset) { p.OverallScore = 101 },
+		"类别分越界":              func(p *ModelBenchmarkProfilePreset) { p.CategoryScores["coding"] = -1 },
+		"缺少类别向量":             func(p *ModelBenchmarkProfilePreset) { p.CategoryScores = nil },
+		"缺少来源":               func(p *ModelBenchmarkProfilePreset) { p.Sources = nil },
+		"核验日期非法":             func(p *ModelBenchmarkProfilePreset) { p.VerifiedAt = "20260713" },
+		"lane 非法":            func(p *ModelBenchmarkProfilePreset) { p.Lane = "draft" },
+		"共享结果数缺失":            func(p *ModelBenchmarkProfilePreset) { p.SharedResults = 0 },
+		"覆盖类别数越界":            func(p *ModelBenchmarkProfilePreset) { p.ComparableCategories = 9 },
+	}
+	for name, corrupt := range tests {
+		t.Run(name, func(t *testing.T) {
+			profile := validBenchmark
+			profile.Patterns = append([]string(nil), validBenchmark.Patterns...)
+			profile.Sources = append([]string(nil), validBenchmark.Sources...)
+			profile.CategoryScores = map[string]float64{"coding": validBenchmark.CategoryScores["coding"]}
+			corrupt(&profile)
+			candidate := validBundle()
+			candidate.ModelRegistry = &ModelRegistryPreset{SchemaVersion: 1, BenchmarkProfiles: []ModelBenchmarkProfilePreset{profile}}
+			if err := Validate(candidate); err == nil {
+				t.Fatal("期望非法 benchmark profile 被拒绝")
+			}
+		})
+	}
+}
+
 func TestTierForAndCanonicalize(t *testing.T) {
 	sub := validBundle().Subscription
 	if got := sub.TierFor("relay"); got != "second" {

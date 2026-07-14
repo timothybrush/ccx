@@ -120,6 +120,18 @@ export interface UpstreamModelCapability {
   sources?: string[]
 }
 
+export interface ModelBenchmarkProfile {
+  canonicalModel: string
+  overallScore?: number
+  categoryScores?: Record<string, number>
+  sources?: string[]
+  verifiedAt?: string
+  lane?: 'provisional' | 'verified'
+  sharedResults?: number
+  comparableCategories?: number
+  totalCategories?: number
+}
+
 export interface EmbeddingCapability {
   embeddingSpaceId?: string
   dimensions?: number
@@ -1249,6 +1261,19 @@ export interface CandidateScore {
   weight: number
 }
 
+export interface DomainStrengthEvidence {
+  source: 'endpoint_override' | 'canonical_benchmark' | 'family_seed' | 'neutral'
+  score: number
+  canonicalCeiling?: number
+  providerQualityFactor?: number
+  canonicalModel?: string
+  benchmarkCategory?: string
+  benchmarkSources?: string[]
+  benchmarkVerifiedAt?: string
+  benchmarkLane?: string
+  evidenceConfidence?: number
+}
+
 export interface RoutingCandidate {
   channelUid: string
   metricsKey?: string
@@ -1257,6 +1282,7 @@ export interface RoutingCandidate {
   healthState?: string
   totalScore: number
   scores?: CandidateScore[]
+  domainEvidence?: DomainStrengthEvidence
   selected: boolean
   filterReasons?: string[]
 }
@@ -1639,10 +1665,15 @@ export interface RuntimeModelRegistryEntry extends UpstreamModelCapability {
   patterns?: string[]
 }
 
+export interface RuntimeModelBenchmarkProfile extends ModelBenchmarkProfile {
+  patterns?: string[]
+}
+
 export interface RuntimeModelRegistryBundle {
   schemaVersion?: number
   pricingUnit?: string
   upstreamCapabilities?: RuntimeModelRegistryEntry[]
+  benchmarkProfiles?: RuntimeModelBenchmarkProfile[]
 }
 
 export interface ChannelPresetBundle {

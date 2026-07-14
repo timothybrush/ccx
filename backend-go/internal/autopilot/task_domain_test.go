@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"math"
 	"testing"
 )
 
@@ -121,6 +122,100 @@ func TestDomainStrength_OverridePartialDomain(t *testing.T) {
 	// 未覆盖的域走种子矩阵
 	if got := DomainStrength(profile, TaskDomainCodeReview); got != 0.90 {
 		t.Errorf("DomainStrength(seed code_review) = %v, want 0.90", got)
+	}
+}
+
+func TestResolveDomainStrength_CanonicalBenchmarkByVariant(t *testing.T) {
+	tests := []struct {
+		model  string
+		domain TaskDomain
+		want   float64
+	}{
+		{model: "claude-opus-4-8", domain: TaskDomainCoding, want: 0.764},
+		{model: "gpt-5.6-terra", domain: TaskDomainReasoning, want: 0.808},
+		{model: "gpt-5.6-sol", domain: TaskDomainReasoning, want: 0.875},
+		{model: "gpt-5.6-sol", domain: TaskDomainAgentic, want: 0.92},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model+"/"+string(tt.domain), func(t *testing.T) {
+			profile := &ModelProfile{ModelID: tt.model, ModelFamily: InferModelFamily(tt.model, "")}
+			evidence := ResolveDomainStrength(profile, tt.domain)
+			if evidence.Source != "canonical_benchmark" {
+				t.Fatalf("Source = %q, want canonical_benchmark", evidence.Source)
+			}
+			if math.Abs(evidence.Score-tt.want) > 1e-9 {
+				t.Fatalf("Score = %v, want %v", evidence.Score, tt.want)
+			}
+			if evidence.ProviderQualityFactor != 1 {
+				t.Fatalf("ProviderQualityFactor = %v, want 1 without endpoint evidence", evidence.ProviderQualityFactor)
+			}
+			if evidence.BenchmarkLane != "provisional" || evidence.BenchmarkVerifiedAt != "2026-07-13" {
+				t.Fatalf("benchmark metadata = lane %q date %q", evidence.BenchmarkLane, evidence.BenchmarkVerifiedAt)
+			}
+			if evidence.EvidenceConfidence != 0.625 {
+				t.Fatalf("EvidenceConfidence = %v, want 0.625", evidence.EvidenceConfidence)
+			}
+		})
+	}
+}
+
+func TestResolveDomainStrength_AppliesProviderQualityAsDownwardFactor(t *testing.T) {
+	profile := &ModelProfile{
+		ModelID:                   "gpt-5.6-sol",
+		ModelFamily:               ModelFamilyOpenAI,
+		ProviderQualityScore:      0.8,
+		ProviderQualityConfidence: 0.75,
+	}
+	evidence := ResolveDomainStrength(profile, TaskDomainReasoning)
+	// factor = 1 - 0.75 * (1 - 0.8) = 0.85; effective = 0.875 * 0.85.
+	if math.Abs(evidence.ProviderQualityFactor-0.85) > 1e-9 {
+		t.Fatalf("ProviderQualityFactor = %v, want 0.85", evidence.ProviderQualityFactor)
+	}
+	if math.Abs(evidence.Score-0.74375) > 1e-9 {
+		t.Fatalf("Score = %v, want 0.74375", evidence.Score)
+	}
+
+	profile.ProviderQualityConfidence = 0.49
+	lowConfidence := ResolveDomainStrength(profile, TaskDomainReasoning)
+	if lowConfidence.ProviderQualityFactor != 1 || lowConfidence.Score != 0.875 {
+		t.Fatalf("低置信度不应下调规范上界: %+v", lowConfidence)
+	}
+}
+
+func TestResolveDomainStrength_OverrideAndFallbackPriority(t *testing.T) {
+	profile := &ModelProfile{
+		ModelID:     "claude-opus-4-8",
+		ModelFamily: ModelFamilyClaude,
+		TaskDomainStrengths: map[TaskDomain]float64{
+			TaskDomainCoding: 0.99,
+		},
+	}
+
+	override := ResolveDomainStrength(profile, TaskDomainCoding)
+	if override.Source != "endpoint_override" || override.Score != 0.99 {
+		t.Fatalf("override = %+v, want endpoint override 0.99", override)
+	}
+	writing := ResolveDomainStrength(profile, TaskDomainWriting)
+	if writing.Source != "family_seed" || writing.Score != 0.85 {
+		t.Fatalf("writing = %+v, want family seed 0.85", writing)
+	}
+	translation := ResolveDomainStrength(profile, TaskDomainTranslation)
+	if translation.Source != "neutral" || translation.Score != 0.5 {
+		t.Fatalf("translation = %+v, want neutral 0.5", translation)
+	}
+}
+
+func TestResolveDomainStrength_MultimodalProxyHasLowerConfidence(t *testing.T) {
+	evidence := ResolveDomainStrength(&ModelProfile{
+		ModelID:     "claude-opus-4-8",
+		ModelFamily: ModelFamilyClaude,
+	}, TaskDomainAestheticsUI)
+	if evidence.Score != 0.77 {
+		t.Fatalf("Score = %v, want 0.77", evidence.Score)
+	}
+	if evidence.EvidenceConfidence != 0.3125 {
+		t.Fatalf("EvidenceConfidence = %v, want 0.3125", evidence.EvidenceConfidence)
 	}
 }
 

@@ -709,5 +709,71 @@
       },
       "sources": ["https://agnes-ai.com/zh-Hans/docs/agnes-video-v20"]
     }
+  ],
+  "benchmarkProfiles": [
+    {
+      "patterns": ["(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "canonicalModel": "claude-opus-4-8",
+      "overallScore": 85,
+      "categoryScores": {
+        "knowledge": 62.7,
+        "math": 53.9,
+        "coding": 76.4,
+        "agentic": 80.3,
+        "multimodal": 77.0
+      },
+      "sources": [
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-13",
+      "lane": "provisional",
+      "sharedResults": 30,
+      "comparableCategories": 5,
+      "totalCategories": 8
+    },
+    {
+      "patterns": ["(?:^|[-/])gpt-5\\.6-terra(?=$|@)"],
+      "canonicalModel": "gpt-5.6-terra",
+      "overallScore": 85,
+      "categoryScores": {
+        "knowledge": 92.9,
+        "math": 80.8,
+        "coding": 63.4,
+        "agentic": 87.4,
+        "multimodal": 80.7
+      },
+      "sources": [
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-13",
+      "lane": "provisional",
+      "sharedResults": 30,
+      "comparableCategories": 5,
+      "totalCategories": 8
+    },
+    {
+      "patterns": ["(?:^|[-/])gpt-5\\.6-sol(?=$|@)"],
+      "canonicalModel": "gpt-5.6-sol",
+      "overallScore": 86,
+      "categoryScores": {
+        "knowledge": 94.6,
+        "math": 87.5,
+        "coding": 64.6,
+        "agentic": 92.0,
+        "multimodal": 83.0
+      },
+      "sources": [
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-13",
+      "lane": "provisional",
+      "sharedResults": 30,
+      "comparableCategories": 5,
+      "totalCategories": 8
+    }
   ]
 }

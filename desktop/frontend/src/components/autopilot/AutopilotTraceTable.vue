@@ -125,6 +125,7 @@ function shortenUid(uid?: string): string {
                         <TableHead class="text-[11px]">Origin Tier</TableHead>
                         <TableHead class="text-[11px]">Health</TableHead>
                         <TableHead class="text-[11px]">Score</TableHead>
+                        <TableHead class="text-[11px]">Domain</TableHead>
                         <TableHead class="text-[11px]">Selected</TableHead>
                         <TableHead class="text-[11px]">Filter Reasons</TableHead>
                       </TableRow>
@@ -135,6 +136,14 @@ function shortenUid(uid?: string): string {
                         <TableCell class="text-[11px]">{{ cand.originTier || '-' }}</TableCell>
                         <TableCell class="text-[11px]">{{ cand.healthState || '-' }}</TableCell>
                         <TableCell class="text-[11px]">{{ cand.totalScore.toFixed(3) }}</TableCell>
+                        <TableCell class="text-[11px]">
+                          <div>{{ cand.domainEvidence?.source || '-' }}</div>
+                          <div v-if="cand.domainEvidence?.canonicalModel" class="text-muted-foreground">
+                            {{ cand.domainEvidence.canonicalModel }} / {{ cand.domainEvidence.benchmarkCategory }}
+                            · {{ cand.domainEvidence.canonicalCeiling?.toFixed(3) }} ×
+                            {{ cand.domainEvidence.providerQualityFactor?.toFixed(3) }}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Check v-if="cand.selected" class="size-3.5 text-emerald-500" />
                           <Minus v-else class="size-3.5 text-muted-foreground" />

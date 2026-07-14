@@ -117,6 +117,7 @@
                             <th class="text-caption">Origin Tier</th>
                             <th class="text-caption">Health</th>
                             <th class="text-caption">Score</th>
+                            <th class="text-caption">Domain</th>
                             <th class="text-caption">Selected</th>
                             <th class="text-caption">Filter Reasons</th>
                           </tr>
@@ -127,6 +128,14 @@
                             <td class="text-caption">{{ cand.originTier || '-' }}</td>
                             <td class="text-caption">{{ cand.healthState || '-' }}</td>
                             <td class="text-caption">{{ cand.totalScore.toFixed(3) }}</td>
+                            <td class="text-caption">
+                              <div>{{ cand.domainEvidence?.source || '-' }}</div>
+                              <div v-if="cand.domainEvidence?.canonicalModel" class="text-medium-emphasis">
+                                {{ cand.domainEvidence.canonicalModel }} / {{ cand.domainEvidence.benchmarkCategory }}
+                                · {{ cand.domainEvidence.canonicalCeiling?.toFixed(3) }} ×
+                                {{ cand.domainEvidence.providerQualityFactor?.toFixed(3) }}
+                              </div>
+                            </td>
                             <td>
                               <v-icon v-if="cand.selected" size="14" color="success">mdi-check</v-icon>
                               <v-icon v-else size="14" color="grey">mdi-minus</v-icon>

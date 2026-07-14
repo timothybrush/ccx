@@ -68,7 +68,7 @@ const (
 	TaskDomainWriting      TaskDomain = "writing"       // 文案/长文写作
 	TaskDomainTranslation  TaskDomain = "translation"   // 翻译
 	TaskDomainAgentic      TaskDomain = "agentic"       // 多步工具调用/agent 编排
-	TaskDomainGeneral      TaskDomain = "general"       // 无法判定，中性
+	TaskDomainGeneral      TaskDomain = "general"       // 无法细分的通用任务；缺少基准证据时中性
 )
 
 // ── 思考等级 ──

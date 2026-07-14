@@ -43,6 +43,8 @@ type RoutingCandidate struct {
 	// 分数明细
 	TotalScore float64          `json:"totalScore"`
 	Scores     []CandidateScore `json:"scores,omitempty"`
+	// DomainEvidence 解释 domain 分来自 endpoint 覆盖、规范基准、家族种子或中性回退。
+	DomainEvidence *DomainStrengthEvidence `json:"domainEvidence,omitempty"`
 
 	// 是否通过当前模式的硬约束；shadow 中仅表示模拟结果，不改变真实调度。
 	Selected bool `json:"selected"`
