@@ -127,7 +127,11 @@ const buildProtocolRoutes = (channels: Partial<Record<LlmChannelKind, RoutedChan
   })
 }
 
-const buildDisplayChannel = (group: ChannelGroup, displayOrder: number): Channel => {
+const getGroupPriority = (channels: Partial<Record<LlmChannelKind, RoutedChannel>>): number => {
+  return Math.min(...Object.values(channels).map(channel => channel.priority ?? channel.routeIndex))
+}
+
+const buildDisplayChannel = (group: ChannelGroup): Channel => {
   const primary = selectPrimary(group.channels)
 
   return {
@@ -137,7 +141,8 @@ const buildDisplayChannel = (group: ChannelGroup, displayOrder: number): Channel
     logicalName: group.logicalName,
     routeKind: primary.routeKind,
     routeIndex: primary.routeIndex,
-    displayKey: `logical:${displayOrder}:${group.key}`,
+    displayKey: `logical:${group.key}`,
+    priority: getGroupPriority(group.channels),
     protocolCapsules: buildProtocolCapsules(group.channels),
     protocolRoutes: buildProtocolRoutes(group.channels),
   }
