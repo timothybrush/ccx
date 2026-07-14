@@ -16,6 +16,10 @@ import (
 // 对应 config.json 的 "autopilot" 顶层字段。
 // 热重载生效：文件变更后自动 reload，autopilot Manager 通过 RegisterOnConfigChange 回调感知。
 type AutopilotRoutingConfig struct {
+	// SchemaVersion 用于旧配置的幂等升级。加载器只迁移低于当前版本的配置，
+	// 避免 omitempty 字段在后续重载时被重复解释为“缺失”。
+	SchemaVersion int `json:"schemaVersion,omitempty"`
+
 	// routingMode 是智能路由运行模式。
 	// "off"    — 完全关闭，SmartRouter 不计算不记录。
 	// "shadow" — 只计算 + 记录 routing trace，不影响真实调度（默认）。
@@ -340,6 +344,8 @@ type ABTestConfig struct {
 // ── 模式常量 ──
 
 const (
+	currentAutopilotConfigSchemaVersion = 1
+
 	// AutopilotModeOff 完全关闭。
 	AutopilotModeOff = "off"
 	// AutopilotModeShadow 影子模式：只计算+记录，不影响真实调度（默认）。
@@ -361,8 +367,9 @@ const (
 // 适用于 config.json 中缺失 "autopilot" 块时的回退值。
 func DefaultAutopilotRoutingConfig() AutopilotRoutingConfig {
 	return AutopilotRoutingConfig{
-		RoutingMode: AutopilotModeShadow,
-		KillSwitch:  false,
+		SchemaVersion: currentAutopilotConfigSchemaVersion,
+		RoutingMode:   AutopilotModeShadow,
+		KillSwitch:    false,
 
 		CostPreference: CostPreferenceConfig{
 			Mode: "balanced",

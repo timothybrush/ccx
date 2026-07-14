@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -67,6 +68,9 @@ func (cm *ConfigManager) loadConfig() error {
 	// 如果配置文件不存在，创建默认配置
 	if _, err := os.Stat(cm.configFile); os.IsNotExist(err) {
 		err := cm.createDefaultConfig()
+		if err == nil {
+			applyAutopilotEnvOverrides(&cm.config.AutopilotRouting)
+		}
 		cm.mu.Unlock()
 		return err
 	}
@@ -87,7 +91,7 @@ func (cm *ConfigManager) loadConfig() error {
 	// 兼容旧配置：检查 FuzzyModeEnabled 字段是否存在
 	// 如果不存在，默认设为 true（新功能默认启用）
 	needSaveDefaults := cm.applyConfigDefaults(data)
-	// Autopilot 智能路由配置：缺失用默认值，环境变量覆盖，校验归一化
+	// Autopilot 智能路由配置：旧版本升级、缺失值补齐与校验归一化
 	if cm.applyAutopilotDefaults(data) {
 		needSaveDefaults = true
 	}
@@ -142,6 +146,9 @@ func (cm *ConfigManager) loadConfig() error {
 			return err
 		}
 	}
+
+	// 环境变量只覆盖运行态，必须放在所有持久化迁移之后，避免把急停状态写回配置文件。
+	applyAutopilotEnvOverrides(&cm.config.AutopilotRouting)
 
 	// 成功加载后通知回调（在锁内构造快照，释放锁后通知）
 	cm.fireConfigChangeCallbacks()
@@ -221,29 +228,102 @@ func (cm *ConfigManager) applyConfigDefaults(rawJSON []byte) bool {
 	return needSave
 }
 
-// applyAutopilotDefaults 处理 AutopilotRouting 配置的默认值、环境变量覆盖与校验。
+// applyAutopilotDefaults 处理 AutopilotRouting 配置的版本升级、默认值与校验。
 // 返回 true 表示配置被修改（需要保存）。
 func (cm *ConfigManager) applyAutopilotDefaults(rawJSON []byte) bool {
 	needSave := false
 
-	// 检查 config.json 中是否已包含 "autopilot" 块
+	// 缺失整个配置块时直接使用当前默认结构；已有旧配置则以当前默认值为基线，
+	// 再精确覆盖旧 JSON 中显式存在的字段，保留 false、0、空数组和空 map。
 	var rawMap map[string]json.RawMessage
 	if err := json.Unmarshal(rawJSON, &rawMap); err == nil {
-		if _, exists := rawMap["autopilot"]; !exists {
-			// 缺失 autopilot 块，使用默认值
+		rawAutopilot, exists := rawMap["autopilot"]
+		if !exists || string(bytes.TrimSpace(rawAutopilot)) == "null" {
 			cm.config.AutopilotRouting = DefaultAutopilotRoutingConfig()
 			needSave = true
 			log.Printf("[Config-Migration] autopilot 配置块不存在，使用默认值")
+		} else {
+			var metadata struct {
+				SchemaVersion int `json:"schemaVersion"`
+			}
+			if err := json.Unmarshal(rawAutopilot, &metadata); err == nil &&
+				metadata.SchemaVersion < currentAutopilotConfigSchemaVersion {
+				upgraded := DefaultAutopilotRoutingConfig()
+				if err := overlayJSONStruct(&upgraded, rawAutopilot); err != nil {
+					log.Printf("[Config-Migration] 警告: autopilot 旧配置升级失败: %v", err)
+				} else {
+					upgraded.SchemaVersion = currentAutopilotConfigSchemaVersion
+					cm.config.AutopilotRouting = upgraded
+					needSave = true
+					log.Printf("[Config-Migration] autopilot 配置已升级到 schemaVersion=%d", currentAutopilotConfigSchemaVersion)
+				}
+			}
 		}
 	}
 
-	// 环境变量覆盖（始终生效，不写入配置文件）
-	applyAutopilotEnvOverrides(&cm.config.AutopilotRouting)
-
-	// 校验与归一化（非法值回退到安全默认）
+	// 校验与归一化的结果也必须持久化，保证一次升级后配置文件与运行态一致。
+	beforeValidation := cm.config.AutopilotRouting.deepCopy()
 	cm.config.AutopilotRouting.Validate()
+	if !reflect.DeepEqual(beforeValidation, cm.config.AutopilotRouting) {
+		needSave = true
+		log.Printf("[Config-Migration] autopilot 配置已归一化")
+	}
 
 	return needSave
+}
+
+// overlayJSONStruct 将 JSON 中显式存在的字段覆盖到已填充默认值的结构体。
+// struct 字段递归覆盖；map/slice/标量整体替换，从而保留显式空值语义。
+func overlayJSONStruct(dst any, rawJSON []byte) error {
+	value := reflect.ValueOf(dst)
+	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("overlayJSONStruct 目标必须是非空结构体指针")
+	}
+	return overlayJSONStructValue(value.Elem(), rawJSON)
+}
+
+func overlayJSONStructValue(dst reflect.Value, rawJSON []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(rawJSON, &fields); err != nil {
+		return err
+	}
+
+	typ := dst.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		structField := typ.Field(i)
+		field := dst.Field(i)
+		if !field.CanSet() {
+			continue
+		}
+
+		jsonName := strings.Split(structField.Tag.Get("json"), ",")[0]
+		if jsonName == "" {
+			jsonName = structField.Name
+		}
+		if jsonName == "-" {
+			continue
+		}
+
+		rawField, exists := fields[jsonName]
+		if !exists {
+			continue
+		}
+
+		trimmed := bytes.TrimSpace(rawField)
+		if field.Kind() == reflect.Struct && string(trimmed) != "null" && len(trimmed) > 0 && trimmed[0] == '{' {
+			if err := overlayJSONStructValue(field, rawField); err != nil {
+				return fmt.Errorf("字段 %s: %w", jsonName, err)
+			}
+			continue
+		}
+
+		replacement := reflect.New(field.Type())
+		if err := json.Unmarshal(rawField, replacement.Interface()); err != nil {
+			return fmt.Errorf("字段 %s: %w", jsonName, err)
+		}
+		field.Set(replacement.Elem())
+	}
+	return nil
 }
 
 // migrateStripBillingHeaderToChannels 将旧全局 StripBillingHeader 迁移到 messages 渠道级字段。
