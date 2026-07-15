@@ -28,6 +28,14 @@ const PROVIDER_ROUTE_SUFFIXES: Record<LlmChannelKind, RegExp> = {
 
 const PRIMARY_KIND_ORDER: LlmChannelKind[] = ['messages', 'chat', 'responses', 'gemini']
 
+const UPSTREAM_PROTOCOLS: Record<Channel['serviceType'], { kind: LlmChannelKind; label: string }> = {
+  claude: { kind: 'messages', label: 'CLAUDE' },
+  openai: { kind: 'chat', label: 'CHAT' },
+  responses: { kind: 'responses', label: 'CODEX' },
+  gemini: { kind: 'gemini', label: 'GEMINI' },
+  copilot: { kind: 'chat', label: 'COPILOT' },
+}
+
 type RoutedChannel = Channel & {
   routeKind: ChannelKind
   routeIndex: number
@@ -99,13 +107,18 @@ const selectPrimary = (channels: Partial<Record<LlmChannelKind, RoutedChannel>>)
 }
 
 const buildProtocolCapsules = (channels: Partial<Record<LlmChannelKind, RoutedChannel>>): ChannelProtocolCapsule[] => {
+  const seenServiceTypes = new Set<string>()
   return PRIMARY_KIND_ORDER.flatMap(kind => {
     const channel = channels[kind]
     if (!channel) return []
+    const serviceType = channel.serviceType
+    if (seenServiceTypes.has(serviceType)) return []
+    seenServiceTypes.add(serviceType)
+    const protocol = UPSTREAM_PROTOCOLS[serviceType]
     return [{
-      kind,
-      label: PROTOCOL_LABELS[kind],
-      serviceType: channel.serviceType,
+      kind: protocol.kind,
+      label: protocol.label,
+      serviceType,
       channelUid: channel.channelUid,
       index: channel.routeIndex,
       status: channel.status,

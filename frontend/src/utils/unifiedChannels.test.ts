@@ -36,12 +36,8 @@ describe('buildUnifiedChannelsData account grouping', () => {
     const result = buildUnifiedChannelsData(data)
     expect(result.channels).toHaveLength(1)
     expect(result.channels[0].accountUid).toBe('acct-main')
-    expect(result.channels[0].protocolCapsules?.map(item => item.kind)).toEqual([
-      'messages',
-      'chat',
-      'responses',
-      'gemini',
-    ])
+    expect(result.channels[0].protocolCapsules?.map(item => item.label)).toEqual(['CLAUDE', 'CHAT'])
+    expect(result.channels[0].protocolRoutes?.map(item => item.kind)).toEqual(['messages', 'chat', 'responses', 'gemini'])
   })
 
   it('相同 provider 和名称下不同 accountUid 不应合并', () => {
@@ -56,6 +52,31 @@ describe('buildUnifiedChannelsData account grouping', () => {
     }
 
     expect(buildUnifiedChannelsData(data).channels).toHaveLength(2)
+  })
+
+  it('协议标签只展示上游实际提供的 serviceType', () => {
+    const data: Record<LlmChannelKind, ChannelsResponse> = {
+      messages: response([channel('volcengine-claude', 'acct-volcengine', 0, ['ark-key'], {
+        providerId: 'volcengine',
+        serviceType: 'claude',
+      })]),
+      chat: response([channel('volcengine-chat', 'acct-volcengine', 0, ['ark-key'], {
+        providerId: 'volcengine',
+        serviceType: 'openai',
+      })]),
+      responses: response([channel('volcengine-codex', 'acct-volcengine', 0, ['ark-key'], {
+        providerId: 'volcengine',
+        serviceType: 'openai',
+      })]),
+      gemini: response([channel('volcengine-gemini', 'acct-volcengine', 0, ['ark-key'], {
+        providerId: 'volcengine',
+        serviceType: 'openai',
+      })]),
+    }
+
+    const [volcengine] = buildUnifiedChannelsData(data).channels
+    expect(volcengine.protocolCapsules?.map(item => item.label)).toEqual(['CLAUDE', 'CHAT'])
+    expect(volcengine.protocolRoutes).toHaveLength(4)
   })
 
   it('新增单协议渠道置顶后保持多协议账号的既有相对顺序', () => {
