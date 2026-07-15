@@ -476,7 +476,15 @@ onUnmounted(() => {
 
 <style scoped>
 .add-channel-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
   overflow: hidden;
+}
+
+.add-channel-dialog > .v-card-text {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .modal-header-text {
