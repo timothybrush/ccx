@@ -287,6 +287,61 @@ func TestResolveModel_FindsBestMatch(t *testing.T) {
 	}
 }
 
+func TestResolveModel_GPT56RequiresPremiumReplacement(t *testing.T) {
+	profiles := []ModelProfile{
+		makeModelProfile("glm-4.5", ModelFamilyGLM, QualityTierNormal, 128000,
+			false, false, true, true, 20),
+		makeModelProfile("glm-5.1", ModelFamilyGLM, QualityTierHigh, 202800,
+			true, false, true, true, 30),
+		makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierPremium, 1048576,
+			true, false, true, true, 40),
+	}
+	for i := range profiles {
+		profiles[i].ChannelKind = "responses"
+	}
+	resolver := newTestResolver(t, profiles)
+	floor := CapabilityFloor{MinQualityTier: ModelProfileQualityTierFromFamily(ModelFamilyOpenAI, "gpt-5.6-sol")}
+
+	mapped, resolved, reason := resolver.ResolveModel(
+		"gpt-5.6-sol", "ch_test", "responses", "metrics_test", floor)
+	if !resolved || mapped != "glm-5.2" {
+		t.Fatalf("ResolveModel() = (%q, %v, %q), want premium glm-5.2", mapped, resolved, reason)
+	}
+}
+
+func TestResolveModel_RefreshesLegacyAutoDiscoveryCapabilities(t *testing.T) {
+	profile := makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierHigh, 272000,
+		false, false, false, true, 0)
+	profile.ChannelKind = "responses"
+	profile.Source = "auto_discovery"
+	store := &ModelProfileStore{
+		cache:     make(map[string]*ModelProfile),
+		dirtyKeys: make(map[string]struct{}),
+	}
+	if err := store.Upsert(&profile); err != nil {
+		t.Fatal(err)
+	}
+	cfgManager, cleanup := createTestConfigManagerForResolver(t, config.Config{
+		ResponsesUpstream: []config.UpstreamConfig{{
+			ChannelUID: "ch_test", AutoManaged: true, ServiceType: "openai",
+		}},
+	})
+	defer cleanup()
+	resolver := NewModelResolver(store, cfgManager)
+
+	mapped, resolved, reason := resolver.ResolveModel(
+		"gpt-5.6-sol", "ch_test", "responses", "metrics_test",
+		CapabilityFloor{MinQualityTier: QualityTierPremium, NeedsReasoning: true, NeedsToolCalls: true})
+	if !resolved || mapped != "glm-5.2" {
+		t.Fatalf("ResolveModel() = (%q, %v, %q), want refreshed glm-5.2 capabilities", mapped, resolved, reason)
+	}
+	refreshed := store.Get("ch_test", "responses", "metrics_test", "glm-5.2")
+	if refreshed == nil || refreshed.QualityTier != QualityTierPremium ||
+		refreshed.ContextTokens != 1048576 || !refreshed.SupportsReasoning || !refreshed.SupportsToolCalls {
+		t.Fatalf("旧自动发现画像未在内存中完成升级: %+v", refreshed)
+	}
+}
+
 func TestResolveModelAnyEndpoint_MapsWithoutExactModelMatch(t *testing.T) {
 	profiles := []ModelProfile{
 		makeModelProfile("mimo-v2.5-pro", ModelFamilyMiMo, QualityTierHigh, 1000000,

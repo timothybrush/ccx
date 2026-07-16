@@ -3,6 +3,8 @@ package autopilot
 import (
 	"strings"
 	"time"
+
+	"github.com/BenedictKing/ccx/internal/config"
 )
 
 // ── 质量档 ──
@@ -229,7 +231,9 @@ func ModelProfileQualityTierFromFamily(family ModelFamily, modelID string) Quali
 		return QualityTierNormal
 
 	case ModelFamilyOpenAI:
-		if strings.Contains(lowerID, "gpt-5.5") || strings.Contains(lowerID, "gpt-5.4") && !strings.Contains(lowerID, "mini") {
+		if strings.Contains(lowerID, "gpt-5.6") ||
+			strings.Contains(lowerID, "gpt-5.5") ||
+			strings.Contains(lowerID, "gpt-5.4") && !strings.Contains(lowerID, "mini") {
 			return QualityTierPremium
 		}
 		if strings.Contains(lowerID, "gpt-5.3") || strings.Contains(lowerID, "gpt-5.2") {
@@ -259,7 +263,16 @@ func ModelProfileQualityTierFromFamily(family ModelFamily, modelID string) Quali
 		return QualityTierNormal
 
 	case ModelFamilyGLM:
-		if strings.Contains(lowerID, "glm-5") || strings.Contains(lowerID, "glm-5p2") {
+		if strings.Contains(lowerID, "glm-5.2") || strings.Contains(lowerID, "glm-5p2") {
+			return QualityTierPremium
+		}
+		if strings.Contains(lowerID, "glm-5") {
+			return QualityTierHigh
+		}
+		return QualityTierNormal
+
+	case ModelFamilyMiMo:
+		if strings.Contains(lowerID, "mimo-v2.5-pro") {
 			return QualityTierHigh
 		}
 		return QualityTierNormal
@@ -319,4 +332,18 @@ type ModelProfile struct {
 
 	// ── 来源 ──
 	Source string `json:"source"` // builtin_registry | auto_probe | capability_test | manual
+}
+
+// applyUpstreamModelCapability 将模型注册表中的上游能力写入模型画像。
+// 该能力描述实际发送给供应商的模型，不应与下游客户端 AgentModelProfile 混用。
+func applyUpstreamModelCapability(profile *ModelProfile, capability config.UpstreamModelCapability) {
+	if profile == nil {
+		return
+	}
+	profile.ContextTokens = capability.ContextWindowTokens
+	profile.SupportsVision = capability.Capabilities["vision"]
+	profile.SupportsToolCalls = capability.Capabilities["toolCalls"] ||
+		capability.Capabilities["tool_calls"] || capability.Capabilities["tools"]
+	profile.SupportsReasoning = capability.ThinkingMode != "" ||
+		capability.Capabilities["reasoning"] || len(capability.ReasoningEfforts) > 0
 }

@@ -3,6 +3,7 @@ package autopilot
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
 )
@@ -97,6 +98,7 @@ func (r *ModelResolver) ResolveModel(
 	if len(candidates) == 0 {
 		return requestModel, false, "no_model_profiles"
 	}
+	candidates = r.refreshAutoDiscoveryCapabilities(candidates, channelUID, channelKind)
 
 	// Step 4: 硬过滤——只保留满足能力下界的模型。
 	// CapabilityFloorEnabled=false 时跳过硬过滤（紧急逃生口，所有候选均可参与排序）。
@@ -127,6 +129,9 @@ func (r *ModelResolver) ResolveModel(
 	// Step 5: 精确模型始终优先；非自适应入口不得跨模型替代。
 	if exact, found := findExactModelProfile(candidates, requestModel); found {
 		return exact.ModelID, true, "found_exact_model_in_profile"
+	}
+	if equivalent, found := findEquivalentModelProfile(candidates, requestModel); found {
+		return equivalent.ModelID, true, "found_equivalent_model_in_profile"
 	}
 	intent := ClassifyModelRoutingIntent(channelKind, requestModel)
 	if !intent.AllowsSubstitution() {
@@ -187,6 +192,7 @@ func (r *ModelResolver) resolveModelAnyEndpoint(
 	if len(candidates) == 0 {
 		return requestModel, false, "no_probed_model_profiles"
 	}
+	candidates = r.refreshAutoDiscoveryCapabilities(candidates, channelUID, channelKind)
 
 	if r.cfgManager != nil {
 		routingCfg := r.cfgManager.GetAutopilotRouting()
@@ -201,6 +207,9 @@ func (r *ModelResolver) resolveModelAnyEndpoint(
 	}
 	if exact, found := findExactModelProfile(candidates, requestModel); found {
 		return exact.ModelID, true, "found_exact_model_in_profile"
+	}
+	if equivalent, found := findEquivalentModelProfile(candidates, requestModel); found {
+		return equivalent.ModelID, true, "found_equivalent_model_in_profile"
 	}
 	intent := ClassifyModelRoutingIntent(channelKind, requestModel)
 	if !intent.AllowsSubstitution() {
@@ -310,6 +319,53 @@ func rankBySimilarity(eligible []ModelProfile, requestModel string, floor Capabi
 	}
 
 	return scoredList[bestIdx].profile
+}
+
+// refreshAutoDiscoveryCapabilities 兼容由旧版本写入的自动发现画像。
+// 旧实现误用了下游 AgentModelProfile，可能把 GLM-5.2 等上游模型写成错误窗口和能力；
+// 运行时以当前上游能力注册表重新派生，后续自动发现会把同样结果持久化。
+func (r *ModelResolver) refreshAutoDiscoveryCapabilities(
+	candidates []ModelProfile,
+	channelUID string,
+	channelKind string,
+) []ModelProfile {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	var upstream *config.UpstreamConfig
+	var global map[string]config.UpstreamModelCapability
+	if r.cfgManager != nil {
+		cfg := r.cfgManager.GetConfig()
+		global = cfg.UpstreamModelCapabilities
+		upstream = r.findUpstream(channelUID, channelKind)
+	}
+
+	refreshed := append([]ModelProfile(nil), candidates...)
+	for i := range refreshed {
+		profile := &refreshed[i]
+		if profile.Source != "auto_discovery" {
+			continue
+		}
+		oldFamily := profile.ModelFamily
+		oldQuality := profile.QualityTier
+		oldContext := profile.ContextTokens
+		oldVision := profile.SupportsVision
+		oldTools := profile.SupportsToolCalls
+		oldReasoning := profile.SupportsReasoning
+		profile.ModelFamily = InferModelFamily(profile.ModelID, "")
+		profile.QualityTier = ModelProfileQualityTierFromFamily(profile.ModelFamily, profile.ModelID)
+		if resolved := config.ResolveUpstreamCapability(profile.ModelID, upstream, global); resolved.Known {
+			applyUpstreamModelCapability(profile, resolved.Capability)
+		}
+		if oldFamily != profile.ModelFamily || oldQuality != profile.QualityTier ||
+			oldContext != profile.ContextTokens || oldVision != profile.SupportsVision ||
+			oldTools != profile.SupportsToolCalls || oldReasoning != profile.SupportsReasoning {
+			profile.UpdatedAt = time.Now()
+			_ = r.profileStore.Upsert(profile)
+		}
+	}
+	return refreshed
 }
 
 // ── 辅助 ──

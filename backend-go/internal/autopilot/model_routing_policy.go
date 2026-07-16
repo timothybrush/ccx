@@ -78,3 +78,33 @@ func findExactModelProfile(profiles []ModelProfile, requestModel string) (ModelP
 	}
 	return ModelProfile{}, false
 }
+
+// findEquivalentModelProfile 只接受供应商文档明确声明的兼容模型别名。
+// 它仍属于 exact-only 语义，不允许扩展为同模型族内的任意替代。
+func findEquivalentModelProfile(profiles []ModelProfile, requestModel string) (ModelProfile, bool) {
+	normalized := normalizeRoutingModelID(requestModel)
+	canonical := canonicalCompatibilityModelID(normalized)
+	for _, profile := range profiles {
+		candidate := normalizeRoutingModelID(profile.ModelID)
+		if candidate == normalized {
+			continue
+		}
+		if canonicalCompatibilityModelID(candidate) == canonical {
+			return profile, true
+		}
+	}
+	return ModelProfile{}, false
+}
+
+// canonicalCompatibilityModelID 收敛供应商官方文档中的兼容别名。
+// 未列出的模型保持原 ID，确保 exact-only 的安全默认值不变。
+func canonicalCompatibilityModelID(model string) string {
+	switch normalizeRoutingModelID(model) {
+	case "deepseek-chat":
+		return "deepseek-v4-flash"
+	case "deepseek-reasoner":
+		return "deepseek-v4-pro"
+	default:
+		return normalizeRoutingModelID(model)
+	}
+}

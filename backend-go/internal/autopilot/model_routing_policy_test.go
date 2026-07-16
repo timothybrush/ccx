@@ -92,6 +92,24 @@ func TestModelResolver_ExactOnlyFindsSameNormalizedModel(t *testing.T) {
 	}
 }
 
+func TestModelResolver_ExactOnlyAcceptsDocumentedCompatibilityAlias(t *testing.T) {
+	flash := routingPolicyProfile("chat", "deepseek-v4-flash", ModelFamilyDeepSeek)
+	pro := routingPolicyProfile("chat", "deepseek-v4-pro", ModelFamilyDeepSeek)
+	pro.ProbeLatencyMs = 1
+	resolver := newTestResolver(t, []ModelProfile{pro, flash})
+
+	mapped, resolved, reason := resolver.ResolveModel(
+		"deepseek-chat", "ch_test", "chat", "metrics_test", CapabilityFloor{})
+	if !resolved || mapped != "deepseek-v4-flash" || reason != "found_equivalent_model_in_profile" {
+		t.Fatalf("ResolveModel() = (%q, %v, %q), want documented DeepSeek compatibility alias", mapped, resolved, reason)
+	}
+
+	mapped, found, reason := resolver.ResolveModelAnyEndpoint("deepseek-chat", "ch_test", "chat")
+	if !found || mapped != "deepseek-v4-flash" || reason != "found_equivalent_model_in_profile" {
+		t.Fatalf("ResolveModelAnyEndpoint() = (%q, %v, %q), want documented DeepSeek compatibility alias", mapped, found, reason)
+	}
+}
+
 func TestModelResolver_AdaptiveEntrypointsAllowSubstitution(t *testing.T) {
 	tests := []struct {
 		name           string

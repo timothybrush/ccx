@@ -505,13 +505,13 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		return
 	}
 
-	// Phase 3B-2：准备全局 agentModelProfiles 和渠道类型（用于 model_profiles 填充）
-	var globalModelProfiles map[string]config.AgentModelProfile
+	// Phase 3B-2：准备全局上游模型能力和渠道类型（用于 model_profiles 填充）
+	var globalModelCapabilities map[string]config.UpstreamModelCapability
 	var channelKind string
 	var channelID int
 	if cfgManager != nil {
 		cfg := cfgManager.GetConfig()
-		globalModelProfiles = cfg.AgentModelProfiles
+		globalModelCapabilities = cfg.UpstreamModelCapabilities
 		var idx int
 		idx, channelKind = findChannelIndexAndKind(cfg, channelUID)
 		if idx >= 0 {
@@ -602,34 +602,21 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 				family := InferModelFamily(modelID, "")
 				qualityTier := ModelProfileQualityTierFromFamily(family, modelID)
 
-				// 从全局 agentModelProfile 解析上下文窗口和能力
-				contextTokens := 0
-				supportsVision := false
-				supportsToolCalls := false
-				supportsReasoning := false
-				if resolved := config.ResolveAgentModelProfile(modelID, globalModelProfiles); resolved.Known {
-					contextTokens = resolved.Profile.ContextWindowTokens
-					// ReasoningEfforts 非空表示该模型支持可控推理
-					supportsReasoning = len(resolved.Profile.ReasoningEfforts) > 0
-					// Vision / ToolCalls 不在 AgentModelProfile 中，保持 false（fail-closed，非 bug）
-				}
-
 				modelProfile := &ModelProfile{
-					ChannelUID:        channelUID,
-					ChannelID:         channelID,
-					ChannelKind:       channelKind,
-					ServiceType:       channel.ServiceType,
-					MetricsKey:        metricsKey,
-					ModelID:           modelID,
-					UpdatedAt:         now,
-					ModelFamily:       family,
-					QualityTier:       qualityTier,
-					ContextTokens:     contextTokens,
-					SupportsVision:    supportsVision,
-					SupportsToolCalls: supportsToolCalls,
-					SupportsReasoning: supportsReasoning,
-					ProbeSuccess:      true, // 出现在 GET /v1/models 响应视为存在
-					Source:            "auto_discovery",
+					ChannelUID:   channelUID,
+					ChannelID:    channelID,
+					ChannelKind:  channelKind,
+					ServiceType:  channel.ServiceType,
+					MetricsKey:   metricsKey,
+					ModelID:      modelID,
+					UpdatedAt:    now,
+					ModelFamily:  family,
+					QualityTier:  qualityTier,
+					ProbeSuccess: true, // 出现在 GET /v1/models 响应视为存在
+					Source:       "auto_discovery",
+				}
+				if resolved := config.ResolveUpstreamCapability(modelID, channel, globalModelCapabilities); resolved.Known {
+					applyUpstreamModelCapability(modelProfile, resolved.Capability)
 				}
 				// 自动发现会周期性重建能力画像，但不应清除 L3 探测或用户反馈写入的
 				// endpoint×model 质量证据。证据只在同一复合主键下继承，避免跨 Key 污染。

@@ -381,11 +381,7 @@ func (p *ProviderQualityProbe) newProviderQualityModelProfile(
 	if !resolved.Known {
 		return modelProfile
 	}
-	capability := resolved.Capability
-	modelProfile.ContextTokens = capability.ContextWindowTokens
-	modelProfile.SupportsVision = capability.Capabilities["vision"]
-	modelProfile.SupportsToolCalls = capability.Capabilities["toolCalls"] || capability.Capabilities["tool_calls"] || capability.Capabilities["tools"]
-	modelProfile.SupportsReasoning = capability.Capabilities["reasoning"] || len(capability.ReasoningEfforts) > 0
+	applyUpstreamModelCapability(modelProfile, resolved.Capability)
 	return modelProfile
 }
 

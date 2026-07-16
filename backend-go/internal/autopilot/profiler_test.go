@@ -439,6 +439,12 @@ func TestDeriveQualityTier(t *testing.T) {
 			want:    QualityTierPremium,
 		},
 		{
+			name:    "gpt-5.6 → premium",
+			family:  ModelFamilyOpenAI,
+			modelID: "gpt-5.6-sol",
+			want:    QualityTierPremium,
+		},
+		{
 			name:    "gpt-5.5 → premium",
 			family:  ModelFamilyOpenAI,
 			modelID: "gpt-5.5",
@@ -455,6 +461,24 @@ func TestDeriveQualityTier(t *testing.T) {
 			family:  ModelFamilyOpenAI,
 			modelID: "gpt-5.4-mini",
 			want:    QualityTierNormal,
+		},
+		{
+			name:    "glm-5.2 → premium",
+			family:  ModelFamilyGLM,
+			modelID: "glm-5.2",
+			want:    QualityTierPremium,
+		},
+		{
+			name:    "glm-5.1 → high",
+			family:  ModelFamilyGLM,
+			modelID: "glm-5.1",
+			want:    QualityTierHigh,
+		},
+		{
+			name:    "mimo-v2.5-pro → high",
+			family:  ModelFamilyMiMo,
+			modelID: "mimo-v2.5-pro",
+			want:    QualityTierHigh,
 		},
 		{
 			name:    "deepseek-v4-pro → high",

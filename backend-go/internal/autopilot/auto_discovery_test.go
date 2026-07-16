@@ -109,6 +109,59 @@ func TestAutoDiscoveryWriteProfilesPreservesProviderQualityEvidence(t *testing.T
 	}
 }
 
+func TestAutoDiscoveryWriteProfilesUsesUpstreamModelCapabilities(t *testing.T) {
+	db := newTestDB(t)
+	profileStore, err := NewProfileStoreWithDB(db)
+	if err != nil {
+		t.Fatalf("NewProfileStoreWithDB: %v", err)
+	}
+	modelStore, err := NewModelProfileStoreWithDB(db)
+	if err != nil {
+		t.Fatalf("NewModelProfileStoreWithDB: %v", err)
+	}
+
+	const (
+		channelUID = "ch-discovery-glm52"
+		baseURL    = "https://open.bigmodel.cn/api/paas/v4#"
+		apiKey     = "test.glm52-key"
+		modelID    = "glm-5.2"
+	)
+	channel := config.UpstreamConfig{
+		ChannelUID:  channelUID,
+		BaseURL:     baseURL,
+		APIKeys:     []string{apiKey},
+		ServiceType: "openai",
+		AutoManaged: true,
+	}
+	cfgManager, cleanup := createTestConfigManager(t, config.Config{ResponsesUpstream: []config.UpstreamConfig{channel}})
+	t.Cleanup(cleanup)
+
+	runner := NewAutoDiscoveryRunner(profileStore, nil)
+	runner.ModelProfileStore = modelStore
+	runner.writeProfiles(channelUID, &channel, []EndpointDiscoveryResult{{
+		KeyMask:     utils.MaskAPIKey(apiKey),
+		BaseURL:     baseURL,
+		Models:      []string{modelID},
+		ModelsCount: 1,
+		ProtocolOk:  true,
+	}}, cfgManager)
+
+	metricsKey := computeMetricsIdentityKey(baseURL, apiKey, channel.ServiceType)
+	got := modelStore.Get(channelUID, "responses", metricsKey, modelID)
+	if got == nil {
+		t.Fatal("模型画像不存在")
+	}
+	if got.ContextTokens != 1048576 {
+		t.Fatalf("ContextTokens = %d, want 1048576", got.ContextTokens)
+	}
+	if !got.SupportsToolCalls || !got.SupportsReasoning {
+		t.Fatalf("GLM-5.2 上游能力未写入模型画像: %+v", got)
+	}
+	if got.QualityTier != QualityTierPremium {
+		t.Fatalf("QualityTier = %q, want premium", got.QualityTier)
+	}
+}
+
 func TestAutoDiscoveryRunner_GetTaskNil(t *testing.T) {
 	runner := NewAutoDiscoveryRunner(nil, nil)
 	task := runner.GetTask("nonexistent")

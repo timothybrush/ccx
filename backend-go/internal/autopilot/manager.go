@@ -702,8 +702,11 @@ func (m *Manager) ResolveModelSupport(kind string, upstream *config.UpstreamConf
 	)
 	if found {
 		source := "auto_resolve"
-		if normalizeRoutingModelID(mapped) == normalizeRoutingModelID(model) {
+		switch resolverReason {
+		case "found_exact_model_in_profile":
 			source = "model_profile_exact"
+		case "found_equivalent_model_in_profile":
+			source = "model_profile_equivalent"
 		}
 		return true, mapped, source, resolverReason
 	}
