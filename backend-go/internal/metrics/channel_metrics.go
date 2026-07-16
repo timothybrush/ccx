@@ -81,6 +81,7 @@ const (
 type RequestRecord struct {
 	Model                    string
 	Timestamp                time.Time
+	FirstByteLatencyMs       int64
 	Success                  bool
 	FailureClass             FailureClass
 	InputTokens              int64
@@ -147,6 +148,9 @@ type TimeWindowStats struct {
 	SuccessCount int64   `json:"successCount,omitempty"`
 	FailureCount int64   `json:"failureCount,omitempty"`
 	SuccessRate  float64 `json:"successRate"`
+	// 首响应字节（TTFB）仅统计成功请求；快速错误、超时和取消不污染样本。
+	FirstByteSampleCount  int64 `json:"firstByteSampleCount,omitempty"`
+	P95FirstByteLatencyMs int64 `json:"p95FirstByteLatencyMs,omitempty"`
 	// Token 统计（按时间窗口聚合）
 	InputTokens         int64 `json:"inputTokens,omitempty"`
 	OutputTokens        int64 `json:"outputTokens,omitempty"`

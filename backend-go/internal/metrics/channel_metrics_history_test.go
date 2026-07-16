@@ -93,6 +93,46 @@ func TestBreakerHealthWindowKeepsRecentFailures(t *testing.T) {
 	}
 }
 
+func TestGetTimeWindowStatsForKeyTracksFirstByteP95(t *testing.T) {
+	m := NewMetricsManager()
+	defer m.Stop()
+
+	const (
+		baseURL     = "https://example.com"
+		apiKey      = "sk-ttfb"
+		serviceType = "openai"
+	)
+	startedAt := time.Now().Add(-time.Minute)
+	for i := 1; i <= 20; i++ {
+		requestID := m.RecordRequestConnectedAt(baseURL, apiKey, serviceType, "glm-5.2", startedAt.Add(time.Duration(i)*time.Millisecond))
+		m.RecordRequestFirstByte(baseURL, apiKey, serviceType, requestID, time.Duration(i)*time.Millisecond)
+		if i == 1 {
+			// 同一请求只接受首次观测，后续回调不得污染样本。
+			m.RecordRequestFirstByte(baseURL, apiKey, serviceType, requestID, time.Second)
+		}
+		m.RecordRequestFinalizeSuccess(baseURL, apiKey, serviceType, requestID, nil)
+	}
+
+	// 未收到响应头的失败请求计入请求数，但不能伪造 TTFB 样本。
+	requestID := m.RecordRequestConnectedAt(baseURL, apiKey, serviceType, "glm-5.2", startedAt)
+	m.RecordRequestFinalizeFailure(baseURL, apiKey, serviceType, requestID)
+	// 快速返回错误响应同样不能拉低成功请求的 TTFB 画像。
+	requestID = m.RecordRequestConnectedAt(baseURL, apiKey, serviceType, "glm-5.2", startedAt)
+	m.RecordRequestFirstByte(baseURL, apiKey, serviceType, requestID, time.Millisecond)
+	m.RecordRequestFinalizeFailure(baseURL, apiKey, serviceType, requestID)
+
+	stats := m.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, time.Hour)
+	if stats.RequestCount != 22 {
+		t.Fatalf("RequestCount = %d, want 22", stats.RequestCount)
+	}
+	if stats.FirstByteSampleCount != 20 {
+		t.Fatalf("FirstByteSampleCount = %d, want 20", stats.FirstByteSampleCount)
+	}
+	if stats.P95FirstByteLatencyMs != 19 {
+		t.Fatalf("P95FirstByteLatencyMs = %d, want 19", stats.P95FirstByteLatencyMs)
+	}
+}
+
 func TestGetHistoricalStatsMultiURL_DeduplicatesEquivalentURLs(t *testing.T) {
 	m := NewMetricsManager()
 	defer m.Stop()

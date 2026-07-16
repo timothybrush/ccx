@@ -104,6 +104,31 @@ func (m *MetricsManager) RecordRequestConnectedAt(baseURL, apiKey, serviceType s
 	return m.recordRequestConnectedInternal(baseURL, apiKey, serviceType, model, "", timestamp)
 }
 
+// RecordRequestFirstByte 记录从发起上游请求到收到首个响应字节的耗时。
+// 该值只写入当前进程的滑动历史；未收到响应头的超时/取消请求不产生样本。
+func (m *MetricsManager) RecordRequestFirstByte(baseURL, apiKey, serviceType string, requestID uint64, latency time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	metrics := m.findPendingRequestMetricsLocked(baseURL, apiKey, serviceType, requestID)
+	if metrics == nil {
+		return
+	}
+	idx, ok := metrics.pendingHistoryIdx[requestID]
+	if !ok || idx < 0 || idx >= len(metrics.requestHistory) {
+		return
+	}
+	record := &metrics.requestHistory[idx]
+	if record.FirstByteLatencyMs > 0 {
+		return
+	}
+	latencyMs := latency.Milliseconds()
+	if latencyMs < 1 {
+		latencyMs = 1
+	}
+	record.FirstByteLatencyMs = latencyMs
+}
+
 func (m *MetricsManager) recordRequestConnectedInternal(baseURL, apiKey, serviceType, model, proxyKeyMask string, timestamp time.Time) uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()

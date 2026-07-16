@@ -45,10 +45,12 @@ func NewMetricsManagerAdapter(mgr *metrics.MetricsManager) MetricsProvider {
 func (a *metricsManagerAdapter) GetTimeWindowStatsForKey(_ string, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
 	stats := a.mgr.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, duration)
 	return TimeWindowStats{
-		RequestCount: stats.RequestCount,
-		SuccessCount: stats.SuccessCount,
-		FailureCount: stats.FailureCount,
-		SuccessRate:  stats.SuccessRate,
+		RequestCount:          stats.RequestCount,
+		SuccessCount:          stats.SuccessCount,
+		FailureCount:          stats.FailureCount,
+		SuccessRate:           stats.SuccessRate,
+		FirstByteSampleCount:  stats.FirstByteSampleCount,
+		P95FirstByteLatencyMs: stats.P95FirstByteLatencyMs,
 	}
 }
 

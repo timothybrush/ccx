@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -721,6 +722,205 @@ func TestTryUpstreamWithAllKeysMarksKeyFailedAfterRepeatedShortEmptyResponse(t *
 	if keyMetrics.RequestCount != 1 || keyMetrics.SuccessCount != 0 || keyMetrics.FailureCount != 1 {
 		t.Fatalf("metrics = requests:%d success:%d failure:%d, want 1/0/1",
 			keyMetrics.RequestCount, keyMetrics.SuccessCount, keyMetrics.FailureCount)
+	}
+}
+
+func TestTryUpstreamWithAllKeysRetriesAfterResponseHeaderTimeout(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	attemptedKeys := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		attemptedKeys <- apiKey
+		if apiKey == "sk-slow" {
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "response-header-timeout-messages",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-slow", "sk-fast"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"glm-5.2"}`))
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+	// 直接覆盖测试副本，避免配置校验的生产最小值让单测等待 1 秒。
+	upstream.ResponseHeaderTimeoutMs = 20
+	urlFailures := 0
+	urlSuccesses := 0
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"glm-5.2","messages":[]}`),
+		nil,
+		false,
+		func(_ *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			for _, key := range []string{"sk-slow", "sk-fast"} {
+				if !failedKeys[key] {
+					return key, nil
+				}
+			}
+			return "", errors.New("no available key")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+			if err == nil {
+				req.Header.Set("Authorization", "Bearer "+apiKey)
+			}
+			return req, err
+		},
+		func(string) {},
+		func(string) { urlFailures++ },
+		func(string) { urlSuccesses++ },
+		func(_ *gin.Context, resp *http.Response, _ *config.UpstreamConfig, _ string, _ []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"glm-5.2",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+	)
+
+	if !handled || successKey != "sk-fast" {
+		t.Fatalf("handled = %v, successKey = %q, want true/sk-fast", handled, successKey)
+	}
+	if failoverErr != nil || lastErr != nil {
+		t.Fatalf("failoverErr = %#v, lastErr = %v, want nil/nil", failoverErr, lastErr)
+	}
+	if urlFailures != 1 || urlSuccesses != 1 {
+		t.Fatalf("url failures/successes = %d/%d, want 1/1", urlFailures, urlSuccesses)
+	}
+	if len(attemptedKeys) != 2 {
+		t.Fatalf("attempt count = %d, want 2", len(attemptedKeys))
+	}
+	if first, second := <-attemptedKeys, <-attemptedKeys; first != "sk-slow" || second != "sk-fast" {
+		t.Fatalf("attempted keys = [%s %s], want [sk-slow sk-fast]", first, second)
+	}
+	if !cfgManager.IsKeyFailed("sk-slow", "Messages") {
+		t.Fatal("响应头超时的 Key 应被标记失败")
+	}
+}
+
+func TestTryUpstreamWithAllKeysStopsOnClientCancellation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	attemptedKeys := make(chan string, 2)
+	requestStarted := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		attemptedKeys <- strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		requestStarted <- struct{}{}
+		select {
+		case <-r.Context().Done():
+		case <-time.After(100 * time.Millisecond):
+		}
+	}))
+	defer server.Close()
+
+	cfgManager, channelScheduler, messagesMetrics, cleanup := newTestFailoverDependencies(t, config.UpstreamConfig{
+		Name:        "client-cancel-messages",
+		BaseURL:     server.URL,
+		APIKeys:     []string{"sk-first", "sk-second"},
+		Status:      "active",
+		ServiceType: "openai",
+	})
+	defer cleanup()
+
+	requestContext, cancel := context.WithCancel(context.Background())
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"glm-5.2"}`)).WithContext(requestContext)
+	go func() {
+		<-requestStarted
+		cancel()
+	}()
+
+	cfg := cfgManager.GetConfig()
+	upstream := &cfg.Upstream[0]
+	upstream.ResponseHeaderTimeoutMs = 200
+	urlFailures := 0
+
+	handled, successKey, _, failoverErr, _, lastErr := TryUpstreamWithAllKeys(
+		c,
+		config.NewEnvConfig(),
+		cfgManager,
+		channelScheduler,
+		scheduler.ChannelKindMessages,
+		"Messages",
+		messagesMetrics,
+		upstream,
+		[]warmup.URLLatencyResult{{URL: server.URL, OriginalIdx: 0}},
+		[]byte(`{"model":"glm-5.2","messages":[]}`),
+		nil,
+		false,
+		func(_ *config.UpstreamConfig, failedKeys map[string]bool) (string, error) {
+			for _, key := range []string{"sk-first", "sk-second"} {
+				if !failedKeys[key] {
+					return key, nil
+				}
+			}
+			return "", errors.New("no available key")
+		},
+		func(c *gin.Context, upstreamCopy *config.UpstreamConfig, apiKey string) (*http.Request, error) {
+			req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, upstreamCopy.BaseURL, strings.NewReader(`{}`))
+			if err == nil {
+				req.Header.Set("Authorization", "Bearer "+apiKey)
+			}
+			return req, err
+		},
+		func(string) {},
+		func(string) { urlFailures++ },
+		nil,
+		func(_ *gin.Context, resp *http.Response, _ *config.UpstreamConfig, _ string, _ []byte) (*types.Usage, error) {
+			_ = resp.Body.Close()
+			return nil, nil
+		},
+		"glm-5.2",
+		"",
+		0,
+		channelScheduler.GetChannelLogStore(scheduler.ChannelKindMessages),
+	)
+
+	if !handled || successKey != "" {
+		t.Fatalf("handled = %v, successKey = %q, want true/empty", handled, successKey)
+	}
+	if failoverErr != nil || !errors.Is(lastErr, context.Canceled) {
+		t.Fatalf("failoverErr = %#v, lastErr = %v, want nil/context.Canceled", failoverErr, lastErr)
+	}
+	if urlFailures != 0 {
+		t.Fatalf("urlFailures = %d, want 0", urlFailures)
+	}
+	if len(attemptedKeys) != 1 {
+		t.Fatalf("attempt count = %d, want 1", len(attemptedKeys))
+	}
+	if first := <-attemptedKeys; first != "sk-first" {
+		t.Fatalf("attempted key = %q, want sk-first", first)
+	}
+	if cfgManager.IsKeyFailed("sk-first", "Messages") {
+		t.Fatal("客户端取消不应标记上游 Key 失败")
 	}
 }
 

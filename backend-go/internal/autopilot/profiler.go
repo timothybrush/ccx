@@ -35,10 +35,12 @@ type KeyCircuitSnapshot struct {
 // TimeWindowStats 是从 metrics 包再导出的轻量统计结构。
 // 字段对齐 metrics.TimeWindowStats，避免 profiler 包对 metrics 产生 import 依赖。
 type TimeWindowStats struct {
-	RequestCount int64
-	SuccessCount int64
-	FailureCount int64
-	SuccessRate  float64
+	RequestCount          int64
+	SuccessCount          int64
+	FailureCount          int64
+	SuccessRate           float64
+	FirstByteSampleCount  int64
+	P95FirstByteLatencyMs int64
 }
 
 // ── Profiler ──
@@ -123,6 +125,8 @@ func (p *Profiler) DeriveEndpointProfile(
 	profile.ConsecutiveFail = int(snapshot.ConsecutiveFailures)
 	profile.LastSuccessAt = snapshot.LastSuccessAt
 	profile.SuccessRate15m = stats1h.SuccessRate // 用 1h 窗口近似（Phase 1 精度足够）
+	profile.FirstByteSampleCount = stats1h.FirstByteSampleCount
+	profile.P95FirstByteLatencyMs = stats1h.P95FirstByteLatencyMs
 
 	// 推导各维度
 	profile.StabilityTier = DeriveStabilityTier(stats1h, snapshot)

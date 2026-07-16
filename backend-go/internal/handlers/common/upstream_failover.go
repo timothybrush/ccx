@@ -494,15 +494,16 @@ func TryUpstreamWithAllKeys(
 			// TCP 建连开始即计数：将活跃度统计提前到发起上游请求之前；同时关联 proxyKeyMask 用于成本报表持久化
 			requestID := metricsManager.RecordRequestConnectedWithProxyKeyMask(currentBaseURL, apiKey, metricsServiceType, redirectedModel, proxyKeyMask)
 
+			attemptStartedAt := time.Now()
 			lifecycleTrace := &RequestLifecycleTrace{
 				OnConnected: func() {
 					UpdateLogStatus(channelLogStore, metricsKey, logRequestID, metrics.StatusConnecting)
 				},
 				OnFirstResponseByte: func() {
 					UpdateLogStatus(channelLogStore, metricsKey, logRequestID, metrics.StatusFirstByte)
+					metricsManager.RecordRequestFirstByte(currentBaseURL, apiKey, metricsServiceType, requestID, time.Since(attemptStartedAt))
 				},
 			}
-			attemptStartedAt := time.Now()
 			resp, err := SendRequestWithLifecycleTrace(req, upstream, envCfg, isStream, apiType, lifecycleTrace)
 			if err != nil {
 				lastError = err

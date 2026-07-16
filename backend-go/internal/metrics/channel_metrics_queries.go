@@ -527,6 +527,7 @@ func (m *MetricsManager) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType s
 
 	cutoff := time.Now().Add(-duration)
 	var requestCount, successCount, failureCount int64
+	firstByteLatencies := make([]int64, 0)
 
 	metrics := m.getIdentityMetricsLocked(baseURL, apiKey, serviceType)
 	if metrics != nil {
@@ -538,6 +539,9 @@ func (m *MetricsManager) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType s
 				} else {
 					failureCount++
 				}
+				if record.Success && record.FirstByteLatencyMs > 0 {
+					firstByteLatencies = append(firstByteLatencies, record.FirstByteLatencyMs)
+				}
 			}
 		}
 	}
@@ -547,13 +551,30 @@ func (m *MetricsManager) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType s
 	}
 
 	successRate := float64(successCount) / float64(requestCount) * 100
+	sort.Slice(firstByteLatencies, func(i, j int) bool { return firstByteLatencies[i] < firstByteLatencies[j] })
 
 	return TimeWindowStats{
-		RequestCount: requestCount,
-		SuccessCount: successCount,
-		FailureCount: failureCount,
-		SuccessRate:  successRate,
+		RequestCount:          requestCount,
+		SuccessCount:          successCount,
+		FailureCount:          failureCount,
+		SuccessRate:           successRate,
+		FirstByteSampleCount:  int64(len(firstByteLatencies)),
+		P95FirstByteLatencyMs: nearestRankPercentile(firstByteLatencies, 95),
 	}
+}
+
+func nearestRankPercentile(sortedValues []int64, percentile int) int64 {
+	if len(sortedValues) == 0 || percentile <= 0 {
+		return 0
+	}
+	if percentile >= 100 {
+		return sortedValues[len(sortedValues)-1]
+	}
+	index := (len(sortedValues)*percentile + 99) / 100
+	if index < 1 {
+		index = 1
+	}
+	return sortedValues[index-1]
 }
 
 // GetAllTimeWindowStatsForKey 获取单个 Key 所有时间窗口的统计

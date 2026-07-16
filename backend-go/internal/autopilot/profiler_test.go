@@ -540,10 +540,12 @@ func TestProfilerDeriveEndpointProfile(t *testing.T) {
 
 	provider := newMockProvider(
 		TimeWindowStats{
-			RequestCount: 50,
-			SuccessCount: 48,
-			FailureCount: 2,
-			SuccessRate:  96,
+			RequestCount:          50,
+			SuccessCount:          48,
+			FailureCount:          2,
+			SuccessRate:           96,
+			FirstByteSampleCount:  40,
+			P95FirstByteLatencyMs: 2300,
 		},
 		KeyCircuitSnapshot{
 			CircuitState:        0, // closed
@@ -599,6 +601,10 @@ func TestProfilerDeriveEndpointProfile(t *testing.T) {
 	}
 	if profile.CostTier != CostTierNormal {
 		t.Errorf("CostTier = %q, want %q", profile.CostTier, CostTierNormal)
+	}
+	if profile.FirstByteSampleCount != 40 || profile.P95FirstByteLatencyMs != 2300 {
+		t.Errorf("TTFB profile = samples:%d p95:%dms, want 40/2300ms",
+			profile.FirstByteSampleCount, profile.P95FirstByteLatencyMs)
 	}
 	if profile.Confidence != 0.3 {
 		t.Errorf("Confidence = %f, want 0.3", profile.Confidence)

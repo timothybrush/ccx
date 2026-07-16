@@ -214,11 +214,13 @@ type KeyEndpointProfile struct {
 	ModelMapping    map[string]string `json:"modelMapping"`    // 该 endpoint 的模型映射
 
 	// ── 运行时指标（来自 MetricsManager）──
-	SuccessRate15m  float64    `json:"successRate15m"`
-	P95LatencyMs    int64      `json:"p95LatencyMs"`
-	ConsecutiveFail int        `json:"consecutiveFail"`
-	LastSuccessAt   *time.Time `json:"lastSuccessAt,omitempty"`
-	LastFailureAt   *time.Time `json:"lastFailureAt,omitempty"`
+	SuccessRate15m        float64    `json:"successRate15m"`
+	P95LatencyMs          int64      `json:"p95LatencyMs"`
+	FirstByteSampleCount  int64      `json:"firstByteSampleCount,omitempty"`
+	P95FirstByteLatencyMs int64      `json:"p95FirstByteLatencyMs,omitempty"`
+	ConsecutiveFail       int        `json:"consecutiveFail"`
+	LastSuccessAt         *time.Time `json:"lastSuccessAt,omitempty"`
+	LastFailureAt         *time.Time `json:"lastFailureAt,omitempty"`
 
 	// ── 自动限速画像 ──
 	DiscoveredRPM           int     `json:"discoveredRpm,omitempty"`
