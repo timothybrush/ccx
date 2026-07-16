@@ -127,6 +127,9 @@ func (p *Profiler) DeriveEndpointProfile(
 	profile.SuccessRate15m = stats1h.SuccessRate // 用 1h 窗口近似（Phase 1 精度足够）
 	profile.FirstByteSampleCount = stats1h.FirstByteSampleCount
 	profile.P95FirstByteLatencyMs = stats1h.P95FirstByteLatencyMs
+	if stats1h.FirstByteSampleCount > 0 && stats1h.P95FirstByteLatencyMs > 0 {
+		profile.FirstByteStatsUpdatedAt = &now
+	}
 
 	// 推导各维度
 	profile.StabilityTier = DeriveStabilityTier(stats1h, snapshot)

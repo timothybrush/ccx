@@ -1,10 +1,13 @@
 package autopilot
 
+import "time"
+
 const (
 	adaptiveResponseHeaderMinSamples = 20
 	adaptiveResponseHeaderFloorMs    = 30_000
 	adaptiveResponseHeaderPaddingMs  = 5_000
 	adaptiveResponseHeaderMultiplier = 4
+	adaptiveFirstByteStatsMaxAge     = time.Hour
 )
 
 // SuggestResponseHeaderTimeout 根据成功请求的 TTFB 画像，为明确的轻任务给出保守响应头超时。
@@ -24,6 +27,9 @@ func SuggestResponseHeaderTimeout(profile *KeyEndpointProfile, request *RequestP
 	if profile.FirstByteSampleCount < adaptiveResponseHeaderMinSamples || profile.P95FirstByteLatencyMs <= 0 {
 		return 0
 	}
+	if !isFirstByteStatsFresh(profile.FirstByteStatsUpdatedAt, time.Now()) {
+		return 0
+	}
 	if profile.P95FirstByteLatencyMs >= int64(inheritedMs) {
 		return 0
 	}
@@ -36,6 +42,14 @@ func SuggestResponseHeaderTimeout(profile *KeyEndpointProfile, request *RequestP
 		return 0
 	}
 	return int(suggestedMs)
+}
+
+func isFirstByteStatsFresh(updatedAt *time.Time, now time.Time) bool {
+	if updatedAt == nil {
+		return false
+	}
+	age := now.Sub(*updatedAt)
+	return age >= 0 && age <= adaptiveFirstByteStatsMaxAge
 }
 
 func isBoundedNonStreamOperation(operation string) bool {

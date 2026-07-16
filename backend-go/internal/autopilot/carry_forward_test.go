@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -117,6 +118,100 @@ func TestCarryForwardDiscoveryFields_NilInputsAreNoop(t *testing.T) {
 	current := newTestProfile("ep-1", "ch-1", "messages", "https://example.com")
 	carryForwardDiscoveryFields(nil, current)
 	carryForwardDiscoveryFields(current, nil)
+}
+
+func TestCarryForwardFirstByteStats(t *testing.T) {
+	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
+	recentAt := now.Add(-30 * time.Minute)
+	staleAt := now.Add(-adaptiveFirstByteStatsMaxAge - time.Minute)
+
+	newProfileWithStats := func(updatedAt time.Time) *KeyEndpointProfile {
+		profile := newTestProfile("ep-ttfb", "ch-1", "messages", "https://example.com")
+		profile.FirstByteSampleCount = 42
+		profile.P95FirstByteLatencyMs = 2_300
+		profile.FirstByteStatsUpdatedAt = &updatedAt
+		return profile
+	}
+
+	t.Run("最近画像被保留且时间戳不续期", func(t *testing.T) {
+		old := newProfileWithStats(recentAt)
+		current := newTestProfile("ep-ttfb", "ch-1", "messages", "https://example.com")
+
+		carryForwardFirstByteStats(old, current, now)
+
+		if current.FirstByteSampleCount != 42 || current.P95FirstByteLatencyMs != 2_300 {
+			t.Fatalf("TTFB 画像未保留: samples=%d p95=%d", current.FirstByteSampleCount, current.P95FirstByteLatencyMs)
+		}
+		if current.FirstByteStatsUpdatedAt == nil || !current.FirstByteStatsUpdatedAt.Equal(recentAt) {
+			t.Fatalf("时间戳不应续期: got=%v want=%v", current.FirstByteStatsUpdatedAt, recentAt)
+		}
+		if current.FirstByteStatsUpdatedAt == old.FirstByteStatsUpdatedAt {
+			t.Fatal("时间戳指针应复制，不能与旧画像共享")
+		}
+	})
+
+	t.Run("超过一小时的画像被丢弃", func(t *testing.T) {
+		current := newTestProfile("ep-ttfb", "ch-1", "messages", "https://example.com")
+
+		carryForwardFirstByteStats(newProfileWithStats(staleAt), current, now)
+
+		if current.FirstByteSampleCount != 0 || current.P95FirstByteLatencyMs != 0 || current.FirstByteStatsUpdatedAt != nil {
+			t.Fatalf("陈旧 TTFB 画像不应保留: %+v", current)
+		}
+	})
+
+	t.Run("本轮新样本优先", func(t *testing.T) {
+		currentAt := now.Add(-time.Minute)
+		current := newTestProfile("ep-ttfb", "ch-1", "messages", "https://example.com")
+		current.FirstByteSampleCount = 3
+		current.P95FirstByteLatencyMs = 900
+		current.FirstByteStatsUpdatedAt = &currentAt
+
+		carryForwardFirstByteStats(newProfileWithStats(recentAt), current, now)
+
+		if current.FirstByteSampleCount != 3 || current.P95FirstByteLatencyMs != 900 {
+			t.Fatalf("本轮 TTFB 画像被旧值覆盖: samples=%d p95=%d", current.FirstByteSampleCount, current.P95FirstByteLatencyMs)
+		}
+		if current.FirstByteStatsUpdatedAt == nil || !current.FirstByteStatsUpdatedAt.Equal(currentAt) {
+			t.Fatalf("本轮时间戳被旧值覆盖: got=%v want=%v", current.FirstByteStatsUpdatedAt, currentAt)
+		}
+	})
+}
+
+func TestCarryForwardFirstByteStats_SurvivesProfileStoreRestart(t *testing.T) {
+	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
+	updatedAt := now.Add(-20 * time.Minute)
+	dbPath := filepath.Join(t.TempDir(), "profiles.db")
+
+	store1, err := NewProfileStore(dbPath)
+	if err != nil {
+		t.Fatalf("创建首个画像存储失败: %v", err)
+	}
+	old := newTestProfile("ep-restart", "ch-1", "messages", "https://example.com")
+	old.FirstByteSampleCount = 25
+	old.P95FirstByteLatencyMs = 1_800
+	old.FirstByteStatsUpdatedAt = &updatedAt
+	if err := store1.Upsert(old); err != nil {
+		t.Fatalf("写入 TTFB 画像失败: %v", err)
+	}
+	if err := store1.Close(); err != nil {
+		t.Fatalf("关闭首个画像存储失败: %v", err)
+	}
+
+	store2, err := NewProfileStore(dbPath)
+	if err != nil {
+		t.Fatalf("重启后打开画像存储失败: %v", err)
+	}
+	defer store2.Close()
+	current := newTestProfile("ep-restart", "ch-1", "messages", "https://example.com")
+	carryForwardFirstByteStats(store2.Get("ep-restart"), current, now)
+
+	if current.FirstByteSampleCount != 25 || current.P95FirstByteLatencyMs != 1_800 {
+		t.Fatalf("重启后 TTFB 画像未恢复: samples=%d p95=%d", current.FirstByteSampleCount, current.P95FirstByteLatencyMs)
+	}
+	if current.FirstByteStatsUpdatedAt == nil || !current.FirstByteStatsUpdatedAt.Equal(updatedAt) {
+		t.Fatalf("重启后 TTFB 时间戳未恢复: got=%v want=%v", current.FirstByteStatsUpdatedAt, updatedAt)
+	}
 }
 
 // TestCarryForwardProbeFields_SurvivesL1OverwriteBug 回归测试：

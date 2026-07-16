@@ -606,6 +606,9 @@ func TestProfilerDeriveEndpointProfile(t *testing.T) {
 		t.Errorf("TTFB profile = samples:%d p95:%dms, want 40/2300ms",
 			profile.FirstByteSampleCount, profile.P95FirstByteLatencyMs)
 	}
+	if profile.FirstByteStatsUpdatedAt == nil || profile.FirstByteStatsUpdatedAt.Before(now) {
+		t.Errorf("TTFB profile freshness timestamp = %v, want >= %v", profile.FirstByteStatsUpdatedAt, now)
+	}
 	if profile.Confidence != 0.3 {
 		t.Errorf("Confidence = %f, want 0.3", profile.Confidence)
 	}

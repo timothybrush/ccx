@@ -802,6 +802,7 @@ func (m *Manager) collectAll() {
 			)
 			oldProfile := m.store.Get(profile.EndpointUID)
 			carryForwardDiscoveryFields(oldProfile, &profile)
+			carryForwardFirstByteStats(oldProfile, &profile, time.Now())
 			profiled++
 
 			// 收集被动信号并诊断
@@ -982,6 +983,25 @@ func carryForwardProbeFields(old *KeyEndpointProfile, current *KeyEndpointProfil
 	current.ProbeConfidence = old.ProbeConfidence
 	current.ProbeStatusCode = old.ProbeStatusCode
 	current.ConsecutiveProbeSuccess = old.ConsecutiveProbeSuccess
+}
+
+// carryForwardFirstByteStats 在指标 SQLite 尚未持久化 TTFB 原始样本时，
+// 通过已落盘的 endpoint 画像跨重启保留最近一小时聚合值；时间戳保持不变，
+// 因此反复重启不会无限续期陈旧样本。
+func carryForwardFirstByteStats(old *KeyEndpointProfile, current *KeyEndpointProfile, now time.Time) {
+	if old == nil || current == nil || current.FirstByteSampleCount > 0 || current.P95FirstByteLatencyMs > 0 {
+		return
+	}
+	if old.FirstByteSampleCount <= 0 || old.P95FirstByteLatencyMs <= 0 {
+		return
+	}
+	if !isFirstByteStatsFresh(old.FirstByteStatsUpdatedAt, now) {
+		return
+	}
+	current.FirstByteSampleCount = old.FirstByteSampleCount
+	current.P95FirstByteLatencyMs = old.P95FirstByteLatencyMs
+	updatedAt := *old.FirstByteStatsUpdatedAt
+	current.FirstByteStatsUpdatedAt = &updatedAt
 }
 
 // emitProfileChangeEvents 对比 endpointUID 的旧画像与本轮新画像，
