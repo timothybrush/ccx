@@ -304,7 +304,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const newModel = ref<ModelOptionValue>('')
 const thinkingModeOptions = ['thinking', 'extended', 'adaptive', 'adaptive_only', 'adaptive_always_on']
-const reasoningEffortOptions = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+const reasoningEffortOptions = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 const modelCapabilityMenuProps = { attach: 'body', zIndex: 2600 } as const
 const newModelName = computed(() => normalizeSelectableString(newModel.value).trim())
 const modelListNoDataText = computed(() => props.fetchModelsError || t('addChannel.modelListEmptyHint'))

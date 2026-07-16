@@ -3,11 +3,28 @@ import { describe, expect, it } from 'vitest'
 import {
   buildQuickAddChannelName,
   defaultQuickAddServiceType,
+  inferQuickAddProviderId,
   normalizeQuickAddBaseUrls,
   normalizeDiscoveredChannelKind,
   recognizeQuickAddBaseUrl,
   supportsQuickAddProtocolDiscovery
 } from './quickAddChannel'
+
+const providers = [
+  {
+    providerId: 'glm',
+    candidates: [{ baseUrl: 'https://open.bigmodel.cn/api/anthropic' }],
+    routes: [
+      { candidates: [{ baseUrl: 'https://open.bigmodel.cn/api/anthropic' }] },
+      { candidates: [{ baseUrl: 'https://open.bigmodel.cn/api/paas/v4#' }] }
+    ]
+  },
+  {
+    providerId: 'deepseek',
+    candidates: [{ baseUrl: 'https://api.deepseek.com/anthropic' }],
+    routes: [{ candidates: [{ baseUrl: 'https://api.deepseek.com' }] }]
+  }
+]
 
 describe('buildQuickAddChannelName', () => {
   it('省略域名前导 www 并保留其余主机名', () => {
@@ -56,5 +73,38 @@ describe('quick add protocol discovery', () => {
     expect(normalizeDiscoveredChannelKind('responses')).toBe('responses')
     expect(normalizeDiscoveredChannelKind('images')).toBeNull()
     expect(normalizeDiscoveredChannelKind('')).toBeNull()
+  })
+})
+
+describe('inferQuickAddProviderId', () => {
+  const zhipuKey = '0123456789abcdef0123456789abcdef.ABCDEFGHIJKLMNO1'
+
+  it('识别智谱两个官方协议根及其完整端点', () => {
+    expect(inferQuickAddProviderId(providers, ['https://open.bigmodel.cn/api/anthropic'], ['sk-any'])).toBe('glm')
+    expect(
+      inferQuickAddProviderId(providers, ['https://open.bigmodel.cn/api/paas/v4/chat/completions'], ['sk-any'])
+    ).toBe('glm')
+  })
+
+  it('没有 Base URL 时按 id.secret Key 识别智谱', () => {
+    expect(inferQuickAddProviderId(providers, [''], [zhipuKey])).toBe('glm')
+  })
+
+  it('第三方 URL 优先，不能仅凭智谱样式 Key 标为官方', () => {
+    expect(inferQuickAddProviderId(providers, ['https://relay.example/v1'], [zhipuKey])).toBe('')
+  })
+
+  it('混合官方和第三方 URL 时保持自定义模式', () => {
+    expect(
+      inferQuickAddProviderId(
+        providers,
+        ['https://open.bigmodel.cn/api/paas/v4', 'https://relay.example/v1'],
+        [zhipuKey]
+      )
+    ).toBe('')
+  })
+
+  it('不会根据共享的 sk- Key 猜测 provider', () => {
+    expect(inferQuickAddProviderId(providers, [''], ['sk-abcdefghijklmnopqrstuvwxyz123456'])).toBe('')
   })
 })

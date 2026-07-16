@@ -276,6 +276,9 @@ func (p *ResponsesProvider) buildProviderRequestBody(c *gin.Context, requestPath
 			converters.NormalizeNonstandardChatRolesInRequest(reqMap)
 		}
 	}
+	if reqMap, ok := providerReq.(map[string]interface{}); ok {
+		ApplyNativeToolStreaming(reqMap, upstream)
+	}
 
 	return providerReq, bodyBytes, nil
 }

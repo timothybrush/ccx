@@ -185,7 +185,7 @@ export interface Channel {
   embeddingCapabilities?: Record<string, EmbeddingCapability>
   defaultCapability?: UpstreamModelCapability
   allowUnknownContext?: boolean
-  reasoningMapping?: Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
+  reasoningMapping?: Record<string, 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
   reasoningParamStyle?: 'reasoning' | 'reasoning_effort' | 'thinking'
   textVerbosity?: 'low' | 'medium' | 'high' | ''
   fastMode?: boolean

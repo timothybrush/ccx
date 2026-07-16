@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const reasoningEfforts = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+const reasoningEfforts = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 const textVerbosityValues = ['low', 'medium', 'high']
 
 const channelPresetDefaults = {

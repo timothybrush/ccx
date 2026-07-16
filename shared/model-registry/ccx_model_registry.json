@@ -143,15 +143,21 @@
       "patterns": ["(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)", "(?:^|[-/])glm-5p2(?=$|@)"],
       "provider": "zai",
       "displayName": "GLM-5.2",
+      "description": "Zhipu flagship coding model with dynamic thinking, configurable reasoning effort, and streaming tool-call arguments on the OpenAI Chat API.",
       "contextWindowTokens": 1048576,
       "maxOutputTokens": 131072,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
       "capabilities": {
         "toolCalls": true,
+        "streamingToolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.2",
+        "https://docs.bigmodel.cn/cn/guide/capabilities/thinking",
+        "https://docs.bigmodel.cn/cn/guide/capabilities/stream-tool"
+      ]
     },
     {
       "patterns": ["(?:^|[-/])glm-5\\.1(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)", "(?:^|[-/])glm-5p1(?=$|@)"],

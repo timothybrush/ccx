@@ -30,7 +30,7 @@ const { t } = useLanguage()
 const newModel = ref('')
 const activeModelInputId = ref('')
 const thinkingModeOptions = ['thinking', 'extended', 'adaptive', 'adaptive_only', 'adaptive_always_on']
-const reasoningEffortOptions = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+const reasoningEffortOptions = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 const newModelName = computed(() => newModel.value.trim())
 const thinkingDatalistId = `model-capability-thinking-${Math.random().toString(36).slice(2)}`
 const reasoningDatalistId = `model-capability-reasoning-${Math.random().toString(36).slice(2)}`

@@ -146,6 +146,7 @@ export function useEditChannelOptions(
   const reasoningEffortOptions = [
     { title: t('addChannel.reasoningDefault'), value: '' },
     { title: 'None', value: 'none' },
+    { title: 'Minimal', value: 'minimal' },
     { title: 'Low', value: 'low' },
     { title: 'Medium', value: 'medium' },
     { title: 'High', value: 'high' },

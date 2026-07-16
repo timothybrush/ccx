@@ -302,7 +302,7 @@ func TestNormalizeMiMoResponsesReasoningEffort(t *testing.T) {
 }
 
 func TestIsValidReasoningEffort(t *testing.T) {
-	valid := []string{"", "off", "none", "low", "medium", "high", "xhigh", "max"}
+	valid := []string{"", "off", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
 	for _, effort := range valid {
 		t.Run("valid_"+effort, func(t *testing.T) {
 			if !isValidReasoningEffort(effort) {

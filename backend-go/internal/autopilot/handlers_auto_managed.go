@@ -1041,10 +1041,15 @@ func handleAutoAdd(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
 			return
 		}
+		req.ProviderID = strings.ToLower(strings.TrimSpace(req.ProviderID))
+		req.BaseURLs = uniqueNonEmptyStrings(req.BaseURLs)
 		req.APIKeys = uniqueNonEmptyStrings(req.APIKeys)
 		if len(req.APIKeys) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "apiKeys 不能为空"})
 			return
+		}
+		if req.ProviderID == "" {
+			req.ProviderID = inferAutoAddProviderID(req.BaseURLs, req.APIKeys)
 		}
 		// provider 模板模式无需 baseUrls（由模板判定）；自定义模式必须带 baseUrls
 		if req.ProviderID == "" && len(req.BaseURLs) == 0 {
@@ -1059,6 +1064,33 @@ func handleAutoAdd(deps *AutoManagedDeps) gin.HandlerFunc {
 
 		handleCustomAutoAdd(c, deps, kind, req)
 	}
+}
+
+// inferAutoAddProviderID 只在输入没有歧义时提升为官方 provider 模式。
+// 明确填写第三方 URL 时绝不根据 Key 样式覆盖用户选择。
+func inferAutoAddProviderID(baseURLs, apiKeys []string) string {
+	baseURLs = uniqueNonEmptyStrings(baseURLs)
+	if len(baseURLs) > 0 {
+		providerID := ""
+		for _, baseURL := range baseURLs {
+			inferred, ok := config.InferProviderIDFromBaseURL(baseURL)
+			if !ok || (providerID != "" && providerID != inferred) {
+				return ""
+			}
+			providerID = inferred
+		}
+		return providerID
+	}
+
+	providerID := ""
+	for _, apiKey := range uniqueNonEmptyStrings(apiKeys) {
+		inferred, ok := config.InferProviderIDFromAPIKey(apiKey)
+		if !ok || (providerID != "" && providerID != inferred) {
+			return ""
+		}
+		providerID = inferred
+	}
+	return providerID
 }
 
 func handleCustomAutoAdd(c *gin.Context, deps *AutoManagedDeps, requestKind string, req AutoAddRequest) {
@@ -1249,6 +1281,7 @@ func handleProviderAutoAdd(c *gin.Context, deps *AutoManagedDeps, requestKind st
 			APIKeys:       append([]string(nil), req.APIKeys...),
 			APIKeyConfigs: item.keyConfigs,
 		}
+		applyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
 		additions = append(additions, config.AccountChannelAddition{Kind: item.route.ChannelKind, Upstream: upstream})
 	}
 	if err := deps.CfgManager.ApplyAccountChannelChanges(accountUID, nil, additions); err != nil {
@@ -1442,9 +1475,18 @@ func planProviderAccountRouteAdditions(
 			APIKeys:       append([]string(nil), apiKeys...),
 			APIKeyConfigs: keyConfigs,
 		}
+		applyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
 		additions = append(additions, config.AccountChannelAddition{Kind: route.ChannelKind, Upstream: upstream})
 	}
 	return additions, http.StatusOK, nil
+}
+
+func applyProviderUpstreamDefaults(providerID string, upstream *config.UpstreamConfig) {
+	if upstream == nil || !strings.EqualFold(strings.TrimSpace(providerID), "glm") || upstream.ServiceType != "openai" {
+		return
+	}
+	upstream.ReasoningParamStyle = "reasoning_effort"
+	upstream.PassbackReasoningContent = true
 }
 
 // bindProviderRouteKeys 为已验证过的托管账号凭证选择 route 的首选官方端点。

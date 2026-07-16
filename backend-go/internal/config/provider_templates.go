@@ -2,6 +2,7 @@ package config
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ type ProviderCandidate struct {
 //   - MiMo:     https://mimo.mi.com/docs（按量 sk- / Token Plan tp-，TP 分 cn/sgp/ams 三区域集群）
 //   - DeepSeek: https://api-docs.deepseek.com（Anthropic 兼容 /anthropic）
 //   - Kimi:     https://api.moonshot.ai/anthropic（全球）/ https://api.moonshot.cn/anthropic（中国）
-//   - GLM:      https://open.bigmodel.cn/api/anthropic
+//   - GLM:      https://open.bigmodel.cn/api/anthropic（Claude）与 /api/paas/v4（OpenAI）
 //   - 火山方舟: https://ark.cn-beijing.volces.com/api/plan（Agent Plan）与 /api/coding（Coding Plan）
 //
 // Claude route 的 baseURL 使用 Anthropic 兼容入口且不带 /v1（claude provider 会自动补 /v1/messages）。
@@ -186,16 +187,36 @@ var builtinProviderTemplates = []ProviderTemplate{
 	{
 		ProviderID:  "glm",
 		DisplayName: "智谱 GLM",
-		Description: "智谱 GLM 官方 API（Anthropic 兼容协议）",
+		Description: "智谱 GLM 官方按量 API（自动识别 id.secret Key；Claude 与 OpenAI Chat 兼容）",
 		ChannelKind: "messages",
 		ServiceType: "claude",
 		OriginType:  "official_api",
 		OriginTier:  "first",
-		Candidates: []ProviderCandidate{
-			{BaseURL: "https://open.bigmodel.cn/api/anthropic", PlanTag: "", Region: "", Priority: 0},
+		Candidates:  glmClaudeCandidates(),
+		Routes: []ProviderRoute{
+			{
+				ChannelKind: "messages",
+				ServiceType: "claude",
+				Description: "Claude Messages 原生 Anthropic 兼容入口",
+				Candidates:  glmClaudeCandidates(),
+			},
+			{
+				ChannelKind: "chat",
+				ServiceType: "openai",
+				Description: "OpenAI Chat Completions 兼容入口",
+				Candidates:  glmOpenAICandidates(),
+			},
+			{
+				ChannelKind: "responses",
+				ServiceType: "openai",
+				Description: "Responses 请求转换到 OpenAI Chat Completions",
+				Candidates:  glmOpenAICandidates(),
+			},
 		},
 	},
 }
+
+var zhipuAPIKeyPattern = regexp.MustCompile(`^[A-Za-z0-9]{20,}\.[A-Za-z0-9]{10,}$`)
 
 func deepseekClaudeCandidates() []ProviderCandidate {
 	return []ProviderCandidate{
@@ -206,6 +227,19 @@ func deepseekClaudeCandidates() []ProviderCandidate {
 func deepseekOpenAICandidates() []ProviderCandidate {
 	return []ProviderCandidate{
 		{BaseURL: "https://api.deepseek.com", PlanTag: "", Region: "", Priority: 0},
+	}
+}
+
+func glmClaudeCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://open.bigmodel.cn/api/anthropic", PlanTag: "payg", Region: "cn", Priority: 0},
+	}
+}
+
+func glmOpenAICandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		// # 表示该路径已经是版本根，调用方不得再自动补 /v1。
+		{BaseURL: "https://open.bigmodel.cn/api/paas/v4#", PlanTag: "payg", Region: "cn", Priority: 0},
 	}
 }
 
@@ -255,6 +289,15 @@ func InferProviderIDFromBaseURL(baseURL string) (string, bool) {
 		}
 	}
 	return bestProvider, bestProvider != ""
+}
+
+// InferProviderIDFromAPIKey 仅识别具有官方唯一格式的 API Key。
+// sk- 等共享格式无法可靠区分 provider，因此不会参与推断。
+func InferProviderIDFromAPIKey(apiKey string) (string, bool) {
+	if zhipuAPIKeyPattern.MatchString(strings.TrimSpace(apiKey)) {
+		return "glm", true
+	}
+	return "", false
 }
 
 func sameURLServer(left, right *url.URL) bool {

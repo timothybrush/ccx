@@ -143,6 +143,28 @@ func TestResolveUpstreamCapability_KimiK27Builtin(t *testing.T) {
 	}
 }
 
+func TestResolveUpstreamCapability_GLM52RuntimeBuiltin(t *testing.T) {
+	resolved := ResolveUpstreamCapability("glm-5.2", nil, nil)
+	if !resolved.Known || resolved.Source != "builtin" {
+		t.Fatalf("resolved = %+v, want builtin known", resolved)
+	}
+	if resolved.Capability.Provider != "zai" {
+		t.Fatalf("Provider = %q, want zai", resolved.Capability.Provider)
+	}
+	if resolved.Capability.ContextWindowTokens != 1048576 {
+		t.Fatalf("ContextWindowTokens = %d, want 1048576", resolved.Capability.ContextWindowTokens)
+	}
+	if resolved.Capability.MaxOutputTokens != 131072 {
+		t.Fatalf("MaxOutputTokens = %d, want 131072", resolved.Capability.MaxOutputTokens)
+	}
+	if !containsString(resolved.Capability.ReasoningEfforts, "minimal") {
+		t.Fatalf("ReasoningEfforts = %v, want minimal", resolved.Capability.ReasoningEfforts)
+	}
+	if !resolved.Capability.Capabilities["streamingToolCalls"] {
+		t.Fatalf("Capabilities = %v, want streamingToolCalls", resolved.Capability.Capabilities)
+	}
+}
+
 func TestResolveUpstreamCapability_Qwen37MaxBuiltin(t *testing.T) {
 	upstream := &UpstreamConfig{
 		ModelMapping: map[string]string{

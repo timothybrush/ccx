@@ -758,7 +758,7 @@ const { t } = useLanguage()
           modelMapping: parseJsonObject<Record<string, string>>(form.modelMappingText, 'Model mapping'),
           modelCapabilityRows: modelCapabilityRows.value,
           embeddingCapabilityRows: form.embeddingCapabilityRows,
-          reasoningMapping: parseJsonObject<Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>>(form.reasoningMappingText, 'Reasoning mapping'),
+          reasoningMapping: parseJsonObject<Record<string, 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>>(form.reasoningMappingText, 'Reasoning mapping'),
           reasoningParamStyle: form.reasoningParamStyle,
           textVerbosity: form.textVerbosity,
           fastMode: form.fastMode,
@@ -1013,7 +1013,7 @@ const { t } = useLanguage()
 
   function buildCurrentPayload() {
     const modelMapping = getModelMappingAsObject()
-    const reasoningMapping = getReasoningMappingAsObject() as Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
+    const reasoningMapping = getReasoningMappingAsObject() as Record<string, 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
 
     return buildChannelPayload({
       name: form.name,

@@ -178,6 +178,7 @@
                     :items="[
                       { title: '无', value: '' },
                       { title: 'None', value: 'none' },
+                      { title: 'Minimal', value: 'minimal' },
                       { title: 'Low', value: 'low' },
                       { title: 'Medium', value: 'medium' },
                       { title: 'High', value: 'high' },
@@ -322,7 +323,7 @@ interface MappingRow {
   id: number
   source: string
   target: string
-  reasoning?: '' | 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  reasoning?: '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   noVision?: boolean
 }
 
@@ -386,7 +387,7 @@ const handleAddMapping = () => {
     id: Date.now(),
     source,
     target,
-    reasoning: (newMapping.value.reasoningEffort || '') as '' | 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max',
+    reasoning: (newMapping.value.reasoningEffort || '') as '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max',
     noVision: existingNoVision ?? false,
   }
 

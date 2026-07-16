@@ -75,6 +75,8 @@ const looksLikeConfigKey = (token: string): boolean => {
  * - 火山引擎 Ark: UUID 格式
  * - 火山引擎 IAM: AK 开头
  */
+const ZHIPU_API_KEY_PATTERN = /^[a-zA-Z0-9]{20,}\.[a-zA-Z0-9]{10,}$/
+
 const PLATFORM_KEY_PATTERNS: RegExp[] = [
   // OpenAI Project Key (新格式，最长，优先匹配)
   /^sk-proj-[a-zA-Z0-9_-]{50,}$/,
@@ -95,12 +97,15 @@ const PLATFORM_KEY_PATTERNS: RegExp[] = [
   // Replicate
   /^r8_[a-zA-Z0-9]{20,}$/,
   // 智谱 AI (id.secret 格式)
-  /^[a-zA-Z0-9]{20,}\.[a-zA-Z0-9]{10,}$/,
+  ZHIPU_API_KEY_PATTERN,
   // 火山引擎 Ark (UUID 格式)
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   // 火山引擎 IAM AK
   /^AK[A-Z]{2,4}[a-zA-Z0-9]{20,}$/
 ]
+
+/** 智谱传统 API Key 使用唯一的 id.secret 格式，可用于无 URL 时的 provider 推断。 */
+export const isZhipuApiKey = (token: string): boolean => ZHIPU_API_KEY_PATTERN.test(token.trim())
 
 /**
  * 检测字符串是否为有效的 API Key

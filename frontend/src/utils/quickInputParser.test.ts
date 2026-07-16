@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isValidApiKey, isValidUrl, parseQuickInput } from './quickInputParser'
+import { isValidApiKey, isValidUrl, isZhipuApiKey, parseQuickInput } from './quickInputParser'
 
 describe('API Key 识别', () => {
   describe('OpenAI 格式', () => {
@@ -78,8 +78,20 @@ describe('API Key 识别', () => {
 
   describe('智谱 AI 格式 (id.secret)', () => {
     it('应识别智谱 AI 的 id.secret 格式', () => {
-      expect(isValidApiKey('269abc123456789012345678.r8abcdef1234')).toBe(true)
-      expect(isValidApiKey('abcdefghij1234567890abcd.secretkey123456')).toBe(true)
+      const keys = [
+        '269abc123456789012345678.r8abcdef1234',
+        'abcdefghij1234567890abcd.secretkey123456'
+      ]
+      for (const key of keys) {
+        expect(isValidApiKey(key)).toBe(true)
+        expect(isZhipuApiKey(key)).toBe(true)
+      }
+    })
+
+    it('不把 JWT、短点号字符串或普通 sk- Key 当成智谱 Key', () => {
+      expect(isZhipuApiKey('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature')).toBe(false)
+      expect(isZhipuApiKey('abc.def')).toBe(false)
+      expect(isZhipuApiKey('sk-abcdefghijklmnopqrstuvwxyz123456')).toBe(false)
     })
   })
 

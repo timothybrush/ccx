@@ -1,5 +1,19 @@
 import type { Channel, ChannelDiscoveryKind, ChannelKind } from '@/services/api-types'
-import { parseQuickInput } from './quickInputParser'
+import { isZhipuApiKey, parseQuickInput } from './quickInputParser'
+
+interface QuickAddProviderCandidate {
+  baseUrl: string
+}
+
+interface QuickAddProviderRoute {
+  candidates?: QuickAddProviderCandidate[]
+}
+
+export interface QuickAddProviderTemplate {
+  providerId: string
+  candidates?: QuickAddProviderCandidate[]
+  routes?: QuickAddProviderRoute[]
+}
 
 const DISCOVERABLE_CHANNEL_KINDS = new Set<ChannelDiscoveryKind>(['messages', 'chat', 'responses', 'gemini'])
 
@@ -35,6 +49,80 @@ export function recognizeQuickAddBaseUrl(rawUrl: string, kind: ChannelKind): str
 
 export function normalizeQuickAddBaseUrls(rawUrls: string[], kind: ChannelKind): string[] {
   return parseQuickInput(rawUrls.join('\n'), defaultQuickAddServiceType(kind)).detectedBaseUrls
+}
+
+function effectiveURLPort(url: URL): string {
+  if (url.port) return url.port
+  if (url.protocol === 'https:') return '443'
+  if (url.protocol === 'http:') return '80'
+  return ''
+}
+
+function inferProviderFromBaseUrl(providers: QuickAddProviderTemplate[], rawBaseUrl: string): string {
+  let target: URL
+  try {
+    target = new URL(rawBaseUrl.trim().replace(/#$/, ''))
+  } catch {
+    return ''
+  }
+
+  const targetPath = target.pathname.replace(/\/+$/, '')
+  let bestProviderId = ''
+  let bestPathLength = -1
+  for (const provider of providers) {
+    const candidates = [
+      ...(provider.candidates ?? []),
+      ...(provider.routes ?? []).flatMap(route => route.candidates ?? [])
+    ]
+    for (const candidate of candidates) {
+      let candidateUrl: URL
+      try {
+        candidateUrl = new URL(candidate.baseUrl.trim().replace(/#$/, ''))
+      } catch {
+        continue
+      }
+      if (
+        target.hostname.toLowerCase() !== candidateUrl.hostname.toLowerCase() ||
+        effectiveURLPort(target) !== effectiveURLPort(candidateUrl)
+      ) {
+        continue
+      }
+      const candidatePath = candidateUrl.pathname.replace(/\/+$/, '')
+      if (candidatePath && targetPath !== candidatePath && !targetPath.startsWith(`${candidatePath}/`)) continue
+      if (candidatePath.length > bestPathLength) {
+        bestProviderId = provider.providerId
+        bestPathLength = candidatePath.length
+      }
+    }
+  }
+  return bestProviderId
+}
+
+/**
+ * 仅在所有非空输入都指向同一个官方 provider 时自动识别。
+ * 有第三方 URL 时不会再根据 Key 样式推断，避免把 relay 错标为官方渠道。
+ */
+export function inferQuickAddProviderId(
+  providers: QuickAddProviderTemplate[],
+  rawBaseUrls: string[],
+  rawApiKeys: string[]
+): string {
+  const baseUrls = rawBaseUrls.map(value => value.trim()).filter(Boolean)
+  if (baseUrls.length > 0) {
+    let providerId = ''
+    for (const baseUrl of baseUrls) {
+      const inferred = inferProviderFromBaseUrl(providers, baseUrl)
+      if (!inferred || (providerId && providerId !== inferred)) return ''
+      providerId = inferred
+    }
+    return providerId
+  }
+
+  const apiKeys = rawApiKeys.map(value => value.trim()).filter(Boolean)
+  if (apiKeys.length > 0 && apiKeys.every(isZhipuApiKey) && providers.some(provider => provider.providerId === 'glm')) {
+    return 'glm'
+  }
+  return ''
 }
 
 export function normalizeDiscoveredChannelKind(kind: string): ChannelDiscoveryKind | null {

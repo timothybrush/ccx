@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeftRight, ArrowRight, Eye, EyeOff, Plus, Trash2, Zap } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 
-type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 interface ModelMappingRow {
   id: number

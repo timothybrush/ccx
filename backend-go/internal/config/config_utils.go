@@ -256,7 +256,7 @@ func ApplyReasoningParamStyle(req map[string]interface{}, style string, effort s
 
 func isValidReasoningEffort(reasoning string) bool {
 	switch reasoning {
-	case "", "off", "none", "low", "medium", "high", "xhigh", "max":
+	case "", "off", "none", "minimal", "low", "medium", "high", "xhigh", "max":
 		return true
 	default:
 		return false

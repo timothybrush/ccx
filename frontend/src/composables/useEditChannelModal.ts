@@ -163,7 +163,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     defaultContextWindowTokens: null as string | number | null,
     defaultMaxOutputTokens: null as string | number | null,
     allowUnknownContext: false,
-    reasoningMapping: {} as Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>,
+    reasoningMapping: {} as Record<string, 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>,
     reasoningParamStyle: 'reasoning' as 'reasoning' | 'reasoning_effort' | 'thinking',
     textVerbosity: '' as 'low' | 'medium' | 'high' | '',
     fastMode: false,
@@ -195,7 +195,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     noVision: false,
     noVisionModels: [] as string[],
     visionFallbackModel: '',
-    visionFallbackReasoningEffort: '' as 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | '',
+    visionFallbackReasoningEffort: '' as 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | '',
     historicalImageTurnLimit: 0,
   })
 
@@ -231,7 +231,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     id: number
     source: string
     target: string
-    reasoning: '' | 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    reasoning: '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     noVision: boolean
   }
 
@@ -979,7 +979,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     form.noVision = !!channel.noVision
     form.noVisionModels = [...(channel.noVisionModels || [])]
     form.visionFallbackModel = channel.visionFallbackModel || ''
-    form.visionFallbackReasoningEffort = (channel.reasoningMapping?.[form.visionFallbackModel] || '') as 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | ''
+    form.visionFallbackReasoningEffort = (channel.reasoningMapping?.[form.visionFallbackModel] || '') as 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | ''
     form.historicalImageTurnLimit = channel.historicalImageTurnLimit ?? 0
 
     // 立即同步 baseUrl 到预览变量，避免等待 debounce

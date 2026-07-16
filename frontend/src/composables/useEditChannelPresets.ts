@@ -17,9 +17,9 @@ type FormLike = {
   noVision: boolean
   noVisionModels: string[]
   visionFallbackModel: string
-  visionFallbackReasoningEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | ''
+  visionFallbackReasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | ''
   modelMapping: Record<string, string>
-  reasoningMapping: Record<string, 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
+  reasoningMapping: Record<string, 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>
   reasoningParamStyle: 'reasoning' | 'reasoning_effort' | 'thinking'
   codexNativeToolPassthrough: boolean
   codexToolCompat: boolean

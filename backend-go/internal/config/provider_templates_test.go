@@ -113,6 +113,34 @@ func TestProviderTemplateDeepSeekRoutes(t *testing.T) {
 	}
 }
 
+func TestProviderTemplateGLMRoutes(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("glm")
+	if !ok {
+		t.Fatal("未找到 GLM 模板")
+	}
+	routes := tmpl.AutoAddRoutes()
+	if len(routes) != 3 {
+		t.Fatalf("GLM 应创建 messages/chat/responses 三条 route，实际 %d: %+v", len(routes), routes)
+	}
+	want := map[string]struct {
+		serviceType string
+		baseURL     string
+	}{
+		"messages":  {serviceType: "claude", baseURL: "https://open.bigmodel.cn/api/anthropic"},
+		"chat":      {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#"},
+		"responses": {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#"},
+	}
+	for _, route := range routes {
+		expect, found := want[route.ChannelKind]
+		if !found || route.ServiceType != expect.serviceType || len(route.Candidates) != 1 || route.Candidates[0].BaseURL != expect.baseURL {
+			t.Fatalf("GLM route 不符合预期: %+v", route)
+		}
+		if route.Candidates[0].PlanTag != "payg" {
+			t.Fatalf("GLM route 应标记为 payg: %+v", route.Candidates[0])
+		}
+	}
+}
+
 func TestInferProviderIDFromBaseURL(t *testing.T) {
 	tests := []struct {
 		baseURL string
@@ -122,6 +150,12 @@ func TestInferProviderIDFromBaseURL(t *testing.T) {
 		{baseURL: "https://api.deepseek.com", want: "deepseek", ok: true},
 		{baseURL: "https://api.deepseek.com/anthropic/v1", want: "deepseek", ok: true},
 		{baseURL: "https://ark.cn-beijing.volces.com/api/plan/v3", want: "volcengine", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/anthropic", want: "glm", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/anthropic/v1/messages", want: "glm", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/paas/v4/", want: "glm", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions", want: "glm", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/other", ok: false},
+		{baseURL: "https://open.bigmodel.cn.evil.example/api/paas/v4", ok: false},
 		{baseURL: "https://relay.example/v1", ok: false},
 		{baseURL: "https://api.deepseek.com.evil.example", ok: false},
 	}
@@ -130,6 +164,29 @@ func TestInferProviderIDFromBaseURL(t *testing.T) {
 		if got != tt.want || ok != tt.ok {
 			t.Fatalf("InferProviderIDFromBaseURL(%q) = %q, %v; want %q, %v", tt.baseURL, got, ok, tt.want, tt.ok)
 		}
+	}
+}
+
+func TestInferProviderIDFromAPIKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		apiKey string
+		want   string
+		ok     bool
+	}{
+		{name: "zhipu id.secret", apiKey: "0123456789abcdef0123456789abcdef.ABCDEFGHIJKLMNO1", want: "glm", ok: true},
+		{name: "trim spaces", apiKey: " 269abc123456789012345678.r8abcdef1234 ", want: "glm", ok: true},
+		{name: "shared sk prefix", apiKey: "sk-abcdefghijklmnopqrstuvwxyz123456", ok: false},
+		{name: "short dotted token", apiKey: "abc.def", ok: false},
+		{name: "jwt", apiKey: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature", ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := InferProviderIDFromAPIKey(tt.apiKey)
+			if got != tt.want || ok != tt.ok {
+				t.Fatalf("InferProviderIDFromAPIKey() = %q, %v; want %q, %v", got, ok, tt.want, tt.ok)
+			}
+		})
 	}
 }
 

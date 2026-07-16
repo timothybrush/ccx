@@ -6,7 +6,7 @@ import {
 } from '@/utils/channel-payload'
 import type { Channel } from '@/services/admin-api'
 
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface ModelMappingRow {
   id: number

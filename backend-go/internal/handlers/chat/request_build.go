@@ -10,6 +10,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
 	"github.com/BenedictKing/ccx/internal/copilot"
+	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -72,6 +73,7 @@ func buildChatCompletionRequestBody(
 	if upstream.NormalizeNonstandardChatRoles {
 		converters.NormalizeNonstandardChatRolesInRequest(reqMap)
 	}
+	providers.ApplyNativeToolStreaming(reqMap, upstream)
 
 	return json.Marshal(reqMap)
 }

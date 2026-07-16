@@ -34,6 +34,7 @@ export function useChannelEditorOptions(options: ChannelEditorOptionsOptions) {
   const reasoningEffortOptions = computed(() => [
     { label: options.t('channelEditor.compat.selectDefault'), value: DEFAULT_SELECT_VALUE },
     { label: 'None', value: 'none' },
+    { label: 'Minimal', value: 'minimal' },
     { label: 'Low', value: 'low' },
     { label: 'Medium', value: 'medium' },
     { label: 'High', value: 'high' },

@@ -70,7 +70,7 @@ func (p *OpenAIProvider) ConvertToProviderRequest(c *gin.Context, upstream *conf
 		requestMap["user_id"] = userID
 	}
 	if effort := config.ResolveReasoningEffort(claudeReq.Model, upstream); effort != "" {
-		requestMap["reasoning"] = map[string]interface{}{"effort": effort}
+		config.ApplyReasoningParamStyle(requestMap, upstream.ReasoningParamStyle, effort)
 	}
 	if upstream.TextVerbosity != "" {
 		requestMap["text"] = map[string]interface{}{"verbosity": upstream.TextVerbosity}
@@ -78,6 +78,7 @@ func (p *OpenAIProvider) ConvertToProviderRequest(c *gin.Context, upstream *conf
 	if upstream.FastMode {
 		requestMap["service_tier"] = "priority"
 	}
+	ApplyNativeToolStreaming(requestMap, upstream)
 
 	reqBodyBytes, err := json.Marshal(requestMap)
 	if err != nil {

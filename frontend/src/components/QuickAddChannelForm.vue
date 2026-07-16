@@ -8,7 +8,7 @@
       </div>
       <v-spacer />
       <v-select
-        v-model="providerId"
+        v-model="displayProviderId"
         :items="providerItems"
         item-title="title"
         item-value="value"
@@ -34,8 +34,8 @@
       {{ selectedProvider.description }}
     </v-alert>
 
-    <!-- Base URL 输入（provider 模式下由后端按 key 前缀判定，隐藏） -->
-    <div v-if="!isProviderMode">
+    <!-- Base URL 输入（仅显式选择 provider 时隐藏；自动识别时保留，允许第三方 URL 覆盖 Key 推断） -->
+    <div v-if="!isExplicitProviderMode">
       <div class="d-flex align-center justify-space-between mb-2">
         <div class="d-flex align-center ga-2">
           <v-icon size="16" color="medium-emphasis">mdi-web</v-icon>
@@ -95,7 +95,7 @@
         <div v-for="(key, idx) in apiKeys" :key="'key-' + idx" class="d-flex align-center ga-2">
           <v-text-field
             v-model="apiKeys[idx]"
-            :placeholder="'sk-...' + (idx + 1)"
+            :placeholder="`${t('app.dialog.apiKeyPlaceholder')} ${idx + 1}`"
             variant="outlined"
             density="compact"
             hide-details
@@ -142,7 +142,12 @@ import {
   getProviderTemplates
 } from '../services/autopilot-api'
 import type { ProviderTemplate } from '../services/autopilot-api'
-import { buildQuickAddChannelName, normalizeQuickAddBaseUrls, recognizeQuickAddBaseUrl } from '../utils/quickAddChannel'
+import {
+  buildQuickAddChannelName,
+  inferQuickAddProviderId,
+  normalizeQuickAddBaseUrls,
+  recognizeQuickAddBaseUrl
+} from '../utils/quickAddChannel'
 
 type ChannelType = 'messages' | 'chat' | 'responses' | 'gemini' | 'images' | 'vectors'
 
@@ -184,9 +189,20 @@ const providerItems = computed(() => [
   ...availableProviders.value.map(p => ({ title: p.displayName, value: p.providerId }))
 ])
 
-const selectedProvider = computed(() => availableProviders.value.find(p => p.providerId === providerId.value))
+const inferredProviderId = computed(() =>
+  inferQuickAddProviderId(availableProviders.value, baseUrls.value, apiKeys.value)
+)
+const effectiveProviderId = computed(() => providerId.value || inferredProviderId.value)
+const displayProviderId = computed({
+  get: () => effectiveProviderId.value,
+  set: value => {
+    providerId.value = value ?? ''
+  }
+})
+const selectedProvider = computed(() => availableProviders.value.find(p => p.providerId === effectiveProviderId.value))
 
-const isProviderMode = computed(() => providerId.value !== '')
+const isExplicitProviderMode = computed(() => providerId.value !== '')
+const isProviderMode = computed(() => effectiveProviderId.value !== '')
 const recognizedBaseUrls = computed(() => baseUrls.value.map(url => recognizeQuickAddBaseUrl(url, props.channelType)))
 const normalizedBaseUrls = computed(() => normalizeQuickAddBaseUrls(baseUrls.value, props.channelType))
 
@@ -291,7 +307,7 @@ async function handleSubmit() {
       targetChannelType,
       isProviderMode.value
         ? {
-            providerId: providerId.value,
+            providerId: effectiveProviderId.value,
             apiKeys: filteredApiKeys
           }
         : {

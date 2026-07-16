@@ -168,6 +168,51 @@ func TestAutoAddRequest_Validation(t *testing.T) {
 	}
 }
 
+func TestInferAutoAddProviderID(t *testing.T) {
+	zhipuKey := "0123456789abcdef0123456789abcdef.ABCDEFGHIJKLMNO1"
+	tests := []struct {
+		name     string
+		baseURLs []string
+		apiKeys  []string
+		want     string
+	}{
+		{name: "官方 Claude URL", baseURLs: []string{"https://open.bigmodel.cn/api/anthropic"}, apiKeys: []string{"sk-any"}, want: "glm"},
+		{name: "官方 OpenAI URL", baseURLs: []string{"https://open.bigmodel.cn/api/paas/v4/"}, apiKeys: []string{"sk-any"}, want: "glm"},
+		{name: "两个官方协议 URL", baseURLs: []string{"https://open.bigmodel.cn/api/anthropic", "https://open.bigmodel.cn/api/paas/v4"}, apiKeys: []string{"sk-any"}, want: "glm"},
+		{name: "仅智谱 Key", apiKeys: []string{zhipuKey}, want: "glm"},
+		{name: "第三方 URL 不按 Key 提升", baseURLs: []string{"https://relay.example/v1"}, apiKeys: []string{zhipuKey}},
+		{name: "混合官方与第三方 URL", baseURLs: []string{"https://open.bigmodel.cn/api/paas/v4", "https://relay.example/v1"}, apiKeys: []string{zhipuKey}},
+		{name: "共享 sk Key 无法推断", apiKeys: []string{"sk-abcdefghijklmnopqrstuvwxyz123456"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := inferAutoAddProviderID(tt.baseURLs, tt.apiKeys); got != tt.want {
+				t.Fatalf("inferAutoAddProviderID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestApplyProviderUpstreamDefaults(t *testing.T) {
+	glmChat := config.UpstreamConfig{ServiceType: "openai"}
+	applyProviderUpstreamDefaults("glm", &glmChat)
+	if glmChat.ReasoningParamStyle != "reasoning_effort" || !glmChat.PassbackReasoningContent {
+		t.Fatalf("GLM OpenAI 默认兼容参数未补齐: %+v", glmChat)
+	}
+
+	glmClaude := config.UpstreamConfig{ServiceType: "claude"}
+	applyProviderUpstreamDefaults("glm", &glmClaude)
+	if glmClaude.ReasoningParamStyle != "" || glmClaude.PassbackReasoningContent {
+		t.Fatalf("GLM Claude 原生 route 不应注入 OpenAI 参数: %+v", glmClaude)
+	}
+
+	custom := config.UpstreamConfig{ServiceType: "openai"}
+	applyProviderUpstreamDefaults("", &custom)
+	if custom.ReasoningParamStyle != "" || custom.PassbackReasoningContent {
+		t.Fatalf("自定义渠道不应应用 GLM 默认值: %+v", custom)
+	}
+}
+
 func TestAutoStatusResponse_Serialization(t *testing.T) {
 	now := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
 	resp := AutoStatusResponse{
