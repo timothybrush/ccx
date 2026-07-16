@@ -1,0 +1,80 @@
+package autopilot
+
+import "strings"
+
+// ModelRoutingIntent 描述下游请求是否允许由其他模型承接。
+// 未明确列入自适应入口的请求一律保持精确模型语义。
+type ModelRoutingIntent string
+
+const (
+	ModelRoutingIntentExactOnly         ModelRoutingIntent = "exact_only"
+	ModelRoutingIntentClaudeAdaptive    ModelRoutingIntent = "claude_adaptive"
+	ModelRoutingIntentResponsesAdaptive ModelRoutingIntent = "responses_adaptive"
+)
+
+// AllowsSubstitution 表示该请求允许在满足能力下界后跨模型替代。
+func (i ModelRoutingIntent) AllowsSubstitution() bool {
+	return i == ModelRoutingIntentClaudeAdaptive || i == ModelRoutingIntentResponsesAdaptive
+}
+
+// ClassifyModelRoutingIntent 根据协议和下游模型识别路由意图。
+// 安全默认值是 exact-only，避免显式请求第三方模型时发生跨模型族重定向。
+func ClassifyModelRoutingIntent(channelKind, requestModel string) ModelRoutingIntent {
+	kind := strings.ToLower(strings.TrimSpace(channelKind))
+	model := normalizeRoutingModelID(requestModel)
+
+	switch kind {
+	case "messages":
+		if isClaudeAdaptiveRequest(model) {
+			return ModelRoutingIntentClaudeAdaptive
+		}
+	case "responses":
+		if isResponsesAdaptiveRequest(model) {
+			return ModelRoutingIntentResponsesAdaptive
+		}
+	}
+
+	return ModelRoutingIntentExactOnly
+}
+
+func normalizeRoutingModelID(model string) string {
+	return strings.ToLower(strings.TrimSpace(model))
+}
+
+func isClaudeAdaptiveRequest(model string) bool {
+	switch model {
+	case "fable", "opus", "sonnet", "haiku":
+		return true
+	}
+	if !strings.HasPrefix(model, "claude-") {
+		return false
+	}
+	for _, segment := range strings.Split(model, "-") {
+		switch segment {
+		case "fable", "opus", "sonnet", "haiku":
+			return true
+		}
+	}
+	return false
+}
+
+func isResponsesAdaptiveRequest(model string) bool {
+	return model == "codex-auto-review" ||
+		model == "gpt-5.5" ||
+		matchesModelSeries(model, "gpt-5.4") ||
+		matchesModelSeries(model, "gpt-5.6")
+}
+
+func matchesModelSeries(model, series string) bool {
+	return model == series || strings.HasPrefix(model, series+"-")
+}
+
+func findExactModelProfile(profiles []ModelProfile, requestModel string) (ModelProfile, bool) {
+	normalized := normalizeRoutingModelID(requestModel)
+	for _, profile := range profiles {
+		if normalizeRoutingModelID(profile.ModelID) == normalized {
+			return profile, true
+		}
+	}
+	return ModelProfile{}, false
+}

@@ -66,6 +66,7 @@ func NewModelResolver(profileStore *ModelProfileStore, cfgManager *config.Config
 //   - 显式 modelMapping（用户手动配置）始终优先，不经过能力下界检查
 //   - 禁止链式映射：candidate 源始终是原始 GetModelProfiles 结果
 //   - 仅 autoManaged 渠道走自动映射；手动渠道由 config.RedirectModel 短路
+//   - 只有 ModelRoutingPolicy 白名单入口允许跨模型替代；其余请求必须精确命中模型 ID
 func (r *ModelResolver) ResolveModel(
 	requestModel string,
 	channelUID string,
@@ -123,10 +124,19 @@ func (r *ModelResolver) ResolveModel(
 		return requestModel, false, "no_capable_model"
 	}
 
-	// Step 5: 在满足下界的候选中选最佳匹配。
+	// Step 5: 精确模型始终优先；非自适应入口不得跨模型替代。
+	if exact, found := findExactModelProfile(candidates, requestModel); found {
+		return exact.ModelID, true, "found_exact_model_in_profile"
+	}
+	intent := ClassifyModelRoutingIntent(channelKind, requestModel)
+	if !intent.AllowsSubstitution() {
+		return requestModel, false, "exact_model_required"
+	}
+
+	// Step 6: 自适应入口在满足下界的候选中选最佳匹配。
 	best := rankBySimilarity(candidates, requestModel, floor)
-	return best.ModelID, true, fmt.Sprintf("mapped %s->%s (family:%s, quality:%s)",
-		requestModel, best.ModelID, best.ModelFamily, best.QualityTier)
+	return best.ModelID, true, fmt.Sprintf("mapped %s->%s (intent:%s, family:%s, quality:%s)",
+		requestModel, best.ModelID, intent, best.ModelFamily, best.QualityTier)
 }
 
 // ResolveModelAnyEndpoint 在渠道的所有 endpoint 中判断 requestModel 是否可由自动映射支持。
@@ -189,14 +199,17 @@ func (r *ModelResolver) resolveModelAnyEndpoint(
 	if len(candidates) == 0 {
 		return requestModel, false, "no_capable_model"
 	}
-	for _, p := range candidates {
-		if strings.EqualFold(p.ModelID, requestModel) {
-			return p.ModelID, true, "found_model_in_profile"
-		}
+	if exact, found := findExactModelProfile(candidates, requestModel); found {
+		return exact.ModelID, true, "found_exact_model_in_profile"
+	}
+	intent := ClassifyModelRoutingIntent(channelKind, requestModel)
+	if !intent.AllowsSubstitution() {
+		return requestModel, false, "exact_model_required"
 	}
 
 	best := rankBySimilarity(candidates, requestModel, floor)
-	return best.ModelID, true, fmt.Sprintf("mapped_any_endpoint %s->%s", requestModel, best.ModelID)
+	return best.ModelID, true, fmt.Sprintf("mapped_any_endpoint %s->%s (intent:%s)",
+		requestModel, best.ModelID, intent)
 }
 
 // ── 过滤与排序 ──

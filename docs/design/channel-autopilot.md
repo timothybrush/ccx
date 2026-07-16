@@ -2443,6 +2443,21 @@ long_context: [medium, high]     image_generation/embedding: 不展开
 
 当请求的模型在某个渠道的 `supportedModels` 中不存在时，自动寻找最佳映射。
 
+**请求意图边界（ModelRoutingPolicy）**
+
+跨模型替代不是所有模型的默认能力，只对白名单客户端入口开放：
+
+```text
+messages:
+  fable / opus / sonnet / haiku 及对应 claude-* 完整模型名 → adaptive
+responses:
+  gpt-5.6* / gpt-5.5 / gpt-5.4* / codex-auto-review → adaptive
+其他协议或模型：
+  exact-only，只能在探测到相同规范化模型 ID 的 endpoint 之间调度
+```
+
+`adaptive` 允许在满足 Capability Floor 后选择 GLM、MiMo 等其他模型族；`exact-only` 禁止跨模型替代。用户显式配置的 `modelMapping` 仍优先于该策略。调度预览和 endpoint 实际解析必须调用同一分类函数，避免诊断结果与真实请求分叉。
+
 **⚠️ 核心约束：能力下界 (Capability Floor)**
 
 模型映射最大的风险是**语义降级**：用户以为在用 opus 级能力，实际被路由到白嫖模型，输出质量下降但无信号。因此映射必须满足能力下界约束：
