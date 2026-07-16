@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// ProviderTemplate 描述一个官方 provider 的模板化添加配置。
+// ProviderTemplate 描述一个已知 provider 的模板化添加配置。
 //
 // 设计目标：用户只需选择 provider + 输入 API Key，系统按 key 前缀选候选 baseURL，
 // 探测验证可用性后自动创建渠道，无需手填 baseURL / 选协议 / 配兼容开关。
@@ -16,13 +16,14 @@ import (
 // ProviderTemplate 只描述来源和端点，不再承载 channel-presets 兼容开关；
 // autoManaged 渠道的模型与能力差异由后端智能调度/ModelResolver 处理。
 type ProviderTemplate struct {
-	ProviderID     string              `json:"providerId"`     // "mimo" / "deepseek" / ...
+	ProviderID     string              `json:"providerId"` // "mimo" / "deepseek" / ...
+	Aliases        []string            `json:"aliases,omitempty"`
 	DisplayName    string              `json:"displayName"`    // "小米 MiMo"
 	Description    string              `json:"description"`    // key 前缀说明等
 	ChannelKind    string              `json:"channelKind"`    // 默认 route 的渠道类型，兼容旧前端
 	ServiceType    string              `json:"serviceType"`    // 默认 route 的服务类型，兼容旧前端
-	OriginType     string              `json:"originType"`     // "official_api"
-	OriginTier     string              `json:"originTier"`     // "first"
+	OriginType     string              `json:"originType"`     // official_api / official_token_plan / relay
+	OriginTier     string              `json:"originTier"`     // first / second
 	KeyPrefixRules []KeyPrefixRule     `json:"keyPrefixRules"` // key 前缀 → plan 判别
 	Candidates     []ProviderCandidate `json:"candidates"`     // 默认 route 的候选 baseURL
 	Routes         []ProviderRoute     `json:"routes,omitempty"`
@@ -50,7 +51,7 @@ type ProviderCandidate struct {
 	Priority int    `json:"priority"` // 同 plan 内探测优先级（数字越小越先探测）
 }
 
-// builtinProviderTemplates 编译期内置的官方 provider 模板。
+// builtinProviderTemplates 编译期内置的已知 provider 模板。
 //
 // URL 来源（2026-07 联网核实官方文档）：
 //   - MiMo:     https://mimo.mi.com/docs（按量 sk- / Token Plan tp-，TP 分 cn/sgp/ams 三区域集群）
@@ -60,7 +61,7 @@ type ProviderCandidate struct {
 //   - 火山方舟: https://ark.cn-beijing.volces.com/api/plan（Agent Plan）与 /api/coding（Coding Plan）
 //
 // Claude route 的 baseURL 使用 Anthropic 兼容入口且不带 /v1（claude provider 会自动补 /v1/messages）。
-// Chat/Responses/Gemini route 使用 OpenAI Chat 兼容入口 /v1（provider 自动拼 /chat/completions）。
+// Chat/Responses route 使用 OpenAI Chat 兼容入口，由 provider 自动补协议端点。
 var builtinProviderTemplates = []ProviderTemplate{
 	{
 		ProviderID:  "mimo",
@@ -134,6 +135,7 @@ var builtinProviderTemplates = []ProviderTemplate{
 	},
 	{
 		ProviderID:  "volcengine",
+		Aliases:     []string{"volc-ark"},
 		DisplayName: "火山方舟 Agent/Coding Plan",
 		Description: "ark- 套餐推理 Key（系统自动识别套餐；模型发现需为每个 Key 绑定火山云 Access Key）",
 		ChannelKind: "messages",
@@ -173,50 +175,200 @@ var builtinProviderTemplates = []ProviderTemplate{
 	},
 	{
 		ProviderID:  "kimi",
+		Aliases:     []string{"kimi-code"},
 		DisplayName: "Kimi (Moonshot)",
-		Description: "Moonshot Kimi 官方 API（Anthropic 兼容，自动判别全球/中国节点）",
+		Description: "Moonshot Kimi 官方 API（按量与 Coding Plan，自动判别可用入口）",
 		ChannelKind: "messages",
 		ServiceType: "claude",
 		OriginType:  "official_api",
 		OriginTier:  "first",
-		Candidates: []ProviderCandidate{
-			{BaseURL: "https://api.moonshot.cn/anthropic", PlanTag: "", Region: "cn", Priority: 0},
-			{BaseURL: "https://api.moonshot.ai/anthropic", PlanTag: "", Region: "global", Priority: 1},
-		},
+		Candidates:  kimiClaudeCandidates(),
+		Routes:      standardProviderRoutes("claude", kimiClaudeCandidates(), kimiOpenAICandidates()),
 	},
 	{
 		ProviderID:  "glm",
 		DisplayName: "智谱 GLM",
-		Description: "智谱 GLM 官方按量 API（自动识别 id.secret Key；Claude 与 OpenAI Chat 兼容）",
+		Description: "智谱 GLM 官方 API（自动识别 id.secret Key；按量与 Coding Plan）",
 		ChannelKind: "messages",
 		ServiceType: "claude",
 		OriginType:  "official_api",
 		OriginTier:  "first",
 		Candidates:  glmClaudeCandidates(),
-		Routes: []ProviderRoute{
-			{
-				ChannelKind: "messages",
-				ServiceType: "claude",
-				Description: "Claude Messages 原生 Anthropic 兼容入口",
-				Candidates:  glmClaudeCandidates(),
-			},
-			{
-				ChannelKind: "chat",
-				ServiceType: "openai",
-				Description: "OpenAI Chat Completions 兼容入口",
-				Candidates:  glmOpenAICandidates(),
-			},
-			{
-				ChannelKind: "responses",
-				ServiceType: "openai",
-				Description: "Responses 请求转换到 OpenAI Chat Completions",
-				Candidates:  glmOpenAICandidates(),
-			},
-		},
+		Routes:      standardProviderRoutes("claude", glmClaudeCandidates(), glmOpenAICandidates()),
 	},
+	newProviderTemplate(
+		"compshare",
+		"优云智算套餐",
+		"UCloud 优云智算模型套餐与聚合服务",
+		"relay",
+		"second",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://cp.compshare.cn", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://cp.compshare.cn/v1", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"sensenova",
+		"SenseNova",
+		"商汤日日新官方 API",
+		"official_api",
+		"first",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://token.sensenova.cn", PlanTag: "payg", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://token.sensenova.cn/v1", PlanTag: "payg", Region: "cn", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"minimax",
+		"MiniMax",
+		"MiniMax 官方 API",
+		"official_api",
+		"first",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://api.minimaxi.com/anthropic", PlanTag: "payg", Region: "global", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://api.minimax.chat/v1", PlanTag: "payg", Region: "global", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"dashscope",
+		"阿里云 DashScope",
+		"阿里云百炼按量、Coding Plan 与 Token Plan",
+		"official_api",
+		"first",
+		standardProviderRoutes("claude", dashScopeClaudeCandidates(), dashScopeOpenAICandidates()),
+	),
+	newProviderTemplateWithAliases(
+		"opencode-zen",
+		[]string{"opencode-go"},
+		"OpenCode Zen / Go",
+		"OpenCode 官方 Zen 按量与 Go 订阅模型网关",
+		"relay",
+		"second",
+		standardProviderRoutes("openai", openCodeCandidates(), openCodeCandidates()),
+	),
+	newProviderTemplate(
+		"tencent-lkeap",
+		"腾讯云 TokenHub",
+		"腾讯云大模型 Token Plan",
+		"official_token_plan",
+		"first",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://api.lkeap.cloud.tencent.com/plan/anthropic", PlanTag: "token_plan", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://api.lkeap.cloud.tencent.com/plan/v3", PlanTag: "token_plan", Region: "cn", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"qianfan",
+		"百度千帆 Coding Plan",
+		"百度智能云千帆 Coding Plan",
+		"official_token_plan",
+		"first",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://qianfan.baidubce.com/anthropic/coding", PlanTag: "coding_plan", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://qianfan.baidubce.com/v2/coding#", PlanTag: "coding_plan", Region: "cn", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"xfyun",
+		"讯飞星辰",
+		"科大讯飞星辰 MaaS Coding Plan",
+		"official_token_plan",
+		"first",
+		xfYunRoutes(),
+	),
+	newProviderTemplate(
+		"openrouter",
+		"OpenRouter",
+		"OpenRouter 多模型聚合平台",
+		"relay",
+		"second",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://openrouter.ai/api", PlanTag: "payg", Region: "global", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://openrouter.ai/api/v1", PlanTag: "payg", Region: "global", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"modelscope",
+		"ModelScope 魔搭",
+		"阿里 ModelScope 官方推理服务",
+		"official_api",
+		"first",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://api-inference.modelscope.cn", PlanTag: "payg", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://api-inference.modelscope.cn/v1", PlanTag: "payg", Region: "cn", Priority: 0},
+		}),
+	),
+	newProviderTemplate(
+		"originrouter",
+		"极易云 OriginRouter",
+		"极易云多模型 API 转发平台",
+		"relay",
+		"second",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://api.easytransnote.com/coding", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://api.easytransnote.com/coding/v1", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}),
+	),
 }
 
 var zhipuAPIKeyPattern = regexp.MustCompile(`^[A-Za-z0-9]{20,}\.[A-Za-z0-9]{10,}$`)
+
+func standardProviderRoutes(messagesServiceType string, messagesCandidates, openAICandidates []ProviderCandidate) []ProviderRoute {
+	messagesDescription := "Claude Messages 原生 Anthropic 兼容入口"
+	if messagesServiceType == "openai" {
+		messagesDescription = "Claude Messages 请求转换到 OpenAI Chat Completions"
+	}
+	return []ProviderRoute{
+		{
+			ChannelKind: "messages",
+			ServiceType: messagesServiceType,
+			Description: messagesDescription,
+			Candidates:  messagesCandidates,
+		},
+		{
+			ChannelKind: "chat",
+			ServiceType: "openai",
+			Description: "OpenAI Chat Completions 兼容入口",
+			Candidates:  openAICandidates,
+		},
+		{
+			ChannelKind: "responses",
+			ServiceType: "openai",
+			Description: "Responses 请求转换到 OpenAI Chat Completions",
+			Candidates:  openAICandidates,
+		},
+	}
+}
+
+func newProviderTemplate(providerID, displayName, description, originType, originTier string, routes []ProviderRoute) ProviderTemplate {
+	return newProviderTemplateWithAliases(providerID, nil, displayName, description, originType, originTier, routes)
+}
+
+func newProviderTemplateWithAliases(providerID string, aliases []string, displayName, description, originType, originTier string, routes []ProviderRoute) ProviderTemplate {
+	tmpl := ProviderTemplate{
+		ProviderID:  providerID,
+		Aliases:     aliases,
+		DisplayName: displayName,
+		Description: description,
+		OriginType:  originType,
+		OriginTier:  originTier,
+		Routes:      routes,
+	}
+	if len(routes) > 0 {
+		tmpl.ChannelKind = routes[0].ChannelKind
+		tmpl.ServiceType = routes[0].ServiceType
+		tmpl.Candidates = routes[0].Candidates
+	}
+	return tmpl
+}
 
 func deepseekClaudeCandidates() []ProviderCandidate {
 	return []ProviderCandidate{
@@ -240,6 +392,75 @@ func glmOpenAICandidates() []ProviderCandidate {
 	return []ProviderCandidate{
 		// # 表示该路径已经是版本根，调用方不得再自动补 /v1。
 		{BaseURL: "https://open.bigmodel.cn/api/paas/v4#", PlanTag: "payg", Region: "cn", Priority: 0},
+		{BaseURL: "https://open.bigmodel.cn/api/coding/paas/v4#", PlanTag: "coding_plan", Region: "cn", Priority: 1},
+	}
+}
+
+func kimiClaudeCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://api.moonshot.cn/anthropic", PlanTag: "payg", Region: "cn", Priority: 0},
+		{BaseURL: "https://api.moonshot.ai/anthropic", PlanTag: "payg", Region: "global", Priority: 1},
+		{BaseURL: "https://api.kimi.com/coding", PlanTag: "coding_plan", Region: "global", Priority: 2},
+	}
+}
+
+func kimiOpenAICandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://api.moonshot.cn/v1", PlanTag: "payg", Region: "cn", Priority: 0},
+		{BaseURL: "https://api.moonshot.ai/v1", PlanTag: "payg", Region: "global", Priority: 1},
+		{BaseURL: "https://api.kimi.com/coding/v1", PlanTag: "coding_plan", Region: "global", Priority: 2},
+	}
+}
+
+func dashScopeClaudeCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://dashscope.aliyuncs.com/apps/anthropic", PlanTag: "payg", Region: "cn", Priority: 0},
+		{BaseURL: "https://coding.dashscope.aliyuncs.com/apps/anthropic", PlanTag: "coding_plan", Region: "cn", Priority: 1},
+		{BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic", PlanTag: "token_plan", Region: "cn", Priority: 2},
+	}
+}
+
+func dashScopeOpenAICandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", PlanTag: "payg", Region: "cn", Priority: 0},
+		{BaseURL: "https://coding.dashscope.aliyuncs.com/v1", PlanTag: "coding_plan", Region: "cn", Priority: 1},
+		{BaseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", PlanTag: "token_plan", Region: "cn", Priority: 2},
+	}
+}
+
+func openCodeCandidates() []ProviderCandidate {
+	return []ProviderCandidate{
+		{BaseURL: "https://opencode.ai/zen/go/v1", PlanTag: "subscription", Region: "global", Priority: 0},
+		{BaseURL: "https://opencode.ai/zen/v1", PlanTag: "payg", Region: "global", Priority: 1},
+	}
+}
+
+func xfYunRoutes() []ProviderRoute {
+	return []ProviderRoute{
+		{
+			ChannelKind: "messages",
+			ServiceType: "claude",
+			Description: "Claude Messages Coding Plan 入口",
+			Candidates: []ProviderCandidate{
+				{BaseURL: "https://maas-coding-api.cn-huabei-1.xf-yun.com/anthropic", PlanTag: "coding_plan", Region: "cn", Priority: 0},
+			},
+		},
+		{
+			ChannelKind: "chat",
+			ServiceType: "openai",
+			Description: "OpenAI Chat Completions Coding Plan 入口",
+			Candidates: []ProviderCandidate{
+				{BaseURL: "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2", PlanTag: "coding_plan", Region: "cn", Priority: 0},
+			},
+		},
+		{
+			ChannelKind: "responses",
+			ServiceType: "responses",
+			Description: "OpenAI Responses Coding Plan 原生入口",
+			Candidates: []ProviderCandidate{
+				{BaseURL: "https://maas-coding-api.cn-huabei-1.xf-yun.com/v1/responses", PlanTag: "coding_plan", Region: "cn", Priority: 0},
+			},
+		},
 	}
 }
 
@@ -252,16 +473,23 @@ func ListProviderTemplates() []ProviderTemplate {
 
 // GetProviderTemplate 按 providerId 查找模板，未找到返回 (nil, false)。
 func GetProviderTemplate(providerID string) (*ProviderTemplate, bool) {
+	providerID = strings.ToLower(strings.TrimSpace(providerID))
 	for i := range builtinProviderTemplates {
-		if builtinProviderTemplates[i].ProviderID == providerID {
-			return &builtinProviderTemplates[i], true
+		tmpl := &builtinProviderTemplates[i]
+		if strings.EqualFold(tmpl.ProviderID, providerID) {
+			return tmpl, true
+		}
+		for _, alias := range tmpl.Aliases {
+			if strings.EqualFold(alias, providerID) {
+				return tmpl, true
+			}
 		}
 	}
 	return nil, false
 }
 
-// InferProviderIDFromBaseURL 仅按官方模板候选端点识别 provider。
-// 使用最长路径匹配，避免把仅承载同名模型的第三方 relay 误判为官方渠道。
+// InferProviderIDFromBaseURL 仅按已知模板候选端点识别 provider。
+// 使用最长路径匹配，避免把仅承载同名模型的其他中转站误判为该渠道。
 func InferProviderIDFromBaseURL(baseURL string) (string, bool) {
 	target, err := url.Parse(strings.TrimSuffix(strings.TrimSpace(baseURL), "#"))
 	if err != nil || target.Hostname() == "" {

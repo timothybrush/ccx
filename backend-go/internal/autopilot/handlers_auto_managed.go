@@ -1066,8 +1066,8 @@ func handleAutoAdd(deps *AutoManagedDeps) gin.HandlerFunc {
 	}
 }
 
-// inferAutoAddProviderID 只在输入没有歧义时提升为官方 provider 模式。
-// 明确填写第三方 URL 时绝不根据 Key 样式覆盖用户选择。
+// inferAutoAddProviderID 只在输入没有歧义时提升为已知 provider 模式。
+// 明确填写非模板 URL 时绝不根据 Key 样式覆盖用户选择。
 func inferAutoAddProviderID(baseURLs, apiKeys []string) string {
 	baseURLs = uniqueNonEmptyStrings(baseURLs)
 	if len(baseURLs) > 0 {
@@ -1224,7 +1224,7 @@ func handleProviderAutoAdd(c *gin.Context, deps *AutoManagedDeps, requestKind st
 		return
 	}
 
-	// provider 账号是按 providerId 唯一的官方托管资源，不接受客户端自定义名称。
+	// provider 账号是按 providerId 唯一的托管资源，不接受客户端自定义名称。
 	// 使用 providerId 作为保留名（如 mimo），前端展示时再映射为品牌友好名。
 	baseName := tmpl.ProviderID
 
@@ -1281,7 +1281,7 @@ func handleProviderAutoAdd(c *gin.Context, deps *AutoManagedDeps, requestKind st
 			APIKeys:       append([]string(nil), req.APIKeys...),
 			APIKeyConfigs: item.keyConfigs,
 		}
-		applyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
+		config.ApplyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
 		additions = append(additions, config.AccountChannelAddition{Kind: item.route.ChannelKind, Upstream: upstream})
 	}
 	if err := deps.CfgManager.ApplyAccountChannelChanges(accountUID, nil, additions); err != nil {
@@ -1475,21 +1475,13 @@ func planProviderAccountRouteAdditions(
 			APIKeys:       append([]string(nil), apiKeys...),
 			APIKeyConfigs: keyConfigs,
 		}
-		applyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
+		config.ApplyProviderUpstreamDefaults(tmpl.ProviderID, &upstream)
 		additions = append(additions, config.AccountChannelAddition{Kind: route.ChannelKind, Upstream: upstream})
 	}
 	return additions, http.StatusOK, nil
 }
 
-func applyProviderUpstreamDefaults(providerID string, upstream *config.UpstreamConfig) {
-	if upstream == nil || !strings.EqualFold(strings.TrimSpace(providerID), "glm") || upstream.ServiceType != "openai" {
-		return
-	}
-	upstream.ReasoningParamStyle = "reasoning_effort"
-	upstream.PassbackReasoningContent = true
-}
-
-// bindProviderRouteKeys 为已验证过的托管账号凭证选择 route 的首选官方端点。
+// bindProviderRouteKeys 为已验证过的托管账号凭证选择 route 的首选候选端点。
 // 旧账号补齐新协议时不应重新发送模型请求；端点可达性由随后触发的 discovery 异步确认。
 func bindProviderRouteKeys(tmpl *config.ProviderTemplate, route config.ProviderRoute, apiKeys []string) ([]config.APIKeyConfig, []string, error) {
 	return bindProviderRouteKeysWithAffinities(tmpl, route, apiKeys, nil)

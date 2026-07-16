@@ -27,6 +27,9 @@ var minimalClaudeProbeBody = []byte(`{"model":"probe","max_tokens":1,"messages":
 // 与 Claude 探测相同，400/422 通常表示占位模型或参数无效，但鉴权已通过。
 var minimalOpenAIChatProbeBody = []byte(`{"model":"probe","messages":[{"role":"user","content":"ping"}],"max_tokens":1}`)
 
+// minimalResponsesProbeBody 最小 OpenAI Responses 探测请求体。
+var minimalResponsesProbeBody = []byte(`{"model":"probe","input":"ping","max_output_tokens":1}`)
+
 var verifyVersionPattern = regexp.MustCompile(`/v\d+[a-z]*$`)
 
 // EndpointVerifyResult 端点验证结果。
@@ -59,6 +62,12 @@ func VerifyClaudeEndpoint(ctx context.Context, baseURL, apiKey, authHeader strin
 func VerifyOpenAIChatEndpoint(ctx context.Context, baseURL, apiKey, authHeader string) EndpointVerifyResult {
 	url := buildOpenAIChatProbeURL(baseURL)
 	return verifyJSONPostEndpoint(ctx, url, apiKey, authHeader, nil, minimalOpenAIChatProbeBody)
+}
+
+// VerifyResponsesEndpoint 对一个 (baseURL, apiKey) 发最小 OpenAI Responses 请求验证可用性。
+func VerifyResponsesEndpoint(ctx context.Context, baseURL, apiKey, authHeader string) EndpointVerifyResult {
+	url := buildResponsesProbeURL(baseURL)
+	return verifyJSONPostEndpoint(ctx, url, apiKey, authHeader, nil, minimalResponsesProbeBody)
 }
 
 func verifyJSONPostEndpoint(ctx context.Context, url, apiKey, authHeader string, prepare func(*http.Request), body []byte) EndpointVerifyResult {
@@ -114,12 +123,19 @@ func buildOpenAIChatProbeURL(baseURL string) string {
 	return buildVersionedProbeURL(baseURL, "/chat/completions")
 }
 
+func buildResponsesProbeURL(baseURL string) string {
+	return buildVersionedProbeURL(baseURL, "/responses")
+}
+
 func buildVersionedProbeURL(baseURL, endpoint string) string {
 	skipVersionPrefix := strings.HasSuffix(baseURL, "#")
 	if skipVersionPrefix {
 		baseURL = strings.TrimSuffix(baseURL, "#")
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
+	if strings.HasSuffix(strings.ToLower(baseURL), strings.ToLower(endpoint)) {
+		return baseURL
+	}
 	if verifyVersionPattern.MatchString(baseURL) || skipVersionPrefix {
 		return baseURL + endpoint
 	}
@@ -155,7 +171,7 @@ func verifyProviderRouteKeys(ctx context.Context, tmpl *config.ProviderTemplate,
 	if tmpl == nil {
 		return nil, nil, fmt.Errorf("provider 模板为空")
 	}
-	if route.ServiceType != "claude" && route.ServiceType != "openai" {
+	if route.ServiceType != "claude" && route.ServiceType != "openai" && route.ServiceType != "responses" {
 		return nil, nil, fmt.Errorf("provider %s 暂不支持模板化验证（serviceType=%s）", tmpl.ProviderID, route.ServiceType)
 	}
 	if len(apiKeys) == 0 {
@@ -223,6 +239,8 @@ func verifyProviderCandidateEndpoint(ctx context.Context, providerID string, rou
 		return VerifyClaudeEndpoint(ctx, baseURL, apiKey, "")
 	case "openai":
 		return VerifyOpenAIChatEndpoint(ctx, baseURL, apiKey, "")
+	case "responses":
+		return VerifyResponsesEndpoint(ctx, baseURL, apiKey, "")
 	default:
 		return EndpointVerifyResult{Message: fmt.Sprintf("不支持的 serviceType: %s", route.ServiceType)}
 	}

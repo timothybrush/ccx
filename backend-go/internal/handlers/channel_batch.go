@@ -497,7 +497,7 @@ func GetChannelTemplates() gin.HandlerFunc {
 	}
 }
 
-// GetProviderTemplates 返回内置 provider 模板（官方 provider 的模板化添加配置）。
+// GetProviderTemplates 返回内置 provider 模板（已知 provider 的模板化添加配置）。
 // 前端据此渲染 provider 选择器：用户选 provider + 输 key，系统自动判别 plan/baseURL 并验证。
 func GetProviderTemplates() gin.HandlerFunc {
 	return func(c *gin.Context) {

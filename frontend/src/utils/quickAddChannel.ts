@@ -11,6 +11,7 @@ interface QuickAddProviderRoute {
 
 export interface QuickAddProviderTemplate {
   providerId: string
+  aliases?: string[]
   candidates?: QuickAddProviderCandidate[]
   routes?: QuickAddProviderRoute[]
 }
@@ -99,8 +100,8 @@ function inferProviderFromBaseUrl(providers: QuickAddProviderTemplate[], rawBase
 }
 
 /**
- * 仅在所有非空输入都指向同一个官方 provider 时自动识别。
- * 有第三方 URL 时不会再根据 Key 样式推断，避免把 relay 错标为官方渠道。
+ * 仅在所有非空输入都指向同一个已知 provider 时自动识别。
+ * 有非模板 URL 时不会再根据 Key 样式推断，避免把自定义渠道错标为已知 Provider。
  */
 export function inferQuickAddProviderId(
   providers: QuickAddProviderTemplate[],

@@ -6,7 +6,23 @@ const PROVIDER_BRAND_NAMES: Record<string, string> = {
   deepseek: 'DeepSeek',
   gemini: 'Gemini',
   anthropic: 'Anthropic',
-  volcengine: '火山方舟'
+  kimi: 'Kimi',
+  'kimi-code': 'Kimi Coding Plan',
+  glm: '智谱 GLM',
+  volcengine: '火山方舟',
+  'volc-ark': '火山方舟',
+  compshare: '优云智算',
+  sensenova: 'SenseNova',
+  minimax: 'MiniMax',
+  dashscope: '阿里云 DashScope',
+  'opencode-zen': 'OpenCode Zen / Go',
+  'opencode-go': 'OpenCode Go',
+  'tencent-lkeap': '腾讯云 TokenHub',
+  qianfan: '百度千帆',
+  xfyun: '讯飞星辰',
+  openrouter: 'OpenRouter',
+  modelscope: 'ModelScope 魔搭',
+  originrouter: '极易云 OriginRouter'
 }
 
 export const providerDisplayName = (providerId?: string): string => {
@@ -23,6 +39,10 @@ export const providerDisplayName = (providerId?: string): string => {
 
 export const isManagedProviderChannel = (channel?: Channel | null): boolean => {
   return !!channel?.providerId && !!channel.accountUid
+}
+
+export const isOfficialProviderChannel = (channel?: Channel | null): boolean => {
+  return channel?.originType === 'official_api' || channel?.originType === 'official_token_plan'
 }
 
 export const isAutoManagedAccountChannel = (channel?: Channel | null): boolean => {

@@ -125,18 +125,22 @@ func TestProviderTemplateGLMRoutes(t *testing.T) {
 	want := map[string]struct {
 		serviceType string
 		baseURL     string
+		candidates  int
 	}{
-		"messages":  {serviceType: "claude", baseURL: "https://open.bigmodel.cn/api/anthropic"},
-		"chat":      {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#"},
-		"responses": {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#"},
+		"messages":  {serviceType: "claude", baseURL: "https://open.bigmodel.cn/api/anthropic", candidates: 1},
+		"chat":      {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#", candidates: 2},
+		"responses": {serviceType: "openai", baseURL: "https://open.bigmodel.cn/api/paas/v4#", candidates: 2},
 	}
 	for _, route := range routes {
 		expect, found := want[route.ChannelKind]
-		if !found || route.ServiceType != expect.serviceType || len(route.Candidates) != 1 || route.Candidates[0].BaseURL != expect.baseURL {
+		if !found || route.ServiceType != expect.serviceType || len(route.Candidates) != expect.candidates || route.Candidates[0].BaseURL != expect.baseURL {
 			t.Fatalf("GLM route 不符合预期: %+v", route)
 		}
 		if route.Candidates[0].PlanTag != "payg" {
 			t.Fatalf("GLM route 应标记为 payg: %+v", route.Candidates[0])
+		}
+		if route.ChannelKind != "messages" && (route.Candidates[1].PlanTag != "coding_plan" || !strings.Contains(route.Candidates[1].BaseURL, "/api/coding/")) {
+			t.Fatalf("GLM %s route 应包含 Coding Plan 候选: %+v", route.ChannelKind, route.Candidates)
 		}
 	}
 }
@@ -154,6 +158,10 @@ func TestInferProviderIDFromBaseURL(t *testing.T) {
 		{baseURL: "https://open.bigmodel.cn/api/anthropic/v1/messages", want: "glm", ok: true},
 		{baseURL: "https://open.bigmodel.cn/api/paas/v4/", want: "glm", ok: true},
 		{baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions", want: "glm", ok: true},
+		{baseURL: "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions", want: "glm", ok: true},
+		{baseURL: "https://opencode.ai/zen/go/v1/chat/completions", want: "opencode-zen", ok: true},
+		{baseURL: "https://opencode.ai/zen/v1", want: "opencode-zen", ok: true},
+		{baseURL: "https://opencode.ai.evil.example/zen/v1", ok: false},
 		{baseURL: "https://open.bigmodel.cn/api/other", ok: false},
 		{baseURL: "https://open.bigmodel.cn.evil.example/api/paas/v4", ok: false},
 		{baseURL: "https://relay.example/v1", ok: false},
@@ -211,17 +219,88 @@ func TestProviderTemplateVolcenginePlanRoutes(t *testing.T) {
 
 func TestListAndGetProviderTemplate(t *testing.T) {
 	all := ListProviderTemplates()
-	if len(all) < 4 {
-		t.Errorf("内置 provider 模板应 >= 4，实际 %d", len(all))
+	if len(all) < 16 {
+		t.Errorf("内置 provider 模板应至少为 16 个，实际 %d", len(all))
 	}
-	for _, id := range []string{"mimo", "deepseek", "kimi", "glm", "volcengine"} {
+	for _, id := range []string{
+		"mimo", "deepseek", "kimi", "glm", "volcengine", "compshare", "sensenova", "minimax",
+		"dashscope", "opencode-zen", "tencent-lkeap", "qianfan", "xfyun", "openrouter", "modelscope", "originrouter",
+	} {
 		if _, ok := GetProviderTemplate(id); !ok {
 			t.Errorf("缺少 provider 模板: %s", id)
+		}
+	}
+	for alias, canonical := range map[string]string{
+		" opencode-go ": "opencode-zen",
+		"VOLC-ARK":      "volcengine",
+		"kimi-code":     "kimi",
+	} {
+		tmpl, ok := GetProviderTemplate(alias)
+		if !ok || tmpl.ProviderID != canonical {
+			t.Errorf("provider 别名 %q 应解析为 %q，实际 %+v", alias, canonical, tmpl)
+		}
+	}
+	for _, id := range []string{"runapi", "unity2"} {
+		if _, ok := GetProviderTemplate(id); ok {
+			t.Errorf("中转站 %s 不应进入自动识别模板", id)
 		}
 	}
 	if _, ok := GetProviderTemplate("nonexistent"); ok {
 		t.Error("不存在的 providerId 应返回 false")
 	}
+}
+
+func TestEveryProviderCandidateCanBeInferred(t *testing.T) {
+	for _, tmpl := range ListProviderTemplates() {
+		for _, route := range tmpl.AutoAddRoutes() {
+			if len(route.Candidates) == 0 {
+				t.Errorf("provider %s route %s 没有候选端点", tmpl.ProviderID, route.ChannelKind)
+				continue
+			}
+			for _, candidate := range route.Candidates {
+				baseURL := strings.TrimSuffix(candidate.BaseURL, "#")
+				got, ok := InferProviderIDFromBaseURL(baseURL)
+				if !ok || got != tmpl.ProviderID {
+					t.Errorf("候选端点 %q 反向识别为 %q, %v；期望 %q", candidate.BaseURL, got, ok, tmpl.ProviderID)
+				}
+			}
+		}
+	}
+}
+
+func TestProviderTemplateOpenCodeRoutes(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("opencode-go")
+	if !ok {
+		t.Fatal("未找到 OpenCode 模板")
+	}
+	if tmpl.ProviderID != "opencode-zen" || len(tmpl.AutoAddRoutes()) != 3 {
+		t.Fatalf("OpenCode 模板不完整: %+v", tmpl)
+	}
+	for _, route := range tmpl.AutoAddRoutes() {
+		if route.ServiceType != "openai" || len(route.Candidates) != 2 {
+			t.Fatalf("OpenCode %s route 应通过 OpenAI Chat 上游探测 Zen/Go 两个入口: %+v", route.ChannelKind, route)
+		}
+		if route.Candidates[0].BaseURL != "https://opencode.ai/zen/go/v1" || route.Candidates[1].BaseURL != "https://opencode.ai/zen/v1" {
+			t.Fatalf("OpenCode 候选顺序错误: %+v", route.Candidates)
+		}
+	}
+}
+
+func TestProviderTemplateXFyunNativeResponsesRoute(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("xfyun")
+	if !ok {
+		t.Fatal("未找到讯飞模板")
+	}
+	for _, route := range tmpl.AutoAddRoutes() {
+		if route.ChannelKind != "responses" {
+			continue
+		}
+		if route.ServiceType != "responses" || len(route.Candidates) != 1 || !strings.HasSuffix(route.Candidates[0].BaseURL, "/v1/responses") {
+			t.Fatalf("讯飞 Responses route 不符合预期: %+v", route)
+		}
+		return
+	}
+	t.Fatal("讯飞模板缺少原生 Responses route")
 }
 
 func TestProviderTemplatesDoNotExposeChannelPresetRefs(t *testing.T) {

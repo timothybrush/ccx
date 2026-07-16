@@ -161,7 +161,7 @@ export interface Channel {
   name: string
   accountUid?: string                // 自动托管账号稳定身份，同一 provider 的多协议渠道共享
   channelUid?: string                // 渠道稳定身份标识（创建后不因重排/改名/Key 变更而改变）
-  providerId?: string                // 官方 provider 模板 ID（如 mimo/deepseek）
+  providerId?: string                // 已知 provider 模板 ID（如 mimo/deepseek）
   routeKind?: ChannelKind            // 前端统一列表中真实所属的后端渠道类型
   routeIndex?: number                // 前端统一列表中真实后端渠道索引
   logicalName?: string               // 前端统一列表中的逻辑渠道名称
@@ -1360,9 +1360,10 @@ export interface ProviderRoute {
   candidates?: ProviderCandidate[]
 }
 
-// 官方 provider 模板（模板化添加：选 provider + 输 key，系统自动判别 plan/baseURL）
+// 已知 provider 模板（模板化添加：选 provider + 输 key，系统自动判别 plan/baseURL）
 export interface ProviderTemplate {
   providerId: string
+  aliases?: string[]
   displayName: string
   description?: string
   channelKind: string

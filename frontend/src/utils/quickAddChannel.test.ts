@@ -23,6 +23,12 @@ const providers = [
     providerId: 'deepseek',
     candidates: [{ baseUrl: 'https://api.deepseek.com/anthropic' }],
     routes: [{ candidates: [{ baseUrl: 'https://api.deepseek.com' }] }]
+  },
+  {
+    providerId: 'opencode-zen',
+    aliases: ['opencode-go'],
+    candidates: [{ baseUrl: 'https://opencode.ai/zen/go/v1' }],
+    routes: [{ candidates: [{ baseUrl: 'https://opencode.ai/zen/v1' }] }]
   }
 ]
 
@@ -84,6 +90,14 @@ describe('inferQuickAddProviderId', () => {
     expect(
       inferQuickAddProviderId(providers, ['https://open.bigmodel.cn/api/paas/v4/chat/completions'], ['sk-any'])
     ).toBe('glm')
+  })
+
+  it('识别 OpenCode Zen/Go 完整端点且不误认相似域名', () => {
+    expect(inferQuickAddProviderId(providers, ['https://opencode.ai/zen/go/v1/chat/completions'], ['sk-any'])).toBe(
+      'opencode-zen'
+    )
+    expect(inferQuickAddProviderId(providers, ['https://opencode.ai/zen/v1'], ['sk-any'])).toBe('opencode-zen')
+    expect(inferQuickAddProviderId(providers, ['https://opencode.ai.evil.example/zen/v1'], ['sk-any'])).toBe('')
   })
 
   it('没有 Base URL 时按 id.secret Key 识别智谱', () => {

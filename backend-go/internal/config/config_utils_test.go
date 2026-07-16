@@ -136,6 +136,24 @@ func TestRuntimeUpstreamForAutoManagedProviderLeavesManualChannelUntouched(t *te
 	}
 }
 
+func TestRuntimeUpstreamForAutoManagedProviderReappliesNativeDefaults(t *testing.T) {
+	upstream := &UpstreamConfig{
+		ProviderID:               "glm",
+		AutoManaged:              true,
+		ServiceType:              "openai",
+		ReasoningParamStyle:      "thinking",
+		PassbackReasoningContent: false,
+	}
+
+	runtime := RuntimeUpstreamForAutoManagedProvider(upstream)
+	if runtime.ReasoningParamStyle != "reasoning_effort" || !runtime.PassbackReasoningContent {
+		t.Fatalf("GLM OpenAI 原生默认值未在运行时恢复: %#v", runtime)
+	}
+	if upstream.ReasoningParamStyle != "thinking" || upstream.PassbackReasoningContent {
+		t.Fatalf("原始配置不应被运行时归一化修改: %#v", upstream)
+	}
+}
+
 func TestIsValidSupportedModelPattern(t *testing.T) {
 	tests := []struct {
 		name    string

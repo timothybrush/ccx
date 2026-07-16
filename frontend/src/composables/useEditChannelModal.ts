@@ -705,7 +705,7 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     const payload = buildChannelPayload(form, { channelType: props.channelType })
     if (isAutoManagedChannel.value && props.channel) {
       Object.assign(payload, {
-        // 官网地址允许官方托管渠道编辑，其余元数据字段仍沿用模板值
+        // 官网地址允许 Provider 托管渠道编辑，其余元数据字段仍沿用模板值
         website: form.website ?? '',
         description: props.channel.description || '',
         tags: [...(props.channel.tags || [])],

@@ -52,9 +52,10 @@ export interface ProviderRoute {
   candidates?: ProviderCandidate[]
 }
 
-/** 官方 provider 模板 */
+/** 已知 provider 模板 */
 export interface ProviderTemplate {
   providerId: string
+  aliases?: string[]
   displayName: string
   description?: string
   channelKind: string

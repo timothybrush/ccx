@@ -172,7 +172,7 @@ const submitting = ref(false)
 const submitError = ref('')
 
 // ---- Provider 模板状态 ----
-// '' 表示自定义模式（手填 baseURL）；非空表示选中某官方 provider（模板化添加）
+// '' 表示自定义模式（手填 baseURL）；非空表示选中某已知 provider（模板化添加）
 const providerId = ref('')
 const providerTemplates = ref<ProviderTemplate[]>([])
 const providerTemplatesLoading = ref(true)
@@ -183,7 +183,7 @@ const availableProviders = computed(() =>
   providerTemplates.value.filter(p => providerSupportsChannel(p, props.channelType))
 )
 
-// 选择项：首项为「自定义」（value=''），其余为官方 provider
+// 选择项：首项为「自定义」（value=''），其余为已知 provider
 const providerItems = computed(() => [
   { title: t('autopilot.quickAdd.provider.custom'), value: '' },
   ...availableProviders.value.map(p => ({ title: p.displayName, value: p.providerId }))

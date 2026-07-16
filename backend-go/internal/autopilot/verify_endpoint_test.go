@@ -50,6 +50,26 @@ func TestBuildOpenAIChatProbeURL(t *testing.T) {
 	}
 }
 
+func TestBuildResponsesProbeURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{"无版本后缀补 /v1/responses", "https://api.example.com", "https://api.example.com/v1/responses"},
+		{"已含 /v1 直接拼 /responses", "https://api.example.com/v1", "https://api.example.com/v1/responses"},
+		{"完整 Responses 端点不重复拼接", "https://api.example.com/v1/responses", "https://api.example.com/v1/responses"},
+		{"# 结尾跳过版本前缀", "https://custom.example.com/relay#", "https://custom.example.com/relay/responses"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildResponsesProbeURL(tc.baseURL); got != tc.want {
+				t.Errorf("buildResponsesProbeURL(%q) = %q, want %q", tc.baseURL, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVerifyClaudeEndpoint(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -215,6 +235,34 @@ func TestVerifyProviderKeys(t *testing.T) {
 			t.Fatalf("openai route 探测路径=%q, want /v1/chat/completions", gotPath)
 		}
 		if len(keyConfigs) != 1 || len(baseURLs) != 1 || baseURLs[0] != chatSrv.URL+"/v1" {
+			t.Fatalf("验证结果不符合预期: keyConfigs=%+v baseURLs=%v", keyConfigs, baseURLs)
+		}
+	})
+
+	t.Run("responses route 使用原生 responses 探测", func(t *testing.T) {
+		var gotPath string
+		responsesSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer responsesSrv.Close()
+
+		tmpl := &config.ProviderTemplate{ProviderID: "xfyun"}
+		route := config.ProviderRoute{
+			ChannelKind: "responses",
+			ServiceType: "responses",
+			Candidates: []config.ProviderCandidate{{
+				BaseURL: responsesSrv.URL + "/v1/responses",
+			}},
+		}
+		keyConfigs, baseURLs, err := verifyProviderRouteKeys(context.Background(), tmpl, route, []string{"sk-a"})
+		if err != nil {
+			t.Fatalf("responses route 应支持模板化验证: %v", err)
+		}
+		if gotPath != "/v1/responses" {
+			t.Fatalf("responses route 探测路径=%q, want /v1/responses", gotPath)
+		}
+		if len(keyConfigs) != 1 || len(baseURLs) != 1 || baseURLs[0] != responsesSrv.URL+"/v1/responses" {
 			t.Fatalf("验证结果不符合预期: keyConfigs=%+v baseURLs=%v", keyConfigs, baseURLs)
 		}
 	})

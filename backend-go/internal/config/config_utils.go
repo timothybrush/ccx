@@ -439,11 +439,25 @@ func (u *UpstreamConfig) Clone() *UpstreamConfig {
 	return &cloned
 }
 
+// ApplyProviderUpstreamDefaults 应用已知 Provider 原生协议所需的运行时默认值。
+func ApplyProviderUpstreamDefaults(providerID string, upstream *UpstreamConfig) {
+	if upstream == nil {
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(providerID)) {
+	case "glm":
+		if upstream.ServiceType == "openai" {
+			upstream.ReasoningParamStyle = "reasoning_effort"
+			upstream.PassbackReasoningContent = true
+		}
+	}
+}
+
 // RuntimeUpstreamForAutoManagedProvider 返回自动托管 provider 渠道的运行时视图。
 //
-// 官方 provider 的自动托管渠道不再使用编辑渠道页里的手工兼容开关；
+// 已知 provider 的自动托管渠道不再使用编辑渠道页里的手工兼容开关；
 // 模型选择和能力差异由 Autopilot 的 ModelResolver/EndpointAttemptPolicy 做 request-scoped 决策。
-// 因此这里屏蔽历史版本可能写入配置的旧兼容字段，避免存量配置继续影响执行。
+// 因此这里屏蔽历史版本可能写入配置的旧兼容字段，再恢复 Provider 原生协议默认值。
 func RuntimeUpstreamForAutoManagedProvider(upstream *UpstreamConfig) *UpstreamConfig {
 	if upstream == nil || !upstream.AutoManaged || strings.TrimSpace(upstream.ProviderID) == "" {
 		return upstream
@@ -473,6 +487,7 @@ func RuntimeUpstreamForAutoManagedProvider(upstream *UpstreamConfig) *UpstreamCo
 	runtime.VisionFallbackModel = ""
 	runtime.HistoricalImageTurnLimit = 0
 	runtime.CompactModel = ""
+	ApplyProviderUpstreamDefaults(runtime.ProviderID, runtime)
 	return runtime
 }
 

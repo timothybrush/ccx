@@ -705,7 +705,7 @@ import { useGlobalTick } from '../composables/useGlobalTick'
 import { useChannelActivity } from '../composables/useChannelActivity'
 import ChannelStatusBadge from './ChannelStatusBadge.vue'
 import ChannelHealthBadge from './ChannelHealthBadge.vue'
-import { isManagedProviderChannel, providerDisplayName } from '../utils/providerDisplay'
+import { isManagedProviderChannel, isOfficialProviderChannel, providerDisplayName } from '../utils/providerDisplay'
 import type { ChannelHealthItem } from '../services/api-types'
 // Lazy-load chart components to reduce initial JS bundle size
 const KeyTrendChart = defineAsyncComponent(() => import('./KeyTrendChart.vue'))
@@ -1095,11 +1095,16 @@ const get24hStats = (channel: Channel) => {
   return getChannelMetrics(channel)?.timeWindows?.['24h']
 }
 
-// 官方托管渠道展示品牌友好名（如「MiMo 官方渠道」），后台仍保留原始保留名
+// Provider 托管渠道展示品牌友好名，后台仍保留原始保留名。
 const getChannelDisplayName = (channel: Channel): string => {
   if (isManagedProviderChannel(channel)) {
     const provider = providerDisplayName(channel.providerId)
-    if (provider) return t('channelEditor.managed.officialChannel', { provider })
+    if (provider) {
+      const key = isOfficialProviderChannel(channel)
+        ? 'channelEditor.managed.officialChannel'
+        : 'channelEditor.managed.providerChannel'
+      return t(key, { provider })
+    }
   }
   return channel.name
 }

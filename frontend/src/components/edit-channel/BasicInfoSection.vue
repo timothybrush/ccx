@@ -5,11 +5,16 @@
       <div class="flex-grow-1">
         <div class="text-caption text-medium-emphasis">{{ t('channelEditor.managed.providerLabel') }}</div>
         <div class="text-body-1 font-weight-bold">
-          {{ t('channelEditor.managed.officialChannel', { provider: providerName }) }}
+          {{ t(officialProvider ? 'channelEditor.managed.officialChannel' : 'channelEditor.managed.providerChannel', { provider: providerName }) }}
         </div>
       </div>
-      <v-chip color="success" variant="tonal" size="small" prepend-icon="mdi-check-decagram">
-        {{ t('channelEditor.managed.officialBadge') }}
+      <v-chip
+        :color="officialProvider ? 'success' : 'primary'"
+        variant="tonal"
+        size="small"
+        :prepend-icon="officialProvider ? 'mdi-check-decagram' : 'mdi-cog-sync'"
+      >
+        {{ t(officialProvider ? 'channelEditor.managed.officialBadge' : 'channelEditor.managed.managedBadge') }}
       </v-chip>
     </div>
 
@@ -154,6 +159,7 @@ interface Props {
   hideMetadata?: boolean
   managedAccount?: boolean
   providerName?: string
+  officialProvider?: boolean
   errors: Record<string, string>
   rules: {
     required: (_value: string) => boolean | string
