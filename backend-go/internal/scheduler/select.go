@@ -1220,30 +1220,10 @@ func (s *ChannelScheduler) findBestAvailableChannelPriority(
 // getUpstreamByIndex 根据索引获取上游配置
 // 注意：返回的是副本，避免指向 slice 元素的指针在 slice 重分配后失效
 func (s *ChannelScheduler) getUpstreamByIndex(index int, kind ChannelKind) *config.UpstreamConfig {
-	cfg := s.configManager.GetConfig()
-
-	var upstreams []config.UpstreamConfig
-	switch kind {
-	case ChannelKindResponses:
-		upstreams = cfg.ResponsesUpstream
-	case ChannelKindGemini:
-		upstreams = cfg.GeminiUpstream
-	case ChannelKindChat:
-		upstreams = cfg.ChatUpstream
-	case ChannelKindImages:
-		upstreams = cfg.ImagesUpstream
-	case ChannelKindVectors:
-		upstreams = cfg.VectorsUpstream
-	default:
-		upstreams = cfg.Upstream
+	if s == nil || s.configManager == nil {
+		return nil
 	}
-
-	if index >= 0 && index < len(upstreams) {
-		// 返回副本，避免返回指向 slice 元素的指针
-		upstream := upstreams[index]
-		return &upstream
-	}
-	return nil
+	return s.configManager.GetUpstreamByIndex(kindAPIType(kind), index)
 }
 
 // buildSmartFilterFromProvider 从全局 CandidateFilterProvider 构建 SmartFilter。

@@ -853,6 +853,19 @@ func (cm *ConfigManager) GetConfig() Config {
 	return cloned
 }
 
+// GetUpstreamByIndex 返回指定协议与索引对应的渠道深拷贝。
+// 相比 GetConfig，它只克隆一个 UpstreamConfig，适合调度热路径中的单渠道读取。
+func (cm *ConfigManager) GetUpstreamByIndex(apiType string, index int) *UpstreamConfig {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	upstreams := cm.getUpstreamSliceLocked(apiType)
+	if upstreams == nil || index < 0 || index >= len(*upstreams) {
+		return nil
+	}
+	return (*upstreams)[index].Clone()
+}
+
 // GetNextAPIKey 获取下一个 API 密钥（纯 failover 模式）
 // apiType: 接口类型（Messages/Responses/Gemini），用于日志标签前缀
 func (cm *ConfigManager) GetNextAPIKey(upstream *UpstreamConfig, failedKeys map[string]bool, apiType string) (string, error) {
