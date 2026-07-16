@@ -2,6 +2,8 @@ package autopilot
 
 import (
 	"testing"
+
+	"github.com/BenedictKing/ccx/internal/config"
 )
 
 // ── EndpointAttemptPolicy 测试（表驱动）──
@@ -1066,6 +1068,57 @@ func TestShadowAndAssistPoliciesEnforceKnownBindingModels(t *testing.T) {
 				t.Fatalf("%s 模式允许了已知不兼容 binding: %v", mode, got)
 			}
 		})
+	}
+}
+
+func TestAssistPolicyRepairsLegacyMetricsKeyForAutoMapping(t *testing.T) {
+	store := newTestProfileStore(t)
+	modelStore, err := NewModelProfileStoreWithDB(store.DB())
+	if err != nil {
+		t.Fatalf("NewModelProfileStoreWithDB: %v", err)
+	}
+	const (
+		channelUID   = "ch-legacy-metrics-key"
+		baseURL      = "https://open.bigmodel.cn/api/anthropic"
+		apiKey       = "legacy-glm-api-key"
+		requestModel = "claude-sonnet-5"
+		mappedModel  = "glm-5.2"
+	)
+	endpointUID := GenerateEndpointUID(channelUID, baseURL, KeyHashFromAPIKey(apiKey))
+	if err := store.Upsert(&KeyEndpointProfile{
+		ChannelUID: channelUID, ChannelKind: "messages", ServiceType: "claude",
+		EndpointUID: endpointUID, BaseURL: baseURL, KeyHash: KeyHashFromAPIKey(apiKey),
+		MetricsKey: KeyHashFromAPIKey(apiKey), AvailableModels: []string{mappedModel},
+		HealthState: HealthStateUnknown,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metricsKey := computeMetricsIdentityKey(baseURL, apiKey, "claude")
+	if err := modelStore.Upsert(&ModelProfile{
+		ChannelUID: channelUID, ChannelKind: "messages", ServiceType: "claude",
+		MetricsKey: metricsKey, ModelID: mappedModel, ModelFamily: ModelFamilyGLM,
+		QualityTier: QualityTierHigh, ContextTokens: 1_000_000, ProbeSuccess: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	routingCfg := config.DefaultAutopilotRoutingConfig()
+	routingCfg.RoutingMode = config.AutopilotModeAssist
+	routingCfg.ModelMapping.AutoResolve = true
+	policy := BuildEndpointPolicy(EndpointPolicyDeps{
+		ProfileStore:  store,
+		ModelResolver: NewModelResolver(modelStore, nil),
+		GetRoutingCfg: func() config.AutopilotRoutingConfig { return routingCfg },
+	}, &RequestProfile{
+		Model: requestModel, ChannelKind: "messages", QualityNeed: QualityTierHigh,
+	}, RoutingModeAssist)
+
+	filtered := policy.FilterKeyBindings(channelUID, baseURL, []string{apiKey})
+	if len(filtered) != 1 || filtered[0] != apiKey {
+		t.Fatalf("legacy MetricsKey 导致可映射 binding 被过滤: %v", filtered)
+	}
+	policy.SortKeyBindings(channelUID, baseURL, filtered)
+	if got := policy.ResolvedModelByEndpointUID(endpointUID); got != mappedModel {
+		t.Fatalf("mapped model = %q, want %q", got, mappedModel)
 	}
 }
 

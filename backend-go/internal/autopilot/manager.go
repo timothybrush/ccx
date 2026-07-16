@@ -42,7 +42,7 @@ func NewMetricsManagerAdapter(mgr *metrics.MetricsManager) MetricsProvider {
 	return &metricsManagerAdapter{mgr: mgr}
 }
 
-func (a *metricsManagerAdapter) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
+func (a *metricsManagerAdapter) GetTimeWindowStatsForKey(_ string, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
 	stats := a.mgr.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, duration)
 	return TimeWindowStats{
 		RequestCount: stats.RequestCount,
@@ -52,7 +52,7 @@ func (a *metricsManagerAdapter) GetTimeWindowStatsForKey(baseURL, apiKey, servic
 	}
 }
 
-func (a *metricsManagerAdapter) GetKeySnapshot(baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
+func (a *metricsManagerAdapter) GetKeySnapshot(_ string, baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
 	cs := a.mgr.GetKeyCircuitState(baseURL, apiKey, serviceType)
 	km := a.mgr.GetKeyMetrics(baseURL, apiKey, serviceType)
 
@@ -66,32 +66,32 @@ func (a *metricsManagerAdapter) GetKeySnapshot(baseURL, apiKey, serviceType stri
 	return snap
 }
 
-// metricsAdapterManager 按 serviceType 路由到对应的 MetricsProvider。
-// 每个 service type 对应一个独立的 MetricsManager 实例。
+// metricsAdapterManager 按入口 channelKind 路由到对应的 MetricsProvider。
+// channelKind 决定指标分片，serviceType 决定分片内的 MetricsIdentity。
 type metricsAdapterManager struct {
 	managers map[string]MetricsProvider
 }
 
-// NewMetricsAdapterManager 创建按 serviceType 路由的 MetricsProvider。
+// NewMetricsAdapterManager 创建按 channelKind 路由的 MetricsProvider。
 // managers 中的 nil 条目会被安全跳过（返回零值）。
 func NewMetricsAdapterManager(managers map[string]MetricsProvider) MetricsProvider {
 	return &metricsAdapterManager{managers: managers}
 }
 
-func (a *metricsAdapterManager) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
-	mgr, ok := a.managers[serviceType]
+func (a *metricsAdapterManager) GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
+	mgr, ok := a.managers[channelKind]
 	if !ok || mgr == nil {
 		return TimeWindowStats{SuccessRate: 100}
 	}
-	return mgr.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, duration)
+	return mgr.GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType, duration)
 }
 
-func (a *metricsAdapterManager) GetKeySnapshot(baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
-	mgr, ok := a.managers[serviceType]
+func (a *metricsAdapterManager) GetKeySnapshot(channelKind, baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
+	mgr, ok := a.managers[channelKind]
 	if !ok || mgr == nil {
 		return KeyCircuitSnapshot{}
 	}
-	return mgr.GetKeySnapshot(baseURL, apiKey, serviceType)
+	return mgr.GetKeySnapshot(channelKind, baseURL, apiKey, serviceType)
 }
 
 // ManagerConfig Manager 可调参数。
@@ -779,19 +779,16 @@ func (m *Manager) collectAll() {
 				entry.ChannelKind,
 				entry.BaseURL,
 				apiKey,
-				entry.ChannelKind,
+				entry.ServiceType,
 				entry.OriginType,
 				entry.OriginTier,
 			)
-			// Profiler 的 metrics provider 以入口 ChannelKind 分片；画像中的
-			// ServiceType 则必须保留真实上游协议，供 L2/L3 直连探测构造请求。
-			profile.ServiceType = entry.ServiceType
 			oldProfile := m.store.Get(profile.EndpointUID)
 			carryForwardDiscoveryFields(oldProfile, &profile)
 			profiled++
 
 			// 收集被动信号并诊断
-			signals := m.collectSignals(entry.BaseURL, apiKey, entry.ChannelKind)
+			signals := m.collectSignals(entry.ChannelKind, entry.BaseURL, apiKey, entry.ServiceType)
 			diagnosis := m.analyzer.Diagnose(signals)
 
 			profile.HealthState = diagnosis.State
@@ -1037,32 +1034,32 @@ func (m *Manager) gatherChannelEntries() []channelEntry {
 }
 
 // collectSignals 从 MetricsManager 收集 endpoint 级被动信号。
-func (m *Manager) collectSignals(baseURL, apiKey, serviceType string) EndpointSignals {
+func (m *Manager) collectSignals(channelKind, baseURL, apiKey, serviceType string) EndpointSignals {
 	now := time.Now()
 	signals := EndpointSignals{Now: now}
 
 	// 1 小时窗口
-	stats1h := m.metrics.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, 1*time.Hour)
+	stats1h := m.metrics.GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType, 1*time.Hour)
 	signals.TotalRequests1h = int(stats1h.RequestCount)
 	signals.SuccessCount1h = int(stats1h.SuccessCount)
 	signals.FailureCount1h = int(stats1h.FailureCount)
 	signals.SuccessRate1h = stats1h.SuccessRate
 
 	// 24 小时窗口
-	stats24h := m.metrics.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, 24*time.Hour)
+	stats24h := m.metrics.GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType, 24*time.Hour)
 	signals.TotalRequests24h = int(stats24h.RequestCount)
 	signals.SuccessCount24h = int(stats24h.SuccessCount)
 	signals.FailureCount24h = int(stats24h.FailureCount)
 
 	// 15 分钟窗口
-	stats15m := m.metrics.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, 15*time.Minute)
+	stats15m := m.metrics.GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType, 15*time.Minute)
 	signals.TotalRequests15m = int(stats15m.RequestCount)
 	if stats15m.RequestCount > 0 {
 		signals.SuccessRate15m = stats15m.SuccessRate
 	}
 
 	// 熔断器快照
-	snapshot := m.metrics.GetKeySnapshot(baseURL, apiKey, serviceType)
+	snapshot := m.metrics.GetKeySnapshot(channelKind, baseURL, apiKey, serviceType)
 	signals.ConsecutiveFail = int(snapshot.ConsecutiveFailures)
 	signals.LastSuccessAt = snapshot.LastSuccessAt
 	signals.CircuitBreakerOpen = snapshot.CircuitState == 1 // 1 = open

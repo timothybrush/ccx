@@ -9,20 +9,20 @@ import (
 
 // mockMetricsProvider 实现 MetricsProvider 接口，用于测试。
 type mockMetricsProvider struct {
-	statsFn    func(baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats
-	snapshotFn func(baseURL, apiKey, serviceType string) KeyCircuitSnapshot
+	statsFn    func(channelKind, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats
+	snapshotFn func(channelKind, baseURL, apiKey, serviceType string) KeyCircuitSnapshot
 }
 
-func (m *mockMetricsProvider) GetTimeWindowStatsForKey(baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
+func (m *mockMetricsProvider) GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats {
 	if m.statsFn != nil {
-		return m.statsFn(baseURL, apiKey, serviceType, duration)
+		return m.statsFn(channelKind, baseURL, apiKey, serviceType, duration)
 	}
 	return TimeWindowStats{}
 }
 
-func (m *mockMetricsProvider) GetKeySnapshot(baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
+func (m *mockMetricsProvider) GetKeySnapshot(channelKind, baseURL, apiKey, serviceType string) KeyCircuitSnapshot {
 	if m.snapshotFn != nil {
-		return m.snapshotFn(baseURL, apiKey, serviceType)
+		return m.snapshotFn(channelKind, baseURL, apiKey, serviceType)
 	}
 	return KeyCircuitSnapshot{}
 }
@@ -30,10 +30,10 @@ func (m *mockMetricsProvider) GetKeySnapshot(baseURL, apiKey, serviceType string
 // newMockProvider 创建返回固定值的 mock provider。
 func newMockProvider(stats TimeWindowStats, snapshot KeyCircuitSnapshot) *mockMetricsProvider {
 	return &mockMetricsProvider{
-		statsFn: func(string, string, string, time.Duration) TimeWindowStats {
+		statsFn: func(string, string, string, string, time.Duration) TimeWindowStats {
 			return stats
 		},
-		snapshotFn: func(string, string, string) KeyCircuitSnapshot {
+		snapshotFn: func(string, string, string, string) KeyCircuitSnapshot {
 			return snapshot
 		},
 	}
@@ -547,6 +547,17 @@ func TestProfilerDeriveEndpointProfile(t *testing.T) {
 	}
 	if profile.EndpointUID == "" {
 		t.Error("EndpointUID should not be empty")
+	}
+	expectedKeyHash := KeyHashFromAPIKey("sk-test1234")
+	if profile.KeyHash != expectedKeyHash {
+		t.Errorf("KeyHash = %q, want %q", profile.KeyHash, expectedKeyHash)
+	}
+	expectedMetricsKey := computeMetricsIdentityKey("https://api.example.com", "sk-test1234", "claude")
+	if profile.MetricsKey != expectedMetricsKey {
+		t.Errorf("MetricsKey = %q, want canonical identity %q", profile.MetricsKey, expectedMetricsKey)
+	}
+	if profile.IdentityBaseURL != "https://api.example.com/v1" {
+		t.Errorf("IdentityBaseURL = %q, want %q", profile.IdentityBaseURL, "https://api.example.com/v1")
 	}
 	if profile.Source != "l1_passive" {
 		t.Errorf("Source = %q, want %q", profile.Source, "l1_passive")

@@ -536,7 +536,9 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 			continue
 		}
 
-		endpointUID := GenerateEndpointUID(channelUID, ep.BaseURL, KeyHashFromAPIKey(apiKey))
+		keyHash := KeyHashFromAPIKey(apiKey)
+		metricsKey := computeMetricsIdentityKey(ep.BaseURL, apiKey, channel.ServiceType)
+		endpointUID := GenerateEndpointUID(channelUID, ep.BaseURL, keyHash)
 
 		// 尝试获取已有画像
 		existing := r.store.Get(endpointUID)
@@ -575,8 +577,10 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 			profile.CostTier = CostTierNormal
 		}
 		profile.BaseURL = ep.BaseURL
+		profile.IdentityBaseURL = utils.MetricsIdentityBaseURL(ep.BaseURL, channel.ServiceType)
 		profile.KeyMask = ep.KeyMask
-		profile.KeyHash = KeyHashFromAPIKey(apiKey)
+		profile.KeyHash = keyHash
+		profile.MetricsKey = metricsKey
 		profile.CredentialUID = channel.CredentialUIDForKey(apiKey)
 		profile.AvailableModels = ep.Models
 		if len(ep.Models) > 0 {
@@ -593,7 +597,6 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		// Phase 3B-2：写入每个发现模型的 ModelProfile 行
 		// 条件：modelProfileStore 非 nil + channel.AutoManaged == true + 有发现模型
 		if r.ModelProfileStore != nil && channel.AutoManaged && len(ep.Models) > 0 {
-			metricsKey := computeMetricsIdentityKey(ep.BaseURL, apiKey, channel.ServiceType)
 			now := time.Now()
 			for _, modelID := range ep.Models {
 				family := InferModelFamily(modelID, "")

@@ -3,6 +3,8 @@ package autopilot
 import (
 	"log"
 	"time"
+
+	"github.com/BenedictKing/ccx/internal/utils"
 )
 
 // ── MetricsProvider 接口 ──
@@ -11,9 +13,9 @@ import (
 // 便于测试时注入 mock，不直接依赖 *metrics.MetricsManager。
 type MetricsProvider interface {
 	// GetTimeWindowStatsForKey 获取指定 Key 在时间窗口内的统计。
-	GetTimeWindowStatsForKey(baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats
+	GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType string, duration time.Duration) TimeWindowStats
 	// GetKeySnapshot 获取指定 Key 的快照状态（熔断器、连续失败等）。
-	GetKeySnapshot(baseURL, apiKey, serviceType string) KeyCircuitSnapshot
+	GetKeySnapshot(channelKind, baseURL, apiKey, serviceType string) KeyCircuitSnapshot
 }
 
 // KeyCircuitSnapshot 是单个 Key 的熔断器与活跃度快照。
@@ -98,8 +100,10 @@ func (p *Profiler) DeriveEndpointProfile(
 		OriginTier:      originTier,
 		ServiceType:     serviceType,
 		BaseURL:         baseURL,
+		IdentityBaseURL: utils.MetricsIdentityBaseURL(baseURL, serviceType),
 		KeyMask:         "***" + apiKey[max(0, len(apiKey)-4):],
-		MetricsKey:      keyHash,
+		KeyHash:         keyHash,
+		MetricsKey:      computeMetricsIdentityKey(baseURL, apiKey, serviceType),
 		UpdatedAt:       now,
 		HealthState:     HealthStateUnknown,
 		QualityTier:     QualityTierLow,
@@ -112,8 +116,8 @@ func (p *Profiler) DeriveEndpointProfile(
 	}
 
 	// 获取指标数据
-	snapshot := p.metrics.GetKeySnapshot(baseURL, apiKey, serviceType)
-	stats1h := p.metrics.GetTimeWindowStatsForKey(baseURL, apiKey, serviceType, 1*time.Hour)
+	snapshot := p.metrics.GetKeySnapshot(channelKind, baseURL, apiKey, serviceType)
+	stats1h := p.metrics.GetTimeWindowStatsForKey(channelKind, baseURL, apiKey, serviceType, 1*time.Hour)
 
 	// 填充运行时指标字段
 	profile.ConsecutiveFail = int(snapshot.ConsecutiveFailures)

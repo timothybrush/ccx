@@ -696,7 +696,7 @@ func scoreEndpointForBinding(store *ProfileStore, fastDecay *FastDecayScorer, mo
 	if store == nil {
 		return cand
 	}
-	profile := store.Get(endpointUID)
+	profile := findProfileForBinding(store, channelUID, baseURL, apiKey)
 	if profile == nil {
 		return cand
 	}
@@ -729,7 +729,21 @@ func findProfileForBinding(store *ProfileStore, channelUID, baseURL, apiKey stri
 	if store == nil || channelUID == "" || baseURL == "" || apiKey == "" {
 		return nil
 	}
-	return store.Get(GenerateEndpointUID(channelUID, baseURL, KeyHashFromAPIKey(apiKey)))
+	profile := store.Get(GenerateEndpointUID(channelUID, baseURL, KeyHashFromAPIKey(apiKey)))
+	if profile == nil {
+		return nil
+	}
+
+	// L1 profiler 的旧版本曾把 keyHash 写入 MetricsKey。按当前 binding 重建
+	// 运行时身份，使旧画像无需等待后台刷新即可命中同一 endpoint 的模型画像。
+	metricsKey := computeMetricsIdentityKey(baseURL, apiKey, profile.ServiceType)
+	if profile.MetricsKey == metricsKey {
+		return profile
+	}
+	snapshot := *profile
+	snapshot.KeyHash = KeyHashFromAPIKey(apiKey)
+	snapshot.MetricsKey = metricsKey
+	return &snapshot
 }
 
 func profileSupportsRequestModel(profile *KeyEndpointProfile, model string, req *RequestProfile, deps *EndpointPolicyDeps) bool {

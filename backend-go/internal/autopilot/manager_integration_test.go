@@ -3,6 +3,7 @@ package autopilot
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
 )
@@ -30,8 +31,19 @@ func TestManagerCollectAllPreservesUpstreamServiceType(t *testing.T) {
 	})
 	t.Cleanup(cleanup)
 
+	var gotChannelKind, gotServiceType string
+	provider := &mockMetricsProvider{
+		statsFn: func(channelKind, _, _, serviceType string, _ time.Duration) TimeWindowStats {
+			gotChannelKind, gotServiceType = channelKind, serviceType
+			return TimeWindowStats{}
+		},
+		snapshotFn: func(channelKind, _, _, serviceType string) KeyCircuitSnapshot {
+			gotChannelKind, gotServiceType = channelKind, serviceType
+			return KeyCircuitSnapshot{}
+		},
+	}
 	metrics := NewMetricsAdapterManager(map[string]MetricsProvider{
-		"messages": newMockProvider(TimeWindowStats{}, KeyCircuitSnapshot{}),
+		"messages": provider,
 	})
 	mgr, err := NewManager(store, metrics, cfgManager, ManagerConfig{QuietLogs: true})
 	if err != nil {
@@ -46,6 +58,13 @@ func TestManagerCollectAllPreservesUpstreamServiceType(t *testing.T) {
 	}
 	if profile.ChannelKind != "messages" || profile.ServiceType != "openai" {
 		t.Fatalf("画像协议身份错误: channelKind=%q serviceType=%q", profile.ChannelKind, profile.ServiceType)
+	}
+	if gotChannelKind != "messages" || gotServiceType != "openai" {
+		t.Fatalf("指标路由身份错误: channelKind=%q serviceType=%q", gotChannelKind, gotServiceType)
+	}
+	expectedMetricsKey := computeMetricsIdentityKey(baseURL, apiKey, "openai")
+	if profile.MetricsKey != expectedMetricsKey || profile.KeyHash != KeyHashFromAPIKey(apiKey) {
+		t.Fatalf("画像 endpoint 身份不一致: metricsKey=%q keyHash=%q", profile.MetricsKey, profile.KeyHash)
 	}
 }
 

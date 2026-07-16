@@ -489,8 +489,13 @@ func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
 	}
 	defer store.Close()
+	modelStore, err := NewModelProfileStoreWithDB(store.DB())
+	if err != nil {
+		t.Fatalf("创建 ModelProfileStore 失败: %v", err)
+	}
 
 	runner := NewAutoDiscoveryRunner(store, nil)
+	runner.ModelProfileStore = modelStore
 	channelUID := "ch_profile_uid"
 	baseURL := "https://api.example.com"
 	apiKey := "sk-test-key"
@@ -500,6 +505,7 @@ func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 		ServiceType: "claude",
 		BaseURL:     baseURL,
 		APIKeys:     []string{apiKey},
+		AutoManaged: true,
 	}
 	cfgManager := setupTestConfigManagerForDiscovery(t, channelUID, nil, nil)
 	defer cfgManager.Close()
@@ -524,6 +530,17 @@ func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 	}
 	if profile.ServiceType != "claude" {
 		t.Fatalf("ServiceType = %q, want claude", profile.ServiceType)
+	}
+	expectedMetricsKey := computeMetricsIdentityKey(baseURL, apiKey, channel.ServiceType)
+	if profile.KeyHash != KeyHashFromAPIKey(apiKey) || profile.MetricsKey != expectedMetricsKey {
+		t.Fatalf("endpoint identity 不完整: keyHash=%q metricsKey=%q", profile.KeyHash, profile.MetricsKey)
+	}
+	if profile.IdentityBaseURL != utils.MetricsIdentityBaseURL(baseURL, channel.ServiceType) {
+		t.Fatalf("IdentityBaseURL = %q", profile.IdentityBaseURL)
+	}
+	modelProfile := modelStore.Get(channelUID, "messages", expectedMetricsKey, "mimo-v2.5-pro")
+	if modelProfile == nil || modelProfile.MetricsKey != profile.MetricsKey {
+		t.Fatalf("endpoint/model profile metrics identity 漂移: endpoint=%q model=%+v", profile.MetricsKey, modelProfile)
 	}
 	if profile.QualityTier != QualityTierNormal || profile.StabilityTier != StabilityTierNormal ||
 		profile.SpeedTier != SpeedTierNormal || profile.CostTier != CostTierNormal {
