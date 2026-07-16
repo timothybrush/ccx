@@ -100,6 +100,10 @@ type EndpointAttemptPolicy struct {
 	// 返回空串表示无映射（使用原始模型）。
 	// 签名：(endpointUID) → mappedModel（空串 = 无映射）
 	ResolvedModelByEndpointUID func(endpointUID string) string
+
+	// ResponseHeaderTimeoutForEndpoint 根据 endpoint TTFB 画像返回响应头超时建议。
+	// 返回 0 表示样本不足或当前请求不应缩短超时。
+	ResponseHeaderTimeoutForEndpoint func(endpointUID string, inheritedMs int, isStream bool) int
 }
 
 // ── EndpointPolicyDeps 依赖注入 ──
@@ -229,6 +233,7 @@ func buildShadowPolicy(deps EndpointPolicyDeps, req *RequestProfile) *EndpointAt
 	}
 
 	policy.ResolvedModelByEndpointUID = buildResolvedModelLookup(modelByUID)
+	policy.ResponseHeaderTimeoutForEndpoint = buildResponseHeaderTimeoutLookup(deps.ProfileStore, req)
 	return policy
 }
 
@@ -399,6 +404,7 @@ func buildActivePolicy(deps EndpointPolicyDeps, req *RequestProfile, enableFilte
 	}
 
 	policy.ResolvedModelByEndpointUID = buildResolvedModelLookup(modelByUID)
+	policy.ResponseHeaderTimeoutForEndpoint = buildResponseHeaderTimeoutLookup(deps.ProfileStore, req)
 	return policy
 }
 

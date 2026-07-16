@@ -160,6 +160,49 @@ func shouldStripBillingHeader(kind scheduler.ChannelKind, upstream *config.Upstr
 	return upstream.IsStripBillingHeaderEnabled()
 }
 
+func applyAdaptiveResponseHeaderTimeout(
+	c *gin.Context,
+	apiType string,
+	policy *autopilot.EndpointAttemptPolicy,
+	upstream *config.UpstreamConfig,
+	upstreamCopy *config.UpstreamConfig,
+	baseURL string,
+	apiKey string,
+	inheritedMs int,
+	isStream bool,
+) *config.UpstreamConfig {
+	if policy == nil || policy.ResponseHeaderTimeoutForEndpoint == nil || upstream == nil || upstreamCopy == nil {
+		return upstream
+	}
+	// 手工渠道和显式超时始终保持用户配置；自适应只管理自动托管渠道的继承值。
+	if !upstream.AutoManaged || upstream.ResponseHeaderTimeoutMs > 0 || upstream.ChannelUID == "" {
+		return upstream
+	}
+
+	endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, baseURL, autopilot.KeyHashFromAPIKey(apiKey))
+	var suggestedMs int
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				RequestLogf(c, "[%s-AdaptiveTimeout] 建议器异常，保持继承超时: %v", apiType, recovered)
+				suggestedMs = 0
+			}
+		}()
+		suggestedMs = policy.ResponseHeaderTimeoutForEndpoint(endpointUID, inheritedMs, isStream)
+	}()
+	if suggestedMs <= 0 {
+		return upstream
+	}
+	if policy.Mode == autopilot.RoutingModeShadow || policy.Mode == autopilot.RoutingModeDryRun {
+		RequestLogf(c, "[%s-AdaptiveTimeout-Shadow] endpoint=%s 建议响应头超时 %dms，当前继承 %dms", apiType, endpointUID, suggestedMs, inheritedMs)
+		return upstream
+	}
+
+	upstreamCopy.ResponseHeaderTimeoutMs = suggestedMs
+	RequestLogf(c, "[%s-AdaptiveTimeout] endpoint=%s 响应头超时 %dms（继承值 %dms）", apiType, endpointUID, suggestedMs, inheritedMs)
+	return upstreamCopy
+}
+
 // TryUpstreamWithAllKeys 尝试一个 upstream 的所有 BaseURL + Key（纯 failover）
 // 返回:
 //   - handled: 是否已向客户端写回响应（成功或非 failover 错误）
@@ -504,7 +547,11 @@ func TryUpstreamWithAllKeys(
 					metricsManager.RecordRequestFirstByte(currentBaseURL, apiKey, metricsServiceType, requestID, time.Since(attemptStartedAt))
 				},
 			}
-			resp, err := SendRequestWithLifecycleTrace(req, upstream, envCfg, isStream, apiType, lifecycleTrace)
+			globalResponseHeaderTimeout := config.GetRuntimeResponseHeaderTimeoutMs(envCfg.ResponseHeaderTimeout * 1000)
+			requestUpstream := applyAdaptiveResponseHeaderTimeout(
+				c, apiType, endpointPolicy, upstream, upstreamCopy, currentBaseURL, apiKey, globalResponseHeaderTimeout, isStream,
+			)
+			resp, err := SendRequestWithLifecycleTrace(req, requestUpstream, envCfg, isStream, apiType, lifecycleTrace)
 			if err != nil {
 				lastError = err
 				// 区分客户端取消和真实渠道故障（统一口径）

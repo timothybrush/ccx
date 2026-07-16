@@ -131,6 +131,11 @@ func TestGetTimeWindowStatsForKeyTracksFirstByteP95(t *testing.T) {
 	if stats.P95FirstByteLatencyMs != 19 {
 		t.Fatalf("P95FirstByteLatencyMs = %d, want 19", stats.P95FirstByteLatencyMs)
 	}
+	aggregated := m.ToResponse(0, baseURL, []string{apiKey}, serviceType, 0).TimeWindows["1h"]
+	if aggregated.FirstByteSampleCount != 20 || aggregated.P95FirstByteLatencyMs != 19 {
+		t.Fatalf("aggregated TTFB = samples:%d p95:%dms, want 20/19ms",
+			aggregated.FirstByteSampleCount, aggregated.P95FirstByteLatencyMs)
+	}
 }
 
 func TestGetHistoricalStatsMultiURL_DeduplicatesEquivalentURLs(t *testing.T) {

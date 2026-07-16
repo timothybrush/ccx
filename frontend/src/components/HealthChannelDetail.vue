@@ -21,6 +21,7 @@
             <th>{{ t('healthCenter.detail.speedTier') }}</th>
             <th>{{ t('healthCenter.detail.successRate15m') }}</th>
             <th>{{ t('healthCenter.detail.p95') }}</th>
+            <th>{{ t('healthCenter.detail.firstByteP95') }}</th>
             <th>{{ t('healthCenter.detail.consecutiveFail') }}</th>
           </tr>
         </thead>
@@ -50,6 +51,12 @@
             </td>
             <td :class="rateColor(ep.successRate15m)">{{ formatPercent(ep.successRate15m) }}</td>
             <td>{{ ep.p95LatencyMs ? ep.p95LatencyMs.toFixed(0) + 'ms' : '-' }}</td>
+            <td>
+              {{ ep.p95FirstByteLatencyMs ? ep.p95FirstByteLatencyMs.toFixed(0) + 'ms' : '-' }}
+              <span v-if="ep.firstByteSampleCount" class="text-caption text-medium-emphasis">
+                (n={{ ep.firstByteSampleCount }})
+              </span>
+            </td>
             <td>
               <span v-if="ep.consecutiveFail > 0" class="text-error font-weight-bold">{{ ep.consecutiveFail }}</span>
               <span v-else>-</span>

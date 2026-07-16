@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sort"
 	"time"
 )
 
@@ -303,6 +304,7 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsInternal(baseURL string, 
 		cutoff := now.Add(-duration)
 		var requestCount, successCount, failureCount int64
 		var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int64
+		firstByteLatencies := make([]int64, 0)
 
 		for _, apiKey := range activeKeys {
 			for _, metrics := range m.getMetricsVariantsLocked(baseURL, apiKey, serviceType) {
@@ -318,6 +320,9 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsInternal(baseURL string, 
 						outputTokens += record.OutputTokens
 						cacheCreationTokens += record.CacheCreationInputTokens
 						cacheReadTokens += record.CacheReadInputTokens
+						if record.Success && record.FirstByteLatencyMs > 0 {
+							firstByteLatencies = append(firstByteLatencies, record.FirstByteLatencyMs)
+						}
 					}
 				}
 			}
@@ -334,16 +339,19 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsInternal(baseURL string, 
 			cacheHitRate = float64(cacheReadTokens) / float64(denom) * 100
 		}
 
+		sort.Slice(firstByteLatencies, func(i, j int) bool { return firstByteLatencies[i] < firstByteLatencies[j] })
 		result[label] = TimeWindowStats{
-			RequestCount:        requestCount,
-			SuccessCount:        successCount,
-			FailureCount:        failureCount,
-			SuccessRate:         successRate,
-			InputTokens:         inputTokens,
-			OutputTokens:        outputTokens,
-			CacheCreationTokens: cacheCreationTokens,
-			CacheReadTokens:     cacheReadTokens,
-			CacheHitRate:        cacheHitRate,
+			RequestCount:          requestCount,
+			SuccessCount:          successCount,
+			FailureCount:          failureCount,
+			SuccessRate:           successRate,
+			InputTokens:           inputTokens,
+			OutputTokens:          outputTokens,
+			CacheCreationTokens:   cacheCreationTokens,
+			CacheReadTokens:       cacheReadTokens,
+			CacheHitRate:          cacheHitRate,
+			FirstByteSampleCount:  int64(len(firstByteLatencies)),
+			P95FirstByteLatencyMs: nearestRankPercentile(firstByteLatencies, 95),
 		}
 	}
 
@@ -366,6 +374,7 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsMultiURL(baseURLs []strin
 		cutoff := now.Add(-duration)
 		var requestCount, successCount, failureCount int64
 		var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int64
+		firstByteLatencies := make([]int64, 0)
 
 		// 遍历所有 BaseURL 和 Key 的组合
 		for _, metrics := range m.getIdentityMetricsByMultiURLAndKeysLocked(baseURLs, activeKeys, serviceType) {
@@ -381,6 +390,9 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsMultiURL(baseURLs []strin
 					outputTokens += record.OutputTokens
 					cacheCreationTokens += record.CacheCreationInputTokens
 					cacheReadTokens += record.CacheReadInputTokens
+					if record.Success && record.FirstByteLatencyMs > 0 {
+						firstByteLatencies = append(firstByteLatencies, record.FirstByteLatencyMs)
+					}
 				}
 			}
 		}
@@ -396,16 +408,19 @@ func (m *MetricsManager) calculateAggregatedTimeWindowsMultiURL(baseURLs []strin
 			cacheHitRate = float64(cacheReadTokens) / float64(denom) * 100
 		}
 
+		sort.Slice(firstByteLatencies, func(i, j int) bool { return firstByteLatencies[i] < firstByteLatencies[j] })
 		result[label] = TimeWindowStats{
-			RequestCount:        requestCount,
-			SuccessCount:        successCount,
-			FailureCount:        failureCount,
-			SuccessRate:         successRate,
-			InputTokens:         inputTokens,
-			OutputTokens:        outputTokens,
-			CacheCreationTokens: cacheCreationTokens,
-			CacheReadTokens:     cacheReadTokens,
-			CacheHitRate:        cacheHitRate,
+			RequestCount:          requestCount,
+			SuccessCount:          successCount,
+			FailureCount:          failureCount,
+			SuccessRate:           successRate,
+			InputTokens:           inputTokens,
+			OutputTokens:          outputTokens,
+			CacheCreationTokens:   cacheCreationTokens,
+			CacheReadTokens:       cacheReadTokens,
+			CacheHitRate:          cacheHitRate,
+			FirstByteSampleCount:  int64(len(firstByteLatencies)),
+			P95FirstByteLatencyMs: nearestRankPercentile(firstByteLatencies, 95),
 		}
 	}
 

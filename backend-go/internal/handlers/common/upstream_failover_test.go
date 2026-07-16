@@ -68,6 +68,84 @@ func TestShouldNormalizeMetadataUserIDOnlyMessages(t *testing.T) {
 	}
 }
 
+func TestApplyAdaptiveResponseHeaderTimeoutHonorsModeAndOwnership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	activePolicy := &autopilot.EndpointAttemptPolicy{
+		Mode: autopilot.RoutingModeActive,
+		ResponseHeaderTimeoutForEndpoint: func(_ string, inheritedMs int, isStream bool) int {
+			if inheritedMs != 120_000 {
+				t.Fatalf("inheritedMs = %d, want 120000", inheritedMs)
+			}
+			if !isStream {
+				t.Fatal("expected stream flag")
+			}
+			return 30_000
+		},
+	}
+
+	tests := []struct {
+		name        string
+		upstream    *config.UpstreamConfig
+		policy      *autopilot.EndpointAttemptPolicy
+		wantTimeout int
+		wantCopy    bool
+	}{
+		{
+			name:        "active auto-managed applies suggestion",
+			upstream:    &config.UpstreamConfig{AutoManaged: true, ChannelUID: "ch-auto"},
+			policy:      activePolicy,
+			wantTimeout: 30_000,
+			wantCopy:    true,
+		},
+		{
+			name:     "shadow only observes suggestion",
+			upstream: &config.UpstreamConfig{AutoManaged: true, ChannelUID: "ch-auto"},
+			policy: &autopilot.EndpointAttemptPolicy{
+				Mode:                             autopilot.RoutingModeShadow,
+				ResponseHeaderTimeoutForEndpoint: func(string, int, bool) int { return 30_000 },
+			},
+		},
+		{
+			name:     "manual channel keeps inherited timeout",
+			upstream: &config.UpstreamConfig{ChannelUID: "ch-manual"},
+			policy:   activePolicy,
+		},
+		{
+			name:        "explicit channel timeout wins",
+			upstream:    &config.UpstreamConfig{AutoManaged: true, ChannelUID: "ch-auto", ResponseHeaderTimeoutMs: 90_000},
+			policy:      activePolicy,
+			wantTimeout: 90_000,
+		},
+		{
+			name:     "panicking suggestion fails open",
+			upstream: &config.UpstreamConfig{AutoManaged: true, ChannelUID: "ch-auto"},
+			policy: &autopilot.EndpointAttemptPolicy{
+				Mode: autopilot.RoutingModeActive,
+				ResponseHeaderTimeoutForEndpoint: func(string, int, bool) int {
+					panic("test panic")
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstreamCopy := tt.upstream.Clone()
+			got := applyAdaptiveResponseHeaderTimeout(c, "Messages", tt.policy, tt.upstream, upstreamCopy, "https://example.com", "sk-test", 120_000, true)
+			if tt.wantCopy && got != upstreamCopy {
+				t.Fatal("expected adaptive runtime copy")
+			}
+			if !tt.wantCopy && got != tt.upstream {
+				t.Fatal("expected original upstream")
+			}
+			if got.ResponseHeaderTimeoutMs != tt.wantTimeout {
+				t.Fatalf("ResponseHeaderTimeoutMs = %d, want %d", got.ResponseHeaderTimeoutMs, tt.wantTimeout)
+			}
+		})
+	}
+}
+
 func TestPlainAPIKeySelectionSkipsDisabledModel(t *testing.T) {
 	upstream := &config.UpstreamConfig{
 		Name:    "plain-keys",
@@ -822,6 +900,12 @@ func TestTryUpstreamWithAllKeysRetriesAfterResponseHeaderTimeout(t *testing.T) {
 	}
 	if !cfgManager.IsKeyFailed("sk-slow", "Messages") {
 		t.Fatal("响应头超时的 Key 应被标记失败")
+	}
+	serviceType := scheduler.NormalizedMetricsServiceType(scheduler.ChannelKindMessages, upstream.ServiceType)
+	stats := messagesMetrics.GetTimeWindowStatsForKey(server.URL, "sk-fast", serviceType, time.Hour)
+	if stats.FirstByteSampleCount != 1 || stats.P95FirstByteLatencyMs <= 0 {
+		t.Fatalf("successful failover TTFB = samples:%d p95:%dms, want one positive sample",
+			stats.FirstByteSampleCount, stats.P95FirstByteLatencyMs)
 	}
 }
 

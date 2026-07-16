@@ -40,24 +40,26 @@ type ChannelsResponse struct {
 
 // EndpointDetailItem endpoint 级详情（Key 已脱敏）。
 type EndpointDetailItem struct {
-	EndpointUID      string  `json:"endpointUid"`
-	ChannelUID       string  `json:"channelUid"`
-	ChannelKind      string  `json:"channelKind"`
-	BaseURL          string  `json:"baseUrl"`
-	KeyHash          string  `json:"keyHash"` // SHA256 前 16 位，绝不返回明文
-	HealthState      string  `json:"healthState"`
-	HealthConfidence float64 `json:"healthConfidence"`
-	HealthEvidence   string  `json:"healthEvidence,omitempty"`
-	SuggestedAction  string  `json:"suggestedAction,omitempty"`
-	QualityTier      string  `json:"qualityTier,omitempty"`
-	StabilityTier    string  `json:"stabilityTier,omitempty"`
-	SpeedTier        string  `json:"speedTier,omitempty"`
-	SuccessRate15m   float64 `json:"successRate15m,omitempty"`
-	SuccessRate1h    float64 `json:"successRate1h,omitempty"`
-	P95LatencyMs     float64 `json:"p95LatencyMs,omitempty"`
-	ConsecutiveFail  int     `json:"consecutiveFail"`
-	LastSuccessAt    string  `json:"lastSuccessAt,omitempty"`
-	UpdatedAt        string  `json:"updatedAt,omitempty"`
+	EndpointUID           string  `json:"endpointUid"`
+	ChannelUID            string  `json:"channelUid"`
+	ChannelKind           string  `json:"channelKind"`
+	BaseURL               string  `json:"baseUrl"`
+	KeyHash               string  `json:"keyHash"` // SHA256 前 16 位，绝不返回明文
+	HealthState           string  `json:"healthState"`
+	HealthConfidence      float64 `json:"healthConfidence"`
+	HealthEvidence        string  `json:"healthEvidence,omitempty"`
+	SuggestedAction       string  `json:"suggestedAction,omitempty"`
+	QualityTier           string  `json:"qualityTier,omitempty"`
+	StabilityTier         string  `json:"stabilityTier,omitempty"`
+	SpeedTier             string  `json:"speedTier,omitempty"`
+	SuccessRate15m        float64 `json:"successRate15m,omitempty"`
+	SuccessRate1h         float64 `json:"successRate1h,omitempty"`
+	P95LatencyMs          float64 `json:"p95LatencyMs,omitempty"`
+	FirstByteSampleCount  int64   `json:"firstByteSampleCount,omitempty"`
+	P95FirstByteLatencyMs float64 `json:"p95FirstByteLatencyMs,omitempty"`
+	ConsecutiveFail       int     `json:"consecutiveFail"`
+	LastSuccessAt         string  `json:"lastSuccessAt,omitempty"`
+	UpdatedAt             string  `json:"updatedAt,omitempty"`
 
 	// Phase 1 新增字段：限速建议（向后兼容，omitempty）
 	SuggestedRPM       int     `json:"suggestedRpm,omitempty"`
@@ -192,21 +194,23 @@ func handleEndpoints(mgr *Manager) gin.HandlerFunc {
 			}
 			apiKey, hasAPIKey := mgr.ResolveAPIKey(p.ChannelUID, keyHash)
 			item := EndpointDetailItem{
-				EndpointUID:      p.EndpointUID,
-				ChannelUID:       p.ChannelUID,
-				ChannelKind:      p.ChannelKind,
-				BaseURL:          p.BaseURL,
-				KeyHash:          p.KeyMask, // KeyMask 已脱敏，绝不返回明文 key
-				HealthState:      string(p.HealthState),
-				HealthConfidence: p.HealthConfidence,
-				HealthEvidence:   strings.Join(p.HealthEvidence, "; "),
-				SuggestedAction:  string(p.SuggestedAction),
-				QualityTier:      string(p.QualityTier),
-				StabilityTier:    string(p.StabilityTier),
-				SpeedTier:        string(p.SpeedTier),
-				SuccessRate15m:   p.SuccessRate15m,
-				P95LatencyMs:     float64(p.P95LatencyMs),
-				ConsecutiveFail:  p.ConsecutiveFail,
+				EndpointUID:           p.EndpointUID,
+				ChannelUID:            p.ChannelUID,
+				ChannelKind:           p.ChannelKind,
+				BaseURL:               p.BaseURL,
+				KeyHash:               p.KeyMask, // KeyMask 已脱敏，绝不返回明文 key
+				HealthState:           string(p.HealthState),
+				HealthConfidence:      p.HealthConfidence,
+				HealthEvidence:        strings.Join(p.HealthEvidence, "; "),
+				SuggestedAction:       string(p.SuggestedAction),
+				QualityTier:           string(p.QualityTier),
+				StabilityTier:         string(p.StabilityTier),
+				SpeedTier:             string(p.SpeedTier),
+				SuccessRate15m:        p.SuccessRate15m,
+				P95LatencyMs:          float64(p.P95LatencyMs),
+				FirstByteSampleCount:  p.FirstByteSampleCount,
+				P95FirstByteLatencyMs: float64(p.P95FirstByteLatencyMs),
+				ConsecutiveFail:       p.ConsecutiveFail,
 
 				// Phase 1 新增：限速建议
 				SuggestedRPM:       p.DiscoveredRPM,
