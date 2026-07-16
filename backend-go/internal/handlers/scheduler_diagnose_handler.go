@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/gin-gonic/gin"
 )
@@ -49,16 +50,24 @@ func DiagnoseSchedulerSelection(sch *scheduler.ChannelScheduler, kind scheduler.
 			}
 		}
 
-		result, err := sch.SelectChannelWithOptions(c.Request.Context(), scheduler.SelectionOptions{
+		model := strings.TrimSpace(req.Model)
+		agentRole := strings.TrimSpace(req.AgentRole)
+		contextRequirement := diagnoseContextRequirement(req.ContextRequirement)
+		selectionContext := autopilot.ContextWithRequestProfile(
+			c.Request.Context(),
+			buildSchedulerDiagnoseRequestProfile(kind, model, agentRole, req.HasImageContent, contextRequirement),
+		)
+
+		result, err := sch.SelectChannelWithOptions(selectionContext, scheduler.SelectionOptions{
 			UserID:             strings.TrimSpace(req.UserID),
 			FailedChannels:     failedChannels,
 			Kind:               kind,
-			Model:              strings.TrimSpace(req.Model),
+			Model:              model,
 			RoutePrefix:        strings.TrimSpace(req.RoutePrefix),
 			ChannelName:        strings.TrimSpace(req.ChannelName),
-			ContextRequirement: diagnoseContextRequirement(req.ContextRequirement),
+			ContextRequirement: contextRequirement,
 			HasImageContent:    req.HasImageContent,
-			AgentRole:          strings.TrimSpace(req.AgentRole),
+			AgentRole:          agentRole,
 			DryRun:             true,
 		})
 		if err != nil {
@@ -89,6 +98,31 @@ func DiagnoseSchedulerSelection(sch *scheduler.ChannelScheduler, kind scheduler.
 			},
 		})
 	}
+}
+
+func buildSchedulerDiagnoseRequestProfile(
+	kind scheduler.ChannelKind,
+	model string,
+	agentRole string,
+	hasImage bool,
+	requirement *scheduler.ContextRequirement,
+) autopilot.RequestProfile {
+	inputTokens := 0
+	if requirement != nil {
+		inputTokens = requirement.InputTokens
+	}
+	return autopilot.BuildRequestProfile(autopilot.RequestProfileFeatures{
+		Model:         model,
+		ChannelKind:   string(kind),
+		Operation:     "completion",
+		AgentRole:     agentRole,
+		HasImage:      hasImage,
+		EstTokens:     inputTokens,
+		ContextNeed:   inputTokens,
+		VisionNeed:    hasImage,
+		ImageGenNeed:  kind == scheduler.ChannelKindImages,
+		EmbeddingNeed: kind == scheduler.ChannelKindVectors,
+	})
 }
 
 func diagnoseContextRequirement(req *schedulerDiagnoseContextRequirement) *scheduler.ContextRequirement {

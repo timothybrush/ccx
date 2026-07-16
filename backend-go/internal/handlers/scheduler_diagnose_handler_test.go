@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -145,6 +147,66 @@ func TestDiagnoseSchedulerSelectionReturnsModelFilterTrace(t *testing.T) {
 	}
 	if resp.Trace.Candidates[1].Reason != "disabled_status" {
 		t.Fatalf("second candidate = %#v, want disabled_status", resp.Trace.Candidates[1])
+	}
+}
+
+func TestDiagnoseSchedulerSelectionAttachesAutopilotRequestProfile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	sch, cleanup := newSchedulerDiagnoseTestScheduler(t, config.Config{
+		ResponsesUpstream: []config.UpstreamConfig{
+			{
+				Name:        "incapable-auto",
+				BaseURL:     "https://incapable.example.com",
+				APIKeys:     []string{"sk-incapable"},
+				Status:      "active",
+				Priority:    1,
+				AutoManaged: true,
+			},
+			{
+				Name:            "capable",
+				BaseURL:         "https://capable.example.com",
+				APIKeys:         []string{"sk-capable"},
+				Status:          "active",
+				Priority:        2,
+				SupportedModels: []string{"gpt-5.6-sol"},
+			},
+		},
+	})
+	defer cleanup()
+
+	profileChecked := false
+	sch.SetModelSupportResolverProvider(func(ctx context.Context, _ scheduler.ChannelKind, upstream *config.UpstreamConfig, _ string) (bool, string, string, string) {
+		profile, ok := autopilot.RequestProfileFromContext(ctx)
+		if !ok {
+			t.Fatal("diagnose request did not attach autopilot request profile")
+		}
+		if profile.Model != "gpt-5.6-sol" || profile.ChannelKind != "responses" ||
+			profile.AgentRole != "subagent" || profile.ContextNeed != 1234 ||
+			!profile.VisionNeed || profile.QualityNeed != autopilot.QualityTierPremium {
+			t.Fatalf("unexpected diagnose request profile: %+v", profile)
+		}
+		profileChecked = true
+		if upstream.Name == "incapable-auto" {
+			return false, "", scheduler.ModelSupportSourceAuthoritativeDeny, "no_capable_model"
+		}
+		return false, "", "", "not handled by resolver"
+	})
+
+	resp := postSchedulerDiagnose(t, sch, scheduler.ChannelKindResponses, []byte(`{
+		"model":"gpt-5.6-sol",
+		"agentRole":"subagent",
+		"hasImageContent":true,
+		"contextRequirement":{"inputTokens":1234,"requiredTokens":1234}
+	}`))
+	if !resp.OK {
+		t.Fatalf("ok = false, error = %q", resp.Error)
+	}
+	if !profileChecked {
+		t.Fatal("model support resolver did not inspect diagnose request profile")
+	}
+	if resp.Selected.ChannelName != "capable" {
+		t.Fatalf("selected = %#v, want capable channel", resp.Selected)
 	}
 }
 
