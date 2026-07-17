@@ -8,10 +8,10 @@ import { translate } from '@/i18n'
 import { registerGlobalTick } from '@/composables/useGlobalTick'
 import { mergeChannelsWithLocalData } from '@/utils/channelMerge'
 import {
+  buildUnifiedRecentActivity,
   buildUnifiedChannelsData,
   isLlmChannelKind,
   LLM_CHANNEL_KINDS,
-  withRouteKindActivity,
   withRouteKindMetrics,
   type LlmChannelKind,
 } from '@/utils/unifiedChannels'
@@ -164,7 +164,15 @@ export const useChannelStore = defineStore('channel', () => {
   const currentDashboardStats = computed(() => dashboardCache.value[activeTab.value].stats)
   const currentDashboardRecentActivity = computed(() => {
     if (isLlmChannelKind(activeTab.value)) {
-      return LLM_CHANNEL_KINDS.flatMap(kind => withRouteKindActivity(kind, dashboardCache.value[kind].recentActivity))
+      return buildUnifiedRecentActivity(
+        unifiedLlmChannelsData.value.channels,
+        {
+          messages: dashboardCache.value.messages.recentActivity,
+          chat: dashboardCache.value.chat.recentActivity,
+          responses: dashboardCache.value.responses.recentActivity,
+          gemini: dashboardCache.value.gemini.recentActivity,
+        },
+      )
     }
     return dashboardCache.value[activeTab.value].recentActivity
   })
@@ -192,106 +200,84 @@ export const useChannelStore = defineStore('channel', () => {
   /**
    * 刷新渠道数据
    */
+  const applyDashboard = (tab: ApiTab, dashboard: ChannelDashboardResponse) => {
+    const nextCache = {
+      metrics: dashboard.metrics,
+      stats: dashboard.stats,
+      recentActivity: dashboard.recentActivity,
+    }
+
+    switch (tab) {
+      case 'gemini':
+        geminiChannelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, geminiChannelsData.value.channels),
+          current: geminiChannelsData.value.current,
+        }
+        dashboardCache.value.gemini = nextCache
+        break
+      case 'chat':
+        chatChannelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, chatChannelsData.value.channels),
+          current: chatChannelsData.value.current,
+        }
+        dashboardCache.value.chat = nextCache
+        break
+      case 'images':
+        imagesChannelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, imagesChannelsData.value.channels),
+          current: imagesChannelsData.value.current,
+        }
+        dashboardCache.value.images = nextCache
+        break
+      case 'vectors':
+        vectorsChannelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, vectorsChannelsData.value.channels),
+          current: vectorsChannelsData.value.current,
+        }
+        dashboardCache.value.vectors = nextCache
+        break
+      case 'messages':
+        channelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, channelsData.value.channels),
+          current: channelsData.value.current,
+        }
+        dashboardCache.value.messages = nextCache
+        break
+      case 'responses':
+        responsesChannelsData.value = {
+          channels: mergeChannelsWithLocalData(dashboard.channels, responsesChannelsData.value.channels),
+          current: responsesChannelsData.value.current,
+        }
+        dashboardCache.value.responses = nextCache
+        break
+    }
+  }
+
   async function refreshChannels() {
     refreshRequested = true
     if (refreshLoopPromise) return refreshLoopPromise
 
     const doRefresh = async (tab: ApiTab) => {
-      try {
-        // 统一使用 dashboard 接口
-        const dashboard = await api.getChannelDashboard(tab)
-
-        // 根据 tab 更新对应的数据和缓存
-        switch (tab) {
-          case 'gemini':
-            geminiChannelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, geminiChannelsData.value.channels),
-              current: geminiChannelsData.value.current
-            }
-            dashboardCache.value.gemini = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-
-          case 'chat':
-            chatChannelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, chatChannelsData.value.channels),
-              current: chatChannelsData.value.current
-            }
-            dashboardCache.value.chat = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-
-          case 'images':
-            imagesChannelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, imagesChannelsData.value.channels),
-              current: imagesChannelsData.value.current
-            }
-            dashboardCache.value.images = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-
-          case 'vectors':
-            vectorsChannelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, vectorsChannelsData.value.channels),
-              current: vectorsChannelsData.value.current
-            }
-            dashboardCache.value.vectors = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-
-          case 'messages':
-            channelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, channelsData.value.channels),
-              current: channelsData.value.current
-            }
-            dashboardCache.value.messages = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-
-          case 'responses':
-            responsesChannelsData.value = {
-              channels: mergeChannelsWithLocalData(dashboard.channels, responsesChannelsData.value.channels),
-              current: responsesChannelsData.value.current
-            }
-            dashboardCache.value.responses = {
-              metrics: dashboard.metrics,
-              stats: dashboard.stats,
-              recentActivity: dashboard.recentActivity
-            }
-            break
-        }
-
-        lastRefreshSuccess.value = true
-      } catch (error) {
-        lastRefreshSuccess.value = false
-        throw error
-      }
+      applyDashboard(tab, await api.getChannelDashboard(tab))
     }
 
     refreshLoopPromise = (async () => {
       try {
         while (refreshRequested) {
           refreshRequested = false
-          const tabs = isLlmChannelKind(activeTab.value)
-            ? LLM_CHANNEL_KINDS
-            : [activeTab.value]
-          await Promise.all(tabs.map(tab => doRefresh(tab)))
+          if (isLlmChannelKind(activeTab.value)) {
+            const response = await api.getLlmChannelDashboard()
+            for (const kind of LLM_CHANNEL_KINDS) {
+              applyDashboard(kind, response.dashboards[kind])
+            }
+          } else {
+            await doRefresh(activeTab.value)
+          }
         }
+        lastRefreshSuccess.value = true
+      } catch (error) {
+        lastRefreshSuccess.value = false
+        throw error
       } finally {
         refreshLoopPromise = null
       }

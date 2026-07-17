@@ -11,6 +11,7 @@ import type {
   CapabilityTestResult,
   Channel,
   ChannelDashboardResponse,
+  LlmChannelDashboardResponse,
   ChannelDiscoveryRequest,
   ChannelDiscoveryResponse,
   ChannelKeyMetricsHistoryResponse,
@@ -469,6 +470,11 @@ export class ApiService {
   async getChannelDashboard(type: 'messages' | 'responses' | 'gemini' | 'chat' | 'images' | 'vectors' = 'messages'): Promise<ChannelDashboardResponse> {
     const query = type !== 'messages' ? `?type=${type}` : ''
     return this.request(`/messages/channels/dashboard${query}`)
+  }
+
+  // 获取统一 LLM 渠道仪表盘，避免前端分别轮询四种协议。
+  async getLlmChannelDashboard(): Promise<LlmChannelDashboardResponse> {
+    return this.request('/messages/channels/dashboard?type=llm')
   }
 
   // ============== Responses 多渠道调度 API ==============

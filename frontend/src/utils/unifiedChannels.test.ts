@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Channel, ChannelsResponse } from '@/services/api'
-import { buildUnifiedChannelsData, type LlmChannelKind } from './unifiedChannels'
+import type { Channel, ChannelRecentActivity, ChannelsResponse } from '@/services/api'
+import { buildUnifiedChannelsData, buildUnifiedRecentActivity, type LlmChannelKind } from './unifiedChannels'
 
 const channel = (
   name: string,
@@ -178,5 +178,48 @@ describe('buildUnifiedChannelsData account grouping', () => {
     const nextMimo = buildUnifiedChannelsData(withNewChannel).channels.find(item => item.name === 'mimo')
 
     expect(nextMimo?.displayKey).toBe(originalMimo?.displayKey)
+  })
+
+  it('聚合逻辑渠道全部协议的最近请求活动', () => {
+    const data: Record<LlmChannelKind, ChannelsResponse> = {
+      messages: response([channel('mimo-claude', 'acct-mimo', 0, ['sk-mimo'])]),
+      chat: response([channel('mimo-chat', 'acct-mimo', 1, ['sk-mimo'])]),
+      responses: response([]),
+      gemini: response([]),
+    }
+    const [logicalChannel] = buildUnifiedChannelsData(data).channels
+    const activity = (
+      channelIndex: number,
+      requestCount: number,
+      successCount: number,
+      failureCount: number,
+    ): ChannelRecentActivity => ({
+      channelIndex,
+      segments: {
+        4: { requestCount, successCount, failureCount, inputTokens: requestCount * 10, outputTokens: requestCount * 2 },
+      },
+      totalSegs: 150,
+      rpm: requestCount / 15,
+      tpm: requestCount * 2 / 15,
+    })
+
+    const [merged] = buildUnifiedRecentActivity([logicalChannel], {
+      messages: [activity(0, 2, 2, 0)],
+      chat: [activity(1, 3, 2, 1)],
+      responses: [],
+      gemini: [],
+    })
+
+    expect(merged.channelIndex).toBe(0)
+    expect(merged.routeKind).toBe('messages')
+    expect(merged.segments[4]).toEqual({
+      requestCount: 5,
+      successCount: 4,
+      failureCount: 1,
+      inputTokens: 50,
+      outputTokens: 10,
+    })
+    expect(merged.rpm).toBeCloseTo(5 / 15)
+    expect(merged.tpm).toBeCloseTo(10 / 15)
   })
 })

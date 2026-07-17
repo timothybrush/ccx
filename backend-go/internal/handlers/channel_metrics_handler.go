@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -792,122 +793,117 @@ func truncateKeyMask(keyMask string, maxLen int) string {
 	return keyMask[:maxLen]
 }
 
-// GetChannelDashboard 获取渠道仪表盘数据（合并 channels + metrics + stats）
-// GET /api/channels/dashboard?type=messages|responses|chat|gemini|images|vectors
-// 将原本需要 3 个请求的数据合并为 1 个请求，减少网络开销
+// GetChannelDashboard 获取渠道仪表盘数据（合并 channels + metrics + stats）。
+// type=llm 一次返回四类 LLM 协议，供统一渠道列表轮询；单协议响应保持兼容。
 func GetChannelDashboard(cfgManager *config.ConfigManager, sch *scheduler.ChannelScheduler) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 获取 type 参数，默认为 messages
 		channelType := strings.ToLower(c.Query("type"))
 		if channelType == "" {
 			channelType = "messages"
 		}
 
 		cfg := cfgManager.GetConfig()
-		var upstreams []config.UpstreamConfig
-		var metricsManager *metrics.MetricsManager
-		var kind scheduler.ChannelKind
-
-		switch channelType {
-		case "responses":
-			upstreams = cfg.ResponsesUpstream
-			metricsManager = sch.GetResponsesMetricsManager()
-			kind = scheduler.ChannelKindResponses
-		case "chat":
-			upstreams = cfg.ChatUpstream
-			metricsManager = sch.GetChatMetricsManager()
-			kind = scheduler.ChannelKindChat
-		case "images":
-			upstreams = cfg.ImagesUpstream
-			metricsManager = sch.GetImagesMetricsManager()
-			kind = scheduler.ChannelKindImages
-		case "vectors":
-			upstreams = cfg.VectorsUpstream
-			metricsManager = sch.GetVectorsMetricsManager()
-			kind = scheduler.ChannelKindVectors
-		case "gemini":
-			upstreams = cfg.GeminiUpstream
-			metricsManager = sch.GetGeminiMetricsManager()
-			kind = scheduler.ChannelKindGemini
-		default: // messages
-			upstreams = cfg.Upstream
-			metricsManager = sch.GetMessagesMetricsManager()
-			kind = scheduler.ChannelKindMessages
+		if channelType == "llm" {
+			dashboards := gin.H{}
+			for _, kind := range []string{"messages", "chat", "responses", "gemini"} {
+				dashboards[kind] = buildChannelDashboard(cfg, sch, kind)
+			}
+			c.JSON(http.StatusOK, gin.H{"dashboards": dashboards})
+			return
 		}
 
-		// 1. 构建 channels 数据
-		channels := make([]gin.H, len(upstreams))
-		for i, up := range upstreams {
-			channel := common.BuildChannelView(up, i)
+		c.JSON(http.StatusOK, buildChannelDashboard(cfg, sch, channelType))
+	}
+}
 
-			if channelType == "gemini" {
-				channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
-				channel["stripThoughtSignature"] = up.StripThoughtSignature
-			}
+func buildChannelDashboard(cfg config.Config, sch *scheduler.ChannelScheduler, channelType string) gin.H {
+	var upstreams []config.UpstreamConfig
+	var metricsManager *metrics.MetricsManager
+	var kind scheduler.ChannelKind
 
-			if channelType == "messages" {
-				channel["passbackReasoningContent"] = up.PassbackReasoningContent
-				channel["passbackThinkingBlocks"] = up.PassbackThinkingBlocks
-				channel["stripEmptyTextBlocks"] = up.StripEmptyTextBlocks
-				channel["stripImageGenerationTool"] = up.IsStripImageGenerationToolEnabled()
-				channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
-				channel["stripThoughtSignature"] = up.StripThoughtSignature
-			}
+	switch channelType {
+	case "responses":
+		upstreams = cfg.ResponsesUpstream
+		metricsManager = sch.GetResponsesMetricsManager()
+		kind = scheduler.ChannelKindResponses
+	case "chat":
+		upstreams = cfg.ChatUpstream
+		metricsManager = sch.GetChatMetricsManager()
+		kind = scheduler.ChannelKindChat
+	case "images":
+		upstreams = cfg.ImagesUpstream
+		metricsManager = sch.GetImagesMetricsManager()
+		kind = scheduler.ChannelKindImages
+	case "vectors":
+		upstreams = cfg.VectorsUpstream
+		metricsManager = sch.GetVectorsMetricsManager()
+		kind = scheduler.ChannelKindVectors
+	case "gemini":
+		upstreams = cfg.GeminiUpstream
+		metricsManager = sch.GetGeminiMetricsManager()
+		kind = scheduler.ChannelKindGemini
+	default:
+		channelType = "messages"
+		upstreams = cfg.Upstream
+		metricsManager = sch.GetMessagesMetricsManager()
+		kind = scheduler.ChannelKindMessages
+	}
 
-			if channelType == "chat" {
-				channel["passbackReasoningContent"] = up.PassbackReasoningContent
-				channel["passbackThinkingBlocks"] = up.PassbackThinkingBlocks
-				channel["stripImageGenerationTool"] = up.IsStripImageGenerationToolEnabled()
-				channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
-				channel["stripThoughtSignature"] = up.StripThoughtSignature
-			}
+	channels := make([]gin.H, len(upstreams))
+	for i, up := range upstreams {
+		channel := common.BuildChannelView(up, i)
 
-			if channelType == "responses" {
-				channel["passbackReasoningContent"] = up.PassbackReasoningContent
-				channel["passbackThinkingBlocks"] = up.PassbackThinkingBlocks
-				channel["stripImageGenerationTool"] = up.IsStripImageGenerationToolEnabled()
-				channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
-				channel["stripThoughtSignature"] = up.StripThoughtSignature
-			}
-
-			channels[i] = channel
+		if channelType == "gemini" {
+			channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
+			channel["stripThoughtSignature"] = up.StripThoughtSignature
 		}
 
-		// 2. 构建 metrics 数据
-		metricsResult := buildChannelMetricsResult(metricsManager, upstreams, kind, true)
-
-		// 3. 构建 stats 数据
-		stats := gin.H{
-			"multiChannelMode":                      sch.IsMultiChannelMode(kind),
-			"activeChannelCount":                    sch.GetActiveChannelCount(kind),
-			"traceAffinityCount":                    sch.GetTraceAffinityManager().Size(),
-			"traceAffinityTTL":                      sch.GetTraceAffinityManager().GetTTL().String(),
-			"failureThreshold":                      metricsManager.GetFailureThreshold() * 100,
-			"windowSize":                            metricsManager.GetWindowSize(),
-			"circuitRecoveryTime":                   metricsManager.GetCircuitRecoveryTime().String(),
-			"consecutiveRetryableFailuresThreshold": metricsManager.GetConsecutiveRetryableFailuresThreshold(),
-			"halfOpenSuccessTarget":                 metricsManager.GetHalfOpenSuccessTarget(),
-			"circuitBackoffBase":                    metricsManager.GetCircuitBackoffBase().String(),
-			"circuitBackoffMax":                     metricsManager.GetCircuitBackoffMax().String(),
+		if channelType == "messages" {
+			channel["passbackReasoningContent"] = up.PassbackReasoningContent
+			channel["passbackThinkingBlocks"] = up.PassbackThinkingBlocks
+			channel["stripEmptyTextBlocks"] = up.StripEmptyTextBlocks
+			channel["stripImageGenerationTool"] = up.IsStripImageGenerationToolEnabled()
+			channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
+			channel["stripThoughtSignature"] = up.StripThoughtSignature
 		}
 
-		// 4. 构建 recentActivity 数据（最近 15 分钟分段活跃度）
-		recentActivity := make([]*metrics.ChannelRecentActivity, len(upstreams))
-		for i, upstream := range upstreams {
-			recentActivity[i] = metricsManager.GetRecentActivityMultiURL(i, upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), scheduler.NormalizedMetricsServiceType(kind, upstream.ServiceType))
+		if channelType == "chat" || channelType == "responses" {
+			channel["passbackReasoningContent"] = up.PassbackReasoningContent
+			channel["passbackThinkingBlocks"] = up.PassbackThinkingBlocks
+			channel["stripImageGenerationTool"] = up.IsStripImageGenerationToolEnabled()
+			channel["injectDummyThoughtSignature"] = up.InjectDummyThoughtSignature
+			channel["stripThoughtSignature"] = up.StripThoughtSignature
 		}
 
-		// 5. 当前渠道索引（最近一次运行态调度选择；无请求记录时回退首个活跃渠道）
-		currentChannel := sch.GetCurrentChannelIndex(kind)
+		channels[i] = channel
+	}
 
-		// 返回合并数据
-		c.JSON(200, gin.H{
-			"channels":       channels,
-			"current":        currentChannel,
-			"metrics":        metricsResult,
-			"stats":          stats,
-			"recentActivity": recentActivity,
-		})
+	metricsResult := buildChannelMetricsResult(metricsManager, upstreams, kind, true)
+	stats := gin.H{
+		"multiChannelMode":                      sch.IsMultiChannelMode(kind),
+		"activeChannelCount":                    sch.GetActiveChannelCount(kind),
+		"traceAffinityCount":                    sch.GetTraceAffinityManager().Size(),
+		"traceAffinityTTL":                      sch.GetTraceAffinityManager().GetTTL().String(),
+		"failureThreshold":                      metricsManager.GetFailureThreshold() * 100,
+		"windowSize":                            metricsManager.GetWindowSize(),
+		"circuitRecoveryTime":                   metricsManager.GetCircuitRecoveryTime().String(),
+		"consecutiveRetryableFailuresThreshold": metricsManager.GetConsecutiveRetryableFailuresThreshold(),
+		"halfOpenSuccessTarget":                 metricsManager.GetHalfOpenSuccessTarget(),
+		"circuitBackoffBase":                    metricsManager.GetCircuitBackoffBase().String(),
+		"circuitBackoffMax":                     metricsManager.GetCircuitBackoffMax().String(),
+	}
+
+	recentActivity := make([]*metrics.ChannelRecentActivity, len(upstreams))
+	for i, upstream := range upstreams {
+		recentActivity[i] = metricsManager.GetRecentActivityMultiURL(i, upstream.GetAllBaseURLs(), channelStatsAPIKeys(upstream), scheduler.NormalizedMetricsServiceType(kind, upstream.ServiceType))
+	}
+
+	return gin.H{
+		"channels":       channels,
+		"current":        sch.GetCurrentChannelIndex(kind),
+		"metrics":        metricsResult,
+		"stats":          stats,
+		"recentActivity": recentActivity,
 	}
 }
 

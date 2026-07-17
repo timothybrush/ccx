@@ -1,4 +1,5 @@
 import type {
+  ActivitySegment,
   Channel,
   ChannelKind,
   ChannelMetrics,
@@ -190,7 +191,62 @@ export const withRouteKindMetrics = (
   metrics: ChannelMetrics[]
 ): ChannelMetrics[] => metrics.map(metric => ({ ...metric, routeKind: kind }))
 
-export const withRouteKindActivity = (
-  kind: LlmChannelKind,
-  activity: ChannelRecentActivity[] | undefined
-): ChannelRecentActivity[] => (activity ?? []).map(item => ({ ...item, routeKind: kind }))
+export const buildUnifiedRecentActivity = (
+  channels: Channel[],
+  activityByKind: Record<LlmChannelKind, ChannelRecentActivity[] | undefined>,
+): ChannelRecentActivity[] => {
+  const activityLookup = new Map<string, ChannelRecentActivity>()
+  for (const kind of LLM_CHANNEL_KINDS) {
+    for (const activity of activityByKind[kind] ?? []) {
+      activityLookup.set(`${kind}:${activity.channelIndex}`, activity)
+    }
+  }
+
+  return channels.map(channel => {
+    const segments: Record<number, ActivitySegment> = {}
+    const seenRoutes = new Set<string>()
+    let totalSegs = 0
+    let rpm = 0
+    let tpm = 0
+
+    for (const route of channel.protocolRoutes ?? []) {
+      if (!isLlmChannelKind(route.kind)) continue
+      const routeKey = `${route.kind}:${route.index}`
+      if (seenRoutes.has(routeKey)) continue
+      seenRoutes.add(routeKey)
+
+      const activity = activityLookup.get(routeKey)
+      if (!activity) continue
+      totalSegs = Math.max(totalSegs, activity.totalSegs ?? 0)
+      rpm += activity.rpm ?? 0
+      tpm += activity.tpm ?? 0
+
+      for (const [rawIndex, source] of Object.entries(activity.segments ?? {})) {
+        if (!source) continue
+        const index = Number(rawIndex)
+        const target = segments[index] ?? {
+          requestCount: 0,
+          successCount: 0,
+          failureCount: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+        }
+        target.requestCount += source.requestCount ?? 0
+        target.successCount += source.successCount ?? 0
+        target.failureCount += source.failureCount ?? 0
+        target.inputTokens += source.inputTokens ?? 0
+        target.outputTokens += source.outputTokens ?? 0
+        segments[index] = target
+      }
+    }
+
+    return {
+      channelIndex: channel.routeIndex ?? channel.index,
+      routeKind: isLlmChannelKind(channel.routeKind ?? '') ? channel.routeKind : 'messages',
+      segments,
+      totalSegs,
+      rpm,
+      tpm,
+    }
+  })
+}

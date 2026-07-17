@@ -103,6 +103,91 @@ func TestGetChannelDashboard_IncludesBreakerFields(t *testing.T) {
 	}
 }
 
+func TestGetChannelDashboard_LLMReturnsAllProtocolDashboards(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := func(name, serviceType string) []config.UpstreamConfig {
+		return []config.UpstreamConfig{{
+			Name:        name,
+			ServiceType: serviceType,
+			BaseURL:     "https://example.com",
+			APIKeys:     []string{"sk-test"},
+		}}
+	}
+	cfg := config.Config{
+		Upstream:          upstream("messages-test", "claude"),
+		ChatUpstream:      upstream("chat-test", "openai"),
+		ResponsesUpstream: upstream("responses-test", "responses"),
+		GeminiUpstream:    upstream("gemini-test", "gemini"),
+	}
+
+	configFile := filepath.Join(t.TempDir(), "config.json")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("序列化配置失败: %v", err)
+	}
+	if err := os.WriteFile(configFile, data, 0644); err != nil {
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+
+	cfgManager, err := config.NewConfigManager(configFile, "")
+	if err != nil {
+		t.Fatalf("创建配置管理器失败: %v", err)
+	}
+	defer cfgManager.Close()
+
+	messagesMetrics := metrics.NewMetricsManager()
+	responsesMetrics := metrics.NewMetricsManager()
+	geminiMetrics := metrics.NewMetricsManager()
+	chatMetrics := metrics.NewMetricsManager()
+	imagesMetrics := metrics.NewMetricsManager()
+	defer messagesMetrics.Stop()
+	defer responsesMetrics.Stop()
+	defer geminiMetrics.Stop()
+	defer chatMetrics.Stop()
+	defer imagesMetrics.Stop()
+
+	traceAffinity := session.NewTraceAffinityManager()
+	defer traceAffinity.Stop()
+	sch := scheduler.NewChannelScheduler(
+		cfgManager,
+		messagesMetrics,
+		responsesMetrics,
+		geminiMetrics,
+		chatMetrics,
+		imagesMetrics,
+		traceAffinity,
+		warmup.NewURLManager(30*time.Second, 3),
+	)
+
+	r := gin.New()
+	r.GET("/messages/channels/dashboard", GetChannelDashboard(cfgManager, sch))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/messages/channels/dashboard?type=llm", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want=%d, body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp struct {
+		Dashboards map[string]struct {
+			Channels []map[string]any `json:"channels"`
+		} `json:"dashboards"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("解析响应失败: %v", err)
+	}
+	for _, kind := range []string{"messages", "chat", "responses", "gemini"} {
+		dashboard, ok := resp.Dashboards[kind]
+		if !ok {
+			t.Fatalf("缺少 %s dashboard: %v", kind, resp.Dashboards)
+		}
+		if len(dashboard.Channels) != 1 {
+			t.Fatalf("%s channels len=%d, want=1", kind, len(dashboard.Channels))
+		}
+	}
+}
+
 func TestGetChannelDashboard_GeminiFallbackServiceTypeReadsMetrics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

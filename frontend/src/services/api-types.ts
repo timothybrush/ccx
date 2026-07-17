@@ -274,6 +274,10 @@ export interface ChannelDashboardResponse {
   recentActivity?: ChannelRecentActivity[]  // 最近 15 分钟分段活跃度
 }
 
+export interface LlmChannelDashboardResponse {
+  dashboards: Record<'messages' | 'chat' | 'responses' | 'gemini', ChannelDashboardResponse>
+}
+
 export interface SchedulerStatsResponse {
   multiChannelMode: boolean
   activeChannelCount: number
