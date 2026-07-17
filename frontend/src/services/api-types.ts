@@ -74,7 +74,7 @@ export interface ChannelMetrics {
 
 export interface DisabledKeyInfo {
   key: string
-  reason: string      // "authentication_error" / "permission_error" / "insufficient_balance"
+  reason: string      // "authentication_error" / "permission_error" / "insufficient_balance" / "insufficient_quota"
   message: string
   disabledAt: string  // ISO8601 时间戳
   recoverAt?: string  // 自动恢复时间（可选，ISO8601）

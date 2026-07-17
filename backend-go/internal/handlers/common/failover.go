@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -1257,12 +1258,27 @@ func normalizeUpstreamErrorStatus(status int, bodyBytes []byte) int {
 // BlacklistResult 拉黑判定结果
 type BlacklistResult struct {
 	ShouldBlacklist bool
-	Reason          string // "authentication_error" / "permission_error" / "insufficient_balance"
+	Reason          string // "authentication_error" / "permission_error" / "insufficient_balance" / "insufficient_quota"
 	Message         string // 原始错误信息摘要
+	RecoverAt       string // 上游明确给出的自动恢复时间（RFC3339）
 }
 
-// ShouldBlacklistKey 判断 HTTP 错误响应是否应该永久拉黑该 Key
-// 对余额不足只识别明确语义，避免将普通 403/429 误判为永久失效
+func insufficientResourceReason(errorCode string) string {
+	if strings.EqualFold(strings.TrimSpace(errorCode), "AccountQuotaExceeded") {
+		return "insufficient_quota"
+	}
+	return "insufficient_balance"
+}
+
+// IsBalanceOrQuotaBlacklistReason 判断拉黑原因是否受“余额不足自动拉黑”开关控制。
+func IsBalanceOrQuotaBlacklistReason(reason string) bool {
+	reason = strings.ToLower(strings.TrimSpace(reason))
+	return reason == "insufficient_balance" || reason == "insufficient_quota"
+}
+
+// ShouldBlacklistKey 判断 HTTP 错误响应是否应该禁用该 Key。
+// 认证/权限错误需手动恢复；额度错误可按上游重置时间自动恢复。
+// 对余额或额度不足只识别明确语义，避免将普通 403/429 误判。
 func ShouldBlacklistKey(statusCode int, bodyBytes []byte) BlacklistResult {
 	// HTTP 402: 明确的付费/余额不足
 	if statusCode == 402 {
@@ -1292,8 +1308,9 @@ func ShouldBlacklistKey(statusCode int, bodyBytes []byte) BlacklistResult {
 	if isInsufficientBalanceMessage(errMessage) {
 		return BlacklistResult{
 			ShouldBlacklist: true,
-			Reason:          "insufficient_balance",
+			Reason:          insufficientResourceReason(errCode),
 			Message:         truncateMessage(errMessage),
+			RecoverAt:       utils.ExtractQuotaRecoverAt(errMessage),
 		}
 	}
 	if isAuthenticationMessage(errMessage) {
@@ -1358,8 +1375,9 @@ func ShouldBlacklistKey(statusCode int, bodyBytes []byte) BlacklistResult {
 	if isInsufficientBalanceCode(errType) || isInsufficientBalanceCode(errCode) || typeLower == "billing_error" {
 		return BlacklistResult{
 			ShouldBlacklist: true,
-			Reason:          "insufficient_balance",
+			Reason:          insufficientResourceReason(errCode),
 			Message:         truncateMessage(errMessage),
+			RecoverAt:       utils.ExtractQuotaRecoverAt(errMessage),
 		}
 	}
 
@@ -1367,8 +1385,9 @@ func ShouldBlacklistKey(statusCode int, bodyBytes []byte) BlacklistResult {
 	if (statusCode == 401 || statusCode == 403 || statusCode == 429) && isInsufficientBalanceMessage(errMessage) {
 		return BlacklistResult{
 			ShouldBlacklist: true,
-			Reason:          "insufficient_balance",
+			Reason:          insufficientResourceReason(errCode),
 			Message:         truncateMessage(errMessage),
+			RecoverAt:       utils.ExtractQuotaRecoverAt(errMessage),
 		}
 	}
 

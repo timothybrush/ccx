@@ -159,6 +159,67 @@ func TestBlacklistKeyRefreshesExistingRecordWithoutDuplicate(t *testing.T) {
 	}
 }
 
+func TestBlacklistKeyWithRecoverAtPrefersFutureUpstreamReset(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	initialConfig := `{
+		"upstream": [{
+			"name": "test-channel",
+			"baseUrl": "https://example.com",
+			"apiKeys": ["sk-active"],
+			"serviceType": "claude"
+		}]
+	}`
+	if err := os.WriteFile(configPath, []byte(initialConfig), 0600); err != nil {
+		t.Fatalf("写入初始配置失败: %v", err)
+	}
+
+	cm, err := NewConfigManager(configPath, "")
+	if err != nil {
+		t.Fatalf("NewConfigManager() error = %v", err)
+	}
+	defer cm.Close()
+
+	wantRecoverAt := time.Now().Add(6 * time.Hour).Truncate(time.Second).Format(time.RFC3339)
+	if err := cm.BlacklistKeyWithRecoverAt("Messages", 0, "sk-active", "insufficient_quota", "monthly quota exhausted", wantRecoverAt); err != nil {
+		t.Fatalf("BlacklistKeyWithRecoverAt() error = %v", err)
+	}
+
+	disabled := cm.GetConfig().Upstream[0].DisabledAPIKeys
+	if len(disabled) != 1 {
+		t.Fatalf("len(DisabledAPIKeys) = %d, want 1", len(disabled))
+	}
+	if got := disabled[0].RecoverAt; got != wantRecoverAt {
+		t.Fatalf("RecoverAt = %q, want %q", got, wantRecoverAt)
+	}
+}
+
+func TestMigrateDisabledKeyRecoveryTimesUsesPersistedQuotaMessage(t *testing.T) {
+	now := time.Date(2026, 7, 17, 18, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	cm := &ConfigManager{config: Config{
+		Upstream: []UpstreamConfig{{
+			Name: "volcengine-claude",
+			DisabledAPIKeys: []DisabledKeyInfo{{
+				Key:        "ark-test",
+				Reason:     "insufficient_balance",
+				Message:    "You have exceeded the monthly usage quota. It will reset at 2026-07-17 23:59:59 +0800 CST.",
+				DisabledAt: now.Add(-time.Hour).Format(time.RFC3339),
+				RecoverAt:  now.Add(time.Hour).Format(time.RFC3339),
+			}},
+		}},
+	}}
+
+	if !cm.migrateDisabledKeyRecoveryTimes(now) {
+		t.Fatal("migrateDisabledKeyRecoveryTimes() = false, want true")
+	}
+	if got, want := cm.config.Upstream[0].DisabledAPIKeys[0].RecoverAt, "2026-07-17T23:59:59+08:00"; got != want {
+		t.Fatalf("RecoverAt = %q, want %q", got, want)
+	}
+	if got := cm.config.Upstream[0].DisabledAPIKeys[0].Reason; got != "insufficient_quota" {
+		t.Fatalf("Reason = %q, want insufficient_quota", got)
+	}
+}
+
 func TestAddAPIKeyRemovesDisabledEntryAndRestoreAvoidsDuplicate(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.json")

@@ -512,6 +512,7 @@
   "channelCard.blacklistReason.authentication_error": "Auth error",
   "channelCard.blacklistReason.permission_error": "Izin ditolak",
   "channelCard.blacklistReason.insufficient_balance": "Saldo habis",
+  "channelCard.blacklistReason.insufficient_quota": "Kuota habis",
   "channelCard.blacklistReason.unavailable": "Tidak tersedia",
   "channelCard.blacklistReason.rate_limited": "Batas rate",
   "channelCard.blacklistReason.invalid": "Key tidak valid",

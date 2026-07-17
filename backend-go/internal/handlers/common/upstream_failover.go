@@ -626,13 +626,13 @@ func TryUpstreamWithAllKeys(
 				// 检查是否应永久拉黑该 Key（认证/权限/余额错误）
 				blResult := ShouldBlacklistKey(resp.StatusCode, respBodyBytes)
 				if blResult.ShouldBlacklist {
-					isBalanceError := blResult.Reason == "insufficient_balance"
+					isBalanceError := IsBalanceOrQuotaBlacklistReason(blResult.Reason)
 					if !isBalanceError || upstream.IsAutoBlacklistBalanceEnabled() {
 						blacklistMessage := blResult.Message
 						if strings.EqualFold(apiType, "Vectors") {
 							blacklistMessage = errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
 						}
-						if err := cfgManager.BlacklistKey(apiType, channelIndex, apiKey, blResult.Reason, blacklistMessage); err != nil {
+						if err := cfgManager.BlacklistKeyWithRecoverAt(apiType, channelIndex, apiKey, blResult.Reason, blacklistMessage, blResult.RecoverAt); err != nil {
 							RequestLogf(c, "[%s-Blacklist] 拉黑 Key 失败: %v", apiType, err)
 						}
 					}
@@ -786,7 +786,7 @@ func TryUpstreamWithAllKeys(
 				} else if blErr, ok := err.(*ErrBlacklistKey); ok {
 					// SSE 流内检测到拉黑条件：Header 未发送，可安全 failover + 拉黑 Key
 					failedKeys[apiKey] = true
-					isBalanceError := blErr.Reason == "insufficient_balance"
+					isBalanceError := IsBalanceOrQuotaBlacklistReason(blErr.Reason)
 					if !isBalanceError || upstream.IsAutoBlacklistBalanceEnabled() {
 						if blacklistErr := cfgManager.BlacklistKey(apiType, channelIndex, apiKey, blErr.Reason, blErr.Message); blacklistErr != nil {
 							RequestLogf(c, "[%s-Blacklist] 拉黑 Key 失败: %v", apiType, blacklistErr)

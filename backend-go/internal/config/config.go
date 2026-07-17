@@ -28,7 +28,7 @@ type UpstreamConfig struct {
 	APIKeys               []string                           `json:"apiKeys"`
 	APIKeyConfigs         []APIKeyConfig                     `json:"apiKeyConfigs,omitempty"`     // API Key 附加配置（限速、权重、配额组等），通过 Key 关联 APIKeys
 	HistoricalAPIKeys     []string                           `json:"historicalApiKeys,omitempty"` // 历史 API Key（用于统计聚合，换 Key 后保留旧 Key 的统计数据）
-	DisabledAPIKeys       []DisabledKeyInfo                  `json:"disabledApiKeys,omitempty"`   // 被拉黑的 API Key（持久化，需手动恢复）
+	DisabledAPIKeys       []DisabledKeyInfo                  `json:"disabledApiKeys,omitempty"`   // 被禁用的 API Key（持久化；额度类可定时恢复）
 	DisabledKeyModels     []DisabledKeyModelInfo             `json:"disabledKeyModels,omitempty"` // 被限制的 (Key,模型) 组合（持久化，定时自动恢复）
 	ServiceType           string                             `json:"serviceType"`                 // gemini, openai, claude
 	AuthHeader            string                             `json:"authHeader,omitempty"`        // 认证头覆盖：auto(空)/bearer/x-api-key
@@ -224,7 +224,7 @@ func (u *UpstreamConfig) CredentialUIDForKey(apiKey string) string {
 // DisabledKeyInfo 被拉黑的 API Key 信息
 type DisabledKeyInfo struct {
 	Key        string        `json:"key"`
-	Reason     string        `json:"reason"`              // "authentication_error" / "permission_error" / "insufficient_balance"
+	Reason     string        `json:"reason"`              // "authentication_error" / "permission_error" / "insufficient_balance" / "insufficient_quota"
 	Message    string        `json:"message"`             // 原始错误信息
 	DisabledAt string        `json:"disabledAt"`          // ISO8601 时间戳
 	RecoverAt  string        `json:"recoverAt,omitempty"` // 自动恢复时间（可选）
@@ -1150,6 +1150,12 @@ func (cm *ConfigManager) SetOverrideTTLMinutes(minutes int) error {
 // apiType: Messages/Responses/Gemini/Chat，用于定位 upstream slice
 // channelIndex: 渠道在 upstream slice 中的索引
 func (cm *ConfigManager) BlacklistKey(apiType string, channelIndex int, apiKey string, reason string, message string) error {
+	return cm.BlacklistKeyWithRecoverAt(apiType, channelIndex, apiKey, reason, message, "")
+}
+
+// BlacklistKeyWithRecoverAt 将指定 Key 禁用到上游明确给出的恢复时间。
+// recoverAt 必须为未来的 RFC3339 时间；为空、无效或已过期时沿用原因级默认策略。
+func (cm *ConfigManager) BlacklistKeyWithRecoverAt(apiType string, channelIndex int, apiKey string, reason string, message string, recoverAt string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -1193,17 +1199,24 @@ func (cm *ConfigManager) BlacklistKey(apiType string, channelIndex int, apiKey s
 	upstream.APIKeyConfigs = normalizeAPIKeyConfigs(upstream.APIKeys, upstream.APIKeyConfigs)
 
 	// 同一 Key 只保留一条禁用记录；再次命中时刷新原因和恢复时间。
-	disabledAt := time.Now().Format(time.RFC3339)
-	recoverAt := ""
+	now := time.Now()
+	disabledAt := now.Format(time.RFC3339)
+	resolvedRecoverAt := ""
 	if IsAutoRecoverableDisabledReason(reason) {
-		recoverAt = time.Now().Add(time.Hour).Format(time.RFC3339)
+		resolvedRecoverAt = now.Add(time.Hour).Format(time.RFC3339)
+		if strings.TrimSpace(recoverAt) == "" {
+			recoverAt = utils.ExtractQuotaRecoverAt(message)
+		}
+		if explicit, err := time.Parse(time.RFC3339, strings.TrimSpace(recoverAt)); err == nil && explicit.After(now) {
+			resolvedRecoverAt = explicit.Format(time.RFC3339)
+		}
 	}
 	refreshed := DisabledKeyInfo{
 		Key:        apiKey,
 		Reason:     reason,
 		Message:    message,
 		DisabledAt: disabledAt,
-		RecoverAt:  recoverAt,
+		RecoverAt:  resolvedRecoverAt,
 		Config:     disabledCfg,
 	}
 	disabledKeys := make([]DisabledKeyInfo, 0, len(upstream.DisabledAPIKeys)+1)

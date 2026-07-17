@@ -358,12 +358,12 @@
             <div class="channel-keys d-flex align-center ga-1" @click.stop>
               <v-chip size="x-small" variant="outlined" class="keys-chip" @click="$emit('edit', element)">
                 <v-icon start size="x-small">mdi-key</v-icon>
-                {{ element.apiKeys?.length || 0 }}
+                {{ availableChannelApiKeyCount(element) }}
               </v-chip>
-              <v-tooltip v-if="element.disabledApiKeys?.length" :text="t('orchestration.blacklistedKeys', { count: element.disabledApiKeys.length })" location="top" color="warning" content-class="ccx-tooltip">
+              <v-tooltip v-if="disabledChannelApiKeyCount(element)" :text="t('orchestration.blacklistedKeys', { count: disabledChannelApiKeyCount(element) })" location="top" color="warning" content-class="ccx-tooltip">
                 <template #activator="{ props: tip }">
                   <v-chip v-bind="tip" size="x-small" color="warning" variant="tonal" @click="$emit('edit', element)">
-                    {{ element.disabledApiKeys.length }}
+                    {{ disabledChannelApiKeyCount(element) }}
                   </v-chip>
                 </template>
               </v-tooltip>
@@ -495,8 +495,8 @@
                       <v-icon size="small">mdi-key</v-icon>
                     </template>
                     <v-list-item-title class="text-caption text-medium-emphasis">
-                      {{ element.apiKeys?.length || 0 }} {{ t('channelCard.configuredKeys') }}
-                      <span v-if="element.disabledApiKeys?.length"> · {{ element.disabledApiKeys.length }} {{ t('channelCard.disabledKeys') }}</span>
+                      {{ availableChannelApiKeyCount(element) }} {{ t('channelCard.configuredKeys') }}
+                      <span v-if="disabledChannelApiKeyCount(element)"> · {{ disabledChannelApiKeyCount(element) }} {{ t('channelCard.disabledKeys') }}</span>
                     </v-list-item-title>
                   </v-list-item>
                   <v-list-item :disabled="!canDeleteChannel(element)" @click="handleDeleteChannel(element)">
@@ -593,12 +593,12 @@
           <div class="channel-keys d-flex align-center ga-1">
             <v-chip size="x-small" variant="outlined" color="grey" class="keys-chip" @click="$emit('edit', channel)">
               <v-icon start size="x-small">mdi-key</v-icon>
-              {{ channel.apiKeys?.length || 0 }}
+              {{ availableChannelApiKeyCount(channel) }}
             </v-chip>
-            <v-tooltip v-if="channel.disabledApiKeys?.length" :text="t('orchestration.blacklistedKeys', { count: channel.disabledApiKeys.length })" location="top" color="warning" content-class="ccx-tooltip">
+            <v-tooltip v-if="disabledChannelApiKeyCount(channel)" :text="t('orchestration.blacklistedKeys', { count: disabledChannelApiKeyCount(channel) })" location="top" color="warning" content-class="ccx-tooltip">
               <template #activator="{ props: tip }">
                 <v-chip v-bind="tip" size="x-small" color="warning" variant="tonal" @click="$emit('edit', channel)">
-                  {{ channel.disabledApiKeys.length }}
+                  {{ disabledChannelApiKeyCount(channel) }}
                 </v-chip>
               </template>
             </v-tooltip>
@@ -706,6 +706,7 @@ import { useChannelActivity } from '../composables/useChannelActivity'
 import ChannelStatusBadge from './ChannelStatusBadge.vue'
 import ChannelHealthBadge from './ChannelHealthBadge.vue'
 import { isManagedProviderChannel, isOfficialProviderChannel, providerDisplayName } from '../utils/providerDisplay'
+import { availableChannelApiKeyCount, disabledChannelApiKeyCount } from '../utils/channelApiKeys'
 import type { ChannelHealthItem } from '../services/api-types'
 // Lazy-load chart components to reduce initial JS bundle size
 const KeyTrendChart = defineAsyncComponent(() => import('./KeyTrendChart.vue'))

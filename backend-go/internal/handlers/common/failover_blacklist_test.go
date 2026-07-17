@@ -203,13 +203,25 @@ func TestShouldBlacklistKey_BalanceMessages(t *testing.T) {
 			},
 		},
 		{
-			name:       "429 volc ark AccountQuotaExceeded should blacklist as insufficient balance",
+			name:       "429 volc ark AccountQuotaExceeded should disable until upstream reset",
 			statusCode: 429,
 			body:       `{"error":{"code":"AccountQuotaExceeded","message":"You have exceeded the 5-hour usage quota. It will reset at 2026-07-03 11:37:21 +0800 CST. We recommend upgrading your plan for more quota, or waiting"}}`,
 			want: BlacklistResult{
 				ShouldBlacklist: true,
-				Reason:          "insufficient_balance",
+				Reason:          "insufficient_quota",
 				Message:         "You have exceeded the 5-hour usage quota. It will reset at 2026-07-03 11:37:21 +0800 CST. We recommend upgrading your plan for more quota, or waiting",
+				RecoverAt:       "2026-07-03T11:37:21+08:00",
+			},
+		},
+		{
+			name:       "429 volc ark monthly AccountQuotaExceeded should honor CST reset",
+			statusCode: 429,
+			body:       `{"error":{"code":"AccountQuotaExceeded","message":"You have exceeded the monthly usage quota. It will reset at 2026-07-17 23:59:59 +0800 CST. We recommend upgrading your plan for more quota, or waiting"}}`,
+			want: BlacklistResult{
+				ShouldBlacklist: true,
+				Reason:          "insufficient_quota",
+				Message:         "You have exceeded the monthly usage quota. It will reset at 2026-07-17 23:59:59 +0800 CST. We recommend upgrading your plan for more quota, or waiting",
+				RecoverAt:       "2026-07-17T23:59:59+08:00",
 			},
 		},
 		{
@@ -218,7 +230,7 @@ func TestShouldBlacklistKey_BalanceMessages(t *testing.T) {
 			body:       `{"error":{"code":"AccountQuotaExceeded","message":"Account quota exceeded for this billing period. Try again after quota resets."}}`,
 			want: BlacklistResult{
 				ShouldBlacklist: true,
-				Reason:          "insufficient_balance",
+				Reason:          "insufficient_quota",
 				Message:         "Account quota exceeded for this billing period. Try again after quota resets.",
 			},
 		},

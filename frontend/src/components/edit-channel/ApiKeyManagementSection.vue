@@ -17,31 +17,80 @@
       </v-card-title>
 
       <v-card-text class="pt-2">
-        <!-- 现有密钥列表 -->
-        <div v-if="apiKeys.length" class="mb-4">
-          <v-list density="compact" class="bg-transparent">
-            <v-list-item
-              v-for="(key, index) in apiKeys"
-              :key="index"
-              class="mb-2"
-              rounded="lg"
-              variant="tonal"
-              :color="duplicateKeyIndex === index ? 'error' : 'surface-variant'"
-              :class="{ 'animate-pulse': duplicateKeyIndex === index }"
-            >
-              <template #prepend>
-                <v-icon size="small" :color="duplicateKeyIndex === index ? 'error' : 'primary'">
-                  {{ duplicateKeyIndex === index ? 'mdi-alert' : 'mdi-key' }}
-                </v-icon>
-              </template>
+        <div v-if="providerId === 'volcengine' && accountUid" class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
+          <div class="d-flex align-center ga-2">
+            <v-icon color="primary" size="small">mdi-shield-key-outline</v-icon>
+            <span class="text-body-2 font-weight-medium">{{ t('volcengineAccessKey.title') }}</span>
+          </div>
+          <v-btn
+            size="small"
+            variant="text"
+            color="primary"
+            href="https://console.volcengine.com/iam/keymanage/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <v-icon start size="small">mdi-open-in-new</v-icon>
+            {{ t('volcengineAccessKey.openConsole') }}
+          </v-btn>
+        </div>
+        <v-progress-linear
+          v-if="providerId === 'volcengine' && volcengineCredentialsLoading"
+          indeterminate
+          color="primary"
+          class="mb-3"
+        />
+        <v-alert
+          v-if="providerId === 'volcengine' && volcengineCredentialsError"
+          color="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          {{ volcengineCredentialsError }}
+        </v-alert>
 
-              <v-list-item-title>
-                <div class="d-flex align-center justify-space-between">
-                  <code class="text-caption">{{ maskApiKey(key) }}</code>
-                  <div class="d-flex align-center ga-1">
+        <!-- 现有密钥列表（拉黑状态与 provider 用量均归并到对应 Key） -->
+        <div v-if="keyRows.length" class="mb-4">
+          <v-list density="compact" class="bg-transparent">
+            <div v-for="row in keyRows" :key="row.key" class="mb-2">
+              <v-list-item
+                rounded="lg"
+                variant="tonal"
+                :color="row.disabled ? 'warning' : duplicateKeyIndex === row.activeIndex ? 'error' : 'surface-variant'"
+                :class="{
+                  'animate-pulse': duplicateKeyIndex === row.activeIndex,
+                  'volcengine-key-row': !!row.volcengineCredential,
+                }"
+                @click="row.volcengineCredential && toggleVolcengineKey(row.key)"
+              >
+                <template #prepend>
+                  <v-icon
+                    size="small"
+                    :color="row.disabled ? 'warning' : duplicateKeyIndex === row.activeIndex ? 'error' : 'primary'"
+                  >
+                    {{ row.disabled ? 'mdi-key-alert' : duplicateKeyIndex === row.activeIndex ? 'mdi-alert' : 'mdi-key' }}
+                  </v-icon>
+                </template>
+
+                <v-list-item-title>
+                  <div class="d-flex align-center ga-2 flex-wrap">
+                    <code class="text-caption">{{ maskApiKey(row.key) }}</code>
+                    <v-chip
+                      v-if="row.disabled"
+                      size="x-small"
+                      :color="disabledKeyColor(row.disabled.reason)"
+                      variant="tonal"
+                    >
+                      {{ t(getDisabledKeyLabel(row.disabled.reason)) }}
+                    </v-chip>
+                    <span v-if="row.disabled?.recoverAt" class="text-caption text-medium-emphasis">
+                      {{ t('channelCard.recoverAt') }}: {{ formatDisabledTime(row.disabled.recoverAt) }}
+                    </span>
+                    <div v-if="!row.disabled" class="d-flex align-center ga-1">
                     <!-- Models 状态标签 -->
                     <v-chip
-                      v-if="keyModelsStatus.get(key)?.loading"
+                      v-if="keyModelsStatus.get(row.key)?.loading"
                       size="x-small"
                       color="info"
                       variant="tonal"
@@ -50,16 +99,16 @@
                       {{ t('addChannel.checking') }}
                     </v-chip>
                     <v-chip
-                      v-else-if="keyModelsStatus.get(key)?.success"
+                      v-else-if="keyModelsStatus.get(row.key)?.success"
                       size="x-small"
                       color="success"
                       variant="tonal"
                     >
-                      {{ t('addChannel.modelsCount', { statusCode: keyModelsStatus.get(key)?.statusCode ?? 'OK', count: keyModelsStatus.get(key)?.modelCount ?? 0 }) }}
+                      {{ t('addChannel.modelsCount', { statusCode: keyModelsStatus.get(row.key)?.statusCode ?? 'OK', count: keyModelsStatus.get(row.key)?.modelCount ?? 0 }) }}
                     </v-chip>
                     <v-tooltip
-                      v-else-if="keyModelsStatus.get(key)?.error"
-                      :text="keyModelsStatus.get(key)?.error"
+                      v-else-if="keyModelsStatus.get(row.key)?.error"
+                      :text="keyModelsStatus.get(row.key)?.error"
                       location="top"
                       max-width="300"
                       content-class="key-tooltip"
@@ -71,23 +120,53 @@
                           color="error"
                           variant="tonal"
                         >
-                          models {{ keyModelsStatus.get(key)?.statusCode || 'ERR' }}
+                          models {{ keyModelsStatus.get(row.key)?.statusCode || 'ERR' }}
                         </v-chip>
                       </template>
                     </v-tooltip>
                     <!-- 重复密钥标签 -->
-                    <v-chip v-if="duplicateKeyIndex === index" size="x-small" color="error" variant="text">
+                    <v-chip v-if="duplicateKeyIndex === row.activeIndex" size="x-small" color="error" variant="text">
                       {{ t('channelEditor.auth.duplicateKey') }}
                     </v-chip>
                   </div>
-                </div>
-              </v-list-item-title>
+                  </div>
+                </v-list-item-title>
+                <v-list-item-subtitle v-if="row.volcengineCredential" class="mt-1 text-caption">
+                  <v-icon size="12" class="mr-1">mdi-chart-timeline-variant</v-icon>
+                  {{ volcengineUsageSummary(row.volcengineCredential) }}
+                </v-list-item-subtitle>
 
-              <template #append>
-                <div class="d-flex align-center ga-1">
+                <template #append>
+                  <div class="d-flex align-center ga-1" @click.stop>
+                    <v-btn
+                      v-if="row.disabled"
+                      size="small"
+                      color="success"
+                      variant="tonal"
+                      rounded="lg"
+                      :loading="restoringKey === row.key"
+                      @click="$emit('restore-key', row.key)"
+                    >
+                      <v-icon start size="small">mdi-restore</v-icon>
+                      {{ t('channelCard.restoreKey') }}
+                    </v-btn>
+                    <v-btn
+                      v-if="row.volcengineCredential"
+                      size="small"
+                      color="primary"
+                      icon
+                      variant="text"
+                      :aria-label="t('volcengineAccessKey.usageTitle')"
+                      @click="toggleVolcengineKey(row.key)"
+                    >
+                      <v-icon size="small">
+                        {{ expandedVolcengineKey === row.key ? 'mdi-chevron-up' : 'mdi-chevron-down' }}
+                      </v-icon>
+                    </v-btn>
+                    <template v-if="!row.disabled && row.activeIndex >= 0">
                   <!-- 置顶/置底：仅首尾密钥显示 -->
                   <v-tooltip
-                    v-if="!isAutoManaged && index === apiKeys.length - 1 && apiKeys.length > 1"
+                    v-if="!isAutoManaged && row.activeIndex === apiKeys.length - 1 && apiKeys.length > 1"
                     :text="t('channelCard.moveTop')"
                     location="top"
                     :open-delay="150"
@@ -101,14 +180,14 @@
                         icon
                         variant="text"
                         rounded="md"
-                        @click="moveToTop(index)"
+                        @click="moveToTop(row.activeIndex)"
                       >
                         <v-icon size="small">mdi-arrow-up-bold</v-icon>
                       </v-btn>
                     </template>
                   </v-tooltip>
                   <v-tooltip
-                    v-if="!isAutoManaged && index === 0 && apiKeys.length > 1"
+                    v-if="!isAutoManaged && row.activeIndex === 0 && apiKeys.length > 1"
                     :text="t('channelCard.moveBottom')"
                     location="top"
                     :open-delay="150"
@@ -122,14 +201,14 @@
                         icon
                         variant="text"
                         rounded="md"
-                        @click="moveToBottom(index)"
+                        @click="moveToBottom(row.activeIndex)"
                       >
                         <v-icon size="small">mdi-arrow-down-bold</v-icon>
                       </v-btn>
                     </template>
                   </v-tooltip>
                   <v-tooltip
-                    :text="copiedKeyIndex === index ? t('channelCard.copied') : t('channelCard.copyKey')"
+                    :text="copiedKeyIndex === row.activeIndex ? t('channelCard.copied') : t('channelCard.copyKey')"
                     location="top"
                     :open-delay="150"
                     content-class="key-tooltip"
@@ -138,13 +217,13 @@
                       <v-btn
                         v-bind="tooltipProps"
                         size="small"
-                        :color="copiedKeyIndex === index ? 'success' : 'primary'"
+                        :color="copiedKeyIndex === row.activeIndex ? 'success' : 'primary'"
                         icon
                         variant="text"
-                        @click="copyKey(key, index)"
+                        @click="copyKey(row.key, row.activeIndex)"
                       >
                         <v-icon size="small">{{
-                          copiedKeyIndex === index ? 'mdi-check' : 'mdi-content-copy'
+                          copiedKeyIndex === row.activeIndex ? 'mdi-check' : 'mdi-content-copy'
                         }}</v-icon>
                       </v-btn>
                     </template>
@@ -157,15 +236,143 @@
                         color="error"
                         icon
                         variant="text"
-                        @click="removeKey(index)"
+                        @click="removeKey(row.activeIndex)"
                       >
                         <v-icon size="small" color="error">mdi-close</v-icon>
                       </v-btn>
                     </template>
                   </v-tooltip>
+                    </template>
+                  </div>
+                </template>
+              </v-list-item>
+
+              <v-expand-transition>
+                <div
+                  v-if="row.volcengineCredential && expandedVolcengineKey === row.key"
+                  class="volcengine-key-detail px-4 pt-3 pb-4"
+                >
+                  <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
+                    <div class="d-flex align-center ga-2 flex-wrap">
+                      <v-chip
+                        v-if="row.volcengineCredential.volcenginePlan"
+                        size="x-small"
+                        color="success"
+                        variant="tonal"
+                      >
+                        {{ planDisplayName(row.volcengineCredential.volcenginePlan) }}
+                        <span v-if="row.volcengineCredential.volcenginePlanTier"> · {{ row.volcengineCredential.volcenginePlanTier }}</span>
+                      </v-chip>
+                      <v-chip
+                        v-if="row.volcengineCredential.volcengineAccessKeyIdMask"
+                        size="x-small"
+                        color="info"
+                        variant="tonal"
+                      >
+                        {{ row.volcengineCredential.volcengineAccessKeyIdMask }}
+                      </v-chip>
+                      <v-chip
+                        v-if="!row.volcengineCredential.hasVolcengineAccessKey"
+                        size="x-small"
+                        color="warning"
+                        variant="tonal"
+                      >
+                        {{ t('volcengineAccessKey.notConfigured') }}
+                      </v-chip>
+                    </div>
+                    <v-btn
+                      v-if="row.volcengineCredential.hasVolcengineAccessKey"
+                      icon
+                      size="x-small"
+                      variant="text"
+                      :loading="volcengineUsageRefreshing[row.volcengineCredential.credentialUid]"
+                      :title="t('volcengineAccessKey.refresh')"
+                      @click="refreshVolcengineUsage(row.volcengineCredential)"
+                    >
+                      <v-icon size="small">mdi-refresh</v-icon>
+                    </v-btn>
+                  </div>
+
+                  <div v-if="row.volcengineCredential.hasVolcengineAccessKey" class="mb-3">
+                    <div
+                      v-if="hasVolcengineUsageData(row.volcengineCredential.volcenginePlanUsage)"
+                      class="volcengine-usage-grid"
+                    >
+                      <div
+                        v-for="win in volcengineUsageWindows(row.volcengineCredential.volcenginePlanUsage)"
+                        :key="win.labelKey"
+                      >
+                        <div class="text-caption text-medium-emphasis">{{ t(win.labelKey) }}</div>
+                        <div class="text-body-2 font-weight-medium" :class="win.colorClass">{{ win.text }}</div>
+                      </div>
+                    </div>
+                    <div v-else class="text-caption text-disabled">
+                      {{ row.volcengineCredential.volcenginePlanUsage?.error || t('volcengineAccessKey.noUsageData') }}
+                    </div>
+                    <div
+                      v-if="row.volcengineCredential.volcenginePlanUsage?.fetchedAt && !row.volcengineCredential.volcenginePlanUsage.error"
+                      class="text-caption text-disabled mt-2"
+                    >
+                      {{ t('volcengineAccessKey.usageFetchedAt') }} {{ formatVolcengineTime(row.volcengineCredential.volcenginePlanUsage.fetchedAt) }}
+                    </div>
+                  </div>
+
+                  <div v-if="volcengineForms[row.volcengineCredential.credentialUid]" class="d-flex flex-column ga-2">
+                    <div class="volcengine-key-fields">
+                      <v-text-field
+                        v-model="volcengineForms[row.volcengineCredential.credentialUid].accessKeyId"
+                        :label="t('volcengineAccessKey.accessKeyId')"
+                        variant="outlined"
+                        density="compact"
+                        autocomplete="off"
+                        hide-details
+                      />
+                      <v-text-field
+                        v-model="volcengineForms[row.volcengineCredential.credentialUid].secretAccessKey"
+                        :label="t('volcengineAccessKey.secretAccessKey')"
+                        type="password"
+                        variant="outlined"
+                        density="compact"
+                        autocomplete="new-password"
+                        hide-details
+                      />
+                    </div>
+                    <v-alert
+                      v-if="volcengineForms[row.volcengineCredential.credentialUid].error"
+                      color="error"
+                      variant="tonal"
+                      density="compact"
+                    >
+                      {{ volcengineForms[row.volcengineCredential.credentialUid].error }}
+                    </v-alert>
+                    <div class="d-flex align-center justify-end ga-2">
+                      <v-btn
+                        v-if="row.volcengineCredential.hasVolcengineAccessKey"
+                        size="small"
+                        variant="text"
+                        color="error"
+                        :loading="volcengineForms[row.volcengineCredential.credentialUid].clearing"
+                        @click="clearVolcengineAccessKey(row.volcengineCredential)"
+                      >
+                        <v-icon start size="small">mdi-delete-outline</v-icon>
+                        {{ t('volcengineAccessKey.clear') }}
+                      </v-btn>
+                      <v-btn
+                        size="small"
+                        variant="tonal"
+                        color="primary"
+                        :loading="volcengineForms[row.volcengineCredential.credentialUid].saving"
+                        :disabled="!canSaveVolcengineCredential(row.volcengineCredential.credentialUid)"
+                        @click="saveVolcengineAccessKey(row.volcengineCredential)"
+                      >
+                        <v-icon start size="small">mdi-content-save-outline</v-icon>
+                        {{ t('volcengineAccessKey.verifyAndSave') }}
+                      </v-btn>
+                    </div>
+                  </div>
                 </div>
-              </template>
-            </v-list-item>
+              </v-expand-transition>
+            </div>
           </v-list>
         </div>
 
@@ -235,144 +442,6 @@
               </div>
             </div>
             <div v-else class="text-caption text-disabled">{{ t('deepseekBalance.noBalance') }}</div>
-          </div>
-        </div>
-
-        <div v-if="providerId === 'volcengine' && accountUid" class="volcengine-access-keys mb-5">
-          <v-divider class="mb-4" />
-          <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-2">
-            <div class="d-flex align-center ga-2">
-              <v-icon color="primary" size="small">mdi-shield-key-outline</v-icon>
-              <span class="text-body-2 font-weight-medium">{{ t('volcengineAccessKey.title') }}</span>
-            </div>
-            <v-btn
-              href="https://console.volcengine.com/iam/keymanage"
-              target="_blank"
-              rel="noopener noreferrer"
-              size="small"
-              variant="text"
-              color="primary"
-            >
-              <v-icon start size="small">mdi-open-in-new</v-icon>
-              {{ t('volcengineAccessKey.openConsole') }}
-            </v-btn>
-          </div>
-          <div class="text-caption text-medium-emphasis mb-3">
-            {{ t('volcengineAccessKey.hint') }}
-          </div>
-          <v-progress-linear v-if="volcengineCredentialsLoading" indeterminate color="primary" class="mb-3" />
-          <v-alert v-if="volcengineCredentialsError" color="error" variant="tonal" density="compact" class="mb-3">
-            {{ volcengineCredentialsError }}
-          </v-alert>
-          <div
-            v-for="credential in volcengineCredentials"
-            :key="credential.credentialUid"
-            class="volcengine-credential py-3"
-          >
-            <div class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
-              <code class="text-caption">{{ credential.keyMask }}</code>
-              <div class="d-flex align-center ga-2 flex-wrap">
-                <v-chip v-if="credential.volcenginePlan" size="x-small" color="success" variant="tonal">
-                  {{ planDisplayName(credential.volcenginePlan) }}
-                  <span v-if="credential.volcenginePlanTier"> · {{ credential.volcenginePlanTier }}</span>
-                </v-chip>
-                <v-chip
-                  :color="credential.hasVolcengineAccessKey ? 'info' : 'warning'"
-                  size="x-small"
-                  variant="tonal"
-                >
-                  {{ credential.hasVolcengineAccessKey
-                    ? credential.volcengineAccessKeyIdMask
-                    : t('volcengineAccessKey.notConfigured') }}
-                </v-chip>
-              </div>
-            </div>
-            <div v-if="credential.hasVolcengineAccessKey" class="volcengine-usage mb-3">
-              <div class="d-flex align-center justify-space-between ga-2 mb-2">
-                <span class="text-caption text-medium-emphasis">{{ t('volcengineAccessKey.usageTitle') }}</span>
-                <div class="d-flex align-center ga-2">
-                  <span
-                    v-if="credential.volcenginePlanUsage?.fetchedAt && !credential.volcenginePlanUsage.error"
-                    class="text-caption text-disabled"
-                  >
-                    {{ t('volcengineAccessKey.usageFetchedAt') }} {{ formatVolcengineTime(credential.volcenginePlanUsage.fetchedAt) }}
-                  </span>
-                  <v-btn
-                    icon
-                    size="x-small"
-                    variant="text"
-                    :loading="volcengineUsageRefreshing[credential.credentialUid]"
-                    :title="t('volcengineAccessKey.refresh')"
-                    @click="refreshVolcengineUsage(credential)"
-                  >
-                    <v-icon size="small">mdi-refresh</v-icon>
-                  </v-btn>
-                </div>
-              </div>
-              <div
-                v-if="hasVolcengineUsageData(credential.volcenginePlanUsage)"
-                class="volcengine-usage-grid"
-              >
-                <div v-for="win in volcengineUsageWindows(credential.volcenginePlanUsage)" :key="win.labelKey">
-                  <div class="text-caption text-medium-emphasis">{{ t(win.labelKey) }}</div>
-                  <div class="text-body-2 font-weight-medium" :class="win.colorClass">{{ win.text }}</div>
-                </div>
-              </div>
-              <div v-else class="text-caption text-disabled">{{ t('volcengineAccessKey.noUsageData') }}</div>
-            </div>
-            <div v-if="volcengineForms[credential.credentialUid]" class="d-flex flex-column ga-2">
-              <div class="volcengine-key-fields">
-                <v-text-field
-                  v-model="volcengineForms[credential.credentialUid].accessKeyId"
-                  :label="t('volcengineAccessKey.accessKeyId')"
-                  variant="outlined"
-                  density="compact"
-                  autocomplete="off"
-                  hide-details
-                />
-                <v-text-field
-                  v-model="volcengineForms[credential.credentialUid].secretAccessKey"
-                  :label="t('volcengineAccessKey.secretAccessKey')"
-                  type="password"
-                  variant="outlined"
-                  density="compact"
-                  autocomplete="new-password"
-                  hide-details
-                />
-              </div>
-              <v-alert
-                v-if="volcengineForms[credential.credentialUid].error"
-                color="error"
-                variant="tonal"
-                density="compact"
-              >
-                {{ volcengineForms[credential.credentialUid].error }}
-              </v-alert>
-              <div class="d-flex align-center justify-end ga-2">
-                <v-btn
-                  v-if="credential.hasVolcengineAccessKey"
-                  size="small"
-                  variant="text"
-                  color="error"
-                  :loading="volcengineForms[credential.credentialUid].clearing"
-                  @click="clearVolcengineAccessKey(credential)"
-                >
-                  <v-icon start size="small">mdi-delete-outline</v-icon>
-                  {{ t('volcengineAccessKey.clear') }}
-                </v-btn>
-                <v-btn
-                  size="small"
-                  variant="tonal"
-                  color="primary"
-                  :loading="volcengineForms[credential.credentialUid].saving"
-                  :disabled="!canSaveVolcengineCredential(credential.credentialUid)"
-                  @click="saveVolcengineAccessKey(credential)"
-                >
-                  <v-icon start size="small">mdi-content-save-outline</v-icon>
-                  {{ t('volcengineAccessKey.verifyAndSave') }}
-                </v-btn>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -632,49 +701,6 @@
           </div>
         </v-alert>
 
-        <!-- 被拉黑的密钥（仅编辑模式） -->
-        <div v-if="isEditing && visibleDisabledKeys.length" class="mt-4">
-          <div class="d-flex align-center ga-2 mb-2">
-            <v-icon size="small" color="error">mdi-key-remove</v-icon>
-            <span class="text-body-2 font-weight-medium text-error">{{ t('channelCard.disabledKeys') }}</span>
-            <v-chip size="x-small" color="error" variant="tonal">{{ visibleDisabledKeys.length }}</v-chip>
-          </div>
-          <v-list density="compact" class="rounded-lg" style="max-height: 150px; overflow-y: auto;">
-            <v-list-item
-              v-for="(dk, dkIdx) in visibleDisabledKeys"
-              :key="'disabled-' + dkIdx"
-              class="px-3"
-              style="background: rgba(var(--v-theme-error), 0.04);"
-            >
-              <template #prepend>
-                <v-icon size="small" color="error" class="mr-2">mdi-key-alert</v-icon>
-              </template>
-              <v-list-item-title class="text-caption font-weight-mono">
-                {{ dk.key.length > 20 ? dk.key.slice(0, 8) + '***' + dk.key.slice(-5) : dk.key }}
-              </v-list-item-title>
-              <v-list-item-subtitle class="d-flex align-center ga-1">
-                <v-chip size="x-small" :color="dk.reason === 'insufficient_balance' ? 'warning' : 'error'" variant="tonal">
-                  {{ t(getDisabledKeyLabel(dk.reason)) }}
-                </v-chip>
-                <span class="text-caption">{{ new Date(dk.disabledAt).toLocaleDateString() }}</span>
-              </v-list-item-subtitle>
-              <template #append>
-                <v-btn
-                  size="x-small"
-                  color="success"
-                  variant="tonal"
-                  rounded="lg"
-                  :loading="restoringKey === dk.key"
-                  @click="$emit('restore-key', dk.key)"
-                >
-                  <v-icon start size="small">mdi-restore</v-icon>
-                  {{ t('channelCard.restoreKey') }}
-                </v-btn>
-              </template>
-            </v-list-item>
-          </v-list>
-        </div>
-
         <!-- 被限制的 (Key, 模型) 组合（仅编辑模式） -->
         <div v-if="isEditing && visibleDisabledKeyModels.length" class="mt-4">
           <div class="d-flex align-center ga-2 mb-2">
@@ -725,8 +751,16 @@
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from '../../i18n'
 import { ApiError, ApiService } from '../../services/api'
-import type { DeepSeekCredentialBalance, ManagedAccountCredential, MiMoTokenPlanQuota, VolcenginePlanUsage, VolcenginePlanUsageWindow } from '../../services/api-types'
+import type {
+  DeepSeekCredentialBalance,
+  DisabledKeyInfo,
+  ManagedAccountCredential,
+  MiMoTokenPlanQuota,
+  VolcenginePlanUsage,
+  VolcenginePlanUsageWindow,
+} from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
+import { buildChannelApiKeyRows } from '../../utils/channelApiKeys'
 
 interface KeyModelsStatus {
   loading?: boolean
@@ -734,12 +768,6 @@ interface KeyModelsStatus {
   error?: string
   statusCode?: string | number
   modelCount?: number
-}
-
-interface DisabledKey {
-  key: string
-  reason: string
-  disabledAt: string
 }
 
 interface DisabledKeyModel {
@@ -752,7 +780,7 @@ interface DisabledKeyModel {
 
 interface Props {
   apiKeys: string[]
-  disabledKeys: DisabledKey[]
+  disabledKeys: DisabledKeyInfo[]
   disabledKeyModels?: DisabledKeyModel[]
   keyModelsStatus: Map<string, KeyModelsStatus>
   isEditing: boolean
@@ -798,6 +826,7 @@ const volcengineCredentialsLoading = ref(false)
 const volcengineCredentialsError = ref('')
 const volcengineForms = ref<Record<string, VolcengineCredentialForm>>({})
 const volcengineUsageRefreshing = ref<Record<string, boolean>>({})
+const expandedVolcengineKey = ref<string | null>(null)
 interface MiMoCredentialForm {
   cookie: string
   saving: boolean
@@ -837,13 +866,29 @@ const copilotDiagnoseResult = ref<CopilotDiagnoseResponse | null>(null)
 const copilotDiagnoseError = ref('')
 let copilotPollTimer: number | null = null
 
-const hasConfigurableKeys = computed(() => props.serviceType === 'copilot' || props.apiKeys.length > 0)
+const keyRows = computed(() => buildChannelApiKeyRows(props.apiKeys, props.disabledKeys).map(row => ({
+  ...row,
+  volcengineCredential: props.providerId === 'volcengine'
+    ? volcengineCredentials.value.find(credential => credential.keyMask === maskApiKey(row.key))
+    : undefined,
+})))
 
-const visibleDisabledKeys = computed(() => {
-  return props.disabledKeys.filter(dk => !props.apiKeys.includes(dk.key))
-})
+const hasConfigurableKeys = computed(() => props.serviceType === 'copilot' || keyRows.value.length > 0)
 
 const visibleDisabledKeyModels = computed(() => props.disabledKeyModels || [])
+
+const toggleVolcengineKey = (key: string) => {
+  expandedVolcengineKey.value = expandedVolcengineKey.value === key ? null : key
+}
+
+const disabledKeyColor = (reason: string) => (
+  reason === 'insufficient_balance' || reason === 'insufficient_quota' ? 'warning' : 'error'
+)
+
+const formatDisabledTime = (iso: string) => {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
+}
 
 const loadDeepSeekBalances = async () => {
   deepseekBalances.value = []
@@ -1096,6 +1141,16 @@ const volcengineUsageWindows = (usage?: VolcenginePlanUsage): VolcengineUsageCel
   ].filter((cell): cell is VolcengineUsageCell => cell !== null)
 }
 
+const volcengineUsageSummary = (credential: ManagedAccountCredential): string => {
+  if (!credential.hasVolcengineAccessKey) return t('volcengineAccessKey.notConfigured')
+  if (credential.volcenginePlanUsage?.error) return credential.volcenginePlanUsage.error
+  const windows = volcengineUsageWindows(credential.volcenginePlanUsage)
+  if (!windows.length) return t('volcengineAccessKey.noUsageData')
+  return windows
+    .map(window => `${t(window.labelKey)} ${window.text.split(' · ')[0]}`)
+    .join(' · ')
+}
+
 const formatVolcengineTime = (iso: string): string => {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
@@ -1333,8 +1388,11 @@ const copyKey = (key: string, index: number) => {
 const getDisabledKeyLabel = (reason: string) => {
   const map: Record<string, string> = {
     'insufficient_balance': 'channelCard.blacklistReason.insufficient_balance',
+    'insufficient_quota': 'channelCard.blacklistReason.insufficient_quota',
     'unauthorized': 'channelCard.blacklistReason.authentication_error',
     'invalid': 'channelCard.blacklistReason.invalid',
+    'authentication_error': 'channelCard.blacklistReason.authentication_error',
+    'permission_error': 'channelCard.blacklistReason.permission_error',
   }
   return (map[reason] || 'channelCard.blacklistReason.unknown') as any
 }
@@ -1365,6 +1423,16 @@ const getDisabledKeyLabel = (reason: string) => {
 
 .volcengine-credential + .volcengine-credential {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.volcengine-key-row {
+  cursor: pointer;
+}
+
+.volcengine-key-detail {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
 }
 
 .deepseek-credential + .deepseek-credential {

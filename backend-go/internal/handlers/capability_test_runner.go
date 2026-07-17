@@ -707,12 +707,12 @@ func executeModelTest(ctx context.Context, channel *config.UpstreamConfig, proto
 	if !success && cfgManager != nil && apiKey != "" && respBody != nil {
 		blacklistResult := common.ShouldBlacklistKey(statusCode, respBody)
 		if blacklistResult.ShouldBlacklist {
-			isBalanceError := blacklistResult.Reason == "insufficient_balance"
+			isBalanceError := common.IsBalanceOrQuotaBlacklistReason(blacklistResult.Reason)
 			if !isBalanceError || channel.IsAutoBlacklistBalanceEnabled() {
 				apiType := channelKindToApiType(channelKind)
 				log.Printf("[CapabilityTest-Blacklist] 渠道 %s 的 %s 协议触发 Key 拉黑 (模型: %s, 原因: %s, 状态码: %d)",
 					channel.Name, protocol, model, blacklistResult.Reason, statusCode)
-				if err := cfgManager.BlacklistKey(apiType, channelID, apiKey, blacklistResult.Reason, blacklistResult.Message); err != nil {
+				if err := cfgManager.BlacklistKeyWithRecoverAt(apiType, channelID, apiKey, blacklistResult.Reason, blacklistResult.Message, blacklistResult.RecoverAt); err != nil {
 					log.Printf("[CapabilityTest-Blacklist] 拉黑 Key 失败: %v", err)
 				}
 			}

@@ -311,12 +311,12 @@ func executeRedirectModelTest(ctx context.Context, channel *config.UpstreamConfi
 	if !success && cfgManager != nil && apiKey != "" && respBody != nil {
 		blacklistResult := common.ShouldBlacklistKey(statusCode, respBody)
 		if blacklistResult.ShouldBlacklist {
-			isBalanceError := blacklistResult.Reason == "insufficient_balance"
+			isBalanceError := common.IsBalanceOrQuotaBlacklistReason(blacklistResult.Reason)
 			if !isBalanceError || channel.IsAutoBlacklistBalanceEnabled() {
 				apiType := channelKindToApiType(protocol)
 				log.Printf("[RedirectTest-Blacklist] 渠道 %s 触发 Key 拉黑 (探测: %s → 实际: %s, 原因: %s, 状态码: %d)",
 					channel.Name, probeModel, actualModel, blacklistResult.Reason, statusCode)
-				if err := cfgManager.BlacklistKey(apiType, channelID, apiKey, blacklistResult.Reason, blacklistResult.Message); err != nil {
+				if err := cfgManager.BlacklistKeyWithRecoverAt(apiType, channelID, apiKey, blacklistResult.Reason, blacklistResult.Message, blacklistResult.RecoverAt); err != nil {
 					log.Printf("[RedirectTest-Blacklist] 拉黑 Key 失败: %v", err)
 				}
 			}

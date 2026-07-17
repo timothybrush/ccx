@@ -312,7 +312,7 @@
                   <div class="d-flex flex-column flex-1-1 mr-2" style="min-width: 0;">
                     <code class="text-caption text-truncate">{{ maskApiKey(dk.key) }}</code>
                     <div class="d-flex align-center ga-1 mt-1">
-                      <v-chip size="x-small" :color="dk.reason === 'insufficient_balance' ? 'warning' : 'error'" variant="tonal">
+                      <v-chip size="x-small" :color="['insufficient_balance', 'insufficient_quota'].includes(dk.reason) ? 'warning' : 'error'" variant="tonal">
                         {{ t(getDisabledKeyReasonLabel(dk.reason)) }}
                       </v-chip>
                       <span class="text-caption text-medium-emphasis">{{ formatDisabledTime(dk.disabledAt) }}</span>
@@ -416,6 +416,7 @@ import ChannelHealthBadge from './ChannelHealthBadge.vue'
 
 const disabledKeyReasonLabelMap = {
   insufficient_balance: 'channelCard.blacklistReason.insufficient_balance',
+  insufficient_quota: 'channelCard.blacklistReason.insufficient_quota',
   unavailable: 'channelCard.blacklistReason.unavailable',
   rate_limited: 'channelCard.blacklistReason.rate_limited',
   invalid: 'channelCard.blacklistReason.invalid',

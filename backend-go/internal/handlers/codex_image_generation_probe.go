@@ -369,10 +369,10 @@ func reconcileCodexImageGenerationRestriction(
 		if !blacklist.ShouldBlacklist {
 			continue
 		}
-		if blacklist.Reason == "insufficient_balance" && !channel.IsAutoBlacklistBalanceEnabled() {
+		if common.IsBalanceOrQuotaBlacklistReason(blacklist.Reason) && !channel.IsAutoBlacklistBalanceEnabled() {
 			return
 		}
-		_ = cfgManager.BlacklistKey(apiType, channelID, apiKey, blacklist.Reason, blacklist.Message)
+		_ = cfgManager.BlacklistKeyWithRecoverAt(apiType, channelID, apiKey, blacklist.Reason, blacklist.Message, blacklist.RecoverAt)
 		return
 	}
 }

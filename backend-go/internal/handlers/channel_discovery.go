@@ -1655,7 +1655,7 @@ func isDiscoveryRateLimited(result ModelTestResult) bool {
 	}
 	if result.Error != nil {
 		blacklist := common.ShouldBlacklistKey(http.StatusTooManyRequests, []byte(*result.Error))
-		if blacklist.ShouldBlacklist && blacklist.Reason == "insufficient_balance" {
+		if blacklist.ShouldBlacklist && common.IsBalanceOrQuotaBlacklistReason(blacklist.Reason) {
 			return false
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -126,6 +127,9 @@ func (cm *ConfigManager) loadConfig() error {
 		needSaveDefaults = true
 	}
 	if cm.ensureOriginBackfill() {
+		needSaveDefaults = true
+	}
+	if cm.migrateDisabledKeyRecoveryTimes(time.Now()) {
 		needSaveDefaults = true
 	}
 
@@ -253,6 +257,53 @@ func (cm *ConfigManager) applyConfigDefaults(rawJSON []byte) bool {
 	}
 
 	return needSave
+}
+
+// migrateDisabledKeyRecoveryTimes 用错误消息中的上游重置时间升级旧禁用记录。
+// 仅接受未来时间，避免已过期文案延长禁用期。
+func (cm *ConfigManager) migrateDisabledKeyRecoveryTimes(now time.Time) bool {
+	channelGroups := []struct {
+		apiType   string
+		upstreams *[]UpstreamConfig
+	}{
+		{apiType: "Messages", upstreams: &cm.config.Upstream},
+		{apiType: "Responses", upstreams: &cm.config.ResponsesUpstream},
+		{apiType: "Chat", upstreams: &cm.config.ChatUpstream},
+		{apiType: "Gemini", upstreams: &cm.config.GeminiUpstream},
+		{apiType: "Images", upstreams: &cm.config.ImagesUpstream},
+		{apiType: "Vectors", upstreams: &cm.config.VectorsUpstream},
+	}
+
+	changed := false
+	for _, group := range channelGroups {
+		for channelIndex := range *group.upstreams {
+			upstream := &(*group.upstreams)[channelIndex]
+			for disabledIndex := range upstream.DisabledAPIKeys {
+				disabled := &upstream.DisabledAPIKeys[disabledIndex]
+				if !IsAutoRecoverableDisabledReason(disabled.Reason) {
+					continue
+				}
+				recordChanged := false
+				if disabled.Reason == "insufficient_balance" && strings.Contains(strings.ToLower(disabled.Message), "usage quota") {
+					disabled.Reason = "insufficient_quota"
+					recordChanged = true
+				}
+				recoverAt := utils.ExtractQuotaRecoverAt(disabled.Message)
+				parsed, err := time.Parse(time.RFC3339, recoverAt)
+				if err == nil && parsed.After(now) && disabled.RecoverAt != recoverAt {
+					disabled.RecoverAt = recoverAt
+					recordChanged = true
+				}
+				if !recordChanged {
+					continue
+				}
+				changed = true
+				log.Printf("[Config-Migration] %s[%d] Key %s 的额度禁用记录已升级 (reason=%s, recoverAt=%s)",
+					group.apiType, channelIndex, utils.MaskAPIKey(disabled.Key), disabled.Reason, disabled.RecoverAt)
+			}
+		}
+	}
+	return changed
 }
 
 // applyAutopilotDefaults 处理 AutopilotRouting 配置的版本升级、默认值与校验。
