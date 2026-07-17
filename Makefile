@@ -4,7 +4,7 @@ GREEN=\033[0;32m
 YELLOW=\033[0;33m
 NC=\033[0m
 
-.PHONY: help install dev run build clean frontend-dev frontend-build embed-frontend desktop-dev desktop-build generate-preset-manifest
+.PHONY: help install dev run build clean frontend-dev frontend-build embed-frontend desktop-dev desktop-build container-verify generate-preset-manifest
 
 help:
 	@echo "$(GREEN)CCX - 可用命令:$(NC)"
@@ -21,6 +21,7 @@ help:
 	@echo "$(YELLOW)构建:$(NC)"
 	@echo "  make build          - 构建前端并编译 Go 后端"
 	@echo "  make desktop-build  - 构建前端、Go 后端和桌面外壳"
+	@echo "  make container-verify - 在 Apple Container 中执行隔离验证"
 	@echo "  make frontend-build - 仅构建前端"
 	@echo "  make clean          - 清理构建文件"
 
@@ -53,6 +54,9 @@ run: embed-frontend
 
 build: embed-frontend
 	@cd backend-go && $(MAKE) build
+
+container-verify:
+	@bash scripts/container-verify.sh
 
 desktop-dev: build
 	@echo "$(GREEN)启动桌面外壳开发模式...$(NC)"

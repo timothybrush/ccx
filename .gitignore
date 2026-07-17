@@ -4,6 +4,8 @@ logs/
 scripts/*
 !scripts/install-wails3.sh
 !scripts/embed-frontend.sh
+!scripts/container-stage-source.sh
+!scripts/container-verify.sh
 !scripts/generate-model-registry.mjs
 !scripts/generate-channel-presets.mjs
 !scripts/generate-preset-manifest.mjs
