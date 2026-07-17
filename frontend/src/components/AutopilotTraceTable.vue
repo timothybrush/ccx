@@ -44,6 +44,7 @@
             <th>{{ t('autopilot.traceTable.col.shadowVsActual') }}</th>
             <th style="width: 70px;">{{ t('autopilot.traceTable.col.match') }}</th>
             <th style="width: 80px;">{{ t('autopilot.traceTable.col.mode') }}</th>
+            <th style="width: 90px;">{{ t('autopilot.traceTable.col.outcome') }}</th>
             <th style="width: 48px;"></th>
           </tr>
         </thead>
@@ -81,17 +82,25 @@
               </td>
               <td>
                 <v-chip
+                  v-if="isComparable(trace)"
                   size="x-small"
                   :color="trace.match ? 'success' : 'error'"
                   variant="flat"
                 >
                   {{ trace.match ? t('autopilot.traceTable.yes') : t('autopilot.traceTable.no') }}
                 </v-chip>
+                <span v-else class="text-caption text-medium-emphasis">-</span>
               </td>
               <td>
                 <v-chip size="x-small" variant="tonal" :color="modeColor(trace.mode)">
                   {{ t(`autopilot.mode.${trace.mode}`) || trace.mode }}
                 </v-chip>
+              </td>
+              <td>
+                <v-chip v-if="trace.outcomeRecorded" size="x-small" variant="tonal" :color="outcomeColor(trace.outcome)">
+                  {{ trace.outcome }}
+                </v-chip>
+                <span v-else class="text-caption text-medium-emphasis">-</span>
               </td>
               <td>
                 <v-icon size="18">
@@ -102,7 +111,7 @@
 
             <!-- 展开详情行 -->
             <tr v-if="expanded[trace.traceUid]">
-              <td colspan="8" class="pa-0">
+              <td colspan="9" class="pa-0">
                 <v-expand-transition>
                   <div class="pa-4 bg-grey-lighten-5">
                     <!-- 候选列表 -->
@@ -227,5 +236,16 @@ function modeColor(mode: string): string {
     dry_run: 'info',
   }
   return map[mode] ?? 'grey'
+}
+
+function isComparable(trace: RoutingDecisionTrace): boolean {
+  return trace.mode === 'shadow' && !!trace.shadowChannelUid && !!trace.actualChannelUid
+}
+
+function outcomeColor(outcome?: RoutingDecisionTrace['outcome']): string {
+  if (outcome === 'success') return 'success'
+  if (outcome === 'cancelled') return 'grey'
+  if (outcome === 'attempt_failed') return 'warning'
+  return 'error'
 }
 </script>

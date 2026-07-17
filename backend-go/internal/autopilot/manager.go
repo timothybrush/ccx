@@ -931,6 +931,10 @@ func (m *Manager) collectAll() {
 		log.Printf("[Autopilot-Worker] 警告: flush 失败: %v", err)
 	}
 
+	// auto 安全保险丝：只读取已完成的 15 分钟窗口；连续三个窗口均恶化时
+	// 持久化降回 assist。样本或安全模式基线不足时不做推断。
+	m.evaluateAutoSafety(time.Now())
+
 	// ── 订阅级能力推导 + drift 检测（shadow，不修改调度）──
 	m.updateSubscriptionCapabilities(allProfiles)
 
@@ -939,6 +943,39 @@ func (m *Manager) collectAll() {
 		log.Printf("[Autopilot-Worker] 本轮完成: 渠道=%d, 画像=%d, 诊断=%d, 耗时=%s",
 			len(entries), profiled, diagnosed, elapsed.Truncate(time.Millisecond))
 	}
+}
+
+func (m *Manager) evaluateAutoSafety(now time.Time) {
+	if m == nil || m.traceStore == nil || m.cfgManager == nil {
+		return
+	}
+	if m.cfgManager.GetEffectiveRoutingMode() != config.AutopilotModeAuto {
+		return
+	}
+	report, err := m.traceStore.EvaluateAutoRegression(now)
+	if err != nil {
+		log.Printf("[Autopilot-AutoSafety] 警告: 回归检测失败: %v", err)
+		return
+	}
+	if !report.ShouldRollback {
+		return
+	}
+	if err := m.cfgManager.SetAutopilotRoutingMode(config.AutopilotModeAssist); err != nil {
+		log.Printf("[Autopilot-AutoSafety] 警告: 自动降级到 assist 失败: %v", err)
+		return
+	}
+	event := AutoSafetyEvent{
+		FromMode:  config.AutopilotModeAuto,
+		ToMode:    config.AutopilotModeAssist,
+		Reasons:   report.Reasons,
+		Observed:  report.Observed,
+		Baseline:  report.Baseline,
+		CreatedAt: now.UTC(),
+	}
+	if err := m.traceStore.RecordAutoSafetyEvent(event); err != nil {
+		log.Printf("[Autopilot-AutoSafety] 警告: 自动降级事件落盘失败: %v", err)
+	}
+	log.Printf("[Autopilot-AutoSafety] auto 连续窗口恶化，已降级到 assist: reasons=%v", report.Reasons)
 }
 
 // carryForwardDiscoveryFields 保留由自动发现写入、L1 流量画像无法重新推导的字段。

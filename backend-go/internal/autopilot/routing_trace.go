@@ -92,6 +92,16 @@ type RoutingDecisionTrace struct {
 	ActualChannelUID string `json:"actualChannelUid,omitempty"` // 实际调度使用的渠道
 	Match            bool   `json:"match"`                      // shadow 与实际是否一致
 
+	// 请求终态。详细 trace 仍按原策略抽样落盘；无偏统计写入独立 15 分钟窗口表。
+	OutcomeRecorded    bool       `json:"outcomeRecorded,omitempty"`
+	Outcome            string     `json:"outcome,omitempty"` // success | upstream_error | exhausted | cancelled | attempt_failed
+	Success            bool       `json:"success,omitempty"`
+	ChannelFallback    bool       `json:"channelFallback,omitempty"`
+	StatusCode         int        `json:"statusCode,omitempty"`
+	RequestDurationMs  int64      `json:"requestDurationMs,omitempty"`
+	FirstByteLatencyMs int64      `json:"firstByteLatencyMs,omitempty"`
+	CompletedAt        *time.Time `json:"completedAt,omitempty"`
+
 	// 脱敏标识
 	PromptHash string `json:"promptHash,omitempty"` // prompt SHA256 前 16 位
 
@@ -232,6 +242,9 @@ func NewTraceStoreWithDB(db *sql.DB) (*TraceStore, error) {
 		if err := initTraceSchema(db); err != nil {
 			return nil, fmt.Errorf("[TraceStore-Init] 建表失败: %w", err)
 		}
+		if err := initRoutingSafetySchema(db); err != nil {
+			return nil, fmt.Errorf("[TraceStore-Init] 初始化路由安全表失败: %w", err)
+		}
 	}
 
 	store := &TraceStore{
@@ -269,6 +282,14 @@ CREATE TABLE IF NOT EXISTS autopilot_routing_traces (
     duration_ms     INTEGER NOT NULL DEFAULT 0,
     prompt_hash     TEXT    NOT NULL DEFAULT '',
     candidates_json TEXT    NOT NULL DEFAULT '[]',
+    outcome_recorded INTEGER NOT NULL DEFAULT 0,
+    outcome          TEXT    NOT NULL DEFAULT '',
+    success          INTEGER NOT NULL DEFAULT 0,
+    channel_fallback INTEGER NOT NULL DEFAULT 0,
+    status_code      INTEGER NOT NULL DEFAULT 0,
+    request_duration_ms INTEGER NOT NULL DEFAULT 0,
+    first_byte_latency_ms INTEGER NOT NULL DEFAULT 0,
+    completed_at     TEXT    NOT NULL DEFAULT '',
     created_at      TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_routing_traces_created
@@ -289,7 +310,10 @@ func (s *TraceStore) loadRecent() error {
 		       requested_model, agent_role, mode,
 		       shadow_uid, actual_uid, match,
 		       selected_uid, fallback_used, duration_ms,
-		       prompt_hash, candidates_json, created_at
+		       prompt_hash, candidates_json,
+		       outcome_recorded, outcome, success, channel_fallback,
+		       status_code, request_duration_ms, first_byte_latency_ms, completed_at,
+		       created_at
 		FROM autopilot_routing_traces
 		ORDER BY created_at DESC
 		LIMIT ?`, traceMaxRecords)
@@ -325,8 +349,8 @@ func (s *TraceStore) loadRecent() error {
 // scanTraceRow 扫描一行并返回 RoutingDecisionTrace。
 func scanTraceRow(rows *sql.Rows) (*RoutingDecisionTrace, error) {
 	var t RoutingDecisionTrace
-	var matchInt, fallbackInt int
-	var createdAt string
+	var matchInt, fallbackInt, outcomeRecordedInt, successInt, channelFallbackInt int
+	var createdAt, completedAt string
 	var candidatesJSON string
 
 	err := rows.Scan(
@@ -334,7 +358,10 @@ func scanTraceRow(rows *sql.Rows) (*RoutingDecisionTrace, error) {
 		&t.RequestedModel, &t.AgentRole, &t.Mode,
 		&t.ShadowChannelUID, &t.ActualChannelUID, &matchInt,
 		&t.SelectedChannelUID, &fallbackInt, &t.DurationMs,
-		&t.PromptHash, &candidatesJSON, &createdAt,
+		&t.PromptHash, &candidatesJSON,
+		&outcomeRecordedInt, &t.Outcome, &successInt, &channelFallbackInt,
+		&t.StatusCode, &t.RequestDurationMs, &t.FirstByteLatencyMs, &completedAt,
+		&createdAt,
 	)
 	if err != nil {
 		return nil, err
@@ -342,7 +369,13 @@ func scanTraceRow(rows *sql.Rows) (*RoutingDecisionTrace, error) {
 
 	t.Match = matchInt != 0
 	t.FallbackUsed = fallbackInt != 0
+	t.OutcomeRecorded = outcomeRecordedInt != 0
+	t.Success = successInt != 0
+	t.ChannelFallback = channelFallbackInt != 0
 	t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	if parsed, err := time.Parse(time.RFC3339, completedAt); err == nil {
+		t.CompletedAt = &parsed
+	}
 
 	if candidatesJSON != "" && candidatesJSON != "[]" {
 		_ = json.Unmarshal([]byte(candidatesJSON), &t.Candidates)
@@ -551,6 +584,22 @@ func (s *TraceStore) persistTrace(t *RoutingDecisionTrace) error {
 	if t.FallbackUsed {
 		fallbackInt = 1
 	}
+	outcomeRecordedInt := 0
+	if t.OutcomeRecorded {
+		outcomeRecordedInt = 1
+	}
+	successInt := 0
+	if t.Success {
+		successInt = 1
+	}
+	channelFallbackInt := 0
+	if t.ChannelFallback {
+		channelFallbackInt = 1
+	}
+	completedAt := ""
+	if t.CompletedAt != nil {
+		completedAt = t.CompletedAt.UTC().Format(time.RFC3339)
+	}
 
 	_, err = s.db.Exec(`
 INSERT INTO autopilot_routing_traces
@@ -558,13 +607,24 @@ INSERT INTO autopilot_routing_traces
      requested_model, agent_role, mode,
      shadow_uid, actual_uid, match,
      selected_uid, fallback_used, duration_ms,
-     prompt_hash, candidates_json, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     prompt_hash, candidates_json,
+     outcome_recorded, outcome, success, channel_fallback,
+     status_code, request_duration_ms, first_byte_latency_ms, completed_at,
+     created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(trace_uid) DO UPDATE SET
     shadow_uid  = excluded.shadow_uid,
     actual_uid  = excluded.actual_uid,
     match       = excluded.match,
-    duration_ms = excluded.duration_ms
+    duration_ms = excluded.duration_ms,
+    outcome_recorded = excluded.outcome_recorded,
+    outcome = excluded.outcome,
+    success = excluded.success,
+    channel_fallback = excluded.channel_fallback,
+    status_code = excluded.status_code,
+    request_duration_ms = excluded.request_duration_ms,
+    first_byte_latency_ms = excluded.first_byte_latency_ms,
+    completed_at = excluded.completed_at
 `,
 		t.TraceUID,
 		t.RequestKind,
@@ -581,6 +641,14 @@ ON CONFLICT(trace_uid) DO UPDATE SET
 		t.DurationMs,
 		t.PromptHash,
 		string(candidatesJSON),
+		outcomeRecordedInt,
+		t.Outcome,
+		successInt,
+		channelFallbackInt,
+		t.StatusCode,
+		t.RequestDurationMs,
+		t.FirstByteLatencyMs,
+		completedAt,
 		t.CreatedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {

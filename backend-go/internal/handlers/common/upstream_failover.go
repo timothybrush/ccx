@@ -543,8 +543,10 @@ func TryUpstreamWithAllKeys(
 					UpdateLogStatus(channelLogStore, metricsKey, logRequestID, metrics.StatusConnecting)
 				},
 				OnFirstResponseByte: func() {
+					firstByteAt := time.Now()
 					UpdateLogStatus(channelLogStore, metricsKey, logRequestID, metrics.StatusFirstByte)
-					metricsManager.RecordRequestFirstByte(currentBaseURL, apiKey, metricsServiceType, requestID, time.Since(attemptStartedAt))
+					metricsManager.RecordRequestFirstByte(currentBaseURL, apiKey, metricsServiceType, requestID, firstByteAt.Sub(attemptStartedAt))
+					recordAutopilotFirstByte(c, firstByteAt)
 				},
 			}
 			globalResponseHeaderTimeout := config.GetRuntimeResponseHeaderTimeoutMs(envCfg.ResponseHeaderTimeout * 1000)

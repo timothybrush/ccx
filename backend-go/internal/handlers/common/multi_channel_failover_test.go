@@ -2,7 +2,10 @@ package common_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/metrics"
@@ -20,6 +24,56 @@ import (
 	"github.com/BenedictKing/ccx/internal/warmup"
 	"github.com/gin-gonic/gin"
 )
+
+func TestHandleMultiChannelFailoverRecordsOneTerminalOutcome(t *testing.T) {
+	cfg := config.Config{Upstream: []config.UpstreamConfig{
+		{Name: "first", ChannelUID: "ch_first", BaseURL: "https://first.example.com", APIKeys: []string{"sk-first"}, Status: "active"},
+		{Name: "second", ChannelUID: "ch_second", BaseURL: "https://second.example.com", APIKeys: []string{"sk-second"}, Status: "active"},
+	}}
+	env := newAffinityTestEnv(t, cfg)
+	defer env.cleanup()
+
+	traceIndex := 0
+	env.scheduler.SetCandidateFilterProvider(func(context.Context, scheduler.ChannelKind, string) (scheduler.CandidateFilterFunc, scheduler.CandidateSelectionObserver) {
+		traceIndex++
+		traceUID := fmt.Sprintf("rt_%d", traceIndex)
+		filter := func(channels []scheduler.ChannelInfo, _ func(scheduler.ChannelInfo) *config.UpstreamConfig, _ func(scheduler.ChannelInfo, *config.UpstreamConfig) bool) ([]scheduler.ChannelInfo, error) {
+			return channels, nil
+		}
+		return filter, func(string) string { return traceUID }
+	})
+
+	var outcomes []autopilot.RoutingOutcome
+	common.SetRoutingOutcomeRecorderHook(func(_ string, outcome autopilot.RoutingOutcome) {
+		outcomes = append(outcomes, outcome)
+	})
+	t.Cleanup(func() { common.SetRoutingOutcomeRecorderHook(nil) })
+
+	c := newTestGinContext(httptest.NewRecorder())
+	attempt := 0
+	common.HandleMultiChannelFailover(
+		c, &config.EnvConfig{}, env.scheduler, scheduler.ChannelKindMessages,
+		"Messages", "user", "model", "",
+		func(*scheduler.SelectionResult) common.MultiChannelAttemptResult {
+			attempt++
+			if attempt == 1 {
+				return common.MultiChannelAttemptResult{Attempted: true, LastError: errors.New("first failed")}
+			}
+			return common.MultiChannelAttemptResult{Handled: true, Attempted: true, SuccessKey: "sk-second"}
+		},
+		nil, nil,
+	)
+
+	if len(outcomes) != 2 {
+		t.Fatalf("outcomes = %d, want 2: %+v", len(outcomes), outcomes)
+	}
+	if outcomes[0].Terminal || outcomes[0].Outcome != "attempt_failed" {
+		t.Fatalf("first outcome = %+v, want non-terminal attempt_failed", outcomes[0])
+	}
+	if !outcomes[1].Terminal || !outcomes[1].Success || !outcomes[1].ChannelFallback {
+		t.Fatalf("final outcome = %+v, want successful fallback", outcomes[1])
+	}
+}
 
 type affinityTestEnv struct {
 	scheduler *scheduler.ChannelScheduler

@@ -200,3 +200,45 @@ CREATE TABLE IF NOT EXISTS autopilot_advisor_decisions (
 		t.Fatalf("自愈应幂等，重复调用报错: %v", err)
 	}
 }
+
+func TestEnsureSchemaVersion_V4AddsRoutingSafetySchema(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := db.Exec(`
+CREATE TABLE autopilot_routing_traces (
+    trace_uid TEXT PRIMARY KEY,
+    request_kind TEXT NOT NULL,
+    task_class TEXT NOT NULL,
+    task_domain TEXT NOT NULL DEFAULT '',
+    requested_model TEXT NOT NULL DEFAULT '',
+    agent_role TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL DEFAULT 'shadow',
+    shadow_uid TEXT NOT NULL DEFAULT '',
+    actual_uid TEXT NOT NULL DEFAULT '',
+    match INTEGER NOT NULL DEFAULT 0,
+    selected_uid TEXT NOT NULL DEFAULT '',
+    fallback_used INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    prompt_hash TEXT NOT NULL DEFAULT '',
+    candidates_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+PRAGMA user_version = 4;
+`); err != nil {
+		t.Fatalf("create v4 trace schema: %v", err)
+	}
+	if err := ensureSchemaVersion(db); err != nil {
+		t.Fatalf("ensureSchemaVersion() error = %v", err)
+	}
+	for _, column := range []string{"outcome_recorded", "outcome", "success", "channel_fallback", "completed_at"} {
+		has, err := columnExists(db, "autopilot_routing_traces", column)
+		if err != nil || !has {
+			t.Fatalf("column %s exists=%v err=%v", column, has, err)
+		}
+	}
+	for _, table := range []string{"autopilot_routing_windows", "autopilot_auto_safety_events"} {
+		has, err := tableExists(db, table)
+		if err != nil || !has {
+			t.Fatalf("table %s exists=%v err=%v", table, has, err)
+		}
+	}
+}

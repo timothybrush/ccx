@@ -1,7 +1,9 @@
 package common
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -26,6 +28,13 @@ type TrySelectedChannelFunc func(selection *scheduler.SelectionResult) MultiChan
 
 // OnMultiChannelHandledFunc 在请求被"处理完成"时回调（成功或非 failover 错误都会触发）。
 type OnMultiChannelHandledFunc func(selection *scheduler.SelectionResult, result MultiChannelAttemptResult)
+
+type pendingRoutingAttempt struct {
+	selection       *scheduler.SelectionResult
+	result          MultiChannelAttemptResult
+	duration        time.Duration
+	channelFallback bool
+}
 
 // HandleAllFailedFunc 处理"所有渠道都失败"的返回逻辑（不同入口可能有不同错误格式）。
 type HandleAllFailedFunc func(c *gin.Context, failoverErr *FailoverError, lastError error)
@@ -104,6 +113,7 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 			HandleAllChannelsFailed(c, false, failoverErr, lastError, apiType)
 		}
 	}
+	requestStartedAt := time.Now()
 
 	failedChannels := make(map[int]bool)
 	var lastError error
@@ -116,11 +126,19 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 	EnsureAutopilotRequestProfile(c, kind, model, "", userID, requestBody)
 
 	maxChannelAttempts := channelScheduler.GetActiveChannelCount(kind)
+	var pendingOutcome *pendingRoutingAttempt
 
 	for channelAttempt := 0; channelAttempt < maxChannelAttempts; channelAttempt++ {
 		// 检查客户端是否已断开连接
 		select {
 		case <-c.Request.Context().Done():
+			if pendingOutcome != nil {
+				pendingOutcome.result.LastError = context.Canceled
+				notifyRoutingOutcome(pendingOutcome.selection, buildRoutingOutcome(
+					c, pendingOutcome.selection, pendingOutcome.result, true,
+					pendingOutcome.channelFallback, requestStartedAt, time.Since(requestStartedAt),
+				))
+			}
 			if envCfg.ShouldLog("info") {
 				RequestLogf(c, "[%s-Cancel] 请求已取消，停止渠道 failover", apiType)
 			}
@@ -146,6 +164,15 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 			break
 		}
 
+		// 新渠道已经成功选出，上一渠道失败由“请求终态”降为“中间尝试失败”。
+		if pendingOutcome != nil {
+			notifyRoutingOutcome(pendingOutcome.selection, buildRoutingOutcome(
+				c, pendingOutcome.selection, pendingOutcome.result, false,
+				false, requestStartedAt, pendingOutcome.duration,
+			))
+			pendingOutcome = nil
+		}
+
 		upstream := selection.Upstream
 		channelIndex := selection.ChannelIndex
 
@@ -159,8 +186,15 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 			}
 		}
 
+		resetAutopilotAttemptTelemetry(c)
+		attemptStartedAt := time.Now()
 		result := trySelectedChannel(selection)
+		attemptDuration := time.Since(attemptStartedAt)
 		if result.Handled {
+			notifyRoutingOutcome(selection, buildRoutingOutcome(
+				c, selection, result, true, channelAttempt > 0,
+				requestStartedAt, time.Since(requestStartedAt),
+			))
 			lastUserMsg, _ := c.Get("lastUserMessage")
 			lastUserMsgStr, _ := lastUserMsg.(string)
 			lastUserMsgs, _ := c.Get("lastUserMessages")
@@ -211,8 +245,20 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 		if result.Attempted && upstream != nil {
 			RequestLogf(c, "[%s-Failover] 警告: 渠道 [%d] %s 所有密钥都失败，尝试下一个渠道", apiType, channelIndex, upstream.Name)
 		}
+		pendingOutcome = &pendingRoutingAttempt{
+			selection:       selection,
+			result:          result,
+			duration:        attemptDuration,
+			channelFallback: channelAttempt > 0,
+		}
 	}
 
 	RequestLogf(c, "[%s-Error] 所有渠道都失败了", apiType)
 	handleAllFailed(c, lastFailoverError, lastError)
+	if pendingOutcome != nil {
+		notifyRoutingOutcome(pendingOutcome.selection, buildRoutingOutcome(
+			c, pendingOutcome.selection, pendingOutcome.result, true,
+			pendingOutcome.channelFallback, requestStartedAt, time.Since(requestStartedAt),
+		))
+	}
 }

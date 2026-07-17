@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/gin-gonic/gin"
@@ -14,10 +15,11 @@ import (
 // RoutingConfigResponse GET /smart-routing/config 响应体。
 // 安全视图，只暴露只读字段，不暴露完整配置。
 type RoutingConfigResponse struct {
-	Mode             string `json:"mode"`
-	KillSwitchActive bool   `json:"killSwitchActive"`
-	CostPreference   string `json:"costPreference,omitempty"`
-	L2ProbeEnabled   bool   `json:"l2ProbeEnabled,omitempty"`
+	Mode             string               `json:"mode"`
+	KillSwitchActive bool                 `json:"killSwitchActive"`
+	CostPreference   string               `json:"costPreference,omitempty"`
+	L2ProbeEnabled   bool                 `json:"l2ProbeEnabled,omitempty"`
+	Readiness        *AutoReadinessReport `json:"readiness,omitempty"`
 }
 
 // RoutingConfigUpdateRequest PUT /smart-routing/config 请求体。
@@ -32,6 +34,7 @@ type RoutingConfigUpdateRequest struct {
 // RoutingConfigDeps 智能路由配置路由的依赖注入。
 type RoutingConfigDeps struct {
 	CfgManager *config.ConfigManager
+	TraceStore *TraceStore
 }
 
 // RegisterRoutingConfigRoutes 注册智能路由配置 API 路由。
@@ -56,14 +59,7 @@ func handleGetRoutingConfig(deps *RoutingConfigDeps) gin.HandlerFunc {
 		}
 		killSwitchActive := cfg.KillSwitch || envKillSwitch
 
-		resp := RoutingConfigResponse{
-			Mode:             cfg.EffectiveRoutingMode(),
-			KillSwitchActive: killSwitchActive,
-			CostPreference:   cfg.CostPreference.Mode,
-			L2ProbeEnabled:   cfg.HealthCheck.L2ProbeEnabled,
-		}
-
-		c.JSON(http.StatusOK, resp)
+		c.JSON(http.StatusOK, routingConfigResponse(cfg, killSwitchActive, deps.TraceStore))
 	}
 }
 
@@ -79,10 +75,21 @@ func handleUpdateRoutingConfig(deps *RoutingConfigDeps) gin.HandlerFunc {
 
 		// 校验 mode
 		if req.Mode != "" {
+			normalizedMode := strings.ToLower(req.Mode)
 			validModes := map[string]bool{"off": true, "shadow": true, "assist": true, "auto": true}
-			if !validModes[strings.ToLower(req.Mode)] {
+			if !validModes[normalizedMode] {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 mode，可选值: off/shadow/assist/auto"})
 				return
+			}
+			if normalizedMode == config.AutopilotModeAuto && deps.CfgManager.GetEffectiveRoutingMode() != config.AutopilotModeAuto {
+				readiness := deps.TraceStore.EvaluateAutoReadiness(time.Now())
+				if !readiness.Ready {
+					c.JSON(http.StatusConflict, gin.H{
+						"error":     "auto 模式尚未达到安全上线门槛",
+						"readiness": readiness,
+					})
+					return
+				}
 			}
 			if err := deps.CfgManager.SetAutopilotRoutingMode(req.Mode); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存路由模式失败"})
@@ -116,13 +123,22 @@ func handleUpdateRoutingConfig(deps *RoutingConfigDeps) gin.HandlerFunc {
 			envKillSwitch = true
 		}
 
-		c.JSON(http.StatusOK, RoutingConfigResponse{
-			Mode:             cfg.EffectiveRoutingMode(),
-			KillSwitchActive: cfg.KillSwitch || envKillSwitch,
-			CostPreference:   cfg.CostPreference.Mode,
-			L2ProbeEnabled:   cfg.HealthCheck.L2ProbeEnabled,
-		})
+		c.JSON(http.StatusOK, routingConfigResponse(cfg, cfg.KillSwitch || envKillSwitch, deps.TraceStore))
 	}
+}
+
+func routingConfigResponse(cfg config.AutopilotRoutingConfig, killSwitchActive bool, store *TraceStore) RoutingConfigResponse {
+	resp := RoutingConfigResponse{
+		Mode:             cfg.EffectiveRoutingMode(),
+		KillSwitchActive: killSwitchActive,
+		CostPreference:   cfg.CostPreference.Mode,
+		L2ProbeEnabled:   cfg.HealthCheck.L2ProbeEnabled,
+	}
+	if store != nil {
+		readiness := store.EvaluateAutoReadiness(time.Now())
+		resp.Readiness = &readiness
+	}
+	return resp
 }
 
 // isTruthyEnv 判断环境变量值是否为真。

@@ -19,7 +19,7 @@ import (
 // v1 = 现有 7 张表的建表语句本身（首次引入版本化时的基线，无需 ALTER）。
 // 后续新增/变更表结构时，在 ensureSchemaVersion 里追加 "if version < N { ... }" 迁移块，
 // 并将本常量递增。
-const autopilotSchemaVersion = 4
+const autopilotSchemaVersion = 5
 
 // ensureSchemaVersion 在任何 CREATE TABLE 之前执行一次版本检查/迁移。
 // 必须在 ProfileStore 打开 DB 后、调用 initProfileStoreSchema 之前调用——
@@ -120,6 +120,21 @@ func ensureSchemaVersion(db *sql.DB) error {
 		version = 4
 	}
 
+	// v4 -> v5: 路由 trace 增加请求终态，供无偏窗口统计与 auto 上线闸门使用。
+	if version > 0 && version < 5 {
+		if err := ensureRoutingTraceOutcomeColumns(db); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] v4->v5 迁移失败: %w", err)
+		}
+		if err := initRoutingSafetySchema(db); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] v4->v5 建立路由安全表失败: %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 5"); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 写入 v5 版本失败: %w", err)
+		}
+		log.Printf("[Autopilot-SchemaMigration] schema 升级: v4 -> v5")
+		version = 5
+	}
+
 	// version == 0：全新库，直接写入当前基线版本；version 属于 (0, autopilotSchemaVersion) 但
 	// 未命中任何迁移块的情况理论上不应出现（说明版本常量与迁移块不同步），同样兜底写回当前版本，
 	// 不阻塞启动——迁移块本身的正确性由后续新增迁移时的测试覆盖。
@@ -139,7 +154,42 @@ func ensureCurrentSchemaColumns(db *sql.DB) error {
 	if err := ensureAdvisorDecisionColumns(db); err != nil {
 		return err
 	}
-	return ensureEndpointProfileColumns(db)
+	if err := ensureEndpointProfileColumns(db); err != nil {
+		return err
+	}
+	return ensureRoutingTraceOutcomeColumns(db)
+}
+
+func ensureRoutingTraceOutcomeColumns(db *sql.DB) error {
+	const table = "autopilot_routing_traces"
+	exists, err := tableExists(db, table)
+	if err != nil || !exists {
+		return err
+	}
+	wantColumns := map[string]string{
+		"outcome_recorded":      "outcome_recorded INTEGER NOT NULL DEFAULT 0",
+		"outcome":               "outcome TEXT NOT NULL DEFAULT ''",
+		"success":               "success INTEGER NOT NULL DEFAULT 0",
+		"channel_fallback":      "channel_fallback INTEGER NOT NULL DEFAULT 0",
+		"status_code":           "status_code INTEGER NOT NULL DEFAULT 0",
+		"request_duration_ms":   "request_duration_ms INTEGER NOT NULL DEFAULT 0",
+		"first_byte_latency_ms": "first_byte_latency_ms INTEGER NOT NULL DEFAULT 0",
+		"completed_at":          "completed_at TEXT NOT NULL DEFAULT ''",
+	}
+	for column, definition := range wantColumns {
+		has, err := columnExists(db, table, column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, definition)); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 补列 %s.%s 失败: %w", table, column, err)
+		}
+		log.Printf("[Autopilot-SchemaMigration] 自愈补列: %s.%s", table, column)
+	}
+	return nil
 }
 
 func ensureEndpointProfileColumns(db *sql.DB) error {

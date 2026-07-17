@@ -640,6 +640,13 @@ func main() {
 		profileStore := sr.ProfileStore()
 		traceStore := sr.TraceStore()
 		fastDecayScorer := autopilotManager.FastDecayScorer()
+		if traceStore != nil {
+			common.SetRoutingOutcomeRecorderHook(func(traceUID string, outcome autopilot.RoutingOutcome) {
+				if err := traceStore.RecordOutcome(traceUID, outcome); err != nil {
+					log.Printf("[Autopilot-Outcome] 警告: trace=%s 终态记录失败: %v", traceUID, err)
+				}
+			})
+		}
 
 		// endpoint policy hook：为每个请求构建 EndpointAttemptPolicy
 		common.SetEndpointPolicyProviderHook(func(c *gin.Context, model string, upstream *config.UpstreamConfig) *autopilot.EndpointAttemptPolicy {
@@ -1195,6 +1202,7 @@ func main() {
 			// Phase 2 第三批：智能路由配置 API
 			autopilot.RegisterRoutingConfigRoutes(apiGroup, &autopilot.RoutingConfigDeps{
 				CfgManager: cfgManager,
+				TraceStore: autopilotManager.TraceStore(),
 			})
 		}
 

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
@@ -192,5 +194,31 @@ func TestRoutingConfigUpdateRequest_Binding(t *testing.T) {
 				t.Fatalf("期望 costPreference=%s, 实际=%s", tt.want.CostPreference, req.CostPreference)
 			}
 		})
+	}
+}
+
+func TestPutRoutingConfigRejectsAutoBeforeReadiness(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{}`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfgManager, err := config.NewConfigManager(configPath, "")
+	if err != nil {
+		t.Fatalf("NewConfigManager() error = %v", err)
+	}
+	store := newRoutingReadinessTestStore(t)
+	router := setupRoutingConfigRouter(&RoutingConfigDeps{CfgManager: cfgManager, TraceStore: store})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/smart-routing/config", bytes.NewBufferString(`{"mode":"auto"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", resp.Code, resp.Body.String())
+	}
+	if got := cfgManager.GetEffectiveRoutingMode(); got != config.AutopilotModeShadow {
+		t.Fatalf("mode changed despite failed readiness: %q", got)
 	}
 }

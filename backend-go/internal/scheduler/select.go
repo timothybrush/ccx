@@ -91,7 +91,7 @@ func (s *ChannelScheduler) SelectChannelWithOptions(ctx context.Context, opts Se
 			if upstream != nil && upstream.ChannelUID != "" {
 				actualChannelUID = upstream.ChannelUID
 			}
-			candidateSelectionObserver(actualChannelUID)
+			result.AutopilotTraceUID = candidateSelectionObserver(actualChannelUID)
 		}
 		channelName := ""
 		if upstream != nil {

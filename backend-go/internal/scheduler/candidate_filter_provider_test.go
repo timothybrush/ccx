@@ -55,16 +55,21 @@ func TestCandidateSelectionObserverReceivesActualChannelUID(t *testing.T) {
 		) ([]ChannelInfo, error) {
 			return channels, nil
 		}
-		return filter, func(actualChannelUID string) {
+		return filter, func(actualChannelUID string) string {
 			observed = append(observed, actualChannelUID)
+			return "rt_actual"
 		}
 	})
 
-	if _, err := s.SelectChannelWithOptions(context.Background(), SelectionOptions{Kind: ChannelKindMessages}); err != nil {
+	result, err := s.SelectChannelWithOptions(context.Background(), SelectionOptions{Kind: ChannelKindMessages})
+	if err != nil {
 		t.Fatalf("SelectChannelWithOptions() error = %v", err)
 	}
 	if len(observed) != 1 || observed[0] != "ch_actual" {
 		t.Fatalf("observer calls = %v, want [ch_actual]", observed)
+	}
+	if result.AutopilotTraceUID != "rt_actual" {
+		t.Fatalf("AutopilotTraceUID = %q, want rt_actual", result.AutopilotTraceUID)
 	}
 
 	observed = observed[:0]

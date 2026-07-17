@@ -119,7 +119,8 @@ func (s *ChannelScheduler) SetRateLimitManager(m *ratelimit.Manager) {
 
 // CandidateSelectionObserver 在本次 CandidateFilter 对应的真实渠道选定后回调。
 // actualChannelUID 已按与 SmartRouter 相同的规则补齐（缺失时为 ch_<index>）。
-type CandidateSelectionObserver func(actualChannelUID string)
+// 返回本次请求级决策 trace UID；为空表示没有可回填的 trace。
+type CandidateSelectionObserver func(actualChannelUID string) string
 
 // CandidateFilterProvider 根据请求 context、渠道类型和模型返回对应的 CandidateFilter
 // 及其请求级选择回调。

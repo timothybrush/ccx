@@ -19,6 +19,56 @@
           {{ t('autopilot.modePanel.killSwitchActive') }}
         </v-alert>
 
+        <v-alert
+          v-if="localConfig.readiness"
+          :type="localConfig.readiness.ready ? 'success' : 'info'"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          :icon="localConfig.readiness.ready ? 'mdi-check-decagram' : 'mdi-chart-timeline-variant'"
+        >
+          <div class="font-weight-medium">
+            {{ t(localConfig.readiness.ready ? 'autopilot.readiness.ready' : 'autopilot.readiness.collecting') }}
+          </div>
+          <div class="text-caption mt-1">
+            {{ t('autopilot.readiness.progress', {
+              samples: localConfig.readiness.safeModeMetrics.requestCount,
+              requiredSamples: localConfig.readiness.requiredSamples,
+              hours: localConfig.readiness.observationHours.toFixed(1),
+              requiredHours: localConfig.readiness.requiredObservationHours,
+            }) }}
+          </div>
+          <v-progress-linear
+            :model-value="readinessProgress"
+            color="primary"
+            height="5"
+            rounded
+            class="my-2"
+          />
+          <div class="d-flex flex-wrap ga-2 text-caption">
+            <span>{{ t('autopilot.readiness.successRate') }} {{ formatRate(localConfig.readiness.safeModeMetrics.successRate) }}</span>
+            <span>{{ t('autopilot.readiness.fallbackRate') }} {{ formatRate(localConfig.readiness.safeModeMetrics.fallbackRate) }}</span>
+            <span>{{ t('autopilot.readiness.failOpenRate') }} {{ formatRate(localConfig.readiness.safeModeMetrics.failOpenRate) }}</span>
+            <span>p95 {{ localConfig.readiness.safeModeMetrics.p95LatencyMs || '-' }}ms</span>
+          </div>
+          <div v-if="!localConfig.readiness.ready" class="text-caption mt-2">
+            {{ readinessReasons }}
+          </div>
+        </v-alert>
+
+        <v-alert
+          v-if="lastRollback"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          icon="mdi-restore-alert"
+        >
+          {{ t('autopilot.readiness.lastRollback', {
+            time: formatRollbackTime(lastRollback.createdAt),
+          }) }}
+        </v-alert>
+
         <!-- 路由模式选择 -->
         <div class="mb-4">
           <div class="text-caption text-medium-emphasis mb-2">
@@ -42,7 +92,7 @@
             <v-btn value="assist" size="small">
               {{ t('autopilot.mode.assist') }}
             </v-btn>
-            <v-btn value="auto" size="small">
+            <v-btn value="auto" size="small" :disabled="!localConfig.readiness?.ready">
               {{ t('autopilot.mode.auto') }}
             </v-btn>
           </v-btn-toggle>
@@ -157,6 +207,8 @@ watch(() => props.config, (newCfg) => {
   localConfig.mode = newCfg.mode
   localConfig.killSwitchActive = newCfg.killSwitchActive
   localConfig.costPreference = newCfg.costPreference
+  localConfig.l2ProbeEnabled = newCfg.l2ProbeEnabled
+  localConfig.readiness = cloneReadiness(newCfg.readiness)
 }, { deep: true })
 
 // 确认对话框状态
@@ -171,6 +223,25 @@ const costPreferenceItems = computed(() => [
   { value: 'cost_first', label: t('autopilot.costPreference.cost_first') },
   { value: 'custom', label: t('autopilot.costPreference.custom') },
 ])
+
+const readinessProgress = computed(() => {
+  const readiness = localConfig.readiness
+  if (!readiness) return 0
+  const sampleProgress = readiness.requiredSamples > 0
+    ? readiness.safeModeMetrics.requestCount / readiness.requiredSamples
+    : 0
+  const timeProgress = readiness.requiredObservationHours > 0
+    ? readiness.observationHours / readiness.requiredObservationHours
+    : 0
+  return Math.min(100, Math.max(0, Math.min(sampleProgress, timeProgress) * 100))
+})
+
+const readinessReasons = computed(() => {
+  const reasons = localConfig.readiness?.blockingReasons ?? []
+  return reasons.map(reason => t(`autopilot.readiness.reason.${reason}`)).join(' · ')
+})
+
+const lastRollback = computed(() => localConfig.readiness?.lastRollback)
 
 // 检测是否有变更
 const hasChanges = computed(() => {
@@ -221,6 +292,21 @@ function cloneConfig(src: SmartRoutingConfig): SmartRoutingConfig {
     mode: src.mode,
     killSwitchActive: src.killSwitchActive,
     costPreference: src.costPreference,
+    l2ProbeEnabled: src.l2ProbeEnabled,
+    readiness: cloneReadiness(src.readiness),
   }
+}
+
+function cloneReadiness(src: SmartRoutingConfig['readiness']): SmartRoutingConfig['readiness'] {
+  return src ? JSON.parse(JSON.stringify(src)) : undefined
+}
+
+function formatRate(value: number): string {
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function formatRollbackTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 </script>

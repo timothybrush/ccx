@@ -19,10 +19,11 @@ type ScheduledRecoveryResult struct {
 
 // SelectionResult 渠道选择结果
 type SelectionResult struct {
-	Upstream     *config.UpstreamConfig
-	ChannelIndex int
-	Reason       string // 选择原因（用于日志）
-	Trace        *SelectionTrace
+	Upstream          *config.UpstreamConfig
+	ChannelIndex      int
+	Reason            string // 选择原因（用于日志）
+	Trace             *SelectionTrace
+	AutopilotTraceUID string // SmartRouter 请求级 trace；为空表示未介入
 }
 
 // ContextRequirement 描述当前请求的输入上下文与输出预算。

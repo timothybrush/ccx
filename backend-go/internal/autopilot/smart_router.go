@@ -308,13 +308,14 @@ func (r *SmartRouter) CandidateFilterForWithActual(
 		return nil, nil
 	}
 
-	observer := func(actualChannelUID string) {
+	observer := func(actualChannelUID string) string {
 		traceMu.Lock()
 		uid := traceUID
 		traceMu.Unlock()
 		if uid != "" {
 			r.UpdateActualChannel(uid, actualChannelUID)
 		}
+		return uid
 	}
 	return filter, observer
 }

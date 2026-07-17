@@ -3808,7 +3808,9 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 - [x] WebSocket 推送画像变更事件（Phase 3A：`GET /api/health-center/events`）
 - [x] 前端画像变更历史/时间线（Phase 3A：`ProfileChangelogTimeline.vue`）
 
-**预估工期**：2-3 周（3A、3B-1、3B-2、3B-3 均已完成；SLO regression 自动回滚待单独立项评估工期）
+**预估工期**：2-3 周（3A、3B-1、3B-2、3B-3 均已完成；advisor 与全局 auto 的 SLO 回滚均已补齐）
+
+> 状态校正（2026-07-17）：上方 Phase 3B 历史说明中的“SLO regression 自动回滚待单独立项”已完成；advisor 回滚与全局 auto 上线闸门/自动降级是两个独立保护层。
 
 ### Phase 4：高级特性
 
@@ -3817,7 +3819,7 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 **范围**：
 - [x] 多维度标签系统扩展（用户自定义标签）——Item 1
 - [x] 成本报表：按用户/模型/渠道/key 统计真实有效成本——Item 2（新增 `proxyKeyMask` 身份贯穿链路：`middleware.GetProxyKeyMask` → `ChannelLog`/`RequestRecord` → SQLite `proxy_key_mask` 列，供 Item 4 复用）
-- [x] SLO regression 自动回滚——Item 3（默认关闭；`SLORollbackConfig`，连续 degrading 窗口数默认 3，不做自动恢复以避免震荡）
+- [x] Trusted advisor SLO regression 自动回滚——Item 3（默认关闭；`SLORollbackConfig`，连续 degrading 窗口数默认 3，不做自动恢复以避免震荡）
 - [x] 渠道推荐：根据使用模式推荐新渠道——Item 4
 - [x] 批量渠道管理（导入/导出/模板）——Item 5
 - [x] 订阅中心 provider adapter：可选自动刷新余额/套餐状态——Item 6（默认关闭；仅 openai/anthropic/google 且显式填写 BillingAPIKey 的订阅生效，中转/公益渠道继续手动维护）
@@ -3827,6 +3829,7 @@ Autopilot 需要一个后台 worker，但必须是保守、可停止、可观测
 **关键实现说明**：
 - Item 3/6/8 均在 `AutopilotRoutingConfig` 新增独立配置块（`SLORollback`/`SubscriptionAutoRefresh`/`ABTest`），`Validate()` 统一做负值/越界兜底，保持与既有字段一致的防御模式。
 - Item 4 直接复用 Item 2 的 `proxyKeyMask` 身份标记，未重新发明身份识别机制。
+- **全局 auto 安全闸门（2026-07-17）**：请求终态按 15 分钟窗口无偏聚合，详细 trace 继续抽样；管理 API 只在 shadow/assist 已积累至少 500 个有效请求、24 小时连续观测且成功率/fallback/fail-open/p95 均达标时允许切换 `auto`。后台连续检测三个已完成 auto 窗口，相对最近七天安全模式基线持续恶化时，持久化降级到 `assist` 并记录 `autopilot_auto_safety_events`，不自动恢复。
 
 ---
 
