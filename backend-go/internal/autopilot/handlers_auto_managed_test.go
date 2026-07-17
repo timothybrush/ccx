@@ -55,6 +55,114 @@ func TestListAccountsMasksCredentials(t *testing.T) {
 	}
 }
 
+func TestListAccountsIncludesActiveEndpointModelAvailability(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts": [{"accountUid":"acct_test","providerId":"volcengine","name":"volcengine","credentials":[{"credentialUid":"cred_a","apiKey":"ark-secret-a"},{"credentialUid":"cred_b","apiKey":"ark-secret-b"}]}],
+  "upstream": [{"accountUid":"acct_test","channelUid":"ch_messages","providerId":"volcengine","name":"volcengine-claude","serviceType":"claude","baseUrl":"https://example.com/anthropic","apiKeyConfigs":[{"credentialUid":"cred_a","baseUrl":"https://example.com/anthropic"},{"credentialUid":"cred_b","baseUrl":"https://example.com/anthropic"}],"autoManaged":true,"status":"active"}],
+  "responsesUpstream": [], "geminiUpstream": [], "chatUpstream": [], "imagesUpstream": [], "vectorsUpstream": []
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatalf("写测试配置失败: %v", err)
+	}
+	cfgManager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatalf("NewConfigManager 失败: %v", err)
+	}
+	t.Cleanup(func() { _ = cfgManager.Close() })
+
+	store, err := NewProfileStoreWithDB(newTestDB(t))
+	if err != nil {
+		t.Fatalf("NewProfileStoreWithDB 失败: %v", err)
+	}
+	updatedAt := time.Date(2026, 7, 17, 10, 54, 33, 0, time.UTC)
+	for _, profile := range []*KeyEndpointProfile{
+		{
+			EndpointUID: "ep_a", AccountUID: "acct_test", ChannelUID: "ch_messages",
+			CredentialUID: "cred_a", KeyMask: "ark-a***001", AvailableModels: []string{"model-b", "model-a"}, UpdatedAt: updatedAt,
+		},
+		{
+			EndpointUID: "ep_b", AccountUID: "acct_test", ChannelUID: "ch_messages",
+			CredentialUID: "cred_b", KeyMask: "ark-b***002", AvailableModels: []string{"model-c", "model-b"}, UpdatedAt: updatedAt.Add(time.Minute),
+		},
+	} {
+		if err := store.Upsert(profile); err != nil {
+			t.Fatalf("ProfileStore.Upsert 失败: %v", err)
+		}
+	}
+	runner := NewAutoDiscoveryRunner(store, nil)
+	router := setupAutoManagedRouter(&AutoManagedDeps{CfgManager: cfgManager, Runner: runner})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/accounts status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	var response struct {
+		Accounts []managedAccountView `json:"accounts"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("解析响应失败: %v", err)
+	}
+	if len(response.Accounts) != 1 || len(response.Accounts[0].Channels) != 1 {
+		t.Fatalf("账号渠道数量错误: %+v", response.Accounts)
+	}
+	channel := response.Accounts[0].Channels[0]
+	if got, want := strings.Join(channel.DiscoveredModels, ","), "model-a,model-b,model-c"; got != want {
+		t.Fatalf("DiscoveredModels=%q, want %q", got, want)
+	}
+	if !channel.ModelInventoryKnown {
+		t.Fatal("已发现模型时 ModelInventoryKnown 应为 true")
+	}
+	if len(channel.ModelBindings) != 2 {
+		t.Fatalf("ModelBindings=%+v, want 2", channel.ModelBindings)
+	}
+	if got := strings.Join(channel.ModelBindings[0].Models, ","); got != "model-a,model-b" {
+		t.Fatalf("第一个 Key 模型=%q", got)
+	}
+	if channel.ModelsUpdatedAt == nil || !channel.ModelsUpdatedAt.Equal(updatedAt.Add(time.Minute)) {
+		t.Fatalf("ModelsUpdatedAt=%v", channel.ModelsUpdatedAt)
+	}
+	if strings.Contains(w.Body.String(), "ark-secret") {
+		t.Fatalf("管理 API 泄漏凭证: %s", w.Body.String())
+	}
+}
+
+func TestManagedChannelModelAvailabilityIncludesEmptyAutoDiscoveryResult(t *testing.T) {
+	updatedAt := time.Date(2026, 7, 17, 11, 2, 0, 0, time.UTC)
+	models, bindings, latest, known := managedChannelModelAvailability([]*KeyEndpointProfile{
+		{
+			EndpointUID: "ep_empty", CredentialUID: "cred_empty", KeyMask: "ark-e***001",
+			Source: "auto_discovery", AvailableModels: []string{}, UpdatedAt: updatedAt,
+		},
+		{
+			EndpointUID: "ep_models", CredentialUID: "cred_models", KeyMask: "ark-m***002",
+			AvailableModels: []string{"model-a"}, UpdatedAt: updatedAt.Add(time.Minute),
+		},
+		{
+			EndpointUID: "ep_unknown", CredentialUID: "cred_unknown", KeyMask: "ark-u***003",
+			Source: "l1_passive", UpdatedAt: updatedAt.Add(2 * time.Minute),
+		},
+	})
+
+	if !known {
+		t.Fatal("自动发现的空模型清单仍应标记为已知")
+	}
+	if got, want := strings.Join(models, ","), "model-a"; got != want {
+		t.Fatalf("models=%q, want %q", got, want)
+	}
+	if len(bindings) != 2 {
+		t.Fatalf("bindings=%+v, want only two known inventories", bindings)
+	}
+	if got := bindings[0]; got.KeyMask != "ark-e***001" || len(got.Models) != 0 {
+		t.Fatalf("empty discovery binding=%+v, want empty ark-e binding", got)
+	}
+	if latest == nil || !latest.Equal(updatedAt.Add(time.Minute)) {
+		t.Fatalf("latest=%v, want discovered inventory update time", latest)
+	}
+}
+
 func TestPatchAccountCredentialsRemovesByUID(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")

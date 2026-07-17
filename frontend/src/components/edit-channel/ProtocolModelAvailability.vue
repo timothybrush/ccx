@@ -10,6 +10,7 @@
           {{ t('channelEditor.protocolModels.hint') }}
         </div>
       </div>
+      <v-progress-circular v-if="loading" class="ml-auto" color="primary" indeterminate size="18" width="2" />
     </div>
 
     <div class="protocol-model-availability__rows">
@@ -17,7 +18,7 @@
         v-for="route in normalizedRoutes"
         :key="`${route.kind}:${route.channelUid || route.index}`"
         class="protocol-model-route"
-        :data-kind="route.kind"
+        :data-kind="route.upstreamKind"
       >
         <div class="protocol-model-route__identity">
           <v-icon size="18" color="primary">{{ route.icon }}</v-icon>
@@ -25,7 +26,7 @@
             <span class="text-body-2 font-weight-medium">{{ route.label }}</span>
             <code class="protocol-model-route__path">{{ route.path }}</code>
           </div>
-          <v-chip size="x-small" variant="tonal" color="primary">
+          <v-chip v-if="route.hasInventory" size="x-small" variant="tonal" color="primary">
             {{ t('channelEditor.protocolModels.count', { count: route.models.length }) }}
           </v-chip>
         </div>
@@ -43,6 +44,22 @@
         </div>
         <div v-else class="text-caption text-medium-emphasis">
           {{ t('channelEditor.protocolModels.empty') }}
+        </div>
+        <div v-if="route.hasBindingDifferences" class="protocol-model-route__bindings">
+          <span class="text-caption text-warning">{{ t('channelEditor.protocolModels.keyDifferences') }}</span>
+          <v-tooltip
+            v-for="binding in route.bindings"
+            :key="binding.credentialUid || binding.keyMask"
+            :text="binding.models.join(', ') || t('channelEditor.protocolModels.empty')"
+            location="top"
+            max-width="420"
+          >
+            <template #activator="{ props: tooltipProps }">
+              <v-chip v-bind="tooltipProps" size="x-small" variant="tonal" color="warning">
+                {{ binding.keyMask }} · {{ t('channelEditor.protocolModels.count', { count: binding.models.length }) }}
+              </v-chip>
+            </template>
+          </v-tooltip>
         </div>
       </div>
     </div>
@@ -94,24 +111,42 @@ const protocolDefinitions: Record<ChannelKind, ProtocolDefinition> = {
   },
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   routes?: ChannelProtocolRoute[]
-}>()
+  loading?: boolean
+}>(), {
+  loading: false,
+})
 
 const { t } = useI18n()
 
+const normalizeModels = (models?: string[]) => Array.from(new Set(
+  (models ?? []).map(model => model.trim()).filter(Boolean),
+)).sort((left, right) => left.localeCompare(right))
+
 const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
-  const definition = protocolDefinitions[route.kind]
-  const models = Array.from(new Set(
-    (route.supportedModels ?? []).map(model => model.trim()).filter(Boolean),
-  )).sort((left, right) => left.localeCompare(right))
+  const upstreamKind = route.upstreamKind ?? route.kind
+  const definition = protocolDefinitions[upstreamKind]
+  const hasDiscoveredInventory = route.modelInventoryKnown === true || Array.isArray(route.discoveredModels)
+  const models = hasDiscoveredInventory
+    ? normalizeModels(route.discoveredModels)
+    : normalizeModels(route.supportedModels)
+  const bindings = (route.modelBindings ?? []).map(binding => ({
+    ...binding,
+    models: normalizeModels(binding.models),
+  }))
+  const bindingSignatures = new Set(bindings.map(binding => binding.models.join('\u0000')))
 
   return {
     ...route,
+    upstreamKind,
     label: t(definition.labelKey),
     path: definition.path,
     icon: definition.icon,
     models,
+    bindings,
+    hasInventory: hasDiscoveredInventory || models.length > 0,
+    hasBindingDifferences: bindings.length > 1 && bindingSignatures.size > 1,
   }
 }))
 </script>
@@ -177,6 +212,14 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   min-width: 0;
 }
 
+.protocol-model-route__bindings {
+  display: flex;
+  grid-column: 2;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .protocol-model-route__model {
   height: auto;
   min-height: 24px;
@@ -193,6 +236,10 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   .protocol-model-route {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .protocol-model-route__bindings {
+    grid-column: 1;
   }
 }
 </style>

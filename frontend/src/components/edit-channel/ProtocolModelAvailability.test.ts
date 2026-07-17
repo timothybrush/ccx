@@ -15,6 +15,10 @@ const passthroughStub = defineComponent({
   template: '<span><slot /></span>',
 })
 
+const tooltipStub = defineComponent({
+  template: '<span><slot name="activator" :props="{}" /><slot /></span>',
+})
+
 describe('ProtocolModelAvailability', () => {
   it('按协议分组展示各自的可用模型', () => {
     const wrapper = mount(ProtocolModelAvailability, {
@@ -69,6 +73,62 @@ describe('ProtocolModelAvailability', () => {
       },
     })
 
-    expect(wrapper.get('[data-kind="gemini"]').text()).toContain('channelEditor.protocolModels.empty')
+    const gemini = wrapper.get('[data-kind="gemini"]')
+    expect(gemini.text()).toContain('channelEditor.protocolModels.empty')
+    expect(gemini.text()).not.toContain('channelEditor.protocolModels.count:0')
+  })
+
+  it('已发现到空模型清单时不回退配置白名单', () => {
+    const wrapper = mount(ProtocolModelAvailability, {
+      props: {
+        routes: [{
+          kind: 'responses', upstreamKind: 'chat', index: 0, name: 'chat-through-responses', serviceType: 'openai',
+          supportedModels: ['configured-model'], modelInventoryKnown: true, discoveredModels: [],
+          modelBindings: [{ credentialUid: 'cred-empty', keyMask: 'sk-e***001', models: [] }],
+        }],
+      },
+      global: {
+        stubs: {
+          VChip: passthroughStub,
+          VIcon: passthroughStub,
+          VTooltip: tooltipStub,
+        },
+      },
+    })
+
+    const chat = wrapper.get('[data-kind="chat"]')
+    expect(chat.text()).toContain('/v1/chat/completions')
+    expect(chat.text()).toContain('channelEditor.protocolModels.count:0')
+    expect(chat.text()).not.toContain('configured-model')
+  })
+
+  it('优先展示 endpoint profile 模型并标记 Key 差异', () => {
+    const wrapper = mount(ProtocolModelAvailability, {
+      props: {
+        routes: [{
+          kind: 'messages', index: 0, name: 'volcengine-claude', serviceType: 'claude',
+          supportedModels: ['configured-model'],
+          discoveredModels: ['actual-model'],
+          modelBindings: [
+            { credentialUid: 'cred-a', keyMask: 'ark-a***001', models: ['actual-model'] },
+            { credentialUid: 'cred-b', keyMask: 'ark-b***002', models: ['other-model'] },
+          ],
+        }],
+      },
+      global: {
+        stubs: {
+          VChip: passthroughStub,
+          VIcon: passthroughStub,
+          VTooltip: tooltipStub,
+        },
+      },
+    })
+
+    const messages = wrapper.get('[data-kind="messages"]')
+    expect(messages.text()).toContain('actual-model')
+    expect(messages.text()).not.toContain('configured-model')
+    expect(messages.text()).toContain('channelEditor.protocolModels.keyDifferences')
+    expect(messages.text()).toContain('ark-a***001')
+    expect(messages.text()).toContain('ark-b***002')
   })
 })

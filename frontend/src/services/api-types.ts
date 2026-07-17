@@ -252,13 +252,25 @@ export interface ChannelProtocolCapsule {
   status?: ChannelStatus | 'healthy' | 'error' | 'unknown' | ''
 }
 
+export interface ChannelModelBinding {
+  credentialUid?: string
+  keyMask: string
+  models: string[]
+  updatedAt?: string
+}
+
 export interface ChannelProtocolRoute {
   kind: ChannelKind
+  upstreamKind?: ChannelKind
   index: number
   name: string
   serviceType: string
   channelUid?: string
   supportedModels?: string[]
+  modelInventoryKnown?: boolean
+  discoveredModels?: string[]
+  modelBindings?: ChannelModelBinding[]
+  modelsUpdatedAt?: string
 }
 
 export interface ChannelsResponse {
@@ -1586,6 +1598,10 @@ export interface ManagedAccountChannel {
   name: string
   serviceType: string
   status: string
+  modelInventoryKnown?: boolean
+  discoveredModels?: string[]
+  modelBindings?: ChannelModelBinding[]
+  modelsUpdatedAt?: string
 }
 
 export interface ManagedAccount {

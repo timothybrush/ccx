@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -254,11 +255,22 @@ type managedMiMoTokenPlanView struct {
 }
 
 type managedAccountChannelView struct {
-	Kind        string `json:"kind"`
-	ChannelUID  string `json:"channelUid"`
-	Name        string `json:"name"`
-	ServiceType string `json:"serviceType"`
-	Status      string `json:"status"`
+	Kind                string                                  `json:"kind"`
+	ChannelUID          string                                  `json:"channelUid"`
+	Name                string                                  `json:"name"`
+	ServiceType         string                                  `json:"serviceType"`
+	Status              string                                  `json:"status"`
+	ModelInventoryKnown bool                                    `json:"modelInventoryKnown,omitempty"`
+	DiscoveredModels    []string                                `json:"discoveredModels,omitempty"`
+	ModelBindings       []managedAccountChannelModelBindingView `json:"modelBindings,omitempty"`
+	ModelsUpdatedAt     *time.Time                              `json:"modelsUpdatedAt,omitempty"`
+}
+
+type managedAccountChannelModelBindingView struct {
+	CredentialUID string     `json:"credentialUid,omitempty"`
+	KeyMask       string     `json:"keyMask"`
+	Models        []string   `json:"models"`
+	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 }
 
 type managedAccountView struct {
@@ -277,6 +289,10 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 			return
 		}
 		cfg := deps.CfgManager.GetConfig()
+		var profileStore *ProfileStore
+		if deps.Runner != nil {
+			profileStore = deps.Runner.store
+		}
 		accounts := make([]managedAccountView, 0, len(cfg.ManagedAccounts))
 		for _, account := range cfg.ManagedAccounts {
 			view := managedAccountView{AccountUID: account.AccountUID, ProviderID: account.ProviderID, Name: account.Name}
@@ -300,18 +316,120 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 				view.Credentials = append(view.Credentials, credentialView)
 			}
 			for _, channel := range deps.CfgManager.GetAccountChannels(account.AccountUID) {
-				view.Channels = append(view.Channels, managedAccountChannelView{
+				channelView := managedAccountChannelView{
 					Kind: channel.Kind, ChannelUID: channel.Upstream.ChannelUID, Name: channel.Upstream.Name,
 					ServiceType: channel.Upstream.ServiceType, Status: channel.Upstream.Status,
-				})
+				}
+				if profileStore != nil {
+					channelView.DiscoveredModels, channelView.ModelBindings, channelView.ModelsUpdatedAt, channelView.ModelInventoryKnown =
+						managedChannelModelAvailability(profileStore.ListActiveByChannel(channel.Upstream.ChannelUID))
+				}
+				view.Channels = append(view.Channels, channelView)
 			}
-			if deps.Runner != nil && deps.Runner.store != nil {
-				view.EndpointCount = len(deps.Runner.store.ListByAccount(account.AccountUID))
+			if profileStore != nil {
+				view.EndpointCount = len(profileStore.ListByAccount(account.AccountUID))
 			}
 			accounts = append(accounts, view)
 		}
 		c.JSON(http.StatusOK, gin.H{"accounts": accounts})
 	}
+}
+
+func managedChannelModelAvailability(profiles []*KeyEndpointProfile) ([]string, []managedAccountChannelModelBindingView, *time.Time, bool) {
+	type bindingAggregate struct {
+		credentialUID string
+		keyMask       string
+		models        map[string]struct{}
+		updatedAt     time.Time
+	}
+
+	allModels := make(map[string]struct{})
+	bindings := make(map[string]*bindingAggregate)
+	var latest time.Time
+	modelInventoryKnown := false
+	for _, profile := range profiles {
+		if profile == nil || !profileHasModelInventory(profile) {
+			continue
+		}
+		modelInventoryKnown = true
+		bindingKey := strings.TrimSpace(profile.CredentialUID)
+		if bindingKey == "" {
+			bindingKey = strings.TrimSpace(profile.KeyHash)
+		}
+		if bindingKey == "" {
+			bindingKey = profile.EndpointUID
+		}
+		binding := bindings[bindingKey]
+		if binding == nil {
+			binding = &bindingAggregate{
+				credentialUID: profile.CredentialUID,
+				keyMask:       profile.KeyMask,
+				models:        make(map[string]struct{}),
+			}
+			bindings[bindingKey] = binding
+		}
+		if binding.keyMask == "" {
+			binding.keyMask = profile.KeyMask
+		}
+		for _, model := range profile.AvailableModels {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			binding.models[model] = struct{}{}
+			allModels[model] = struct{}{}
+		}
+		if profile.UpdatedAt.After(binding.updatedAt) {
+			binding.updatedAt = profile.UpdatedAt
+		}
+		if profile.UpdatedAt.After(latest) {
+			latest = profile.UpdatedAt
+		}
+	}
+
+	modelList := sortedModelSet(allModels)
+	bindingList := make([]managedAccountChannelModelBindingView, 0, len(bindings))
+	for _, binding := range bindings {
+		view := managedAccountChannelModelBindingView{
+			CredentialUID: binding.credentialUID,
+			KeyMask:       binding.keyMask,
+			Models:        sortedModelSet(binding.models),
+		}
+		if !binding.updatedAt.IsZero() {
+			updatedAt := binding.updatedAt
+			view.UpdatedAt = &updatedAt
+		}
+		bindingList = append(bindingList, view)
+	}
+	sort.Slice(bindingList, func(i, j int) bool {
+		if bindingList[i].KeyMask == bindingList[j].KeyMask {
+			return bindingList[i].CredentialUID < bindingList[j].CredentialUID
+		}
+		return bindingList[i].KeyMask < bindingList[j].KeyMask
+	})
+	if latest.IsZero() {
+		return modelList, bindingList, nil, modelInventoryKnown
+	}
+	return modelList, bindingList, &latest, modelInventoryKnown
+}
+
+// profileHasModelInventory 区分尚未获得模型清单与成功发现到空清单。
+// 自动发现将 HTTP 200 的空 models 响应持久化为 Source=auto_discovery；它仍是权威结果，
+// 因此需要展示为当前 Key 的 0 个模型，而不是回退到可能过期的配置白名单。
+func profileHasModelInventory(profile *KeyEndpointProfile) bool {
+	return len(profile.AvailableModels) > 0 || strings.EqualFold(strings.TrimSpace(profile.Source), "auto_discovery")
+}
+
+func sortedModelSet(models map[string]struct{}) []string {
+	if len(models) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(models))
+	for model := range models {
+		result = append(result, model)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func mimoTokenPlanView(source *config.MiMoConsoleCredential) *managedMiMoTokenPlanView {

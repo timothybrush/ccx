@@ -110,6 +110,7 @@ describe('buildUnifiedChannelsData account grouping', () => {
     const [volcengine] = buildUnifiedChannelsData(data).channels
     expect(volcengine.protocolCapsules?.map(item => item.label)).toEqual(['CLAUDE', 'CHAT'])
     expect(volcengine.protocolRoutes).toHaveLength(4)
+    expect(volcengine.protocolRoutes?.every(route => route.supportedModels === undefined)).toBe(true)
   })
 
   it('新增单协议渠道置顶后保持多协议账号的既有相对顺序', () => {

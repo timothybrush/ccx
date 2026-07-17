@@ -61,7 +61,7 @@
                 @update:base-urls-text="baseUrlsText = $event"
                 @menu-update="onMenuUpdate"
               />
-              <ProtocolModelAvailability :routes="props.channel?.protocolRoutes" />
+              <ProtocolModelAvailability :routes="protocolModelRoutes" :loading="managedModelsLoading" />
             </section>
 
             <!-- 身份认证 -->
@@ -420,7 +420,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 // 子组件导入
 import AddChannelHeader from './edit-channel/AddChannelHeader.vue'
@@ -438,6 +438,9 @@ import AdvancedOptionsSection from './edit-channel/AdvancedOptionsSection.vue'
 import TransportConfigGroup from './edit-channel/TransportConfigGroup.vue'
 import RateLimitGroup from './edit-channel/RateLimitGroup.vue'
 import { useEditChannelModal, type EditChannelModalEmits, type EditChannelModalProps } from '../composables/useEditChannelModal'
+import { ApiService } from '../services/api'
+import type { ManagedAccountChannel } from '../services/api-types'
+import { buildNativeProtocolModelRoutes } from '../utils/channelModelAvailability'
 import { isManagedProviderChannel, isOfficialProviderChannel, providerDisplayName } from '../utils/providerDisplay'
 
 const props = withDefaults(defineProps<EditChannelModalProps>(), {
@@ -448,6 +451,38 @@ const emit = defineEmits<EditChannelModalEmits>()
 const managedProviderName = computed(() => providerDisplayName(props.channel?.providerId))
 const isManagedProvider = computed(() => isManagedProviderChannel(props.channel))
 const isOfficialManagedProvider = computed(() => isOfficialProviderChannel(props.channel))
+const managedAccountChannels = ref<ManagedAccountChannel[]>([])
+const managedModelsLoading = ref(false)
+const managedAccountsApi = new ApiService()
+let managedModelsRequestId = 0
+
+const protocolModelRoutes = computed(() => {
+  const routes = props.channel?.protocolRoutes ?? []
+  if (!props.channel?.autoManaged || !props.channel.accountUid) return routes
+  return buildNativeProtocolModelRoutes(routes, managedAccountChannels.value)
+})
+
+watch(
+  [() => props.show, () => props.channel?.accountUid],
+  async ([show, accountUid]) => {
+    const requestId = ++managedModelsRequestId
+    managedAccountChannels.value = []
+    managedModelsLoading.value = false
+    if (!show || !accountUid) return
+
+    managedModelsLoading.value = true
+    try {
+      const response = await managedAccountsApi.getManagedAccounts()
+      if (requestId !== managedModelsRequestId) return
+      managedAccountChannels.value = response.accounts.find(account => account.accountUid === accountUid)?.channels ?? []
+    } catch {
+      if (requestId === managedModelsRequestId) managedAccountChannels.value = []
+    } finally {
+      if (requestId === managedModelsRequestId) managedModelsLoading.value = false
+    }
+  },
+  { immediate: true },
+)
 
 const {
   formRef,
