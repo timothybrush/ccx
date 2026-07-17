@@ -19,3 +19,13 @@ tar -C "$source_dir" \
   --exclude='frontend/dist' \
   -cf - Makefile VERSION backend-go frontend shared scripts \
   | tar -C "$target_dir" -xf -
+
+# The backend package embeds frontend/dist at compile time. The real frontend is
+# verified separately, so keep host artifacts excluded and satisfy go:embed only
+# inside the disposable Linux worktree.
+embedded_dist="$target_dir/backend-go/frontend/dist"
+if [ ! -f "$embedded_dist/index.html" ]; then
+  mkdir -p "$embedded_dist"
+  printf '%s\n' '<!doctype html><title>CCX container verification</title>' \
+    >"$embedded_dist/index.html"
+fi
