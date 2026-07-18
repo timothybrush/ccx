@@ -3,6 +3,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Building, BadgeCheck, Cog } from 'lucide-vue-next'
 import { useLanguage } from '@/composables/useLanguage'
 
 interface FormData {
@@ -25,6 +27,9 @@ const props = defineProps<{
   errors: Errors
   serviceTypeOptions: Array<{ label: string; value: string }>
   expectedRequestUrls: any[]
+  managedAccount?: boolean
+  providerName?: string
+  officialProvider?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,8 +47,29 @@ function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
   <section class="space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-xs">
     <h4 class="text-xs font-bold uppercase tracking-wider text-primary">{{ t('channelEditor.nav.basic') }}</h4>
 
+    <div v-if="managedAccount && providerName" class="mb-2 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+      <Building class="h-5 w-5 shrink-0 text-primary" />
+      <div class="min-w-0 flex-1">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {{ t('channelEditor.managed.providerLabel') }}
+        </div>
+        <div class="text-sm font-bold text-foreground">
+          {{ t(officialProvider ? 'channelEditor.managed.officialChannel' : 'channelEditor.managed.providerChannel', { provider: providerName }) }}
+        </div>
+      </div>
+      <Badge
+        :class="officialProvider
+          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : 'border-primary/30 bg-primary/10 text-primary'"
+        class="shrink-0 gap-1 text-[10px]"
+      >
+        <component :is="officialProvider ? BadgeCheck : Cog" class="h-3 w-3" />
+        {{ t(officialProvider ? 'channelEditor.managed.officialBadge' : 'channelEditor.managed.managedBadge') }}
+      </Badge>
+    </div>
+
     <div class="grid gap-3 md:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
-      <div class="space-y-1.5">
+      <div v-if="!managedAccount || !providerName" class="space-y-1.5">
         <Label class="text-xs font-semibold text-muted-foreground">
           {{ t('channelEditor.basic.name.label') }} <span class="text-destructive">*</span>
         </Label>

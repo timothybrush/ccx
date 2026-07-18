@@ -145,6 +145,9 @@ const {
   handleDiscoverChannelConfig,
   applyChannelDiscoveryRecommendation,
   t,
+  managedProviderName,
+  isOfficialManagedProvider,
+  isAutoManagedChannel,
 } = useChannelEditDialog(props, emit)
 
 const embeddingTargetModels = computed(() =>
@@ -236,6 +239,9 @@ const embeddingTargetModels = computed(() =>
                         :errors="errors"
                         :service-type-options="serviceTypeOptions"
                         :expected-request-urls="expectedRequestUrls"
+                        :managed-account="isAutoManagedChannel"
+                        :provider-name="managedProviderName"
+                        :official-provider="isOfficialManagedProvider"
                         @update:form="(updates) => Object.assign(form, updates)"
                       />
                     </section>

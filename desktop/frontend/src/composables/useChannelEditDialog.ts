@@ -16,6 +16,7 @@ import { extractChannelNamePrefix, syncBaseUrlsFormState } from '@/utils/channel
 import type { ManagedChannelType } from '@/utils/channel-type-api'
 import { buildExpectedRequestUrls } from '@/utils/expected-request-urls'
 import { parseQuickInput } from '@/utils/quick-input-parser'
+import { providerDisplayName, isOfficialProviderChannel, isAutoManagedAccountChannel } from '@/utils/providerDisplay'
 import { defaultStreamTimeouts } from '@/utils/stream-timeout-presets'
 import type {
   Channel,
@@ -53,6 +54,9 @@ const { t } = useLanguage()
 
   const isEditMode = computed(() => !!props.channel)
   const isMac = computed(() => typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform))
+  const managedProviderName = computed(() => providerDisplayName(props.channel?.providerId))
+  const isOfficialManagedProvider = computed(() => isOfficialProviderChannel(props.channel))
+  const isAutoManagedChannel = computed(() => isAutoManagedAccountChannel(props.channel))
   const saving = ref(false)
   const error = ref('')
   const success = ref('')
@@ -1200,5 +1204,8 @@ const { t } = useLanguage()
     handleDiscoverChannelConfig,
     applyChannelDiscoveryRecommendation,
     t,
+    managedProviderName,
+    isOfficialManagedProvider,
+    isAutoManagedChannel,
   }
 }

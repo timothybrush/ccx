@@ -244,6 +244,15 @@ export interface Channel {
   rateLimitMaxConcurrent?: number
   rateLimitAutoFromHeaders?: boolean
   rpm?: number
+  // 托管渠道身份（autopilot 自动托管渠道）
+  accountUid?: string
+  channelUid?: string
+  providerId?: string
+  autoManaged?: boolean
+  autoManagedAt?: string
+  originType?: string
+  originTier?: string
+  tags?: string[]
 }
 
 export interface ChannelsResponse {
