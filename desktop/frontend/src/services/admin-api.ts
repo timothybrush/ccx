@@ -877,6 +877,8 @@ export interface EndpointDetailItem {
   successRate15m?: number
   successRate1h?: number
   p95LatencyMs?: number
+  firstByteSampleCount?: number
+  p95FirstByteLatencyMs?: number
   consecutiveFail: number
   lastSuccessAt?: string
   updatedAt?: string

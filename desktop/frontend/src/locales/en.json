@@ -1293,6 +1293,7 @@
   "healthCenter.detail.keyHash": "Key",
   "healthCenter.detail.lastSuccess": "Last Success",
   "healthCenter.detail.p95": "P95 Latency",
+  "healthCenter.detail.firstByteP95": "P95 First Byte",
   "healthCenter.detail.qualityTier": "Quality",
   "healthCenter.detail.speedTier": "Speed",
   "healthCenter.detail.stabilityTier": "Stability",

@@ -1293,6 +1293,7 @@
   "healthCenter.detail.keyHash": "Key",
   "healthCenter.detail.lastSuccess": "最近成功",
   "healthCenter.detail.p95": "P95 延迟",
+  "healthCenter.detail.firstByteP95": "P95 首字节",
   "healthCenter.detail.qualityTier": "质量",
   "healthCenter.detail.speedTier": "速度",
   "healthCenter.detail.stabilityTier": "稳定性",

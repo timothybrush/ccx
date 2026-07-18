@@ -86,6 +86,7 @@ function rateClass(rate?: number): string {
             <TableHead>{{ t('healthCenter.detail.speedTier') }}</TableHead>
             <TableHead>{{ t('healthCenter.detail.successRate15m') }}</TableHead>
             <TableHead>{{ t('healthCenter.detail.p95') }}</TableHead>
+            <TableHead>{{ t('healthCenter.detail.firstByteP95') }}</TableHead>
             <TableHead>{{ t('healthCenter.detail.consecutiveFail') }}</TableHead>
           </TableRow>
         </TableHeader>
@@ -111,6 +112,12 @@ function rateClass(rate?: number): string {
             </TableCell>
             <TableCell :class="rateClass(ep.successRate15m)">{{ formatPercent(ep.successRate15m) }}</TableCell>
             <TableCell>{{ ep.p95LatencyMs ? ep.p95LatencyMs.toFixed(0) + 'ms' : '-' }}</TableCell>
+            <TableCell>
+              {{ ep.p95FirstByteLatencyMs ? ep.p95FirstByteLatencyMs.toFixed(0) + 'ms' : '-' }}
+              <span v-if="ep.firstByteSampleCount" class="text-xs text-muted-foreground">
+                (n={{ ep.firstByteSampleCount }})
+              </span>
+            </TableCell>
             <TableCell>
               <span v-if="ep.consecutiveFail > 0" class="font-bold text-red-500">{{ ep.consecutiveFail }}</span>
               <span v-else>-</span>
