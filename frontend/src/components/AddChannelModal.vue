@@ -21,6 +21,7 @@
           <v-btn-toggle
             v-model="quickAddMode"
             mandatory
+            :disabled="isCreatingChannel"
             density="compact"
             rounded="lg"
             color="primary"
@@ -255,6 +256,9 @@ const quickAddMode = ref(false)
 const quickAddFormRef = ref<InstanceType<typeof QuickAddChannelForm> | null>(null)
 
 const isMac = computed(() => typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform))
+const isCreatingChannel = computed(() =>
+  quickAddMode.value ? Boolean(quickAddFormRef.value?.submitting) : standardSubmitting.value
+)
 
 const headerClasses = computed(() => {
   const isDark = theme.global.current.value.dark
