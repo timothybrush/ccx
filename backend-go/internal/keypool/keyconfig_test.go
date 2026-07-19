@@ -213,3 +213,21 @@ func TestCandidatesForModel_DisabledKeyFiltered(t *testing.T) {
 		t.Fatalf("want 2 candidates after disabled record expires, got %d", len(cands))
 	}
 }
+
+func TestCandidatesForModel_FiltersKeysAboveGroupMultiplierLimit(t *testing.T) {
+	safeRatio, unsafeRatio, limit := 1.0, 2.0, 1.0
+	up := &config.UpstreamConfig{
+		APIKeys: []string{"safe", "unsafe", "legacy", "incomplete"},
+		APIKeyConfigs: []config.APIKeyConfig{
+			{Key: "safe", GroupMultiplier: &safeRatio, MaxGroupMultiplier: &limit},
+			{Key: "unsafe", GroupMultiplier: &unsafeRatio, MaxGroupMultiplier: &limit},
+			{Key: "legacy"},
+			{Key: "incomplete", GroupMultiplier: &safeRatio},
+		},
+	}
+
+	cands := CandidatesForModel(up, nil, "gpt-5.6")
+	if len(cands) != 2 || cands[0].APIKey != "safe" || cands[1].APIKey != "legacy" {
+		t.Fatalf("group multiplier guard should keep only safe and legacy keys, got %+v", cands)
+	}
+}

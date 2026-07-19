@@ -131,9 +131,13 @@ type APIKeyConfig struct {
 	// BaseURL 该 Key 绑定的上游端点。非空时 failover 遍历仅在此 baseURL 上尝试该 Key，
 	// 避免 provider 模板化添加场景下不同 plan 的 Key（如 MiMo sk-/tp-）与多 baseURL 产生无效笛卡尔积组合。
 	// 为空时保持原有笛卡尔积行为（向后兼容，历史手填渠道不受影响）。
-	BaseURL                  string   `json:"baseUrl,omitempty"`
-	Enabled                  *bool    `json:"enabled,omitempty"`
-	QuotaGroup               string   `json:"quotaGroup,omitempty"`
+	BaseURL    string `json:"baseUrl,omitempty"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+	QuotaGroup string `json:"quotaGroup,omitempty"`
+	// GroupMultiplier 和 MaxGroupMultiplier 是自动接入的成本安全闸门。
+	// 两者同时存在时，调度只会使用倍率不超过上限的 Key；任一字段缺失则保持历史 Key 的兼容行为。
+	GroupMultiplier          *float64 `json:"groupMultiplier,omitempty"`
+	MaxGroupMultiplier       *float64 `json:"maxGroupMultiplier,omitempty"`
 	RateLimitRPM             int      `json:"rateLimitRpm,omitempty"`
 	RateLimitWindowMinutes   int      `json:"rateLimitWindowMinutes,omitempty"` // 滑动窗口时长（秒；JSON 字段名保留为兼容旧配置）
 	RateLimitMaxConcurrent   int      `json:"rateLimitMaxConcurrent,omitempty"`
@@ -437,6 +441,9 @@ func IsAPIKeyConfigEffective(cfg APIKeyConfig) bool {
 		return true
 	}
 	if strings.TrimSpace(cfg.Name) != "" || strings.TrimSpace(cfg.QuotaGroup) != "" {
+		return true
+	}
+	if cfg.GroupMultiplier != nil || cfg.MaxGroupMultiplier != nil {
 		return true
 	}
 	if cfg.RateLimitRPM > 0 || cfg.RateLimitWindowMinutes > 0 || cfg.RateLimitMaxConcurrent > 0 {
@@ -897,7 +904,7 @@ func (cm *ConfigManager) GetNextAPIKey(upstream *UpstreamConfig, failedKeys map[
 	now := time.Now()
 	availableKeys := []string{}
 	for _, key := range upstream.APIKeys {
-		if !failedKeys[key] && !upstream.IsKeyDisabledNow(key, now) && !cm.isKeyFailed(key, apiType) {
+		if !failedKeys[key] && !upstream.IsKeyDisabledNow(key, now) && upstream.IsAPIKeyGroupMultiplierAllowed(key) && !cm.isKeyFailed(key, apiType) {
 			availableKeys = append(availableKeys, key)
 		}
 	}
@@ -909,7 +916,7 @@ func (cm *ConfigManager) GetNextAPIKey(upstream *UpstreamConfig, failedKeys map[
 
 		cm.mu.RLock()
 		for _, key := range upstream.APIKeys {
-			if !failedKeys[key] && !upstream.IsKeyDisabledNow(key, now) { // 排除本次请求失败或持久禁用的密钥
+			if !failedKeys[key] && !upstream.IsKeyDisabledNow(key, now) && upstream.IsAPIKeyGroupMultiplierAllowed(key) { // 排除本次请求失败、持久禁用或超过成本上限的密钥
 				cacheKey := failedKeyCacheKey(apiType, key)
 				if failure, exists := cm.failedKeysCache[cacheKey]; exists {
 					if failure.Timestamp.Before(oldestTime) {
@@ -954,6 +961,9 @@ func (cm *ConfigManager) GetAdminAPIKey(upstream *UpstreamConfig, failedKeys map
 
 	for _, disabledKey := range upstream.DisabledAPIKeys {
 		if failedKeys[disabledKey.Key] {
+			continue
+		}
+		if disabledKey.Config != nil && !IsAPIKeyConfigGroupMultiplierAllowed(*disabledKey.Config) {
 			continue
 		}
 		log.Printf("[%s-Key] 警告: 活跃密钥不可用，临时借用已拉黑密钥用于管理操作: %s", apiType, utils.MaskAPIKey(disabledKey.Key))

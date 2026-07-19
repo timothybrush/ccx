@@ -44,6 +44,12 @@ func setupNewApiTestConfigManager(t *testing.T) *config.ConfigManager {
 // existingTokenKey 为空字符串时模拟"列表接口对已存在 key 做了脱敏、不回显明文"的上游行为
 // （§8.5.1 设计文档中 key 列表 data.items[] 含 key 字段，但部分 fork 可能脱敏）。
 func mockNewApiSite(t *testing.T, existingTokenName string, existingTokenKey string, createRespHasKey bool) *httptest.Server {
+	return mockNewApiSiteWithGroups(t, existingTokenName, existingTokenKey, "default", createRespHasKey, map[string]NewApiGroupInfo{
+		"default": {Desc: "默认", Ratio: 1.0},
+	})
+}
+
+func mockNewApiSiteWithGroups(t *testing.T, existingTokenName string, existingTokenKey string, existingTokenGroup string, createRespHasKey bool, groups map[string]NewApiGroupInfo) *httptest.Server {
 	t.Helper()
 	var created []NewApiToken
 	nextID := 100
@@ -52,7 +58,7 @@ func mockNewApiSite(t *testing.T, existingTokenName string, existingTokenKey str
 		writeEnvelope(w, true, NewApiUserSelf{ID: 7, Username: "bob", Quota: 50000, UsedQuota: 1000}, "")
 	})
 	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
-		writeEnvelope(w, true, map[string]NewApiGroupInfo{"default": {Desc: "默认", Ratio: 1.0}}, "")
+		writeEnvelope(w, true, groups, "")
 	})
 	mux.HandleFunc("/api/user/models", func(w http.ResponseWriter, r *http.Request) {
 		writeEnvelope(w, true, []string{"gpt-4o", "claude-3-5-sonnet"}, "")
@@ -62,7 +68,7 @@ func mockNewApiSite(t *testing.T, existingTokenName string, existingTokenKey str
 		case http.MethodGet:
 			items := []NewApiToken{}
 			if existingTokenName != "" {
-				items = append(items, NewApiToken{ID: 1, Key: existingTokenKey, Name: existingTokenName, Status: 1})
+				items = append(items, NewApiToken{ID: 1, Key: existingTokenKey, Name: existingTokenName, Group: existingTokenGroup, Status: 1})
 			}
 			items = append(items, created...)
 			writeEnvelope(w, true, newApiTokenListData{Items: items}, "")
@@ -70,7 +76,7 @@ func mockNewApiSite(t *testing.T, existingTokenName string, existingTokenKey str
 			var req NewApiCreateTokenRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 			nextID++
-			tok := NewApiToken{ID: nextID, Name: req.Name, Status: 1}
+			tok := NewApiToken{ID: nextID, Name: req.Name, Group: req.Group, Status: 1}
 			if createRespHasKey {
 				tok.Key = "sk-newly-created-key"
 			}
@@ -127,6 +133,40 @@ func TestHandleNewApiVerify_Success(t *testing.T) {
 	}
 }
 
+func TestHandleNewApiVerify_ReportsGroupFetchError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7, Username: "bob"}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, false, nil, "groups unavailable")
+	})
+	mux.HandleFunc("/api/user/models", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, []string{}, "")
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store})
+	body, _ := json.Marshal(NewApiVerifyRequest{BaseURL: site.URL, AccessToken: "token"})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/verify", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("期望 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp NewApiVerifyResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("响应解析失败: %v", err)
+	}
+	if resp.GroupFetchError == "" {
+		t.Fatalf("分组拉取失败应明确返回错误，got %+v", resp)
+	}
+}
+
 func TestHandleNewApiVerify_InvalidToken(t *testing.T) {
 	site := mockNewApiSite(t, "", "", true)
 	mux := http.NewServeMux()
@@ -169,7 +209,8 @@ func TestHandleNewApiVerify_MissingFields(t *testing.T) {
 
 func TestHandleNewApiProvision_FullFlow_CreateNewKey(t *testing.T) {
 	site := mockNewApiSite(t, "", "", true)
-	store, err := NewSubscriptionStoreWithDB(newTestDB(t))
+	db := newTestDB(t)
+	store, err := NewSubscriptionStoreWithDB(db)
 	if err != nil {
 		t.Fatalf("创建 store 失败: %v", err)
 	}
@@ -216,6 +257,20 @@ func TestHandleNewApiProvision_FullFlow_CreateNewKey(t *testing.T) {
 	if profile.AccessToken != "secret-provision-token" {
 		t.Fatalf("profile 持久化的 AccessToken 不匹配: got=%s", profile.AccessToken)
 	}
+	if profile.ProvisionGroup != "default" || profile.ProvisionGroupRatio == nil || *profile.ProvisionGroupRatio != 1 {
+		t.Fatalf("profile 分组快照不匹配: %+v", profile)
+	}
+	if profile.MaxGroupMultiplier == nil || *profile.MaxGroupMultiplier != DefaultNewApiMaxGroupMultiplier {
+		t.Fatalf("profile 分组倍率上限不匹配: %+v", profile.MaxGroupMultiplier)
+	}
+	reloadedStore, err := NewSubscriptionStoreWithDB(db)
+	if err != nil {
+		t.Fatalf("重载订阅存储失败: %v", err)
+	}
+	persisted := reloadedStore.Get("sub-newapi-1")
+	if persisted == nil || persisted.MaxGroupMultiplier == nil || *persisted.MaxGroupMultiplier != DefaultNewApiMaxGroupMultiplier {
+		t.Fatalf("重载后分组倍率上限丢失: %+v", persisted)
+	}
 	if bytesContains(w.Body.Bytes(), []byte("secret-provision-token")) {
 		t.Fatal("响应体中出现了完整 AccessToken 明文")
 	}
@@ -229,6 +284,9 @@ func TestHandleNewApiProvision_FullFlow_CreateNewKey(t *testing.T) {
 			if len(ch.APIKeys) != 1 || ch.APIKeys[0] != "sk-newly-created-key" {
 				t.Fatalf("渠道 APIKeys 不匹配: %+v", ch.APIKeys)
 			}
+			if len(ch.APIKeyConfigs) != 1 || ch.APIKeyConfigs[0].QuotaGroup != "default" {
+				t.Fatalf("渠道 Key 分组元数据不匹配: %+v", ch.APIKeyConfigs)
+			}
 			if ch.ChannelUID != resp.ChannelUID {
 				t.Fatalf("渠道 UID 不匹配: cfg=%s resp=%s", ch.ChannelUID, resp.ChannelUID)
 			}
@@ -239,9 +297,315 @@ func TestHandleNewApiProvision_FullFlow_CreateNewKey(t *testing.T) {
 	}
 }
 
+func TestHandleNewApiProvision_AutoCreatesOnlyEligibleGroupKeys(t *testing.T) {
+	var created []NewApiToken
+	var createdGroups []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7, Username: "bob", Quota: 50000}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, map[string]NewApiGroupInfo{
+			"default":  {Desc: "默认", Ratio: 1},
+			"discount": {Desc: "优惠", Ratio: 0.5},
+			"premium":  {Desc: "高倍率", Ratio: 2},
+		}, "")
+	})
+	mux.HandleFunc("/api/user/models", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, []string{"gpt-5.6"}, "")
+	})
+	mux.HandleFunc("/api/token/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			writeEnvelope(w, true, newApiTokenListData{Items: created}, "")
+		case http.MethodPost:
+			var createReq NewApiCreateTokenRequest
+			if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
+				t.Fatalf("解析建 key 请求失败: %v", err)
+			}
+			createdGroups = append(createdGroups, createReq.Group)
+			token := NewApiToken{
+				ID:     len(created) + 1,
+				Key:    "sk-" + createReq.Group,
+				Name:   createReq.Name,
+				Group:  createReq.Group,
+				Status: 1,
+			}
+			created = append(created, token)
+			writeEnvelope(w, true, token, "")
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	limit := 1.0
+	body, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID:            "sub-auto-groups",
+		DisplayName:                "自动安全分组",
+		BaseURL:                    site.URL,
+		AccessToken:                "token",
+		ChannelKind:                "messages",
+		ChannelName:                "newapi-auto-safe-groups",
+		ProvisionAllEligibleGroups: true,
+		MaxGroupMultiplier:         &limit,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("期望 201, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if len(createdGroups) != 2 || createdGroups[0] != "discount" || createdGroups[1] != "default" {
+		t.Fatalf("只应为阈值内分组建 key，got %v", createdGroups)
+	}
+	var resp NewApiProvisionResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("响应解析失败: %v", err)
+	}
+	if len(resp.ProvisionedKeys) != 2 || resp.ProvisionedKeys[0].Group != "discount" || resp.ProvisionedKeys[1].Group != "default" {
+		t.Fatalf("响应分组 key 元数据不匹配: %+v", resp.ProvisionedKeys)
+	}
+	if bytesContains(w.Body.Bytes(), []byte("sk-discount")) || bytesContains(w.Body.Bytes(), []byte("sk-default")) {
+		t.Fatal("批量接入响应不应回传任何分组 key 明文")
+	}
+
+	profile := store.Get("sub-auto-groups")
+	if profile == nil || len(profile.ProvisionedKeys) != 2 || profile.MaxGroupMultiplier == nil || *profile.MaxGroupMultiplier != limit {
+		t.Fatalf("订阅未持久化完整的分组安全策略: %+v", profile)
+	}
+	cfg := cfgManager.GetConfig()
+	if len(cfg.Upstream) != 1 || len(cfg.Upstream[0].APIKeys) != 2 || len(cfg.Upstream[0].APIKeyConfigs) != 2 {
+		t.Fatalf("渠道未绑定全部合格分组 key: %+v", cfg.Upstream)
+	}
+	for _, keyConfig := range cfg.Upstream[0].APIKeyConfigs {
+		if keyConfig.QuotaGroup == "premium" || keyConfig.GroupMultiplier == nil || keyConfig.MaxGroupMultiplier == nil || *keyConfig.GroupMultiplier > *keyConfig.MaxGroupMultiplier {
+			t.Fatalf("渠道包含超限或不受保护的 key 配置: %+v", keyConfig)
+		}
+	}
+}
+
+func TestHandleNewApiProvision_ChannelNameConflictPreventsRemoteKeyCreation(t *testing.T) {
+	postCalls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, map[string]NewApiGroupInfo{"default": {Ratio: 1}}, "")
+	})
+	mux.HandleFunc("/api/token/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			postCalls++
+		}
+		writeEnvelope(w, true, newApiTokenListData{}, "")
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	if err := cfgManager.AddUpstream(config.UpstreamConfig{Name: "already-exists", BaseURL: "https://example.com", APIKeys: []string{"sk-existing"}, ServiceType: "claude"}); err != nil {
+		t.Fatalf("预置渠道失败: %v", err)
+	}
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	requestBody, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID:            "sub-channel-conflict",
+		DisplayName:                "冲突渠道",
+		BaseURL:                    site.URL,
+		AccessToken:                "token",
+		ChannelKind:                "messages",
+		ChannelName:                "already-exists",
+		ProvisionAllEligibleGroups: true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("期望 409, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if postCalls != 0 || store.Get("sub-channel-conflict") != nil {
+		t.Fatalf("渠道名冲突不得创建远端 key 或订阅: postCalls=%d", postCalls)
+	}
+}
+
+func TestHandleNewApiProvision_SecondGroupFailureRollsBackCreatedKey(t *testing.T) {
+	postCalls := 0
+	var deleted []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, map[string]NewApiGroupInfo{
+			"first":  {Ratio: 0.5},
+			"second": {Ratio: 1},
+		}, "")
+	})
+	mux.HandleFunc("/api/user/models", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, []string{}, "")
+	})
+	mux.HandleFunc("/api/token/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			writeEnvelope(w, true, newApiTokenListData{}, "")
+		case http.MethodPost:
+			postCalls++
+			if postCalls == 1 {
+				var createReq NewApiCreateTokenRequest
+				if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
+					t.Fatalf("解析建 key 请求失败: %v", err)
+				}
+				writeEnvelope(w, true, NewApiToken{ID: 42, Key: "sk-first", Name: createReq.Name, Group: createReq.Group}, "")
+				return
+			}
+			writeEnvelope(w, false, nil, "second group failed")
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/token/42", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		deleted = append(deleted, r.URL.Path)
+		writeEnvelope(w, true, nil, "")
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	limit := 1.0
+	requestBody, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID:            "sub-rollback",
+		DisplayName:                "失败回收",
+		BaseURL:                    site.URL,
+		AccessToken:                "token",
+		ChannelKind:                "messages",
+		ProvisionAllEligibleGroups: true,
+		MaxGroupMultiplier:         &limit,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("期望 502, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if postCalls != 2 || len(deleted) != 1 || deleted[0] != "/api/token/42" {
+		t.Fatalf("分组创建失败后应回收第一把新建 key: post=%d deleted=%v", postCalls, deleted)
+	}
+	if store.Get("sub-rollback") != nil || len(cfgManager.GetConfig().Upstream) != 0 {
+		t.Fatal("批量创建失败不应保留订阅或渠道")
+	}
+}
+
+func TestHandleNewApiProvision_RejectsGroupAboveMultiplierLimit(t *testing.T) {
+	postCalls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7, Username: "bob"}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, map[string]NewApiGroupInfo{
+			"default": {Desc: "正常", Ratio: 1},
+			"premium": {Desc: "高倍率", Ratio: 3},
+		}, "")
+	})
+	mux.HandleFunc("/api/token/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			postCalls++
+		}
+		writeEnvelope(w, true, newApiTokenListData{}, "")
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	limit := 1.0
+	body, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID:    "sub-high-group",
+		DisplayName:        "高倍率分组",
+		BaseURL:            site.URL,
+		AccessToken:        "token",
+		ChannelKind:        "messages",
+		ProvisionGroup:     "premium",
+		MaxGroupMultiplier: &limit,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("期望 422, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if postCalls != 0 {
+		t.Fatalf("高倍率分组必须在建 key 前拦截，POST /api/token/ 调用次数=%d", postCalls)
+	}
+	if store.Get("sub-high-group") != nil || len(cfgManager.GetConfig().Upstream) != 0 {
+		t.Fatal("高倍率分组被拒绝后不应创建订阅或渠道")
+	}
+}
+
+func TestHandleNewApiProvision_GroupLookupFailureBlocksProvision(t *testing.T) {
+	postCalls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/user/self", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, true, NewApiUserSelf{ID: 7, Username: "bob"}, "")
+	})
+	mux.HandleFunc("/api/user/self/groups", func(w http.ResponseWriter, r *http.Request) {
+		writeEnvelope(w, false, nil, "groups unavailable")
+	})
+	mux.HandleFunc("/api/token/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			postCalls++
+		}
+		writeEnvelope(w, true, newApiTokenListData{}, "")
+	})
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	body, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID: "sub-no-groups",
+		DisplayName:     "无分组信息",
+		BaseURL:         site.URL,
+		AccessToken:     "token",
+		ChannelKind:     "messages",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("期望 502, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if postCalls != 0 || store.Get("sub-no-groups") != nil || len(cfgManager.GetConfig().Upstream) != 0 {
+		t.Fatal("无法读取分组时不得创建或绑定 key")
+	}
+}
+
 func TestHandleNewApiProvision_ReuseExistingKey_Succeeds(t *testing.T) {
 	// 站点 key 列表按 §8.5.1 设计返回明文 key（data.items[].key），复用同名 key 时应直接成功建渠道。
-	site := mockNewApiSite(t, DefaultNewApiProvisionKeyName, "sk-existing-key", true)
+	site := mockNewApiSite(t, defaultNewApiProvisionKeyNameForGroup("default"), "sk-existing-key", true)
 	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
 	cfgManager := setupNewApiTestConfigManager(t)
 	runner := NewAutoDiscoveryRunner(nil, nil)
@@ -278,9 +642,44 @@ func TestHandleNewApiProvision_ReuseExistingKey_Succeeds(t *testing.T) {
 	}
 }
 
+func TestHandleNewApiProvision_ExistingKeyInDifferentGroupReturnsConflict(t *testing.T) {
+	site := mockNewApiSiteWithGroups(
+		t,
+		defaultNewApiProvisionKeyNameForGroup("default"),
+		"sk-existing-key",
+		"premium",
+		true,
+		map[string]NewApiGroupInfo{
+			"default": {Ratio: 1},
+			"premium": {Ratio: 2},
+		},
+	)
+	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
+	cfgManager := setupNewApiTestConfigManager(t)
+	router := setupNewApiRouter(t, &NewApiRouteDeps{Store: store, CfgManager: cfgManager})
+	body, _ := json.Marshal(NewApiProvisionRequest{
+		SubscriptionUID: "sub-group-mismatch",
+		DisplayName:     "分组冲突",
+		BaseURL:         site.URL,
+		AccessToken:     "token",
+		ChannelKind:     "messages",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/subscriptions/newapi/provision", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("期望 409, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if store.Get("sub-group-mismatch") != nil || len(cfgManager.GetConfig().Upstream) != 0 {
+		t.Fatal("分组冲突不得创建订阅或渠道")
+	}
+}
+
 func TestHandleNewApiProvision_ReuseExistingKey_MaskedKey_ReturnsConflict(t *testing.T) {
 	// 部分 fork 的 key 列表接口不回显明文 key（脱敏/空字符串），此时无法拿到可用 key，应返回 409 让用户手动处理。
-	site := mockNewApiSite(t, DefaultNewApiProvisionKeyName, "", true)
+	site := mockNewApiSite(t, defaultNewApiProvisionKeyNameForGroup("default"), "", true)
 	store, _ := NewSubscriptionStoreWithDB(newTestDB(t))
 	cfgManager := setupNewApiTestConfigManager(t)
 	runner := NewAutoDiscoveryRunner(nil, nil)

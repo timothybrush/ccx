@@ -68,10 +68,17 @@ type SubscriptionProfile struct {
 	ProvisionKeyName string `json:"provisionKeyName,omitempty"`
 	// ProvisionGroup 建 key 时指定分组，空=默认分组。
 	ProvisionGroup string `json:"provisionGroup,omitempty"`
+	// ProvisionGroupRatio 是建 key 时经服务端校验的分组倍率。
+	ProvisionGroupRatio *float64 `json:"provisionGroupRatio,omitempty"`
+	// MaxGroupMultiplier 是允许自动建 key 与调用的最高分组倍率。
+	MaxGroupMultiplier *float64 `json:"maxGroupMultiplier,omitempty"`
 	// ProvisionModels 建 key 时的 model_limits 白名单，空=不限制。
 	ProvisionModels []string `json:"provisionModels,omitempty"`
 	// ProvisionedTokenID 是自动建 key 后回填的 new-api 侧令牌 ID（只读展示）。
 	ProvisionedTokenID int `json:"provisionedTokenId,omitempty"`
+	// ProvisionedKeys 记录自动接入的全部安全分组 Key 元数据，不含明文 Key。
+	// 旧的 Provision* 单值字段保留第一把 Key，以兼容已有 API 调用方。
+	ProvisionedKeys []NewApiProvisionedKey `json:"provisionedKeys,omitempty"`
 	// AvailableModels 是账号可用模型快照（GET /api/user/models），供渠道 supportedModels 参考。
 	AvailableModels []string `json:"availableModels,omitempty"`
 
@@ -79,6 +86,15 @@ type SubscriptionProfile struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	UpdatedAt  time.Time  `json:"updatedAt"`
 	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
+}
+
+// NewApiProvisionedKey 是自动接入的单把 NewAPI Key 的非敏感元数据。
+// Key 明文仅保存在渠道配置中，绝不写入订阅画像或订阅 API 响应。
+type NewApiProvisionedKey struct {
+	Name            string  `json:"name"`
+	Group           string  `json:"group"`
+	GroupMultiplier float64 `json:"groupMultiplier"`
+	TokenID         int     `json:"tokenId"`
 }
 
 // SharedCapability 描述同订阅下所有 endpoint 共享的能力画像。
@@ -246,6 +262,17 @@ func (s *SubscriptionStore) Get(subscriptionUID string) *SubscriptionProfile {
 			cp.GroupMultipliers[k] = v
 		}
 	}
+	if p.ProvisionGroupRatio != nil {
+		value := *p.ProvisionGroupRatio
+		cp.ProvisionGroupRatio = &value
+	}
+	if p.MaxGroupMultiplier != nil {
+		value := *p.MaxGroupMultiplier
+		cp.MaxGroupMultiplier = &value
+	}
+	if p.ProvisionedKeys != nil {
+		cp.ProvisionedKeys = append([]NewApiProvisionedKey(nil), p.ProvisionedKeys...)
+	}
 	return &cp
 }
 
@@ -295,6 +322,17 @@ func (s *SubscriptionStore) ListAll() []*SubscriptionProfile {
 			for k, v := range p.GroupMultipliers {
 				cp.GroupMultipliers[k] = v
 			}
+		}
+		if p.ProvisionGroupRatio != nil {
+			value := *p.ProvisionGroupRatio
+			cp.ProvisionGroupRatio = &value
+		}
+		if p.MaxGroupMultiplier != nil {
+			value := *p.MaxGroupMultiplier
+			cp.MaxGroupMultiplier = &value
+		}
+		if p.ProvisionedKeys != nil {
+			cp.ProvisionedKeys = append([]NewApiProvisionedKey(nil), p.ProvisionedKeys...)
 		}
 		result = append(result, &cp)
 	}

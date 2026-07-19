@@ -88,6 +88,7 @@
             :key="g.name"
             size="small"
             class="mr-1 mt-1"
+            :color="g.ratio <= maxGroupMultiplier ? 'success' : 'warning'"
             variant="tonal"
           >
             {{ g.name }} × {{ g.ratio }}
@@ -126,16 +127,41 @@
         density="compact"
         class="mb-2"
       />
-      <v-select
-        v-if="groupItems.length"
-        v-model="provisionForm.provisionGroup"
-        :label="t('subscription.newApi.provisionGroup')"
-        :items="groupSelectOptions"
+      <v-text-field
+        v-model.number="maxGroupMultiplier"
+        :label="t('subscription.newApi.maxGroupMultiplier')"
+        type="number"
+        min="0"
+        step="0.1"
         variant="outlined"
         density="compact"
-        clearable
-        class="mb-2"
+        class="mb-1"
+        required
       />
+      <div class="text-caption text-medium-emphasis mb-2">
+        {{ t('subscription.newApi.maxGroupMultiplierHint', { limit: maxGroupMultiplier }) }}
+      </div>
+      <v-alert v-if="blockedGroupCount > 0" color="warning" variant="tonal" density="compact" class="mb-2">
+        {{ t('subscription.newApi.excludedGroups', { count: blockedGroupCount, limit: maxGroupMultiplier }) }}
+      </v-alert>
+      <v-alert v-if="verifyResult?.groupFetchError" color="error" variant="tonal" density="compact" class="mb-2">
+        {{ t('subscription.newApi.groupFetchError') }} {{ verifyResult.groupFetchError }}
+      </v-alert>
+      <v-alert v-if="verified && eligibleGroupItems.length === 0" color="error" variant="tonal" density="compact" class="mb-2">
+        {{ t('subscription.newApi.noEligibleGroups', { limit: maxGroupMultiplier }) }}
+      </v-alert>
+      <v-alert v-if="eligibleGroupItems.length" color="success" variant="tonal" density="compact" class="mb-2">
+        {{ t('subscription.newApi.eligibleGroups', { count: eligibleGroupItems.length }) }}
+        <v-chip
+          v-for="group in eligibleGroupItems"
+          :key="group.name"
+          size="x-small"
+          class="ml-1"
+          variant="outlined"
+        >
+          {{ group.name }} × {{ group.ratio }}
+        </v-chip>
+      </v-alert>
       <v-textarea
         v-model="provisionForm.notes"
         :label="t('subscription.field.notes')"
@@ -168,6 +194,11 @@ import type {
   NewApiProvisionRequest,
   NewApiProvisionResponse,
 } from '@/services/api-types'
+import {
+  DEFAULT_NEWAPI_MAX_GROUP_MULTIPLIER,
+  eligibleNewApiGroups,
+  isValidNewApiGroupMultiplier
+} from '@/utils/newApiGroups'
 
 const { t } = useI18n()
 
@@ -180,6 +211,7 @@ const verifying = ref(false)
 const provisioning = ref(false)
 const verified = ref(false)
 const verifyResult = ref<NewApiVerifyResponse | null>(null)
+const maxGroupMultiplier = ref(DEFAULT_NEWAPI_MAX_GROUP_MULTIPLIER)
 
 const verifyForm = ref<NewApiVerifyRequest>({
   baseUrl: '',
@@ -198,7 +230,6 @@ const provisionForm = ref<NewApiProvisionRequest>({
   userId: '',
   authTokenMode: 'bearer',
   channelName: '',
-  provisionGroup: '',
   notes: '',
 })
 
@@ -216,16 +247,24 @@ const channelKindOptions = computed(() => [
 
 const groupItems = computed(() => {
   if (!verifyResult.value) return []
-  return Object.entries(verifyResult.value.groups || {}).map(([name, ratio]) => ({ name, ratio }))
+  return Object.entries(verifyResult.value.groups || {})
+    .map(([name, ratio]) => ({ name, ratio }))
+    .sort((left, right) => left.ratio - right.ratio || left.name.localeCompare(right.name))
 })
 
-const groupSelectOptions = computed(() =>
-  groupItems.value.map((g) => ({ title: `${g.name} × ${g.ratio}`, value: g.name }))
+const maxGroupMultiplierValid = computed(() => isValidNewApiGroupMultiplier(maxGroupMultiplier.value))
+const eligibleGroupItems = computed(() =>
+  eligibleNewApiGroups(verifyResult.value?.groups || {}, maxGroupMultiplier.value)
 )
+const blockedGroupCount = computed(() => groupItems.value.length - eligibleGroupItems.value.length)
 
 const canVerify = computed(() => !!verifyForm.value.baseUrl.trim() && !!verifyForm.value.accessToken.trim())
 const canProvision = computed(
-  () => !!provisionForm.value.subscriptionUid.trim() && !!provisionForm.value.channelKind
+  () =>
+    !!provisionForm.value.subscriptionUid.trim() &&
+    !!provisionForm.value.channelKind &&
+    maxGroupMultiplierValid.value &&
+    eligibleGroupItems.value.length > 0
 )
 
 function slugifyDisplayName(name: string): string {
@@ -297,7 +336,8 @@ async function handleProvision() {
       userId: provisionForm.value.userId || undefined,
       authTokenMode: provisionForm.value.authTokenMode || undefined,
       channelName: provisionForm.value.channelName || undefined,
-      provisionGroup: provisionForm.value.provisionGroup || undefined,
+      provisionAllEligibleGroups: true,
+      maxGroupMultiplier: maxGroupMultiplier.value,
       notes: provisionForm.value.notes || undefined,
     })
     emit('created', result)

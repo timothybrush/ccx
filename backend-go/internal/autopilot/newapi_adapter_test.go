@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -269,6 +270,46 @@ func TestNewApiAdapter_FindTokenByName_NotFound(t *testing.T) {
 	}
 }
 
+func TestNewApiAdapter_FindTokenByName_SearchesLaterPages(t *testing.T) {
+	firstPage := make([]NewApiToken, 100)
+	for i := range firstPage {
+		firstPage[i] = NewApiToken{ID: i + 1, Name: "other-" + strconv.Itoa(i)}
+	}
+	srv := newMockNewApiServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("p") {
+		case "1":
+			writeEnvelope(w, true, newApiTokenListData{Items: firstPage}, "")
+		case "2":
+			writeEnvelope(w, true, newApiTokenListData{Items: []NewApiToken{{ID: 101, Key: "sk-target", Name: "ccx-autopilot-default", Group: "default"}}}, "")
+		default:
+			t.Fatalf("意外页码: %s", r.URL.Query().Get("p"))
+		}
+	})
+
+	adapter := &NewApiAdapter{HTTPClient: srv.Client()}
+	token, err := adapter.FindTokenByName(context.Background(), srv.URL, "token", "1", "", "ccx-autopilot-default")
+	if err != nil {
+		t.Fatalf("FindTokenByName 失败: %v", err)
+	}
+	if token == nil || token.ID != 101 || token.Group != "default" {
+		t.Fatalf("未从后续页面找到同名 key: %+v", token)
+	}
+}
+
+func TestNewApiAdapter_DeleteToken(t *testing.T) {
+	srv := newMockNewApiServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/token/42" {
+			t.Fatalf("删除请求不符: %s %s", r.Method, r.URL.Path)
+		}
+		writeEnvelope(w, true, nil, "")
+	})
+
+	adapter := &NewApiAdapter{HTTPClient: srv.Client()}
+	if err := adapter.DeleteToken(context.Background(), srv.URL, "token", "1", "", 42); err != nil {
+		t.Fatalf("DeleteToken 失败: %v", err)
+	}
+}
+
 // ── ProvisionKey ──
 
 func TestNewApiAdapter_ProvisionKey_CreateNew(t *testing.T) {
@@ -346,6 +387,35 @@ func TestNewApiAdapter_ProvisionKey_ReuseExisting(t *testing.T) {
 	}
 }
 
+func TestNewApiAdapter_ProvisionKey_RejectsExistingKeyInDifferentGroup(t *testing.T) {
+	postCalled := false
+	srv := newMockNewApiServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/token/":
+			writeEnvelope(w, true, map[string]interface{}{
+				"items": []NewApiToken{{ID: 7, Key: "sk-existing", Name: "ccx-autopilot-default", Group: "premium", Status: 1}},
+			}, "")
+		case r.Method == http.MethodPost && r.URL.Path == "/api/token/":
+			postCalled = true
+			writeEnvelope(w, true, NewApiToken{ID: 999, Key: "sk-should-not-be-created"}, "")
+		default:
+			t.Fatalf("意外请求: %s %s", r.Method, r.URL.Path)
+		}
+	})
+
+	adapter := &NewApiAdapter{HTTPClient: srv.Client()}
+	_, _, _, err := adapter.ProvisionKey(context.Background(), srv.URL, "token", "1", "", NewApiProvisionOptions{
+		Name:  "ccx-autopilot-default",
+		Group: "default",
+	})
+	if err == nil {
+		t.Fatal("同名但不同分组的 key 必须被拒绝")
+	}
+	if postCalled {
+		t.Fatal("分组不匹配时不应新建或复用 key")
+	}
+}
+
 func TestNewApiAdapter_ProvisionKey_WithModelsAndGroup(t *testing.T) {
 	srv := newMockNewApiServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -362,7 +432,7 @@ func TestNewApiAdapter_ProvisionKey_WithModelsAndGroup(t *testing.T) {
 			if !req.ModelLimitsEnabled || req.ModelLimits != "gpt-4o,claude-3-5-sonnet" {
 				t.Fatalf("model_limits 未按预期拼接: enabled=%v limits=%s", req.ModelLimitsEnabled, req.ModelLimits)
 			}
-			writeEnvelope(w, true, NewApiToken{ID: 1, Key: "sk-x"}, "")
+			writeEnvelope(w, true, NewApiToken{ID: 1, Key: "sk-x", Group: req.Group}, "")
 		}
 	})
 

@@ -2,10 +2,12 @@ package autopilot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
@@ -38,6 +40,10 @@ type NewApiRouteDeps struct {
 	CfgManager *config.ConfigManager
 	Runner     *AutoDiscoveryRunner
 }
+
+// NewAPI provision 是管理面低频操作。串行化可避免同一时刻重复创建同名远端 Key，
+// 配置管理器仍负责与其他来源的渠道名冲突检测。
+var newAPIProvisionMu sync.Mutex
 
 // RegisterNewApiSubscriptionRoutes 注册 new-api 集成的两个核心端点：
 //
@@ -72,6 +78,7 @@ type NewApiVerifyResponse struct {
 	Quota           int64              `json:"quota"`
 	UsedQuota       int64              `json:"usedQuota"`
 	Groups          map[string]float64 `json:"groups"`
+	GroupFetchError string             `json:"groupFetchError,omitempty"`
 	AvailableModels []string           `json:"availableModels"`
 	// 派生建议：前端可直接展示
 	SuggestedOriginType string `json:"suggestedOriginType"`
@@ -81,29 +88,147 @@ type NewApiVerifyResponse struct {
 
 // NewApiProvisionRequest POST /subscriptions/newapi/provision 请求体。
 type NewApiProvisionRequest struct {
-	SubscriptionUID  string   `json:"subscriptionUid" binding:"required"`
-	DisplayName      string   `json:"displayName" binding:"required"`
-	BaseURL          string   `json:"baseUrl" binding:"required"`
-	AccessToken      string   `json:"accessToken" binding:"required"`
-	UserID           string   `json:"userId"`
-	AuthTokenMode    string   `json:"authTokenMode,omitempty"`
-	ChannelKind      string   `json:"channelKind" binding:"required"` // messages/chat/responses/gemini
-	ChannelName      string   `json:"channelName,omitempty"`
-	ProvisionKeyName string   `json:"provisionKeyName,omitempty"`
-	ProvisionGroup   string   `json:"provisionGroup,omitempty"`
-	ProvisionModels  []string `json:"provisionModels,omitempty"`
-	Notes            string   `json:"notes,omitempty"`
+	SubscriptionUID  string `json:"subscriptionUid" binding:"required"`
+	DisplayName      string `json:"displayName" binding:"required"`
+	BaseURL          string `json:"baseUrl" binding:"required"`
+	AccessToken      string `json:"accessToken" binding:"required"`
+	UserID           string `json:"userId"`
+	AuthTokenMode    string `json:"authTokenMode,omitempty"`
+	ChannelKind      string `json:"channelKind" binding:"required"` // messages/chat/responses/gemini
+	ChannelName      string `json:"channelName,omitempty"`
+	ProvisionKeyName string `json:"provisionKeyName,omitempty"`
+	ProvisionGroup   string `json:"provisionGroup,omitempty"`
+	// ProvisionAllEligibleGroups 明确启用“阈值内全部分组”的自动接入。
+	// 未设置时保留旧接口的 ProvisionGroup/默认 default 分组语义。
+	ProvisionAllEligibleGroups bool     `json:"provisionAllEligibleGroups,omitempty"`
+	ProvisionModels            []string `json:"provisionModels,omitempty"`
+	// MaxGroupMultiplier 限制自动建 Key 与调用允许使用的最高分组倍率；缺省时保守使用 1.0。
+	MaxGroupMultiplier *float64 `json:"maxGroupMultiplier,omitempty"`
+	Notes              string   `json:"notes,omitempty"`
 }
 
 // NewApiProvisionResponse POST /subscriptions/newapi/provision 响应体。
 type NewApiProvisionResponse struct {
-	Subscription       SubscriptionItem `json:"subscription"`
-	ChannelUID         string           `json:"channelUid"`
-	ChannelIndex       int              `json:"channelIndex"`
-	ProvisionedKey     string           `json:"provisionedKey"` // 明文 key，仅此次返回，前端必须立即转给渠道；后续只展示脱敏/不回显
-	ProvisionedTokenID int              `json:"provisionedTokenId"`
-	Reused             bool             `json:"reused"` // true 表示复用了已存在的同名 key
-	DiscoveryStarted   bool             `json:"discoveryStarted"`
+	Subscription       SubscriptionItem               `json:"subscription"`
+	ChannelUID         string                         `json:"channelUid"`
+	ChannelIndex       int                            `json:"channelIndex"`
+	ProvisionedKey     string                         `json:"provisionedKey"` // 明文 key，仅此次返回，前端必须立即转给渠道；后续只展示脱敏/不回显
+	ProvisionedTokenID int                            `json:"provisionedTokenId"`
+	Reused             bool                           `json:"reused"` // true 表示全部 Key 都复用了已存在的同名 key
+	ProvisionedKeys    []NewApiProvisionedKeyResponse `json:"provisionedKeys,omitempty"`
+	DiscoveryStarted   bool                           `json:"discoveryStarted"`
+}
+
+// NewApiProvisionedKeyResponse 是一把自动接入 Key 的非敏感结果。
+type NewApiProvisionedKeyResponse struct {
+	Name            string  `json:"name"`
+	Group           string  `json:"group"`
+	GroupMultiplier float64 `json:"groupMultiplier"`
+	TokenID         int     `json:"tokenId"`
+	Reused          bool    `json:"reused"`
+}
+
+type newApiProvisionedKey struct {
+	NewApiProvisionedKey
+	Key    string
+	Reused bool
+}
+
+type newApiProvisionConflictError struct {
+	err error
+}
+
+func (e *newApiProvisionConflictError) Error() string {
+	return e.err.Error()
+}
+
+// cleanupNewApiProvisionedKeys 仅回收本次请求新建、尚未绑定渠道的远端 Key。
+// 回收失败不会覆盖主错误，但会留下明确日志供用户在上游面板手动处理。
+func cleanupNewApiProvisionedKeys(ctx context.Context, adapter *NewApiAdapter, req NewApiProvisionRequest, userID string, keys []newApiProvisionedKey) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	for i := len(keys) - 1; i >= 0; i-- {
+		key := keys[i]
+		if key.Reused || key.TokenID <= 0 {
+			continue
+		}
+		if err := adapter.DeleteToken(cleanupCtx, req.BaseURL, req.AccessToken, userID, req.AuthTokenMode, key.TokenID); err != nil {
+			log.Printf("[NewApi-Provision] 回收未绑定 key 失败 name=%s group=%s tokenID=%d: %v", key.Name, key.Group, key.TokenID, err)
+		}
+	}
+}
+
+func provisionNewApiGroupKeys(
+	ctx context.Context,
+	adapter *NewApiAdapter,
+	req NewApiProvisionRequest,
+	userID string,
+	groups []newApiResolvedGroup,
+) ([]newApiProvisionedKey, error) {
+	if len(groups) == 0 {
+		return nil, fmt.Errorf("没有可创建 key 的分组")
+	}
+	if req.ProvisionAllEligibleGroups && strings.TrimSpace(req.ProvisionKeyName) != "" {
+		return nil, fmt.Errorf("自动接入全部合格分组时不支持 provisionKeyName")
+	}
+
+	names := make([]string, len(groups))
+	nameGroups := make(map[string]string, len(groups))
+	for i, group := range groups {
+		name := strings.TrimSpace(req.ProvisionKeyName)
+		if name == "" {
+			name = defaultNewApiProvisionKeyNameForGroup(group.Name)
+		}
+		if previousGroup, exists := nameGroups[name]; exists && previousGroup != group.Name {
+			return nil, fmt.Errorf("分组 %q 与 %q 生成了相同的 key 名称 %q", previousGroup, group.Name, name)
+		}
+		names[i] = name
+		nameGroups[name] = group.Name
+	}
+
+	provisioned := make([]newApiProvisionedKey, 0, len(groups))
+	seenKeys := make(map[string]string, len(groups))
+	rollback := func(extra ...newApiProvisionedKey) {
+		keys := append([]newApiProvisionedKey(nil), provisioned...)
+		keys = append(keys, extra...)
+		cleanupNewApiProvisionedKeys(ctx, adapter, req, userID, keys)
+	}
+	for i, group := range groups {
+		tokenID, keyPlain, reused, err := adapter.ProvisionKey(ctx, req.BaseURL, req.AccessToken, userID, req.AuthTokenMode, NewApiProvisionOptions{
+			Name:   names[i],
+			Group:  group.Name,
+			Models: req.ProvisionModels,
+		})
+		if err != nil {
+			if tokenID > 0 && !reused {
+				rollback(newApiProvisionedKey{NewApiProvisionedKey: NewApiProvisionedKey{Name: names[i], Group: group.Name, GroupMultiplier: group.Ratio, TokenID: tokenID}})
+			} else {
+				rollback()
+			}
+			return nil, fmt.Errorf("分组 %q 建 key 失败: %w", group.Name, err)
+		}
+		current := newApiProvisionedKey{
+			NewApiProvisionedKey: NewApiProvisionedKey{
+				Name:            names[i],
+				Group:           group.Name,
+				GroupMultiplier: group.Ratio,
+				TokenID:         tokenID,
+			},
+			Key:    keyPlain,
+			Reused: reused,
+		}
+		if keyPlain == "" {
+			rollback(current)
+			return nil, &newApiProvisionConflictError{err: fmt.Errorf("分组 %q 的同名 key=%s 未返回明文，无法直接绑定，请删除后重试或手动填 key", group.Name, names[i])}
+		}
+		if previousGroup, exists := seenKeys[keyPlain]; exists && previousGroup != group.Name {
+			rollback(current)
+			return nil, fmt.Errorf("分组 %q 与 %q 返回相同的 key，已阻止绑定", previousGroup, group.Name)
+		}
+		seenKeys[keyPlain] = group.Name
+		provisioned = append(provisioned, current)
+	}
+	return provisioned, nil
 }
 
 // ─── Handler ───
@@ -138,8 +263,12 @@ func handleNewApiVerify(deps *NewApiRouteDeps) gin.HandlerFunc {
 			derivedUserID = fmt.Sprintf("%d", self.ID)
 		}
 
-		// 2) 拉分组倍率（失败不阻断——只是少了分组预览）
-		groups, _ := adapter.FetchGroups(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
+		// 2) 拉分组倍率（验证阶段不阻断，但把失败原因明确回传给界面）。
+		groups, groupErr := adapter.FetchGroups(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
+		groupFetchError := ""
+		if groupErr != nil {
+			groupFetchError = groupErr.Error()
+		}
 
 		// 3) 拉可用模型（失败不阻断）
 		models, _ := adapter.FetchModels(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
@@ -151,6 +280,7 @@ func handleNewApiVerify(deps *NewApiRouteDeps) gin.HandlerFunc {
 			Quota:               self.Quota,
 			UsedQuota:           self.UsedQuota,
 			Groups:              groups,
+			GroupFetchError:     groupFetchError,
 			AvailableModels:     models,
 			SuggestedOriginType: defaults.OriginType,
 			SuggestedOriginTier: defaults.OriginTier,
@@ -181,10 +311,27 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("不支持的渠道类型: %s", req.ChannelKind)})
 			return
 		}
+		newAPIProvisionMu.Lock()
+		defer newAPIProvisionMu.Unlock()
+
 		// 提前校验 subscriptionUid 唯一性，避免白白在 new-api 侧建 key 后才发现 profile 冲突。
 		if deps.Store.Get(req.SubscriptionUID) != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("subscriptionUid=%s 已存在", req.SubscriptionUID)})
 			return
+		}
+		if req.ProvisionAllEligibleGroups && strings.TrimSpace(req.ProvisionKeyName) != "" {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "自动接入全部合格分组时不支持 provisionKeyName"})
+			return
+		}
+		channelName := strings.TrimSpace(req.ChannelName)
+		if channelName == "" {
+			channelName = fmt.Sprintf("newapi-%s-%d", req.ChannelKind, time.Now().UnixMilli()%100000)
+		}
+		for _, existing := range getChannelSlice(deps.CfgManager.GetConfig(), req.ChannelKind) {
+			if existing.Name == channelName {
+				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("渠道名称 %q 已存在", channelName)})
+				return
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
@@ -203,33 +350,65 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 			derivedUserID = fmt.Sprintf("%d", self.ID)
 		}
 
-		// 2) 拉分组倍率 + 可用模型（best-effort）
-		groups, _ := adapter.FetchGroups(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
-		models, _ := adapter.FetchModels(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
-
-		// 3) 建/复用代理 key
-		provName := req.ProvisionKeyName
-		if provName == "" {
-			provName = DefaultNewApiProvisionKeyName
-		}
-		tokenID, keyPlain, reused, err := adapter.ProvisionKey(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode, NewApiProvisionOptions{
-			Name:   provName,
-			Group:  req.ProvisionGroup,
-			Models: req.ProvisionModels,
-		})
+		// 2) 拉分组倍率并强制校验。分组未知时不能安全决定要创建或调用哪一把 Key。
+		groups, err := adapter.FetchGroups(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
 		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("建 key 失败: %v", err)})
+			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("无法获取分组倍率，已阻止自动建 key: %v", err)})
 			return
 		}
-		// 复用旧 key 时 keyPlain 为空——前端必须已经持有关键信息；此情形降级为报错让用户重试或手动填
-		if keyPlain == "" {
-			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("站点已存在同名 key=%s 但未返回明文，无法直接绑定，请删除后重试或手动填 key", provName)})
+		resolvedGroups, err := resolveNewApiProvisionGroups(groups, req.ProvisionGroup, req.ProvisionAllEligibleGroups, req.MaxGroupMultiplier)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "分组倍率校验失败: " + err.Error()})
+			return
+		}
+
+		// 模型清单只用于订阅画像和后续 Discovery，不影响分组安全闸门。
+		models, _ := adapter.FetchModels(ctx, req.BaseURL, req.AccessToken, derivedUserID, req.AuthTokenMode)
+
+		// 3) 为全部合格分组分别建/复用代理 Key。一个 Key 固定绑定一个上游分组，
+		// 不会因为同渠道的其他分组而越过用户设置的倍率上限。
+		provisioned, err := provisionNewApiGroupKeys(ctx, adapter, req, derivedUserID, resolvedGroups)
+		if err != nil {
+			var conflict *newApiProvisionConflictError
+			if errors.As(err, &conflict) {
+				c.JSON(http.StatusConflict, gin.H{"error": "建 key 失败: " + conflict.Error()})
+				return
+			}
+			var keyConflict *NewApiProvisionKeyConflictError
+			if errors.As(err, &keyConflict) {
+				c.JSON(http.StatusConflict, gin.H{"error": "建 key 失败: " + keyConflict.Error()})
+				return
+			}
+			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("建 key 失败: %v", err)})
 			return
 		}
 
 		// 4) 建 profile
 		now := time.Now()
 		defaults := newApiDefaults()
+		primaryKey := provisioned[0]
+		provisionGroupRatio := primaryKey.GroupMultiplier
+		maxGroupMultiplier := resolvedGroups[0].MaxMultiplier
+		profileKeys := make([]NewApiProvisionedKey, 0, len(provisioned))
+		apiKeys := make([]string, 0, len(provisioned))
+		apiKeyConfigs := make([]config.APIKeyConfig, 0, len(provisioned))
+		allReused := true
+		for _, key := range provisioned {
+			profileKeys = append(profileKeys, key.NewApiProvisionedKey)
+			apiKeys = append(apiKeys, key.Key)
+			ratio := key.GroupMultiplier
+			limit := maxGroupMultiplier
+			apiKeyConfigs = append(apiKeyConfigs, config.APIKeyConfig{
+				Key:                key.Key,
+				Name:               "new-api:" + key.Group,
+				QuotaGroup:         key.Group,
+				GroupMultiplier:    &ratio,
+				MaxGroupMultiplier: &limit,
+			})
+			if !key.Reused {
+				allReused = false
+			}
+		}
 		profile := &SubscriptionProfile{
 			SubscriptionUID:    req.SubscriptionUID,
 			DisplayName:        req.DisplayName,
@@ -246,20 +425,24 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 			Confidence:         0.95,
 			Notes:              req.Notes,
 			// §8.5.1
-			BaseURL:            req.BaseURL,
-			AccessToken:        req.AccessToken, // 持久化但不出 API 响应
-			UserID:             derivedUserID,
-			AuthTokenMode:      req.AuthTokenMode,
-			ProvisionKeyName:   provName,
-			ProvisionGroup:     req.ProvisionGroup,
-			ProvisionModels:    req.ProvisionModels,
-			ProvisionedTokenID: tokenID,
-			AvailableModels:    models,
-			AutoRefreshEnabled: false, // new-api 走 Verify，不直接接 SubscriptionBalanceFetcher
-			CreatedAt:          now,
-			UpdatedAt:          now,
+			BaseURL:             req.BaseURL,
+			AccessToken:         req.AccessToken, // 持久化但不出 API 响应
+			UserID:              derivedUserID,
+			AuthTokenMode:       req.AuthTokenMode,
+			ProvisionKeyName:    primaryKey.Name,
+			ProvisionGroup:      primaryKey.Group,
+			ProvisionGroupRatio: &provisionGroupRatio,
+			MaxGroupMultiplier:  &maxGroupMultiplier,
+			ProvisionModels:     req.ProvisionModels,
+			ProvisionedTokenID:  primaryKey.TokenID,
+			ProvisionedKeys:     profileKeys,
+			AvailableModels:     models,
+			AutoRefreshEnabled:  false, // new-api 走 Verify，不直接接 SubscriptionBalanceFetcher
+			CreatedAt:           now,
+			UpdatedAt:           now,
 		}
 		if err := deps.Store.Create(profile); err != nil {
+			cleanupNewApiProvisionedKeys(ctx, adapter, req, derivedUserID, provisioned)
 			if strings.Contains(err.Error(), "已存在") {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			} else {
@@ -269,10 +452,6 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 		}
 
 		// 5) 建上游渠道
-		channelName := req.ChannelName
-		if channelName == "" {
-			channelName = fmt.Sprintf("newapi-%s-%d", req.ChannelKind, time.Now().UnixMilli()%100000)
-		}
 		serviceType := kindToDefaultServiceType(req.ChannelKind)
 		channelUID := config.GenerateChannelUID()
 		upstream := config.UpstreamConfig{
@@ -280,7 +459,8 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 			ChannelUID:    channelUID,
 			BaseURL:       strings.TrimRight(req.BaseURL, "/"),
 			BaseURLs:      []string{strings.TrimRight(req.BaseURL, "/")},
-			APIKeys:       []string{keyPlain},
+			APIKeys:       apiKeys,
+			APIKeyConfigs: apiKeyConfigs,
 			ServiceType:   serviceType,
 			Status:        "active",
 			AutoManaged:   true,
@@ -306,6 +486,7 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 		if err != nil {
 			// 渠道建失败：回滚 profile（最佳努力删除）
 			_ = deps.Store.Delete(req.SubscriptionUID)
+			cleanupNewApiProvisionedKeys(ctx, adapter, req, derivedUserID, provisioned)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("建渠道失败: %v", err)})
 			return
 		}
@@ -339,21 +520,36 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 			}
 		}
 
-		log.Printf("[NewApi-Provision] 完成 subscription=%s channelUID=%s tokenID=%d reused=%v discovery=%v",
-			req.SubscriptionUID, channelUID, tokenID, reused, discoveryStarted)
+		responseKeys := make([]NewApiProvisionedKeyResponse, 0, len(provisioned))
+		for _, key := range provisioned {
+			responseKeys = append(responseKeys, NewApiProvisionedKeyResponse{
+				Name:            key.Name,
+				Group:           key.Group,
+				GroupMultiplier: key.GroupMultiplier,
+				TokenID:         key.TokenID,
+				Reused:          key.Reused,
+			})
+		}
+		log.Printf("[NewApi-Provision] 完成 subscription=%s channelUID=%s groups=%d maxRatio=%.4g allReused=%v discovery=%v",
+			req.SubscriptionUID, channelUID, len(provisioned), maxGroupMultiplier, allReused, discoveryStarted)
 
 		fresh := deps.Store.Get(req.SubscriptionUID)
 		if fresh == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "订阅已建但无法回读"})
 			return
 		}
+		legacyProvisionedKey := ""
+		if !req.ProvisionAllEligibleGroups {
+			legacyProvisionedKey = primaryKey.Key
+		}
 		c.JSON(http.StatusCreated, NewApiProvisionResponse{
 			Subscription:       toSubscriptionItem(fresh),
 			ChannelUID:         channelUID,
 			ChannelIndex:       channelIndex,
-			ProvisionedKey:     keyPlain,
-			ProvisionedTokenID: tokenID,
-			Reused:             reused,
+			ProvisionedKey:     legacyProvisionedKey,
+			ProvisionedTokenID: primaryKey.TokenID,
+			Reused:             allReused,
+			ProvisionedKeys:    responseKeys,
 			DiscoveryStarted:   discoveryStarted,
 		})
 	}

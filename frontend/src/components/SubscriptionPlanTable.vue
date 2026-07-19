@@ -30,6 +30,9 @@
           <td>
             <div class="font-weight-medium">{{ item.displayName }}</div>
             <div v-if="item.provider" class="text-caption text-medium-emphasis">{{ item.provider }}</div>
+            <div v-if="item.maxGroupMultiplier !== undefined && item.provisionedKeys?.length" class="text-caption text-medium-emphasis">
+              {{ t('subscription.newApi.activeGroupSummary', { limit: item.maxGroupMultiplier, count: item.provisionedKeys.length }) }}
+            </div>
           </td>
 
           <!-- 余额 -->

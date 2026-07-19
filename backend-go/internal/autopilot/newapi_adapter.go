@@ -52,6 +52,16 @@ type NewApiToken struct {
 	Key    string `json:"key"`
 	Name   string `json:"name"`
 	Status int    `json:"status"`
+	Group  string `json:"group"`
+}
+
+// NewApiProvisionKeyConflictError 表示同名 Key 已存在但无法安全复用的本地冲突。
+type NewApiProvisionKeyConflictError struct {
+	err error
+}
+
+func (e *NewApiProvisionKeyConflictError) Error() string {
+	return e.err.Error()
 }
 
 // newApiTokenListData 对应 GET /api/token/?p=&size= 的 data 字段。
@@ -251,18 +261,39 @@ func (a *NewApiAdapter) ListTokens(ctx context.Context, baseURL, accessToken, us
 }
 
 // FindTokenByName 在 key 列表中查找同名令牌（大小写敏感，new-api 名称精确匹配）。
+// new-api 的列表通常分页，必须遍历到末页，避免重复 provision 时遗漏第 2 页以后的同名 Key。
 // 未找到返回 nil, nil。
 func (a *NewApiAdapter) FindTokenByName(ctx context.Context, baseURL, accessToken, userID, authTokenMode, name string) (*NewApiToken, error) {
-	tokens, err := a.ListTokens(ctx, baseURL, accessToken, userID, authTokenMode, 1, 100)
-	if err != nil {
-		return nil, err
-	}
-	for i := range tokens {
-		if tokens[i].Name == name {
-			return &tokens[i], nil
+	const (
+		pageSize = 100
+		maxPages = 1000
+	)
+	seenTokens := make(map[string]struct{}, pageSize)
+	for page := 1; page <= maxPages; page++ {
+		tokens, err := a.ListTokens(ctx, baseURL, accessToken, userID, authTokenMode, page, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		if len(tokens) == 0 {
+			return nil, nil
+		}
+
+		newTokenCount := 0
+		for i := range tokens {
+			if tokens[i].Name == name {
+				return &tokens[i], nil
+			}
+			identity := strconv.Itoa(tokens[i].ID) + "\x00" + tokens[i].Name
+			if _, exists := seenTokens[identity]; !exists {
+				seenTokens[identity] = struct{}{}
+				newTokenCount++
+			}
+		}
+		if len(tokens) < pageSize || newTokenCount == 0 {
+			return nil, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("[NewApiAdapter-FindTokenByName] token 列表超过 %d 页，已拒绝继续创建以避免重复 key", maxPages)
 }
 
 // NewApiProvisionOptions 建代理 key 的模板参数。
@@ -288,6 +319,9 @@ func (a *NewApiAdapter) ProvisionKey(ctx context.Context, baseURL, accessToken, 
 		return 0, "", false, fmt.Errorf("[NewApiAdapter-ProvisionKey] 查重失败: %w", err)
 	}
 	if existing != nil {
+		if expectedGroup := strings.TrimSpace(opts.Group); expectedGroup != "" && existing.Group != expectedGroup {
+			return existing.ID, "", true, &NewApiProvisionKeyConflictError{err: fmt.Errorf("[NewApiAdapter-ProvisionKey] 同名 key=%s 的分组为 %q，无法确认其属于目标分组 %q", name, existing.Group, expectedGroup)}
+		}
 		return existing.ID, existing.Key, true, nil
 	}
 
@@ -315,6 +349,23 @@ func (a *NewApiAdapter) ProvisionKey(ctx context.Context, baseURL, accessToken, 
 		return 0, "", false, fmt.Errorf("[NewApiAdapter-ProvisionKey] 创建失败: %w", createErr)
 	}
 
+	if expectedGroup := strings.TrimSpace(opts.Group); expectedGroup != "" {
+		if created.Group == expectedGroup && created.Key != "" {
+			return created.ID, created.Key, false, nil
+		}
+		fresh, findErr := a.FindTokenByName(ctx, baseURL, accessToken, userID, authTokenMode, name)
+		if findErr != nil || fresh == nil || fresh.Group != expectedGroup {
+			return created.ID, "", false, fmt.Errorf("[NewApiAdapter-ProvisionKey] 创建后无法确认 key=%s 属于目标分组 %q", name, expectedGroup)
+		}
+		if fresh.Key != "" {
+			return fresh.ID, fresh.Key, false, nil
+		}
+		if created.Key != "" {
+			return fresh.ID, created.Key, false, nil
+		}
+		return fresh.ID, "", false, fmt.Errorf("[NewApiAdapter-ProvisionKey] 创建成功但无法取回 key 明文，请到站点后台手动核对 name=%s", name)
+	}
+
 	if created.Key != "" {
 		return created.ID, created.Key, false, nil
 	}
@@ -325,4 +376,15 @@ func (a *NewApiAdapter) ProvisionKey(ctx context.Context, baseURL, accessToken, 
 		return created.ID, "", false, fmt.Errorf("[NewApiAdapter-ProvisionKey] 创建成功但无法取回 key 明文，请到站点后台手动核对 name=%s", name)
 	}
 	return fresh.ID, fresh.Key, false, nil
+}
+
+// DeleteToken 删除本次 provision 新建但尚未绑定到渠道的远端 Key，用于失败补偿。
+func (a *NewApiAdapter) DeleteToken(ctx context.Context, baseURL, accessToken, userID, authTokenMode string, tokenID int) error {
+	if tokenID <= 0 {
+		return fmt.Errorf("[NewApiAdapter-DeleteToken] tokenID 必须大于 0")
+	}
+	if err := a.doRequest(ctx, http.MethodDelete, baseURL, "/api/token/"+strconv.Itoa(tokenID), accessToken, userID, authTokenMode, nil, nil); err != nil {
+		return fmt.Errorf("[NewApiAdapter-DeleteToken] 删除 tokenID=%d 失败: %w", tokenID, err)
+	}
+	return nil
 }

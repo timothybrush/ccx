@@ -90,15 +90,18 @@ type SubscriptionItem struct {
 
 	// ── §8.5.1：new-api 订阅集成 ──
 	// AccessToken 绝不完整出响应，只回显脱敏后的尾部片段，字段名区分以免误用。
-	BaseURL            string   `json:"baseUrl,omitempty"`
-	AccessTokenMasked  string   `json:"accessTokenMasked,omitempty"`
-	UserID             string   `json:"userId,omitempty"`
-	AuthTokenMode      string   `json:"authTokenMode,omitempty"`
-	ProvisionKeyName   string   `json:"provisionKeyName,omitempty"`
-	ProvisionGroup     string   `json:"provisionGroup,omitempty"`
-	ProvisionModels    []string `json:"provisionModels,omitempty"`
-	ProvisionedTokenID int      `json:"provisionedTokenId,omitempty"`
-	AvailableModels    []string `json:"availableModels,omitempty"`
+	BaseURL             string                 `json:"baseUrl,omitempty"`
+	AccessTokenMasked   string                 `json:"accessTokenMasked,omitempty"`
+	UserID              string                 `json:"userId,omitempty"`
+	AuthTokenMode       string                 `json:"authTokenMode,omitempty"`
+	ProvisionKeyName    string                 `json:"provisionKeyName,omitempty"`
+	ProvisionGroup      string                 `json:"provisionGroup,omitempty"`
+	ProvisionGroupRatio *float64               `json:"provisionGroupRatio,omitempty"`
+	MaxGroupMultiplier  *float64               `json:"maxGroupMultiplier,omitempty"`
+	ProvisionModels     []string               `json:"provisionModels,omitempty"`
+	ProvisionedTokenID  int                    `json:"provisionedTokenId,omitempty"`
+	ProvisionedKeys     []NewApiProvisionedKey `json:"provisionedKeys,omitempty"`
+	AvailableModels     []string               `json:"availableModels,omitempty"`
 }
 
 // SubscriptionsListResponse GET /api/subscriptions 返回结构。
@@ -444,15 +447,18 @@ func toSubscriptionItem(p *SubscriptionProfile) SubscriptionItem {
 		LastBalanceRefreshError: p.LastBalanceRefreshError,
 
 		// §8.5.1：new-api 订阅集成——AccessToken 绝不完整出响应，仅脱敏展示
-		BaseURL:            p.BaseURL,
-		AccessTokenMasked:  maskAccessToken(p.AccessToken),
-		UserID:             p.UserID,
-		AuthTokenMode:      p.AuthTokenMode,
-		ProvisionKeyName:   p.ProvisionKeyName,
-		ProvisionGroup:     p.ProvisionGroup,
-		ProvisionModels:    p.ProvisionModels,
-		ProvisionedTokenID: p.ProvisionedTokenID,
-		AvailableModels:    p.AvailableModels,
+		BaseURL:             p.BaseURL,
+		AccessTokenMasked:   maskAccessToken(p.AccessToken),
+		UserID:              p.UserID,
+		AuthTokenMode:       p.AuthTokenMode,
+		ProvisionKeyName:    p.ProvisionKeyName,
+		ProvisionGroup:      p.ProvisionGroup,
+		ProvisionGroupRatio: p.ProvisionGroupRatio,
+		MaxGroupMultiplier:  p.MaxGroupMultiplier,
+		ProvisionModels:     p.ProvisionModels,
+		ProvisionedTokenID:  p.ProvisionedTokenID,
+		ProvisionedKeys:     append([]NewApiProvisionedKey(nil), p.ProvisionedKeys...),
+		AvailableModels:     p.AvailableModels,
 	}
 	if p.ArchivedAt != nil {
 		item.ArchivedAt = p.ArchivedAt.Format("2006-01-02T15:04:05Z07:00")

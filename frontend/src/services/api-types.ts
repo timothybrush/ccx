@@ -1071,6 +1071,12 @@ export interface SubscriptionItem {
   autoRefreshSupported?: boolean
   lastBalanceRefreshAt?: string
   lastBalanceRefreshError?: string
+
+  // NewAPI 自动接入的分组安全阈值与已绑定分组快照
+  provisionGroup?: string
+  provisionGroupRatio?: number
+  maxGroupMultiplier?: number
+  provisionedKeys?: NewApiProvisionedKeyInfo[]
 }
 
 export interface SubscriptionsListResponse {
@@ -1133,6 +1139,7 @@ export interface NewApiVerifyResponse {
   quota: number
   usedQuota: number
   groups: Record<string, number>
+  groupFetchError?: string
   availableModels: string[]
   suggestedOriginType: string
   suggestedOriginTier: string
@@ -1150,8 +1157,21 @@ export interface NewApiProvisionRequest {
   channelName?: string
   provisionKeyName?: string
   provisionGroup?: string
+  provisionAllEligibleGroups?: boolean
   provisionModels?: string[]
+  maxGroupMultiplier?: number
   notes?: string
+}
+
+export interface NewApiProvisionedKeyInfo {
+  name: string
+  group: string
+  groupMultiplier: number
+  tokenId: number
+}
+
+export interface NewApiProvisionedKey extends NewApiProvisionedKeyInfo {
+  reused: boolean
 }
 
 export interface NewApiProvisionResponse {
@@ -1161,6 +1181,7 @@ export interface NewApiProvisionResponse {
   provisionedKey: string
   provisionedTokenId: number
   reused: boolean
+  provisionedKeys?: NewApiProvisionedKey[]
   discoveryStarted: boolean
 }
 
