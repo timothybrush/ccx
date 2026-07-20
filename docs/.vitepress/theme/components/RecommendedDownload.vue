@@ -301,7 +301,8 @@ h2 {
 }
 
 .download-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
   flex-shrink: 0;
   gap: 12px;
 }
@@ -351,7 +352,7 @@ h2 {
   }
 
   .download-actions {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 }
 </style>
