@@ -102,6 +102,7 @@ type AutoManagedDeps struct {
 	RateLimitDiscoverer    *RateLimitDiscoverer
 	MiMoConsoleClient      *MiMoConsoleClient
 	CompshareConsoleClient *CompshareConsoleClient
+	KimiConsoleClient      *KimiConsoleClient
 	DeepSeekClient         *DeepSeekClient
 }
 
@@ -127,6 +128,9 @@ func RegisterAutoManagedRoutes(apiGroup *gin.RouterGroup, deps *AutoManagedDeps)
 	apiGroup.PUT("/accounts/:accountUid/credentials/:credentialUid/compshare-console-cookie", handleSetCompshareConsoleCookie(deps))
 	apiGroup.POST("/accounts/:accountUid/credentials/:credentialUid/compshare-console-cookie/refresh", handleRefreshCompshareConsoleCookie(deps))
 	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid/compshare-console-cookie", handleClearCompshareConsoleCookie(deps))
+	apiGroup.PUT("/accounts/:accountUid/credentials/:credentialUid/kimi-console-token", handleSetKimiConsoleToken(deps))
+	apiGroup.POST("/accounts/:accountUid/credentials/:credentialUid/kimi-console-token/refresh", handleRefreshKimiConsoleToken(deps))
+	apiGroup.DELETE("/accounts/:accountUid/credentials/:credentialUid/kimi-console-token", handleClearKimiConsoleToken(deps))
 	apiGroup.GET("/accounts/:accountUid/deepseek-balance", handleDeepSeekBalance(deps))
 	kinds := []string{"messages", "chat", "responses", "gemini", "images", "vectors"}
 	for _, kind := range kinds {
@@ -236,18 +240,20 @@ func handleRenameAccount(deps *AutoManagedDeps) gin.HandlerFunc {
 }
 
 type managedAccountCredentialView struct {
-	CredentialUID             string                      `json:"credentialUid"`
-	KeyMask                   string                      `json:"keyMask"`
-	HasVolcengineAccessKey    bool                        `json:"hasVolcengineAccessKey,omitempty"`
-	VolcengineAccessKeyIDMask string                      `json:"volcengineAccessKeyIdMask,omitempty"`
-	VolcenginePlan            string                      `json:"volcenginePlan,omitempty"`
-	VolcenginePlanTier        string                      `json:"volcenginePlanTier,omitempty"`
-	VolcenginePlanStatus      string                      `json:"volcenginePlanStatus,omitempty"`
-	VolcenginePlanUsage       *config.VolcenginePlanUsage `json:"volcenginePlanUsage,omitempty"`
-	HasMiMoConsoleCookie      bool                        `json:"hasMiMoConsoleCookie,omitempty"`
-	MiMoTokenPlan             *managedMiMoTokenPlanView   `json:"mimoTokenPlan,omitempty"`
-	HasCompshareConsoleCookie bool                        `json:"hasCompshareConsoleCookie,omitempty"`
-	CompsharePlan             *managedCompsharePlanView   `json:"compsharePlan,omitempty"`
+	CredentialUID             string                        `json:"credentialUid"`
+	KeyMask                   string                        `json:"keyMask"`
+	HasVolcengineAccessKey    bool                          `json:"hasVolcengineAccessKey,omitempty"`
+	VolcengineAccessKeyIDMask string                        `json:"volcengineAccessKeyIdMask,omitempty"`
+	VolcenginePlan            string                        `json:"volcenginePlan,omitempty"`
+	VolcenginePlanTier        string                        `json:"volcenginePlanTier,omitempty"`
+	VolcenginePlanStatus      string                        `json:"volcenginePlanStatus,omitempty"`
+	VolcenginePlanUsage       *config.VolcenginePlanUsage   `json:"volcenginePlanUsage,omitempty"`
+	HasMiMoConsoleCookie      bool                          `json:"hasMiMoConsoleCookie,omitempty"`
+	MiMoTokenPlan             *managedMiMoTokenPlanView     `json:"mimoTokenPlan,omitempty"`
+	HasCompshareConsoleCookie bool                          `json:"hasCompshareConsoleCookie,omitempty"`
+	CompsharePlan             *managedCompsharePlanView     `json:"compsharePlan,omitempty"`
+	HasKimiConsoleToken       bool                          `json:"hasKimiConsoleToken,omitempty"`
+	KimiCodeUsage             *config.KimiCodeUsageSnapshot `json:"kimiCodeUsage,omitempty"`
 }
 
 type managedMiMoTokenPlanView struct {
@@ -336,6 +342,11 @@ func handleListAccounts(deps *AutoManagedDeps) gin.HandlerFunc {
 				if credential.CompshareConsole != nil {
 					credentialView.HasCompshareConsoleCookie = true
 					credentialView.CompsharePlan = compsharePlanView(credential.CompshareConsole)
+				}
+				if credential.KimiConsole != nil {
+					credentialView.HasKimiConsoleToken = true
+					usage := credential.KimiConsole.Usage
+					credentialView.KimiCodeUsage = &usage
 				}
 				view.Credentials = append(view.Credentials, credentialView)
 			}
@@ -684,6 +695,92 @@ func compshareConsoleClient(deps *AutoManagedDeps) *CompshareConsoleClient {
 		return deps.CompshareConsoleClient
 	}
 	return &CompshareConsoleClient{HTTPClient: &http.Client{Timeout: 10 * time.Second}}
+}
+
+func handleSetKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			AccessToken string `json:"accessToken"`
+		}
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求体"})
+			return
+		}
+		accountUID, credentialUID := strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))
+		if _, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID); !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "推理 Key 凭证不存在"})
+			return
+		}
+		channels := deps.CfgManager.GetAccountChannels(accountUID)
+		if len(channels) == 0 || channels[0].Upstream.ProviderID != "kimi" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "仅 Kimi 自动托管账号支持绑定控制台令牌"})
+			return
+		}
+		console, err := kimiConsoleClient(deps).Verify(c.Request.Context(), req.AccessToken)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.CfgManager.BindManagedAccountKimiConsole(accountUID, credentialUID, *console); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"accountUid": accountUID, "credentialUid": credentialUID, "usage": console.Usage,
+		})
+	}
+}
+
+func handleRefreshKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		accountUID, credentialUID := strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))
+		credential, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID)
+		if !ok || credential.KimiConsole == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "未绑定 Kimi 控制台令牌"})
+			return
+		}
+		console, err := kimiConsoleClient(deps).Verify(c.Request.Context(), credential.KimiConsole.AccessToken)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.CfgManager.BindManagedAccountKimiConsole(accountUID, credentialUID, *console); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"usage": console.Usage})
+	}
+}
+
+func handleClearKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.CfgManager == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "配置管理器不可用"})
+			return
+		}
+		if err := deps.CfgManager.ClearManagedAccountKimiConsole(
+			strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid")),
+		); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func kimiConsoleClient(deps *AutoManagedDeps) *KimiConsoleClient {
+	if deps != nil && deps.KimiConsoleClient != nil {
+		return deps.KimiConsoleClient
+	}
+	return &KimiConsoleClient{HTTPClient: &http.Client{Timeout: 10 * time.Second}}
 }
 
 func handleSetVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {

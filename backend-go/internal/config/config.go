@@ -160,6 +160,55 @@ type ManagedAccountCredential struct {
 	VolcengineAccessKey *VolcengineAccessKeyPair    `json:"volcengineAccessKey,omitempty"`
 	MiMoConsole         *MiMoConsoleCredential      `json:"mimoConsole,omitempty"`
 	CompshareConsole    *CompshareConsoleCredential `json:"compshareConsole,omitempty"`
+	KimiConsole         *KimiConsoleCredential      `json:"kimiConsole,omitempty"`
+}
+
+// KimiConsoleCredential 保存 Kimi Web 会话令牌与最近一次 Kimi Code 套餐快照。
+// AccessToken 属于敏感凭证，只能持久化，管理 API 不得回显。
+type KimiConsoleCredential struct {
+	AccessToken string                `json:"accessToken"`
+	Usage       KimiCodeUsageSnapshot `json:"usage"`
+}
+
+// KimiCodeUsageSnapshot 汇总 Kimi Code 额度和会员订阅统计。
+type KimiCodeUsageSnapshot struct {
+	WeeklyUsage         KimiCodeQuotaWindow  `json:"weeklyUsage"`
+	TotalQuota          KimiCodeQuotaWindow  `json:"totalQuota"`
+	RateLimits          []KimiCodeRateLimit  `json:"rateLimits,omitempty"`
+	CodeFiveHour        *KimiCodeRatioWindow `json:"codeFiveHour,omitempty"`
+	CodeSevenDay        *KimiCodeRatioWindow `json:"codeSevenDay,omitempty"`
+	SubscriptionBalance *KimiCodeBalance     `json:"subscriptionBalance,omitempty"`
+	GiftBalances        []KimiCodeBalance    `json:"giftBalances,omitempty"`
+	ValidatedAt         time.Time            `json:"validatedAt"`
+}
+
+// KimiCodeQuotaWindow 是 GetUsages 返回的精确额度窗口。
+type KimiCodeQuotaWindow struct {
+	Used      int64  `json:"used"`
+	Limit     int64  `json:"limit"`
+	Remaining int64  `json:"remaining"`
+	ResetTime string `json:"resetTime,omitempty"`
+}
+
+type KimiCodeRateLimit struct {
+	WindowSeconds int64               `json:"windowSeconds"`
+	Usage         KimiCodeQuotaWindow `json:"usage"`
+}
+
+// KimiCodeRatioWindow 是 GetSubscriptionStats 返回的比例窗口，Ratio 表示已用比例。
+type KimiCodeRatioWindow struct {
+	Ratio     float64 `json:"ratio"`
+	Enabled   bool    `json:"enabled"`
+	ResetTime string  `json:"resetTime,omitempty"`
+}
+
+type KimiCodeBalance struct {
+	Feature           string  `json:"feature,omitempty"`
+	Type              string  `json:"type,omitempty"`
+	Unit              string  `json:"unit,omitempty"`
+	AmountUsedRatio   float64 `json:"amountUsedRatio"`
+	KimiCodeUsedRatio float64 `json:"kimiCodeUsedRatio"`
+	ExpireTime        string  `json:"expireTime,omitempty"`
 }
 
 // VolcengineAccessKeyPair 是火山云管控面签名凭证，用于 Agent/Coding Plan 识别与模型发现。
@@ -827,6 +876,9 @@ func (cm *ConfigManager) GetConfig() Config {
 				if credential.CompshareConsole != nil {
 					console := *credential.CompshareConsole
 					cloned.ManagedAccounts[i].Credentials[j].CompshareConsole = &console
+				}
+				if credential.KimiConsole != nil {
+					cloned.ManagedAccounts[i].Credentials[j].KimiConsole = cloneKimiConsoleCredential(credential.KimiConsole)
 				}
 			}
 		}

@@ -1548,6 +1548,8 @@ export interface ManagedAccountCredential {
   mimoTokenPlan?: MiMoTokenPlanSnapshot
   hasCompshareConsoleCookie?: boolean
   compsharePlan?: CompsharePlanSnapshot
+  hasKimiConsoleToken?: boolean
+  kimiCodeUsage?: KimiCodeUsageSnapshot
 }
 
 export interface DeepSeekBalanceInfo {
@@ -1649,6 +1651,50 @@ export interface CompshareConsoleCookieResponse {
   accountUid: string
   credentialUid: string
   plan: CompsharePlanSnapshot
+}
+
+export interface KimiCodeQuotaWindow {
+  used: number
+  limit: number
+  remaining: number
+  resetTime?: string
+}
+
+export interface KimiCodeRateLimit {
+  windowSeconds: number
+  usage: KimiCodeQuotaWindow
+}
+
+export interface KimiCodeRatioWindow {
+  ratio: number
+  enabled: boolean
+  resetTime?: string
+}
+
+export interface KimiCodeBalance {
+  feature?: string
+  type?: string
+  unit?: string
+  amountUsedRatio: number
+  kimiCodeUsedRatio: number
+  expireTime?: string
+}
+
+export interface KimiCodeUsageSnapshot {
+  weeklyUsage: KimiCodeQuotaWindow
+  totalQuota: KimiCodeQuotaWindow
+  rateLimits?: KimiCodeRateLimit[]
+  codeFiveHour?: KimiCodeRatioWindow
+  codeSevenDay?: KimiCodeRatioWindow
+  subscriptionBalance?: KimiCodeBalance
+  giftBalances?: KimiCodeBalance[]
+  validatedAt: string
+}
+
+export interface KimiConsoleTokenResponse {
+  accountUid: string
+  credentialUid: string
+  usage: KimiCodeUsageSnapshot
 }
 
 export interface VolcengineAccessKeyResponse {

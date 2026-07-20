@@ -74,11 +74,84 @@ func (cm *ConfigManager) GetManagedAccountCredential(accountUID, credentialUID s
 					console := *credential.CompshareConsole
 					credential.CompshareConsole = &console
 				}
+				credential.KimiConsole = cloneKimiConsoleCredential(credential.KimiConsole)
 				return credential, true
 			}
 		}
 	}
 	return ManagedAccountCredential{}, false
+}
+
+func cloneKimiConsoleCredential(source *KimiConsoleCredential) *KimiConsoleCredential {
+	if source == nil {
+		return nil
+	}
+	clone := *source
+	clone.Usage.RateLimits = append([]KimiCodeRateLimit(nil), source.Usage.RateLimits...)
+	clone.Usage.GiftBalances = append([]KimiCodeBalance(nil), source.Usage.GiftBalances...)
+	if source.Usage.CodeFiveHour != nil {
+		window := *source.Usage.CodeFiveHour
+		clone.Usage.CodeFiveHour = &window
+	}
+	if source.Usage.CodeSevenDay != nil {
+		window := *source.Usage.CodeSevenDay
+		clone.Usage.CodeSevenDay = &window
+	}
+	if source.Usage.SubscriptionBalance != nil {
+		balance := *source.Usage.SubscriptionBalance
+		clone.Usage.SubscriptionBalance = &balance
+	}
+	return &clone
+}
+
+// BindManagedAccountKimiConsole 为 Kimi 托管凭证保存 Web 会话令牌和套餐快照。
+func (cm *ConfigManager) BindManagedAccountKimiConsole(accountUID, credentialUID string, console KimiConsoleCredential) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		if account.ProviderID != "kimi" {
+			return fmt.Errorf("仅 Kimi 自动托管账号支持绑定控制台令牌")
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID != credentialUID {
+				continue
+			}
+			console.AccessToken = strings.TrimSpace(console.AccessToken)
+			if console.AccessToken == "" {
+				return fmt.Errorf("Kimi 控制台令牌不能为空")
+			}
+			account.Credentials[j].KimiConsole = cloneKimiConsoleCredential(&console)
+			return cm.saveConfigLocked(cm.config)
+		}
+		return fmt.Errorf("凭证 %s 不存在", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
+func (cm *ConfigManager) ClearManagedAccountKimiConsole(accountUID, credentialUID string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i := range cm.config.ManagedAccounts {
+		account := &cm.config.ManagedAccounts[i]
+		if account.AccountUID != accountUID {
+			continue
+		}
+		if account.ProviderID != "kimi" {
+			return fmt.Errorf("仅 Kimi 自动托管账号支持绑定控制台令牌")
+		}
+		for j := range account.Credentials {
+			if account.Credentials[j].CredentialUID == credentialUID {
+				account.Credentials[j].KimiConsole = nil
+				return cm.saveConfigLocked(cm.config)
+			}
+		}
+		return fmt.Errorf("凭证 %s 不存在", credentialUID)
+	}
+	return fmt.Errorf("账号 %s 不存在", accountUID)
 }
 
 // BindManagedAccountMiMoConsole 绑定 MiMo 控制台 Cookie，并可原子采用 Cookie 所属的 Token Plan Key。

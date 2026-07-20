@@ -789,6 +789,114 @@ func TestListManagedAccountsDoesNotExposeVolcengineSecret(t *testing.T) {
 	}
 }
 
+func TestKimiConsoleTokenLifecycleDoesNotExposeToken(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	data := `{
+  "managedAccounts": [{"accountUid":"acct_kimi","providerId":"kimi","name":"kimi","credentials":[{"credentialUid":"cred_kimi","apiKey":"sk-kimi-secret"}]}],
+  "upstream": [{"accountUid":"acct_kimi","channelUid":"ch_kimi","providerId":"kimi","name":"kimi","serviceType":"claude","baseUrl":"https://api.kimi.com/coding","apiKeyConfigs":[{"credentialUid":"cred_kimi","baseUrl":"https://api.kimi.com/coding"}],"autoManaged":true,"status":"active"}],
+  "responsesUpstream": [], "geminiUpstream": [], "chatUpstream": [], "imagesUpstream": [], "vectorsUpstream": []
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfgManager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cfgManager.Close() })
+
+	kimiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer web-session-secret" {
+			t.Fatalf("Kimi 请求未使用保存的会话令牌")
+		}
+		switch r.URL.Path {
+		case kimiUsagesPath:
+			_, _ = w.Write([]byte(`{"usages":[{"scope":"FEATURE_CODING","detail":{"limit":"100","remaining":"80","resetTime":"2026-07-27T16:13:43Z"},"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"100","remaining":"90","resetTime":"2026-07-21T02:13:43Z"}}]}],"totalQuota":{"limit":"100","remaining":"80"}}`))
+		case kimiSubscriptionStatsPath:
+			_, _ = w.Write([]byte(`{"ratelimitCode5h":{"ratio":0.1,"enabled":true},"ratelimitCode7d":{"ratio":0.2,"enabled":true},"subscriptionBalance":{"feature":"FEATURE_OMNI","type":"SUBSCRIPTION","unit":"UNIT_CREDIT","amountUsedRatio":0.2,"kimiCodeUsedRatio":0.2,"expireTime":"2026-08-20T16:14:07Z"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer kimiServer.Close()
+
+	router := setupAutoManagedRouter(&AutoManagedDeps{
+		CfgManager: cfgManager,
+		KimiConsoleClient: &KimiConsoleClient{
+			HTTPClient: kimiServer.Client(), BaseURL: kimiServer.URL,
+		},
+	})
+	put := httptest.NewRequest(
+		http.MethodPut,
+		"/api/accounts/acct_kimi/credentials/cred_kimi/kimi-console-token",
+		bytes.NewBufferString(`{"accessToken":"Bearer web-session-secret"}`),
+	)
+	put.Header.Set("Content-Type", "application/json")
+	putRecorder := httptest.NewRecorder()
+	router.ServeHTTP(putRecorder, put)
+	if putRecorder.Code != http.StatusOK {
+		t.Fatalf("绑定 Kimi 令牌失败: status=%d body=%s", putRecorder.Code, putRecorder.Body.String())
+	}
+	if strings.Contains(putRecorder.Body.String(), "web-session-secret") || strings.Contains(putRecorder.Body.String(), "accessToken") {
+		t.Fatalf("绑定响应泄露 Kimi 令牌: %s", putRecorder.Body.String())
+	}
+	credential, ok := cfgManager.GetManagedAccountCredential("acct_kimi", "cred_kimi")
+	if !ok || credential.KimiConsole == nil || credential.KimiConsole.AccessToken != "web-session-secret" {
+		t.Fatalf("Kimi 令牌未持久化: %+v", credential)
+	}
+	persisted, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(persisted), `"accessToken": "web-session-secret"`) {
+		t.Fatalf("配置文件未保存 Kimi 令牌")
+	}
+
+	listRecorder := httptest.NewRecorder()
+	router.ServeHTTP(listRecorder, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	if listRecorder.Code != http.StatusOK || strings.Contains(listRecorder.Body.String(), "web-session-secret") || strings.Contains(listRecorder.Body.String(), "accessToken") {
+		t.Fatalf("账号列表响应异常或泄露令牌: status=%d body=%s", listRecorder.Code, listRecorder.Body.String())
+	}
+	if !strings.Contains(listRecorder.Body.String(), `"hasKimiConsoleToken":true`) || !strings.Contains(listRecorder.Body.String(), `"kimiCodeUsage"`) {
+		t.Fatalf("账号列表缺少 Kimi 用量快照: %s", listRecorder.Body.String())
+	}
+
+	refreshRecorder := httptest.NewRecorder()
+	router.ServeHTTP(refreshRecorder, httptest.NewRequest(
+		http.MethodPost,
+		"/api/accounts/acct_kimi/credentials/cred_kimi/kimi-console-token/refresh",
+		nil,
+	))
+	if refreshRecorder.Code != http.StatusOK {
+		t.Fatalf("刷新 Kimi 余量失败: status=%d body=%s", refreshRecorder.Code, refreshRecorder.Body.String())
+	}
+	if strings.Contains(refreshRecorder.Body.String(), "web-session-secret") || strings.Contains(refreshRecorder.Body.String(), "accessToken") {
+		t.Fatalf("刷新响应泄露 Kimi 令牌: %s", refreshRecorder.Body.String())
+	}
+
+	deleteRecorder := httptest.NewRecorder()
+	router.ServeHTTP(deleteRecorder, httptest.NewRequest(
+		http.MethodDelete,
+		"/api/accounts/acct_kimi/credentials/cred_kimi/kimi-console-token",
+		nil,
+	))
+	if deleteRecorder.Code != http.StatusNoContent {
+		t.Fatalf("解绑 Kimi 令牌失败: status=%d body=%s", deleteRecorder.Code, deleteRecorder.Body.String())
+	}
+	credential, _ = cfgManager.GetManagedAccountCredential("acct_kimi", "cred_kimi")
+	if credential.KimiConsole != nil {
+		t.Fatalf("Kimi 令牌解绑后仍存在: %+v", credential.KimiConsole)
+	}
+	persisted, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(persisted), "web-session-secret") {
+		t.Fatalf("解绑后配置文件仍包含 Kimi 令牌")
+	}
+}
+
 func TestSetVolcengineAccessKeyDetectsPlanBeforePersisting(t *testing.T) {
 	controlPlane := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("Action") != "GetPersonalPlan" {

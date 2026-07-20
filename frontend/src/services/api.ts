@@ -60,6 +60,7 @@ import type {
   DeepSeekAccountBalancesResponse,
   MiMoConsoleCookieResponse,
   CompshareConsoleCookieResponse,
+  KimiConsoleTokenResponse,
   VolcengineAccessKeyResponse,
   VolcenginePlanUsageRefreshResponse,
   ChannelAutoStatusResponse,
@@ -1492,6 +1493,32 @@ export class ApiService {
 
   async clearCompshareConsoleCookie(accountUid: string, credentialUid: string): Promise<void> {
     await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/compshare-console-cookie`, {
+      method: 'DELETE',
+    })
+  }
+
+  async setKimiConsoleToken(
+    accountUid: string,
+    credentialUid: string,
+    accessToken: string
+  ): Promise<KimiConsoleTokenResponse> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/kimi-console-token`, {
+      method: 'PUT',
+      body: JSON.stringify({ accessToken }),
+    })
+  }
+
+  async refreshKimiConsoleToken(
+    accountUid: string,
+    credentialUid: string
+  ): Promise<{ usage: KimiConsoleTokenResponse['usage'] }> {
+    return this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/kimi-console-token/refresh`, {
+      method: 'POST',
+    })
+  }
+
+  async clearKimiConsoleToken(accountUid: string, credentialUid: string): Promise<void> {
+    await this.request(`/accounts/${encodeURIComponent(accountUid)}/credentials/${encodeURIComponent(credentialUid)}/kimi-console-token`, {
       method: 'DELETE',
     })
   }
