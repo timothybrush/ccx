@@ -234,7 +234,13 @@ Join the QQ group for discussion: **642217364**
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=BenedictKing/ccx&type=Date)](https://www.star-history.com/#BenedictKing/ccx&Date)
+<a href="https://www.star-history.com/?repos=BenedictKing%2Fccx&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=BenedictKing/ccx&type=date&theme=dark&legend=top-left&sealed_token=O5bBgCb5Ppt9QRyb0YBRWF8TJOoit-OjAG3w6QBDKGSwN-CUcxMO72mJBJ2QzxX8N3zVNik0" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=BenedictKing/ccx&type=date&legend=top-left&sealed_token=O5bBgCb5Ppt9QRyb0YBRWF8TJOoit-OjAG3w6QBDKGSwN-CUcxMO72mJBJ2QzxX8N3zVNik0" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=BenedictKing/ccx&type=date&legend=top-left&sealed_token=O5bBgCb5Ppt9QRyb0YBRWF8TJOoit-OjAG3w6QBDKGSwN-CUcxMO72mJBJ2QzxX8N3zVNik0" />
+ </picture>
+</a>
 
 ## Acknowledgments
 
