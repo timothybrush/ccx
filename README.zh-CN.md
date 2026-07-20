@@ -238,11 +238,11 @@ make dev
 
 <table>
   <tr>
-    <td align="center" width="40">
-      <img src="https://signpath.org/assets/favicon-50x50.png" width="24" alt="SignPath Logo" />
+    <td align="center" width="60">
+      <a target="_blank" rel="noopener noreferrer nofollow" href="https://signpath.org/"><img src="https://signpath.org/assets/favicon-50x50.png" alt="SignPath Logo" style="max-width: 100%;padding-top: 6px;" width="50"></a>
     </td>
     <td>
-      Windows 代码签名由 <a href="https://signpath.io/">SignPath.io</a> 免费提供，证书由 <a href="https://signpath.org/foundation">SignPath Foundation</a> 签发。
+      Windows 代码签名由 <a href="https://signpath.io/">SignPath.io</a> 免费提供，证书由 <a href="https://signpath.org/">SignPath Foundation</a> 签发。
     </td>
   </tr>
 </table>

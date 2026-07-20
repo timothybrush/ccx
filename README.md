@@ -240,11 +240,11 @@ Join the QQ group for discussion: **642217364**
 
 <table>
   <tr>
-    <td align="center" width="40">
-      <img src="https://signpath.org/assets/favicon-50x50.png" width="24" alt="SignPath Logo" />
+    <td align="center" width="60">
+      <a target="_blank" rel="noopener noreferrer nofollow" href="https://signpath.org/"><img src="https://signpath.org/assets/favicon-50x50.png" alt="SignPath Logo" style="max-width: 100%;padding-top: 6px;" width="50"></a>
     </td>
     <td>
-      Free code signing on Windows provided by <a href="https://signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/foundation">SignPath Foundation</a>
+      Free code signing on Windows provided by <a href="https://signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>
     </td>
   </tr>
 </table>
