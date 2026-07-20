@@ -30,3 +30,7 @@ features:
   - title: 一键部署
     details: 前端嵌入二进制，单端口部署，支持 Docker 与系统服务
 ---
+
+## 致谢
+
+> Windows 代码签名由 [SignPath.io](https://signpath.io/) 免费提供，证书由 [SignPath Foundation](https://signpath.org/foundation) 签发。

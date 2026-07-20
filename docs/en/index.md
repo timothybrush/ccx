@@ -30,3 +30,7 @@ features:
   - title: Single Binary Deploy
     details: Frontend embedded in binary, single-port deployment, Docker and system service support
 ---
+
+## Acknowledgments
+
+> Free code signing on Windows provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/foundation).
