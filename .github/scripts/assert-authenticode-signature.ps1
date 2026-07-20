@@ -1,8 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string[]] $Path,
-
-  [string] $SigningPolicySlug = $env:SIGNPATH_SIGNING_POLICY_SLUG
+  [string[]] $Path
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,9 +25,6 @@ function Write-CertificateDetails {
   Write-Host "  ${Label} valid until: $($Certificate.NotAfter)"
 }
 
-$allowUntrustedTestSignature = $SigningPolicySlug -eq "test-signing"
-$allowedTestStatuses = @("UnknownError", "NotTrusted")
-
 foreach ($file in $Path) {
   $signature = Get-AuthenticodeSignature -FilePath $file
 
@@ -42,15 +37,6 @@ foreach ($file in $Path) {
   Write-CertificateDetails -Label "Timestamp" -Certificate $signature.TimeStamperCertificate
 
   if ($signature.Status -eq "Valid") {
-    continue
-  }
-
-  if (
-    $allowUntrustedTestSignature -and
-    $allowedTestStatuses -contains $signature.Status.ToString() -and
-    $null -ne $signature.SignerCertificate
-  ) {
-    Write-Warning "Accepting $($signature.Status) for test-signing because a signer certificate is present. Production signing policies must return Valid."
     continue
   }
 

@@ -374,7 +374,7 @@ jobs:
     env:
       SIGNPATH_ORGANIZATION_ID: 4ffeb1d3-df31-4323-a3e9-15fecdcbaad2
       SIGNPATH_PROJECT_SLUG: ccx
-      SIGNPATH_SIGNING_POLICY_SLUG: test-signing
+      SIGNPATH_SIGNING_POLICY_SLUG: release_certificate_2026
       SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
     steps:
       - name: Checkout code
