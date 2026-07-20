@@ -71,6 +71,26 @@ func TestBuildResponsesProbeURL(t *testing.T) {
 	}
 }
 
+func TestVolcenginePlanProbeModel(t *testing.T) {
+	cases := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{"Agent Plan", "https://ark.cn-beijing.volces.com/api/plan", "doubao-seed-2.0-code"},
+		{"Agent Plan OpenAI", "https://ark.cn-beijing.volces.com/api/plan/v3", "doubao-seed-2.0-code"},
+		{"Coding Plan", "https://ark.cn-beijing.volces.com/api/coding", "ark-code-latest"},
+		{"Coding Plan OpenAI", "https://ark.cn-beijing.volces.com/api/coding/v3", "ark-code-latest"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := volcenginePlanProbeModel(tc.baseURL); got != tc.want {
+				t.Errorf("volcenginePlanProbeModel(%q) = %q, want %q", tc.baseURL, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVerifyClaudeEndpoint(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -328,7 +348,7 @@ func TestVerifyProviderKeys(t *testing.T) {
 				http.Error(w, "invalid body", http.StatusBadRequest)
 				return
 			}
-			if body.Model != "ark-code-latest" || len(body.System) < 2 ||
+			if body.Model != "doubao-seed-2.0-code" || len(body.System) < 2 ||
 				!strings.HasPrefix(body.System[0].Text, "x-anthropic-billing-header") ||
 				!strings.HasPrefix(body.System[1].Text, "You are Claude Code,") {
 				http.Error(w, "Claude Code identity required", http.StatusForbidden)

@@ -260,7 +260,7 @@ func verifyProviderCandidateEndpoint(ctx context.Context, providerID string, rou
 }
 
 func verifyVolcenginePlanEndpoint(ctx context.Context, route config.ProviderRoute, baseURL, apiKey string) EndpointVerifyResult {
-	const model = "ark-code-latest"
+	model := volcenginePlanProbeModel(baseURL)
 	switch route.ServiceType {
 	case "claude":
 		body := []byte(`{"model":"` + model + `","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`)
@@ -274,4 +274,14 @@ func verifyVolcenginePlanEndpoint(ctx context.Context, route config.ProviderRout
 	default:
 		return EndpointVerifyResult{Message: fmt.Sprintf("不支持的 serviceType: %s", route.ServiceType)}
 	}
+}
+
+// volcenginePlanProbeModel 选择各套餐入口都实际提供的探针模型。
+// Agent Plan 不提供 Coding Plan 专用的 ark-code-latest 别名；使用 Agent
+// Plan 清单中的 doubao-seed-2.0-code 才能避免把有效 Key 误判为端点不可用。
+func volcenginePlanProbeModel(baseURL string) string {
+	if strings.Contains(strings.ToLower(baseURL), "/api/coding") {
+		return "ark-code-latest"
+	}
+	return "doubao-seed-2.0-code"
 }
