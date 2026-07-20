@@ -179,7 +179,8 @@ func (cm *ConfigManager) ClearManagedAccountMiMoConsole(accountUID, credentialUI
 	return fmt.Errorf("账号 %s 不存在", accountUID)
 }
 
-// BindManagedAccountCompshareConsole 为优云智算托管凭证保存控制台 Cookie 和套餐快照。
+// BindManagedAccountCompshareConsole 为优云智算托管凭证保存控制台 Cookie 和套餐快照，
+// 并将套餐并发上限同步到该凭证在全部协议渠道中的 Key 级限速配置。
 func (cm *ConfigManager) BindManagedAccountCompshareConsole(accountUID, credentialUID string, console CompshareConsoleCredential) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -195,6 +196,15 @@ func (cm *ConfigManager) BindManagedAccountCompshareConsole(accountUID, credenti
 			if account.Credentials[j].CredentialUID != credentialUID {
 				continue
 			}
+			if console.ConcurrencyLimit > 0 {
+				maxConcurrent := int(console.ConcurrencyLimit)
+				if int64(maxConcurrent) != console.ConcurrencyLimit {
+					return fmt.Errorf("优云智算套餐并发上限超出支持范围")
+				}
+				if !cm.applyManagedCredentialMaxConcurrentLocked(accountUID, credentialUID, account.Credentials[j].APIKey, maxConcurrent) {
+					return fmt.Errorf("凭证 %s 未绑定到任何渠道", credentialUID)
+				}
+			}
 			console.Cookie = strings.TrimSpace(console.Cookie)
 			account.Credentials[j].CompshareConsole = &console
 			return cm.saveConfigLocked(cm.config)
@@ -202,6 +212,46 @@ func (cm *ConfigManager) BindManagedAccountCompshareConsole(accountUID, credenti
 		return fmt.Errorf("凭证 %s 不存在", credentialUID)
 	}
 	return fmt.Errorf("账号 %s 不存在", accountUID)
+}
+
+// applyManagedCredentialMaxConcurrentLocked 更新账号全部协议渠道中的同一凭证。
+// 调用方必须持有 cm.mu；返回值表示至少找到了一条对应的 Key 配置。
+func (cm *ConfigManager) applyManagedCredentialMaxConcurrentLocked(accountUID, credentialUID, apiKey string, maxConcurrent int) bool {
+	updated := false
+	matchesCredential := func(keyConfig APIKeyConfig) bool {
+		if keyConfig.CredentialUID != "" {
+			return keyConfig.CredentialUID == credentialUID
+		}
+		return apiKey != "" && keyConfig.Key == apiKey
+	}
+	apply := func(channels []UpstreamConfig) {
+		for i := range channels {
+			channel := &channels[i]
+			if channel.AccountUID != accountUID || channel.ProviderID != "compshare" {
+				continue
+			}
+			for j := range channel.APIKeyConfigs {
+				if matchesCredential(channel.APIKeyConfigs[j]) {
+					channel.APIKeyConfigs[j].RateLimitMaxConcurrent = maxConcurrent
+					updated = true
+				}
+			}
+			for j := range channel.DisabledAPIKeys {
+				keyConfig := channel.DisabledAPIKeys[j].Config
+				if keyConfig != nil && matchesCredential(*keyConfig) {
+					keyConfig.RateLimitMaxConcurrent = maxConcurrent
+					updated = true
+				}
+			}
+		}
+	}
+	apply(cm.config.Upstream)
+	apply(cm.config.ChatUpstream)
+	apply(cm.config.ResponsesUpstream)
+	apply(cm.config.GeminiUpstream)
+	apply(cm.config.ImagesUpstream)
+	apply(cm.config.VectorsUpstream)
+	return updated
 }
 
 func (cm *ConfigManager) ClearManagedAccountCompshareConsole(accountUID, credentialUID string) error {
