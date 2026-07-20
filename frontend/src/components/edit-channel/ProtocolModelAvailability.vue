@@ -46,20 +46,71 @@
           {{ t('channelEditor.protocolModels.empty') }}
         </div>
         <div v-if="route.hasBindingDifferences" class="protocol-model-route__bindings">
-          <span class="text-caption text-warning">{{ t('channelEditor.protocolModels.keyDifferences') }}</span>
-          <v-tooltip
-            v-for="binding in route.bindings"
-            :key="binding.credentialUid || binding.keyMask"
-            :text="binding.models.join(', ') || t('channelEditor.protocolModels.empty')"
-            location="top"
-            max-width="420"
-          >
-            <template #activator="{ props: tooltipProps }">
-              <v-chip v-bind="tooltipProps" size="x-small" variant="tonal" color="warning">
-                {{ binding.keyMask }} · {{ t('channelEditor.protocolModels.count', { count: binding.models.length }) }}
-              </v-chip>
-            </template>
-          </v-tooltip>
+          <div class="protocol-model-route__bindings-header">
+            <v-icon color="warning" size="16">mdi-key-alert</v-icon>
+            <div>
+              <div class="text-caption font-weight-medium text-warning">
+                {{ t('channelEditor.protocolModels.keyDifferences') }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                {{ t('channelEditor.protocolModels.keyDifferencesHint') }}
+              </div>
+            </div>
+          </div>
+          <div class="protocol-model-route__binding-list">
+            <details
+              v-for="binding in route.bindings"
+              :key="binding.credentialUid || binding.keyMask"
+              class="protocol-model-binding"
+            >
+              <summary class="protocol-model-binding__summary">
+                <code>{{ binding.keyMask }}</code>
+                <v-chip class="protocol-model-binding__coverage" size="x-small" variant="tonal" color="warning">
+                  {{ t('channelEditor.protocolModels.coverage', { available: binding.models.length, total: route.models.length }) }}
+                </v-chip>
+                <v-icon class="protocol-model-binding__chevron" size="16">mdi-chevron-down</v-icon>
+              </summary>
+              <div class="protocol-model-binding__detail">
+                <div>
+                  <div class="protocol-model-binding__label text-success">
+                    {{ t('channelEditor.protocolModels.availableModels') }} · {{ binding.models.length }}
+                  </div>
+                  <div v-if="binding.models.length" class="protocol-model-binding__models">
+                    <v-chip
+                      v-for="model in binding.models"
+                      :key="`available:${model}`"
+                      size="x-small"
+                      variant="outlined"
+                      color="success"
+                      class="protocol-model-binding__model"
+                    >
+                      {{ model }}
+                    </v-chip>
+                  </div>
+                  <div v-else class="text-caption text-medium-emphasis">
+                    {{ t('channelEditor.protocolModels.empty') }}
+                  </div>
+                </div>
+                <div v-if="binding.missingModels.length">
+                  <div class="protocol-model-binding__label text-warning">
+                    {{ t('channelEditor.protocolModels.unavailableModels') }} · {{ binding.missingModels.length }}
+                  </div>
+                  <div class="protocol-model-binding__models">
+                    <v-chip
+                      v-for="model in binding.missingModels"
+                      :key="`unavailable:${model}`"
+                      size="x-small"
+                      variant="tonal"
+                      color="warning"
+                      class="protocol-model-binding__model"
+                    >
+                      {{ model }}
+                    </v-chip>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     </div>
@@ -128,14 +179,25 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   const upstreamKind = route.upstreamKind ?? route.kind
   const definition = protocolDefinitions[upstreamKind]
   const hasDiscoveredInventory = route.modelInventoryKnown === true || Array.isArray(route.discoveredModels)
-  const models = hasDiscoveredInventory
+  const inventoryModels = hasDiscoveredInventory
     ? normalizeModels(route.discoveredModels)
     : normalizeModels(route.supportedModels)
   const bindings = (route.modelBindings ?? []).map(binding => ({
     ...binding,
     models: normalizeModels(binding.models),
   }))
+  const models = normalizeModels([
+    ...inventoryModels,
+    ...bindings.flatMap(binding => binding.models),
+  ])
   const bindingSignatures = new Set(bindings.map(binding => binding.models.join('\u0000')))
+  const bindingsWithDifferences = bindings.map(binding => {
+    const availableModels = new Set(binding.models)
+    return {
+      ...binding,
+      missingModels: models.filter(model => !availableModels.has(model)),
+    }
+  })
 
   return {
     ...route,
@@ -144,7 +206,7 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
     path: definition.path,
     icon: definition.icon,
     models,
-    bindings,
+    bindings: bindingsWithDifferences,
     hasInventory: hasDiscoveredInventory || models.length > 0,
     hasBindingDifferences: bindings.length > 1 && bindingSignatures.size > 1,
   }
@@ -214,10 +276,89 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
 
 .protocol-model-route__bindings {
   display: flex;
-  grid-column: 2;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(var(--v-theme-warning), 0.35);
+}
+
+.protocol-model-route__bindings-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.protocol-model-route__binding-list {
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 4px;
+}
+
+.protocol-model-binding + .protocol-model-binding {
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+}
+
+.protocol-model-binding__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 20px;
   align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+  background: rgba(var(--v-theme-warning), 0.04);
+}
+
+.protocol-model-binding__summary::-webkit-details-marker {
+  display: none;
+}
+
+.protocol-model-binding__summary code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.protocol-model-binding__chevron {
+  transition: transform 0.16s ease;
+}
+
+.protocol-model-binding[open] .protocol-model-binding__chevron {
+  transform: rotate(180deg);
+}
+
+.protocol-model-binding__detail {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+.protocol-model-binding__label {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.protocol-model-binding__models {
+  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.protocol-model-binding__model {
+  height: auto;
+  min-height: 20px;
+  max-width: 100%;
+}
+
+.protocol-model-binding__model :deep(.v-chip__content) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
 }
 
 .protocol-model-route__model {
@@ -238,8 +379,26 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
     gap: 10px;
   }
 
-  .protocol-model-route__bindings {
+  .protocol-model-binding__summary {
+    grid-template-columns: minmax(0, 1fr) auto 18px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .protocol-model-binding__summary {
+    grid-template-columns: minmax(0, 1fr) 18px;
+  }
+
+  .protocol-model-binding__coverage {
     grid-column: 1;
+    justify-self: start;
+  }
+
+  .protocol-model-binding__chevron {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
   }
 }
 </style>

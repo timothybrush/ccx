@@ -165,21 +165,33 @@
                 <v-icon start size="12">mdi-rocket-launch</v-icon>
                 {{ formatPromotionRemaining(element.promotionUntil) }}
               </v-chip>
-              <!-- Official website link button -->
-              <v-btn
-                :href="getWebsiteUrl(element)"
-                target="_blank"
-                rel="noopener"
-                icon
-                size="x-small"
-                variant="text"
-                color="primary"
-                class="ml-1"
-                :title="t('orchestration.openWebsite')"
-                @click.stop
+              <!-- Official website links; plan channels may expose more than one console. -->
+              <v-tooltip
+                v-for="link in getChannelWebsiteLinks(element)"
+                :key="`${link.kind}:${link.url}`"
+                :text="websiteLinkLabel(link.kind)"
+                location="top"
+                :open-delay="150"
+                content-class="ccx-tooltip"
               >
-                <v-icon size="14">mdi-open-in-new</v-icon>
-              </v-btn>
+                <template #activator="{ props: tooltipProps }">
+                  <v-btn
+                    v-bind="tooltipProps"
+                    :href="link.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    icon
+                    size="x-small"
+                    variant="text"
+                    color="primary"
+                    class="ml-1"
+                    :aria-label="websiteLinkLabel(link.kind)"
+                    @click.stop
+                  >
+                    <v-icon size="14">{{ websiteLinkIcon(link.kind) }}</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
               <v-chip
                 v-for="capsule in getProtocolCapsules(element)"
                 :key="`${capsule.kind}-${capsule.index}`"
@@ -707,6 +719,7 @@ import ChannelStatusBadge from './ChannelStatusBadge.vue'
 import ChannelHealthBadge from './ChannelHealthBadge.vue'
 import { isManagedProviderChannel, isOfficialProviderChannel, providerDisplayName } from '../utils/providerDisplay'
 import { availableChannelApiKeyCount, disabledChannelApiKeyCount } from '../utils/channelApiKeys'
+import { getChannelWebsiteLinks, type ChannelWebsiteKind } from '../utils/channelWebsite'
 import type { ChannelHealthItem } from '../services/api-types'
 // Lazy-load chart components to reduce initial JS bundle size
 const KeyTrendChart = defineAsyncComponent(() => import('./KeyTrendChart.vue'))
@@ -1228,16 +1241,15 @@ const formatCacheStats = (stats?: TimeWindowStats): string => {
   return `${t('orchestration.hitRate')} ${hitRate.toFixed(0)}% · ${t('orchestration.read')} ${formatTokens(cacheReadTokens)} · ${t('orchestration.write')} ${formatTokens(cacheCreationTokens)}`
 }
 
-// Get the official website URL (prefer website; otherwise extract the domain from baseUrl)
-const getWebsiteUrl = (channel: Channel): string => {
-  if (channel.website) return channel.website
-  try {
-    const url = new URL(channel.baseUrl)
-    return `${url.protocol}//${url.host}`
-  } catch {
-    return channel.baseUrl
-  }
+const websiteLinkLabel = (kind: ChannelWebsiteKind): string => {
+  if (kind === 'agent_plan') return t('volcengineAccessKey.agentPlanConsole')
+  if (kind === 'coding_plan') return t('volcengineAccessKey.codingPlanConsole')
+  return t('orchestration.openWebsite')
 }
+
+const websiteLinkIcon = (kind: ChannelWebsiteKind): string => (
+  kind === 'coding_plan' ? 'mdi-code-braces' : kind === 'agent_plan' ? 'mdi-robot-outline' : 'mdi-open-in-new'
+)
 
 // ============== Realtime channel activity helpers ==============
 

@@ -136,7 +136,11 @@ export function useAppController() {
     }
   }
 
-  const saveChannel = async (channel: Omit<Channel, 'index' | 'latency' | 'status'>, options?: { isQuickAdd?: boolean; triggerCapabilityTest?: boolean }) => {
+  const saveChannel = async (
+    channel: Omit<Channel, 'index' | 'latency' | 'status'>,
+    options?: { isQuickAdd?: boolean; triggerCapabilityTest?: boolean },
+    onComplete?: () => void,
+  ) => {
     try {
       const editingChannel = dialogStore.editingChannel as Channel | null
       const result = await channelStore.saveChannel(
@@ -171,6 +175,8 @@ export function useAppController() {
     } catch (error) {
       handleAuthError(error)
       return undefined
+    } finally {
+      onComplete?.()
     }
   }
 

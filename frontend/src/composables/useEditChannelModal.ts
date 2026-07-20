@@ -37,6 +37,7 @@ import { useEditChannelOptions } from '../utils/editChannelOptions'
 import { isValidUrl, normalizeModelCapabilities } from '../utils/editChannelHelpers'
 import { createHandleTestCapability } from '../utils/editChannelPayload'
 import { isAutoManagedAccountChannel } from '../utils/providerDisplay'
+import { getVolcenginePlanWebsiteLinks } from '../utils/channelWebsite'
 
 export interface EditChannelModalProps {
   show: boolean
@@ -46,7 +47,11 @@ export interface EditChannelModalProps {
 
 export type EditChannelModalEmits = {
   'update:show': [value: boolean]
-  save: [channel: Omit<Channel, 'index' | 'latency' | 'status'>, options?: { isQuickAdd?: boolean; triggerCapabilityTest?: boolean }]
+  save: [
+    channel: Omit<Channel, 'index' | 'latency' | 'status'>,
+    options?: { isQuickAdd?: boolean; triggerCapabilityTest?: boolean },
+    onComplete?: () => void,
+  ]
   testCapability: [channelId: number]
   error: [message: string]
   success: [message: string]
@@ -916,7 +921,8 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     form.authHeader = channel.authHeader || 'auto'
     form.baseUrl = channel.baseUrl
     form.baseUrls = channel.baseUrls || []
-    form.website = channel.website || ''
+    const planWebsiteLinks = getVolcenginePlanWebsiteLinks(channel)
+    form.website = channel.website || (planWebsiteLinks.length === 1 ? planWebsiteLinks[0].url : '')
     form.insecureSkipVerify = !!channel.insecureSkipVerify
     form.lowQuality = !!channel.lowQuality
     form.injectDummyThoughtSignature = !!channel.injectDummyThoughtSignature
@@ -1130,30 +1136,43 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
   }
 
   const handleSubmit = async () => {
-    if (!formRef.value) return
+    if (submitting.value || !formRef.value) return
 
-    if (!isAutoManagedChannel.value) {
-      if (props.channelType === 'vectors') {
-        syncEmbeddingCapabilitiesFromMapping()
-      } else {
-        syncModelCapabilitiesFromMapping()
+    submitting.value = true
+    let saveStarted = false
+
+    try {
+      if (!isAutoManagedChannel.value) {
+        if (props.channelType === 'vectors') {
+          syncEmbeddingCapabilitiesFromMapping()
+        } else {
+          syncModelCapabilitiesFromMapping()
+        }
+      }
+
+      const { valid } = await formRef.value.validate()
+      if (!valid) return
+      if (!isAutoManagedChannel.value && (modelCapabilitiesError.value || embeddingCapabilitiesError.value)) return
+
+      if (!isAutoManagedChannel.value) {
+        syncModelMappingToForm()
+      }
+
+      const channelData = buildSubmitPayload()
+
+      emit('save', channelData, undefined, () => {
+        submitting.value = false
+      })
+      saveStarted = true
+    } finally {
+      if (!saveStarted) {
+        submitting.value = false
       }
     }
-
-    const { valid } = await formRef.value.validate()
-    if (!valid) return
-    if (!isAutoManagedChannel.value && (modelCapabilitiesError.value || embeddingCapabilitiesError.value)) return
-
-    if (!isAutoManagedChannel.value) {
-      syncModelMappingToForm()
-    }
-
-    const channelData = buildSubmitPayload()
-
-    emit('save', channelData)
   }
 
   const handleCancel = () => {
+    if (submitting.value) return
     emit('update:show', false)
     resetForm()
   }
@@ -1317,6 +1336,10 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     if (!props.show) return
 
     if (keyboardEvent.key === 'Escape') {
+      if (submitting.value) {
+        keyboardEvent.preventDefault()
+        return
+      }
       if (isAnySelectMenuOpen.value || Date.now() < suppressDialogEscapeUntil.value) {
         keyboardEvent.preventDefault()
         keyboardEvent.stopPropagation()

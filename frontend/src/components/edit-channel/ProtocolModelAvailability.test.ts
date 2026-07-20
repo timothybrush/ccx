@@ -7,16 +7,16 @@ import ProtocolModelAvailability from './ProtocolModelAvailability.vue'
 
 vi.mock('../../i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, number>) => params?.count === undefined ? key : `${key}:${params.count}`,
+    t: (key: string, params?: Record<string, number>) => {
+      if (params?.count !== undefined) return `${key}:${params.count}`
+      if (params?.available !== undefined) return `${key}:${params.available}/${params.total}`
+      return key
+    },
   }),
 }))
 
 const passthroughStub = defineComponent({
   template: '<span><slot /></span>',
-})
-
-const tooltipStub = defineComponent({
-  template: '<span><slot name="activator" :props="{}" /><slot /></span>',
 })
 
 describe('ProtocolModelAvailability', () => {
@@ -91,7 +91,6 @@ describe('ProtocolModelAvailability', () => {
         stubs: {
           VChip: passthroughStub,
           VIcon: passthroughStub,
-          VTooltip: tooltipStub,
         },
       },
     })
@@ -119,7 +118,6 @@ describe('ProtocolModelAvailability', () => {
         stubs: {
           VChip: passthroughStub,
           VIcon: passthroughStub,
-          VTooltip: tooltipStub,
         },
       },
     })
@@ -130,5 +128,8 @@ describe('ProtocolModelAvailability', () => {
     expect(messages.text()).toContain('channelEditor.protocolModels.keyDifferences')
     expect(messages.text()).toContain('ark-a***001')
     expect(messages.text()).toContain('ark-b***002')
+    expect(messages.text()).toContain('channelEditor.protocolModels.coverage:1/2')
+    expect(messages.findAll('details')).toHaveLength(2)
+    expect(messages.findAll('details')[0].text()).toContain('other-model')
   })
 })

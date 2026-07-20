@@ -95,6 +95,7 @@ export interface APIKeyConfig {
   key: string
   credentialUid?: string
   name?: string
+  baseUrl?: string
   enabled?: boolean
   quotaGroup?: string
   rateLimitRpm?: number

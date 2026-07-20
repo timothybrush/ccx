@@ -55,6 +55,7 @@
                 :managed-account="isAutoManagedChannel"
                 :provider-name="managedProviderName"
                 :official-provider="isOfficialManagedProvider"
+                :website-links="managedPlanWebsiteLinks"
                 :errors="errors"
                 :rules="rules"
                 @update:form="updateForm"
@@ -402,13 +403,13 @@
       <!-- 底部按钮 -->
       <v-card-actions class="pa-6 pt-2">
         <v-spacer />
-        <v-btn variant="outlined" @click="handleCancel">
+        <v-btn variant="outlined" :disabled="submitting" @click="handleCancel">
           {{ t('app.actions.cancel') }}<span class="shortcut-hint ml-2 text-xs opacity-50">Esc</span>
         </v-btn>
         <v-btn
           color="primary"
           variant="elevated"
-          :disabled="!isFormValid"
+          :disabled="!isFormValid || submitting"
           :loading="submitting"
           @click="handleSubmit"
         >
@@ -441,6 +442,7 @@ import { useEditChannelModal, type EditChannelModalEmits, type EditChannelModalP
 import { ApiService } from '../services/api'
 import type { ManagedAccountChannel } from '../services/api-types'
 import { buildNativeProtocolModelRoutes } from '../utils/channelModelAvailability'
+import { getVolcenginePlanWebsiteLinks } from '../utils/channelWebsite'
 import { isManagedProviderChannel, isOfficialProviderChannel, providerDisplayName } from '../utils/providerDisplay'
 
 const props = withDefaults(defineProps<EditChannelModalProps>(), {
@@ -451,6 +453,7 @@ const emit = defineEmits<EditChannelModalEmits>()
 const managedProviderName = computed(() => providerDisplayName(props.channel?.providerId))
 const isManagedProvider = computed(() => isManagedProviderChannel(props.channel))
 const isOfficialManagedProvider = computed(() => isOfficialProviderChannel(props.channel))
+const managedPlanWebsiteLinks = computed(() => props.channel ? getVolcenginePlanWebsiteLinks(props.channel) : [])
 const managedAccountChannels = ref<ManagedAccountChannel[]>([])
 const managedModelsLoading = ref(false)
 const managedAccountsApi = new ApiService()

@@ -94,6 +94,22 @@
           :error-messages="errors.website"
           @update:model-value="updateField('website', $event)"
         />
+        <div v-if="managedAccount && websiteLinks?.length" class="website-links">
+          <span class="text-caption text-medium-emphasis">{{ t('channelEditor.basic.website.detectedPlans') }}</span>
+          <v-btn
+            v-for="link in websiteLinks"
+            :key="link.kind"
+            :href="link.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            size="small"
+            variant="tonal"
+            color="primary"
+          >
+            <v-icon start size="small">{{ websiteLinkIcon(link.kind) }}</v-icon>
+            {{ websiteLinkLabel(link.kind) }}
+          </v-btn>
+        </div>
       </v-col>
 
       <!-- 描述 -->
@@ -139,6 +155,7 @@
 
 <script setup lang="ts">
 import { useI18n } from '../../i18n'
+import type { ChannelWebsiteKind, ChannelWebsiteLink } from '../../utils/channelWebsite'
 
 interface FormData {
   name: string
@@ -160,6 +177,7 @@ interface Props {
   managedAccount?: boolean
   providerName?: string
   officialProvider?: boolean
+  websiteLinks?: ChannelWebsiteLink[]
   errors: Record<string, string>
   rules: {
     required: (_value: string) => boolean | string
@@ -181,6 +199,16 @@ const { t } = useI18n()
 const updateField = (field: keyof FormData, value: unknown) => {
   emit('update:form', { [field]: value })
 }
+
+const websiteLinkLabel = (kind: ChannelWebsiteKind): string => {
+  if (kind === 'agent_plan') return t('volcengineAccessKey.agentPlanConsole')
+  if (kind === 'coding_plan') return t('volcengineAccessKey.codingPlanConsole')
+  return t('channelCard.openWebsite')
+}
+
+const websiteLinkIcon = (kind: ChannelWebsiteKind): string => (
+  kind === 'coding_plan' ? 'mdi-code-braces' : kind === 'agent_plan' ? 'mdi-robot-outline' : 'mdi-open-in-new'
+)
 </script>
 
 <style scoped>
@@ -203,5 +231,13 @@ const updateField = (field: keyof FormData, value: unknown) => {
 
 .expected-request-item {
   margin: 2px 0;
+}
+
+.website-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
 }
 </style>

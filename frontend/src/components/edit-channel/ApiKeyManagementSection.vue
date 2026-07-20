@@ -259,9 +259,14 @@
                         size="x-small"
                         color="success"
                         variant="tonal"
+                        :href="getVolcenginePlanConsoleURL(row.volcengineCredential.volcenginePlan)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
                       >
                         {{ planDisplayName(row.volcengineCredential.volcenginePlan) }}
                         <span v-if="row.volcengineCredential.volcenginePlanTier"> · {{ row.volcengineCredential.volcenginePlanTier }}</span>
+                        <v-icon end size="12">mdi-open-in-new</v-icon>
                       </v-chip>
                       <v-chip
                         v-if="row.volcengineCredential.volcengineAccessKeyIdMask"
@@ -761,6 +766,7 @@ import type {
 } from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
 import { buildChannelApiKeyRows } from '../../utils/channelApiKeys'
+import { getVolcenginePlanConsoleURL } from '../../utils/channelWebsite'
 
 interface KeyModelsStatus {
   loading?: boolean
