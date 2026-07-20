@@ -28,6 +28,99 @@ func TestMultiURLHealthTreatsMissingKeyAsAvailableCandidate(t *testing.T) {
 	}
 }
 
+func TestMultiURLCombinedFailuresOpenChannelBeforeAnySingleIdentity(t *testing.T) {
+	m := NewMetricsManager()
+	defer m.Stop()
+	m.UpdateCircuitBreakerConfig(CircuitBreakerParams{
+		WindowSize:                   50,
+		FailureThreshold:             0.85,
+		ConsecutiveFailuresThreshold: 10,
+	})
+
+	baseURLs := []string{"https://primary.example.com", "https://backup.example.com"}
+	apiKeys := []string{"sk-a", "sk-b"}
+	serviceType := "openai"
+
+	// 10 次失败轮流落到 4 个身份，每个身份都低于单 Key 的连续失败阈值。
+	for i := 0; i < 10; i++ {
+		baseURL := baseURLs[i%len(baseURLs)]
+		apiKey := apiKeys[(i/2)%len(apiKeys)]
+		m.RecordFailure(baseURL, apiKey, serviceType)
+	}
+
+	for _, baseURL := range baseURLs {
+		for _, apiKey := range apiKeys {
+			if got := m.GetKeyCircuitState(baseURL, apiKey, serviceType); got != CircuitStateClosed {
+				t.Fatalf("single identity %s/%s state = %v, want closed", baseURL, apiKey, got)
+			}
+		}
+	}
+
+	if got := m.GetChannelCircuitStateMultiURL(baseURLs, apiKeys, serviceType); got != CircuitStateOpen {
+		t.Fatalf("combined channel state = %v, want open", got)
+	}
+	if m.IsChannelHealthyMultiURL(baseURLs, apiKeys, serviceType) {
+		t.Fatal("combined failure should make the channel unhealthy")
+	}
+	if got := m.ToResponseMultiURL(0, baseURLs, apiKeys, serviceType, 0).CircuitState; got != "open" {
+		t.Fatalf("metrics response circuit state = %q, want open", got)
+	}
+}
+
+func TestMultiURLCombinedFailureRecoversAfterSuccess(t *testing.T) {
+	m := NewMetricsManager()
+	defer m.Stop()
+	m.UpdateCircuitBreakerConfig(CircuitBreakerParams{
+		WindowSize:                   50,
+		FailureThreshold:             0.85,
+		ConsecutiveFailuresThreshold: 10,
+	})
+
+	baseURLs := []string{"https://primary.example.com", "https://backup.example.com"}
+	apiKeys := []string{"sk-a", "sk-b"}
+	serviceType := "openai"
+	for i := 0; i < 10; i++ {
+		m.RecordFailure(baseURLs[i%2], apiKeys[(i/2)%2], serviceType)
+	}
+	m.RecordSuccess(baseURLs[0], apiKeys[0], serviceType)
+
+	if got := m.GetChannelCircuitStateMultiURL(baseURLs, apiKeys, serviceType); got != CircuitStateClosed {
+		t.Fatalf("channel state after success = %v, want closed", got)
+	}
+	if !m.IsChannelHealthyMultiURL(baseURLs, apiKeys, serviceType) {
+		t.Fatal("channel should recover after a successful request breaks the combined failure streak")
+	}
+}
+
+func TestMultiURLCombinedFailureIgnoresPendingRequests(t *testing.T) {
+	m := NewMetricsManager()
+	defer m.Stop()
+	m.UpdateCircuitBreakerConfig(CircuitBreakerParams{
+		WindowSize:                   10,
+		FailureThreshold:             0.85,
+		ConsecutiveFailuresThreshold: 2,
+	})
+
+	baseURL := "https://example.com"
+	serviceType := "openai"
+	startedAt := time.Now()
+	requestA := m.RecordRequestConnectedAt(baseURL, "sk-a", serviceType, "test-model", startedAt)
+	requestB := m.RecordRequestConnectedAt(baseURL, "sk-b", serviceType, "test-model", startedAt.Add(time.Millisecond))
+
+	if got := m.CalculateChannelFailureRateMultiURL([]string{baseURL}, []string{"sk-a", "sk-b"}, serviceType); got != 0 {
+		t.Fatalf("pending request failure rate = %v, want 0", got)
+	}
+	if got := m.GetChannelCircuitStateMultiURL([]string{baseURL}, []string{"sk-a", "sk-b"}, serviceType); got != CircuitStateClosed {
+		t.Fatalf("pending request channel state = %v, want closed", got)
+	}
+
+	m.RecordRequestFinalizeFailure(baseURL, "sk-a", serviceType, requestA)
+	m.RecordRequestFinalizeFailure(baseURL, "sk-b", serviceType, requestB)
+	if got := m.GetChannelCircuitStateMultiURL([]string{baseURL}, []string{"sk-a", "sk-b"}, serviceType); got != CircuitStateOpen {
+		t.Fatalf("finalized combined failure channel state = %v, want open", got)
+	}
+}
+
 func TestBreakerHealthWindowExpiresOldFailures(t *testing.T) {
 	m := NewMetricsManager()
 	defer m.Stop()

@@ -85,6 +85,144 @@ func (m *MetricsManager) IsChannelHealthyWithKeys(baseURL string, activeKeys []s
 	return failureRate < m.failureThreshold
 }
 
+// channelBreakerRecord 是渠道级熔断判定所需的带身份时间序列样本。
+// 单个 Key 的 breaker 仍按各自的 requestHistory 维护；这里仅用于识别多个身份同时失败。
+type channelBreakerRecord struct {
+	timestamp time.Time
+	success   bool
+	relevant  bool
+	identity  string
+}
+
+type channelBreakerSnapshot struct {
+	results                         []bool
+	failureIdentityCount            int
+	consecutiveFailures             int64
+	consecutiveFailureIdentityCount int
+	hasOpenState                    bool
+	hasAvailableCandidate           bool
+}
+
+func (s channelBreakerSnapshot) failureRate() float64 {
+	if len(s.results) == 0 {
+		return 0
+	}
+	failures := 0
+	for _, success := range s.results {
+		if !success {
+			failures++
+		}
+	}
+	return float64(failures) / float64(len(s.results))
+}
+
+// channelBreakerSnapshotLocked 聚合当前渠道所有可用身份的健康窗口。
+// 非 breaker 相关的失败会打断“连续失败”序列，但不会进入失败率样本。
+func (m *MetricsManager) channelBreakerSnapshotLocked(baseURLs, activeKeys []string, serviceType string, now time.Time) channelBreakerSnapshot {
+	snapshot := channelBreakerSnapshot{
+		hasAvailableCandidate: m.hasAvailableIdentityCandidateLocked(baseURLs, activeKeys, serviceType),
+	}
+	cutoff := now.Add(-defaultBreakerHealthWindow)
+	records := make([]channelBreakerRecord, 0)
+
+	for _, metrics := range m.getIdentityMetricsByMultiURLAndKeysLocked(baseURLs, activeKeys, serviceType) {
+		legacyBreakerResults := append([]bool(nil), metrics.breakerResults...)
+		m.advanceCircuitStateIfDueLocked(metrics, now)
+		m.refreshBreakerWindowsLocked(metrics, now)
+		if metrics.CircuitState == CircuitStateOpen {
+			snapshot.hasOpenState = true
+			continue
+		}
+		snapshot.hasAvailableCandidate = true
+
+		pendingIndexes := make(map[int]struct{}, len(metrics.pendingHistoryIdx))
+		for _, idx := range metrics.pendingHistoryIdx {
+			pendingIndexes[idx] = struct{}{}
+		}
+		for idx, record := range metrics.requestHistory {
+			if _, pending := pendingIndexes[idx]; pending || record.Timestamp.Before(cutoff) {
+				continue
+			}
+			normalizedClass := normalizeFailureClass(record.Success, record.FailureClass)
+			records = append(records, channelBreakerRecord{
+				timestamp: record.Timestamp,
+				success:   record.Success,
+				relevant:  record.Success || normalizedClass.IsBreakerRelevant(),
+				identity:  metrics.MetricsKey,
+			})
+		}
+
+		// 保留对仅有派生窗口、没有历史时间戳的旧内存指标的兼容。
+		if len(metrics.requestHistory) == 0 {
+			for _, success := range legacyBreakerResults {
+				records = append(records, channelBreakerRecord{
+					timestamp: now,
+					success:   success,
+					relevant:  true,
+					identity:  metrics.MetricsKey,
+				})
+			}
+		}
+	}
+
+	sort.SliceStable(records, func(i, j int) bool {
+		if records[i].timestamp.Equal(records[j].timestamp) {
+			return records[i].identity < records[j].identity
+		}
+		return records[i].timestamp.Before(records[j].timestamp)
+	})
+
+	failureIdentities := make(map[string]struct{})
+	streakIdentities := make(map[string]struct{})
+	for _, record := range records {
+		if !record.relevant {
+			streakIdentities = make(map[string]struct{})
+			snapshot.consecutiveFailures = 0
+			continue
+		}
+		snapshot.results = append(snapshot.results, record.success)
+		if record.success {
+			streakIdentities = make(map[string]struct{})
+			snapshot.consecutiveFailures = 0
+			continue
+		}
+
+		failureIdentities[record.identity] = struct{}{}
+		streakIdentities[record.identity] = struct{}{}
+		snapshot.consecutiveFailures++
+	}
+	snapshot.failureIdentityCount = len(failureIdentities)
+	snapshot.consecutiveFailureIdentityCount = len(streakIdentities)
+	return snapshot
+}
+
+// isCombinedChannelFailureLocked 判断是否存在跨 Key/BaseURL 的共同故障。
+// 至少两个独立身份同时失败，避免单个坏端点触发整个渠道的组合熔断。
+func (m *MetricsManager) isCombinedChannelFailureLocked(snapshot channelBreakerSnapshot) bool {
+	if snapshot.failureIdentityCount < 2 {
+		return false
+	}
+	if snapshot.consecutiveFailures >= m.consecutiveFailuresThreshold && snapshot.consecutiveFailureIdentityCount >= 2 {
+		return true
+	}
+	minRequests := max(3, m.windowSize/2)
+	return len(snapshot.results) >= minRequests && snapshot.failureRate() >= m.failureThreshold
+}
+
+func (m *MetricsManager) isChannelBreakerHealthyLocked(snapshot channelBreakerSnapshot) bool {
+	if m.isCombinedChannelFailureLocked(snapshot) {
+		return false
+	}
+	if len(snapshot.results) == 0 {
+		return !(snapshot.hasOpenState && !snapshot.hasAvailableCandidate)
+	}
+	minRequests := max(3, m.windowSize/2)
+	if len(snapshot.results) < minRequests {
+		return true
+	}
+	return snapshot.failureRate() < m.failureThreshold
+}
+
 // IsChannelHealthyMultiURL 判断多 BaseURL 聚合渠道是否健康。
 func (m *MetricsManager) IsChannelHealthyMultiURL(baseURLs []string, activeKeys []string, serviceType string) bool {
 	if len(baseURLs) == 0 {
@@ -97,40 +235,8 @@ func (m *MetricsManager) IsChannelHealthyMultiURL(baseURLs []string, activeKeys 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var totalResults []bool
-	hasOpenOnly := false
-	hasAvailableCandidate := m.hasAvailableIdentityCandidateLocked(baseURLs, activeKeys, serviceType)
-	now := time.Now()
-	for _, metrics := range m.getIdentityMetricsByMultiURLAndKeysLocked(baseURLs, activeKeys, serviceType) {
-		m.advanceCircuitStateIfDueLocked(metrics, now)
-		m.refreshBreakerWindowsLocked(metrics, now)
-		if metrics.CircuitState == CircuitStateOpen {
-			hasOpenOnly = true
-			continue
-		}
-		hasAvailableCandidate = true
-		totalResults = append(totalResults, metrics.breakerResults...)
-	}
-	if len(totalResults) == 0 {
-		if hasOpenOnly && !hasAvailableCandidate {
-			return false
-		}
-		return true
-	}
-
-	minRequests := max(3, m.windowSize/2)
-	if len(totalResults) < minRequests {
-		return true
-	}
-
-	failures := 0
-	for _, success := range totalResults {
-		if !success {
-			failures++
-		}
-	}
-	failureRate := float64(failures) / float64(len(totalResults))
-	return failureRate < m.failureThreshold
+	snapshot := m.channelBreakerSnapshotLocked(baseURLs, activeKeys, serviceType, time.Now())
+	return m.isChannelBreakerHealthyLocked(snapshot)
 }
 
 // CalculateChannelFailureRateMultiURL 计算多 BaseURL 聚合 breaker 失败率。
@@ -142,35 +248,14 @@ func (m *MetricsManager) CalculateChannelFailureRateMultiURL(baseURLs []string, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var totalResults []bool
-	hasOpenOnly := false
-	hasAvailableCandidate := m.hasAvailableIdentityCandidateLocked(baseURLs, activeKeys, serviceType)
-	now := time.Now()
-	for _, metrics := range m.getIdentityMetricsByMultiURLAndKeysLocked(baseURLs, activeKeys, serviceType) {
-		m.advanceCircuitStateIfDueLocked(metrics, now)
-		m.refreshBreakerWindowsLocked(metrics, now)
-		if metrics.CircuitState == CircuitStateOpen {
-			hasOpenOnly = true
-			continue
-		}
-		hasAvailableCandidate = true
-		totalResults = append(totalResults, metrics.breakerResults...)
-	}
-
-	if len(totalResults) == 0 {
-		if hasOpenOnly && !hasAvailableCandidate {
+	snapshot := m.channelBreakerSnapshotLocked(baseURLs, activeKeys, serviceType, time.Now())
+	if len(snapshot.results) == 0 {
+		if snapshot.hasOpenState && !snapshot.hasAvailableCandidate {
 			return 1
 		}
 		return 0
 	}
-
-	failures := 0
-	for _, success := range totalResults {
-		if !success {
-			failures++
-		}
-	}
-	return float64(failures) / float64(len(totalResults))
+	return snapshot.failureRate()
 }
 
 // CalculateKeyFailureRate 计算单个 Key 的 breaker 失败率
@@ -863,6 +948,13 @@ func (m *MetricsManager) GetChannelCircuitStateMultiURL(baseURLs []string, activ
 }
 
 func (m *MetricsManager) channelCircuitStateMultiURLLocked(baseURLs []string, activeKeys []string, serviceType string, now time.Time) CircuitState {
+	snapshot := m.channelBreakerSnapshotLocked(baseURLs, activeKeys, serviceType, now)
+	if !m.isChannelBreakerHealthyLocked(snapshot) {
+		// 组合失败或聚合失败率达到阈值时，渠道级状态必须与健康判定一致，
+		// 否则调度器会在 fallback 阶段重新选回同一故障渠道。
+		return CircuitStateOpen
+	}
+
 	hasHalfOpen := false
 	for _, baseURL := range baseURLs {
 		for _, apiKey := range activeKeys {

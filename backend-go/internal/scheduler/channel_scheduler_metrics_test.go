@@ -395,6 +395,54 @@ func TestFallbackSkipsRuntimeCooldownChannel(t *testing.T) {
 	}
 }
 
+func TestFallbackSkipsCombinedUnhealthyChannel(t *testing.T) {
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{
+			{
+				Name:     "combined-unhealthy-channel",
+				BaseURL:  "https://primary.example.com",
+				BaseURLs: []string{"https://primary.example.com", "https://backup.example.com"},
+				APIKeys:  []string{"sk-a", "sk-b"},
+				Status:   "active",
+				Priority: 1,
+			},
+			{
+				Name:     "healthy-fallback-channel",
+				BaseURL:  "https://healthy.example.com",
+				APIKeys:  []string{"sk-healthy"},
+				Status:   "active",
+				Priority: 2,
+			},
+		},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+	scheduler.messagesMetricsManager.UpdateCircuitBreakerConfig(metrics.CircuitBreakerParams{
+		WindowSize:                   50,
+		FailureThreshold:             0.85,
+		ConsecutiveFailuresThreshold: 10,
+	})
+
+	baseURLs := []string{"https://primary.example.com", "https://backup.example.com"}
+	apiKeys := []string{"sk-a", "sk-b"}
+	for i := 0; i < 10; i++ {
+		scheduler.messagesMetricsManager.RecordFailure(baseURLs[i%2], apiKeys[(i/2)%2], "claude")
+	}
+
+	activeChannels := []ChannelInfo{
+		{Index: 0, Name: "combined-unhealthy-channel", Priority: 1, Status: "active"},
+		{Index: 1, Name: "healthy-fallback-channel", Priority: 2, Status: "active"},
+	}
+	result, err := scheduler.selectFallbackChannel(activeChannels, map[int]bool{}, ChannelKindMessages)
+	if err != nil {
+		t.Fatalf("fallback 选择失败: %v", err)
+	}
+	if result.ChannelIndex != 1 {
+		t.Fatalf("期望跳过组合失败渠道并选择 index=1，实际为 index=%d", result.ChannelIndex)
+	}
+}
+
 func TestAffinityYieldToHigherPriorityHealthyChannel(t *testing.T) {
 	cfg := config.Config{
 		Upstream: []config.UpstreamConfig{
