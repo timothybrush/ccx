@@ -1,7 +1,6 @@
 package autopilot
 
 import (
-	"log"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -144,9 +143,6 @@ func (p *Profiler) DeriveEndpointProfile(
 	if profile.HealthState == HealthStateDead || profile.HealthState == HealthStateMisconfigured {
 		profile.SuggestedAction = ActionProbe
 	}
-
-	log.Printf("[Profiler-Derive] endpoint=%s stability=%s speed=%s cost=%s health=%s",
-		endpointUID, profile.StabilityTier, profile.SpeedTier, profile.CostTier, profile.HealthState)
 
 	return profile
 }
