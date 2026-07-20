@@ -436,7 +436,6 @@ ON CONFLICT(endpoint_uid) DO UPDATE SET
 		return fmt.Errorf("[ProfileStore-Flush] 提交事务失败: %w", err)
 	}
 
-	log.Printf("[ProfileStore-Flush] 已落盘 %d 条画像", len(profiles))
 	return nil
 }
 
