@@ -77,8 +77,8 @@ func TestVolcenginePlanProbeModel(t *testing.T) {
 		baseURL string
 		want    string
 	}{
-		{"Agent Plan", "https://ark.cn-beijing.volces.com/api/plan", "doubao-seed-2.0-code"},
-		{"Agent Plan OpenAI", "https://ark.cn-beijing.volces.com/api/plan/v3", "doubao-seed-2.0-code"},
+		{"Agent Plan", "https://ark.cn-beijing.volces.com/api/plan", "auto"},
+		{"Agent Plan OpenAI", "https://ark.cn-beijing.volces.com/api/plan/v3", "auto"},
 		{"Coding Plan", "https://ark.cn-beijing.volces.com/api/coding", "ark-code-latest"},
 		{"Coding Plan OpenAI", "https://ark.cn-beijing.volces.com/api/coding/v3", "ark-code-latest"},
 	}
@@ -348,7 +348,7 @@ func TestVerifyProviderKeys(t *testing.T) {
 				http.Error(w, "invalid body", http.StatusBadRequest)
 				return
 			}
-			if body.Model != "doubao-seed-2.0-code" || len(body.System) < 2 ||
+			if body.Model != "auto" || len(body.System) < 2 ||
 				!strings.HasPrefix(body.System[0].Text, "x-anthropic-billing-header") ||
 				!strings.HasPrefix(body.System[1].Text, "You are Claude Code,") {
 				http.Error(w, "Claude Code identity required", http.StatusForbidden)

@@ -206,13 +206,21 @@ func TestProviderTemplateVolcenginePlanRoutes(t *testing.T) {
 	if tmpl.DisplayName != "火山方舟 Agent/Coding Plan" || len(tmpl.AutoAddRoutes()) != 4 {
 		t.Fatalf("火山模板不完整: %+v", tmpl)
 	}
+	wantBases := map[string][2]string{
+		"messages":  {"https://ark.cn-beijing.volces.com/api/plan", "https://ark.cn-beijing.volces.com/api/coding"},
+		"chat":      {"https://ark.cn-beijing.volces.com/api/plan/v3", "https://ark.cn-beijing.volces.com/api/coding/v3"},
+		"responses": {"https://ark.cn-beijing.volces.com/api/plan/v3", "https://ark.cn-beijing.volces.com/api/coding/v3"},
+		"gemini":    {"https://ark.cn-beijing.volces.com/api/plan/v3", "https://ark.cn-beijing.volces.com/api/coding/v3"},
+	}
 	for _, route := range tmpl.AutoAddRoutes() {
 		candidates := tmpl.CandidatesForRouteKey(route, "ark-test")
 		if len(candidates) != 2 {
 			t.Fatalf("route %s 应包含 Agent/Coding 两个候选: %+v", route.ChannelKind, candidates)
 		}
-		if !strings.Contains(candidates[0].BaseURL, "/api/plan") || !strings.Contains(candidates[1].BaseURL, "/api/coding") {
-			t.Fatalf("route %s 候选顺序错误: %+v", route.ChannelKind, candidates)
+		want, exists := wantBases[route.ChannelKind]
+		if !exists || candidates[0].BaseURL != want[0] || candidates[1].BaseURL != want[1] {
+			t.Fatalf("route %s Base URL 错误: got=%q/%q want=%q/%q", route.ChannelKind,
+				candidates[0].BaseURL, candidates[1].BaseURL, want[0], want[1])
 		}
 	}
 }

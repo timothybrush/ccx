@@ -276,12 +276,12 @@ func verifyVolcenginePlanEndpoint(ctx context.Context, route config.ProviderRout
 	}
 }
 
-// volcenginePlanProbeModel 选择各套餐入口都实际提供的探针模型。
-// Agent Plan 不提供 Coding Plan 专用的 ark-code-latest 别名；使用 Agent
-// Plan 清单中的 doubao-seed-2.0-code 才能避免把有效 Key 误判为端点不可用。
+// volcenginePlanProbeModel 选择端点验证用的探针模型。
+// Agent Plan 使用上游 Auto 模式；ark-code-latest 仍是两类套餐都支持的
+// 配置层逻辑模型名，Coding/Token Plan 探针沿用该兼容模型名。
 func volcenginePlanProbeModel(baseURL string) string {
 	if strings.Contains(strings.ToLower(baseURL), "/api/coding") {
 		return "ark-code-latest"
 	}
-	return "doubao-seed-2.0-code"
+	return "auto"
 }
