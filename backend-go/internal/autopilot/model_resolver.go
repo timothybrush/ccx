@@ -15,11 +15,12 @@ import (
 // 上下文、推理、视觉和工具调用是硬约束；质量档是优先目标，
 // 仅在没有满足目标质量的模型时允许降档兜底。
 type CapabilityFloor struct {
-	MinContextTokens int         // 最小上下文窗口（0=不限）
-	NeedsReasoning   bool        // 必须支持推理
-	NeedsVision      bool        // 必须支持视觉
-	NeedsToolCalls   bool        // 必须支持工具调用
-	MinQualityTier   QualityTier // 目标质量档（无同档候选时允许降档）
+	MinContextTokens  int         // 最小上下文窗口（0=不限）
+	NeedsReasoning    bool        // 必须支持推理
+	NeedsVision       bool        // 必须支持视觉
+	NeedsToolCalls    bool        // 必须支持工具调用
+	MinQualityTier    QualityTier // 目标质量档（无同档候选时允许降档）
+	QualityBenefitCap QualityTier // 简单/常规任务超过该档后不再自动获得质量排序收益
 }
 
 // BuildCapabilityFloorFromRequestProfile 从 RequestProfile 推导能力下界。
@@ -30,11 +31,12 @@ func BuildCapabilityFloorFromRequestProfile(profile *RequestProfile) CapabilityF
 		return CapabilityFloor{}
 	}
 	return CapabilityFloor{
-		MinContextTokens: profile.ContextNeed,
-		NeedsReasoning:   profile.ReasoningNeed,
-		NeedsVision:      profile.VisionNeed,
-		NeedsToolCalls:   profile.ToolUseNeed,
-		MinQualityTier:   requestQualityTarget(profile),
+		MinContextTokens:  profile.ContextNeed,
+		NeedsReasoning:    profile.ReasoningNeed,
+		NeedsVision:       profile.VisionNeed,
+		NeedsToolCalls:    profile.ToolUseNeed,
+		MinQualityTier:    requestQualityTarget(profile),
+		QualityBenefitCap: requestQualityBenefitCap(profile),
 	}
 }
 
@@ -46,6 +48,20 @@ func requestQualityTarget(profile *RequestProfile) QualityTier {
 		return profile.QualityTarget
 	}
 	return ResolveQualityTarget(profile)
+}
+
+// requestQualityBenefitCap 只对难度已知且不复杂的任务设置软收益上限。
+// 未知或复杂任务继续按模型质量优先，保持保守路由；该上限从不淘汰候选。
+func requestQualityBenefitCap(profile *RequestProfile) QualityTier {
+	if profile == nil {
+		return ""
+	}
+	if profile.Complexity == TaskComplexityTrivial ||
+		profile.Complexity == TaskComplexityRoutine ||
+		profile.TaskClass == TaskClassLightweight {
+		return requestQualityTarget(profile)
+	}
+	return ""
 }
 
 // ── ModelResolver 模型自动映射器 ──
@@ -151,7 +167,7 @@ func (r *ModelResolver) ResolveModel(
 	}
 
 	// Step 6: 自适应入口在满足下界的候选中按模型质量、实测表现和成本选优。
-	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind)
+	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind, floor)
 	baseReason := fmt.Sprintf("mapped %s->%s (intent:%s, %s)",
 		requestModel, best.profile.ModelID, intent, best.reasonSummary())
 	return best.profile.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
@@ -230,7 +246,7 @@ func (r *ModelResolver) resolveModelAnyEndpoint(
 		return requestModel, false, "exact_model_required"
 	}
 
-	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind)
+	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind, floor)
 	baseReason := fmt.Sprintf("mapped_any_endpoint %s->%s (intent:%s, %s)",
 		requestModel, best.profile.ModelID, intent, best.reasonSummary())
 	return best.profile.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
@@ -312,6 +328,7 @@ func modelResolutionReason(reason string, qualityFallback bool) string {
 type rankedModelCandidate struct {
 	profile                        ModelProfile
 	qualityRank                    int
+	qualityBenefitCap              QualityTier
 	providerModelQualityKnown      bool
 	providerModelQualityComparable bool
 	providerModelQualityPriority   int
@@ -329,6 +346,10 @@ type rankedModelCandidate struct {
 }
 
 func (candidate rankedModelCandidate) reasonSummary() string {
+	quality := string(candidate.profile.QualityTier)
+	if candidate.qualityBenefitCap != "" {
+		quality = fmt.Sprintf("%s(benefit_cap:%s)", candidate.profile.QualityTier, candidate.qualityBenefitCap)
+	}
 	providerQuality := "unknown"
 	if candidate.providerModelQualityKnown {
 		status := candidate.providerModelQualitySource
@@ -354,13 +375,13 @@ func (candidate rankedModelCandidate) reasonSummary() string {
 		publicCost = fmt.Sprintf("%.6f", candidate.normalizedPublicCostUSD)
 	}
 	return fmt.Sprintf("family:%s, quality:%s, provider_quality_priority:%s, measured_quality:%s, latency:%s, provider_cost_multiplier:%s, normalized_public_cost_usd:%s",
-		candidate.profile.ModelFamily, candidate.profile.QualityTier, providerQuality, measuredQuality, latency, providerCost, publicCost)
+		candidate.profile.ModelFamily, quality, providerQuality, measuredQuality, latency, providerCost, publicCost)
 }
 
 // rankEligibleModels 在已经满足能力下界的候选中选择最佳模型。
 //
 // 排序优先级（高→低）：
-//  1. 模型质量档越高越优先；质量目标是准入下限，不再惩罚高于目标的模型
+//  1. 模型质量档越高越优先；简单/常规任务在 QualityBenefitCap 处收益饱和
 //  2. 同档候选均有 provider 已确认的能力顺序时，优先选择更强模型
 //  3. 带置信度折算的供应商实测质量越高越优先
 //  4. 已测延迟优先于未知延迟，同为已测时延迟越低越优先
@@ -371,6 +392,7 @@ func (r *ModelResolver) rankEligibleModels(
 	requestModel string,
 	channelUID string,
 	channelKind string,
+	floor CapabilityFloor,
 ) rankedModelCandidate {
 	reqFamily := InferModelFamily(requestModel, "")
 	upstream, global := r.modelRankingCapabilityContext(channelUID, channelKind)
@@ -383,6 +405,7 @@ func (r *ModelResolver) rankEligibleModels(
 		ranked = append(ranked, rankedModelCandidate{
 			profile:                      profile,
 			qualityRank:                  qualityTierRank(profile.QualityTier),
+			qualityBenefitCap:            floor.QualityBenefitCap,
 			providerModelQualityKnown:    qualityKnown,
 			providerModelQualityPriority: qualityPriority,
 			providerModelQualitySource:   qualitySource,
@@ -398,6 +421,7 @@ func (r *ModelResolver) rankEligibleModels(
 			normalizedCandidateID:        strings.ToLower(profile.ModelID),
 		})
 	}
+	ranked = selectQualityBenefitBand(ranked, floor.QualityBenefitCap)
 	qualityPriorityComplete := make(map[int]bool)
 	qualityRankSeen := make(map[int]bool)
 	for i := range ranked {
@@ -447,6 +471,77 @@ func betterRankedModel(candidate, current rankedModelCandidate) bool {
 		return candidate.sameFamily
 	}
 	return candidate.normalizedCandidateID < current.normalizedCandidateID
+}
+
+// selectQualityBenefitBand 为难度已知的简单/常规任务选择最低的足够质量档。
+// 若目标档不存在则使用紧邻的更高档；质量降档兜底时选择可用的最高档。
+// 更高档模型只有在同渠道成本不高于目标档全部候选时才继续参与，保留“更强且更省”的选择。
+// 它只缩小软排序集合，不改变上下文、工具等硬能力过滤，也不影响精确模型命中。
+func selectQualityBenefitBand(eligible []rankedModelCandidate, cap QualityTier) []rankedModelCandidate {
+	if cap == "" {
+		return eligible
+	}
+
+	capRank := qualityTierRank(cap)
+	selectedRank := -1
+	for _, candidate := range eligible {
+		rank := candidate.qualityRank
+		if rank >= capRank && (selectedRank < capRank || rank < selectedRank) {
+			selectedRank = rank
+		}
+	}
+	if selectedRank < 0 {
+		for _, candidate := range eligible {
+			if rank := candidate.qualityRank; rank > selectedRank {
+				selectedRank = rank
+			}
+		}
+	}
+
+	selected := make([]rankedModelCandidate, 0, len(eligible))
+	for _, candidate := range eligible {
+		if candidate.qualityRank == selectedRank {
+			selected = append(selected, candidate)
+		}
+	}
+	if selectedRank < capRank {
+		return selected
+	}
+	for _, candidate := range eligible {
+		if candidate.qualityRank > selectedRank && modelCostNoHigherThanBand(candidate, selected) {
+			selected = append(selected, candidate)
+		}
+	}
+	return selected
+}
+
+func modelCostNoHigherThanBand(candidate rankedModelCandidate, baseline []rankedModelCandidate) bool {
+	providerCostPresent := candidate.providerCostKnown
+	for _, current := range baseline {
+		providerCostPresent = providerCostPresent || current.providerCostKnown
+	}
+	if providerCostPresent {
+		if !candidate.providerCostKnown {
+			return false
+		}
+		for _, current := range baseline {
+			if !current.providerCostKnown || candidate.providerCostSource != current.providerCostSource ||
+				candidate.providerCostMultiplier > current.providerCostMultiplier {
+				return false
+			}
+		}
+		return len(baseline) > 0
+	}
+
+	if !candidate.publicCostKnown {
+		return false
+	}
+	for _, current := range baseline {
+		if !current.publicCostKnown || candidate.normalizedPublicCostUSD > current.normalizedPublicCostUSD {
+			return false
+		}
+	}
+	return len(baseline) > 0
 }
 
 // compareRankedModelCost 比较同一渠道内的模型成本证据。

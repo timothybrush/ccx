@@ -19,8 +19,7 @@ const (
 type ComplexitySignals struct {
 	PromptText     string
 	MessageCount   int
-	ToolCount      int
-	EstTokens      int
+	PromptTokens   int
 	HasDiffContext bool
 }
 
@@ -48,17 +47,17 @@ func InferTaskComplexity(signals ComplexitySignals) TaskComplexity {
 	}
 
 	normalized := strings.Trim(text, " \t\r\n.!?;:,，。！？；：")
-	if trivialPrompts[normalized] && signals.MessageCount <= 1 && signals.ToolCount == 0 {
+	if trivialPrompts[normalized] && signals.MessageCount <= 1 {
 		return TaskComplexityTrivial
 	}
 
 	score := 0
 	switch {
-	case signals.EstTokens >= 50_000:
+	case signals.PromptTokens >= 50_000:
 		score += 4
-	case signals.EstTokens >= 20_000:
+	case signals.PromptTokens >= 20_000:
 		score += 2
-	case signals.EstTokens >= 8_000:
+	case signals.PromptTokens >= 8_000:
 		score++
 	}
 	if signals.MessageCount >= 12 {
@@ -66,11 +65,6 @@ func InferTaskComplexity(signals ComplexitySignals) TaskComplexity {
 	} else if signals.MessageCount >= 6 {
 		score += 2
 	} else if signals.MessageCount >= 3 {
-		score++
-	}
-	if signals.ToolCount >= 5 {
-		score += 2
-	} else if signals.ToolCount > 0 {
 		score++
 	}
 	if signals.HasDiffContext {

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -129,7 +130,7 @@ func TestAnalyzeAutopilotPromptExtractsEphemeralRoutingSignals(t *testing.T) {
 		"tools":[{"name":"Read"},{"function":{"name":"apply_patch"}}]
 	}`))
 
-	analysis := analyzeAutopilotPrompt(req, 1200, "")
+	analysis := analyzeAutopilotPrompt(req, "")
 	if analysis.Complexity != autopilot.TaskComplexityComplex {
 		t.Fatalf("Complexity = %q, want complex", analysis.Complexity)
 	}
@@ -141,6 +142,52 @@ func TestAnalyzeAutopilotPromptExtractsEphemeralRoutingSignals(t *testing.T) {
 	}
 	if len(analysis.DomainHints.FileExtensions) == 0 {
 		t.Fatalf("FileExtensions = %v, want .go", analysis.DomainHints.FileExtensions)
+	}
+}
+
+func TestAttachAutopilotRequestProfileIgnoresHarnessOverheadForTaskDifficulty(t *testing.T) {
+	tools := make([]map[string]interface{}, 0, 12)
+	for i := 0; i < 12; i++ {
+		tools = append(tools, map[string]interface{}{
+			"name":        "tool_" + strconv.Itoa(i),
+			"description": strings.Repeat("tool documentation ", 40),
+		})
+	}
+	bodyValue := map[string]interface{}{
+		"model": "claude-sonnet-5",
+		"messages": []interface{}{map[string]interface{}{
+			"role": "user",
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "text",
+					"text": "<system-reminder>" + strings.Repeat("generic harness context ", 5_000) + "</system-reminder>",
+				},
+				map[string]interface{}{"type": "text", "text": "请帮我写一段简短的个人介绍"},
+			},
+		}},
+		"tools":    tools,
+		"thinking": map[string]interface{}{"type": "adaptive"},
+	}
+	bodyBytes, err := json.Marshal(bodyValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newAutopilotProfileTestContext(t, "/v1/messages", string(bodyBytes), &types.AgentContext{AgentRole: "main"})
+
+	profile := AttachAutopilotRequestProfile(
+		c, scheduler.ChannelKindMessages, "claude-sonnet-5", "completion", "session-test", bodyBytes, 0)
+
+	if profile.EstTokens < 20_000 {
+		t.Fatalf("测试请求未形成足够大的整包上下文: EstTokens=%d", profile.EstTokens)
+	}
+	if profile.Complexity != autopilot.TaskComplexityRoutine || profile.TaskClass != autopilot.TaskClassWorker {
+		t.Fatalf("profile = complexity:%q class:%q, want routine/worker", profile.Complexity, profile.TaskClass)
+	}
+	if profile.QualityTarget != autopilot.QualityTierHigh {
+		t.Fatalf("QualityTarget = %q, want high", profile.QualityTarget)
+	}
+	if !profile.ToolUseNeed || !profile.ReasoningNeed {
+		t.Fatalf("能力下界丢失: tools=%v reasoning=%v", profile.ToolUseNeed, profile.ReasoningNeed)
 	}
 }
 

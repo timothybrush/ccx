@@ -56,9 +56,13 @@ func newTestResolverWithConfig(t *testing.T, profiles []ModelProfile, cfg config
 	return NewModelResolver(newTestModelProfileStore(profiles), cfgManager)
 }
 
-func rankTestModels(eligible []ModelProfile, requestModel string) ModelProfile {
+func rankTestModels(eligible []ModelProfile, requestModel string, floors ...CapabilityFloor) ModelProfile {
 	resolver := &ModelResolver{}
-	return resolver.rankEligibleModels(eligible, requestModel, "", "").profile
+	floor := CapabilityFloor{}
+	if len(floors) > 0 {
+		floor = floors[0]
+	}
+	return resolver.rankEligibleModels(eligible, requestModel, "", "", floor).profile
 }
 
 // createTestConfigManagerForResolver 创建测试用 ConfigManager。
@@ -117,12 +121,33 @@ func TestBuildCapabilityFloorFromRequestProfile(t *testing.T) {
 	if floor.MinQualityTier != QualityTierHigh {
 		t.Errorf("MinQualityTier = %s, want high", floor.MinQualityTier)
 	}
+	if floor.QualityBenefitCap != "" {
+		t.Errorf("QualityBenefitCap = %s, want empty for unknown complexity", floor.QualityBenefitCap)
+	}
 
 	// 空 profile 应生成零值 floor
 	empty := BuildCapabilityFloorFromRequestProfile(&RequestProfile{})
 	if empty.MinContextTokens != 0 || empty.NeedsReasoning || empty.NeedsVision ||
-		empty.NeedsToolCalls || empty.MinQualityTier != "" {
+		empty.NeedsToolCalls || empty.MinQualityTier != "" || empty.QualityBenefitCap != "" {
 		t.Errorf("empty profile should produce zero-value floor, got %+v", empty)
+	}
+}
+
+func TestBuildCapabilityFloorCapsQualityBenefitForKnownRoutineTasks(t *testing.T) {
+	routine := &RequestProfile{
+		TaskClass: TaskClassWorker, Complexity: TaskComplexityRoutine,
+		QualityNeed: QualityTierHigh, ReasoningNeed: true,
+	}
+	if floor := BuildCapabilityFloorFromRequestProfile(routine); floor.QualityBenefitCap != QualityTierHigh {
+		t.Fatalf("routine QualityBenefitCap = %q, want high", floor.QualityBenefitCap)
+	}
+
+	complex := &RequestProfile{
+		TaskClass: TaskClassSupervisor, Complexity: TaskComplexityComplex,
+		QualityNeed: QualityTierHigh, ReasoningNeed: true,
+	}
+	if floor := BuildCapabilityFloorFromRequestProfile(complex); floor.QualityBenefitCap != "" {
+		t.Fatalf("complex QualityBenefitCap = %q, want empty", floor.QualityBenefitCap)
 	}
 }
 
@@ -265,7 +290,7 @@ func TestRankEligibleModels_DoesNotPenalizeQualityAboveTarget(t *testing.T) {
 	}
 }
 
-func TestResolveModel_UsesTaskQualityTargetAsFloor(t *testing.T) {
+func TestResolveModel_UsesQualityBenefitCapForRoutineTasks(t *testing.T) {
 	profiles := []ModelProfile{
 		makeModelProfile("k3", ModelFamilyKimi, QualityTierPremium, 1_048_576,
 			true, true, true, true, 10),
@@ -282,26 +307,37 @@ func TestResolveModel_UsesTaskQualityTargetAsFloor(t *testing.T) {
 		wantModel string
 	}{
 		{
-			name: "lightweight 下限通过后仍选择最高质量模型",
+			name: "lightweight 选择最低的足够质量档",
 			profile: RequestProfile{
 				Model: "claude-opus-4-8", ChannelKind: "messages", QualityNeed: QualityTierPremium,
-				TaskClass: TaskClassLightweight, ContextNeed: 1000,
+				TaskClass: TaskClassLightweight, Complexity: TaskComplexityTrivial, ContextNeed: 1000,
 			},
-			wantModel: "k3",
+			wantModel: "kimi-v2",
 		},
 		{
-			name: "supervisor 下限通过后选择 premium K3",
+			name: "常规 Sonnet 工具请求不升级到 premium K3",
 			profile: RequestProfile{
-				Model: "claude-opus-4-8", ChannelKind: "messages", QualityNeed: QualityTierPremium,
-				TaskClass: TaskClassSupervisor, ContextNeed: 1000,
+				Model: "claude-sonnet-5", ChannelKind: "messages", QualityNeed: QualityTierHigh,
+				TaskClass: TaskClassWorker, Complexity: TaskComplexityRoutine, ContextNeed: 26_708,
+				ToolUseNeed: true, ReasoningNeed: true,
+			},
+			wantModel: "kimi-for-coding",
+		},
+		{
+			name: "复杂 Sonnet 仍允许选择 premium K3",
+			profile: RequestProfile{
+				Model: "claude-sonnet-5", ChannelKind: "messages", QualityNeed: QualityTierHigh,
+				TaskClass: TaskClassSupervisor, Complexity: TaskComplexityComplex, ContextNeed: 26_708,
+				ToolUseNeed: true, ReasoningNeed: true,
 			},
 			wantModel: "k3",
 		},
 		{
 			name: "大上下文硬约束保留 K3",
 			profile: RequestProfile{
-				Model: "claude-opus-4-8", ChannelKind: "messages", QualityNeed: QualityTierPremium,
-				TaskClass: TaskClassSupervisor, ContextNeed: 500_000,
+				Model: "claude-sonnet-5", ChannelKind: "messages", QualityNeed: QualityTierHigh,
+				TaskClass: TaskClassWorker, Complexity: TaskComplexityRoutine, ContextNeed: 500_000,
+				ToolUseNeed: true, ReasoningNeed: true,
 			},
 			wantModel: "k3",
 		},
@@ -390,7 +426,7 @@ func TestRankEligibleModels_PrefersProviderModelQualityBeforeRelativeCost(t *tes
 		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
 	}}})
 
-	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages")
+	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages", CapabilityFloor{})
 	if best.profile.ModelID != "glm-5.1" {
 		t.Fatalf("expected glm-5.1 quality to precede 6x vs 5x cost, got %s", best.profile.ModelID)
 	}
@@ -413,7 +449,7 @@ func TestRankEligibleModels_PrefersProviderRelativeCostWhenQualityOrderIncomplet
 
 	orders := [][]ModelProfile{eligible, {eligible[1], eligible[0]}}
 	for _, order := range orders {
-		best := resolver.rankEligibleModels(order, "claude-sonnet-5", "ch_test", "messages")
+		best := resolver.rankEligibleModels(order, "claude-sonnet-5", "ch_test", "messages", CapabilityFloor{})
 		if best.profile.ModelID != "glm-5.2" {
 			t.Fatalf("expected glm-5.2 (2 次优于 6 次 when quality tier metadata is incomplete), got %s", best.profile.ModelID)
 		}
@@ -434,7 +470,7 @@ func TestRankEligibleModels_ProviderCostTieFallsBackToPublicPrice(t *testing.T) 
 		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
 	}}})
 
-	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages")
+	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages", CapabilityFloor{})
 	if best.profile.ModelID != "deepseek-v4-flash" {
 		t.Fatalf("expected deepseek-v4-flash after equal 1x multipliers fall back to public price, got %s", best.profile.ModelID)
 	}
@@ -533,15 +569,19 @@ func TestResolveModel_CompshareInventoryPrefersGLM52OverDeepSeekFallbacks(t *tes
 		AutoManaged: true,
 	}}})
 
-	mapped, resolved, reason := resolver.ResolveModel(
-		"claude-sonnet-5",
-		"ch_test",
-		"messages",
-		"metrics_test",
-		CapabilityFloor{MinContextTokens: 39561, MinQualityTier: QualityTierNormal},
-	)
-	if !resolved || mapped != "glm-5.2" {
-		t.Fatalf("ResolveModel() = (%q, %v, %q), want glm-5.2", mapped, resolved, reason)
+	floors := []CapabilityFloor{
+		{MinContextTokens: 39_561, MinQualityTier: QualityTierNormal},
+		{
+			MinContextTokens: 39_561, MinQualityTier: QualityTierHigh,
+			QualityBenefitCap: QualityTierHigh,
+		},
+	}
+	for _, floor := range floors {
+		mapped, resolved, reason := resolver.ResolveModel(
+			"claude-sonnet-5", "ch_test", "messages", "metrics_test", floor)
+		if !resolved || mapped != "glm-5.2" {
+			t.Fatalf("ResolveModel(%+v) = (%q, %v, %q), want glm-5.2", floor, mapped, resolved, reason)
+		}
 	}
 }
 

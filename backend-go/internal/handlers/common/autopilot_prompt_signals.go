@@ -5,18 +5,20 @@ import (
 	"strings"
 
 	"github.com/BenedictKing/ccx/internal/autopilot"
+	"github.com/BenedictKing/ccx/internal/utils"
 )
 
 const maxAutopilotSignalRunes = 32_768
 
 var autopilotFileExtensionPattern = regexp.MustCompile(`(?i)\.[a-z][a-z0-9]{0,9}\b`)
+var autopilotSystemReminderPattern = regexp.MustCompile(`(?is)<system-reminder>.*?</system-reminder>`)
 
 type autopilotPromptAnalysis struct {
 	Complexity  autopilot.TaskComplexity
 	DomainHints autopilot.DomainHints
 }
 
-func analyzeAutopilotPrompt(req map[string]interface{}, estTokens int, explicitDomain string) autopilotPromptAnalysis {
+func analyzeAutopilotPrompt(req map[string]interface{}, explicitDomain string) autopilotPromptAnalysis {
 	if req == nil {
 		return autopilotPromptAnalysis{Complexity: autopilot.TaskComplexityUnknown}
 	}
@@ -31,14 +33,20 @@ func analyzeAutopilotPrompt(req map[string]interface{}, estTokens int, explicitD
 	collectAutopilotRoleTexts(req["messages"], &userTexts, &messageCount)
 	collectAutopilotRoleTexts(req["contents"], &userTexts, &messageCount)
 	if input, ok := req["input"].(string); ok && strings.TrimSpace(input) != "" {
-		userTexts = append(userTexts, input)
-		messageCount++
+		before := len(userTexts)
+		appendAutopilotText(&userTexts, input)
+		if len(userTexts) > before {
+			messageCount++
+		}
 	} else {
 		collectAutopilotRoleTexts(req["input"], &userTexts, &messageCount)
 	}
 	if prompt, ok := req["prompt"].(string); ok && strings.TrimSpace(prompt) != "" {
-		userTexts = append(userTexts, prompt)
-		messageCount++
+		before := len(userTexts)
+		appendAutopilotText(&userTexts, prompt)
+		if len(userTexts) > before {
+			messageCount++
+		}
 	}
 
 	toolNames := extractAutopilotToolNames(req["tools"])
@@ -48,14 +56,13 @@ func analyzeAutopilotPrompt(req map[string]interface{}, estTokens int, explicitD
 	}
 	complexityText := joinAutopilotSignalText(complexityTexts)
 	domainText := joinAutopilotSignalText(append(append([]string{}, systemTexts...), userTexts...))
-	hasDiff := strings.Contains(domainText, "diff --git") || strings.Contains(domainText, "@@ -")
+	hasDiff := strings.Contains(complexityText, "diff --git") || strings.Contains(complexityText, "@@ -")
 
 	return autopilotPromptAnalysis{
 		Complexity: autopilot.InferTaskComplexity(autopilot.ComplexitySignals{
 			PromptText:     complexityText,
 			MessageCount:   messageCount,
-			ToolCount:      len(toolNames),
-			EstTokens:      estTokens,
+			PromptTokens:   utils.EstimateTokens(complexityText),
 			HasDiffContext: hasDiff,
 		}),
 		DomainHints: autopilot.DomainHints{
@@ -99,7 +106,7 @@ func collectAutopilotRoleTexts(value interface{}, texts *[]string, count *int) {
 func appendAutopilotText(texts *[]string, value interface{}) {
 	switch typed := value.(type) {
 	case string:
-		if text := strings.TrimSpace(typed); text != "" {
+		if text := stripAutopilotHarnessContext(typed); text != "" {
 			*texts = append(*texts, text)
 		}
 	case []interface{}:
@@ -121,6 +128,12 @@ func appendAutopilotText(texts *[]string, value interface{}) {
 			}
 		}
 	}
+}
+
+// stripAutopilotHarnessContext 去掉 Claude Code 以 user content 注入的通用运行时提醒。
+// 这些文本仍占上下文窗口，但不描述当前用户任务，不能参与复杂度判断。
+func stripAutopilotHarnessContext(text string) string {
+	return strings.TrimSpace(autopilotSystemReminderPattern.ReplaceAllString(text, " "))
 }
 
 func extractAutopilotToolNames(value interface{}) []string {

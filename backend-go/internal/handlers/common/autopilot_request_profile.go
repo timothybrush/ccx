@@ -41,7 +41,7 @@ func AttachAutopilotRequestProfile(
 	if c != nil {
 		explicitDomain = c.GetHeader("X-Task-Domain")
 	}
-	promptAnalysis := analyzeAutopilotPrompt(req, estTokens, explicitDomain)
+	promptAnalysis := analyzeAutopilotPrompt(req, explicitDomain)
 	profile := autopilot.BuildRequestProfile(autopilot.RequestProfileFeatures{
 		Model:              model,
 		ChannelKind:        string(kind),
