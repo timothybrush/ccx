@@ -45,6 +45,11 @@ func newTestResolver(t *testing.T, profiles []ModelProfile) *ModelResolver {
 	return NewModelResolver(store, nil)
 }
 
+func rankTestModels(eligible []ModelProfile, requestModel string) ModelProfile {
+	resolver := &ModelResolver{}
+	return resolver.rankEligibleModels(eligible, requestModel, "", "").profile
+}
+
 // createTestConfigManagerForResolver 创建测试用 ConfigManager。
 func createTestConfigManagerForResolver(t *testing.T, cfg config.Config) (*config.ConfigManager, func()) {
 	t.Helper()
@@ -205,25 +210,23 @@ func TestFilterByCapabilityFloor_ZeroFloorPassesAllProbed(t *testing.T) {
 	}
 }
 
-// ── rankBySimilarity 测试 ──
+// ── rankEligibleModels 测试 ──
 
-func TestRankBySimilarity_PrefersSameFamily(t *testing.T) {
-	floor := CapabilityFloor{MinQualityTier: QualityTierHigh}
+func TestRankEligibleModels_PrefersSameFamilyAsFinalTieBreaker(t *testing.T) {
 	eligible := []ModelProfile{
-		makeModelProfile("gpt-5.3", ModelFamilyOpenAI, QualityTierHigh, 200000,
+		makeModelProfile("a-other", ModelFamilyOpenAI, QualityTierHigh, 200000,
 			true, false, true, true, 50),
-		makeModelProfile("claude-sonnet-4-6", ModelFamilyClaude, QualityTierHigh, 200000,
+		makeModelProfile("z-claude", ModelFamilyClaude, QualityTierHigh, 200000,
 			true, false, true, true, 50),
 	}
 
-	best := rankBySimilarity(eligible, "claude-sonnet-5", floor)
-	if best.ModelID != "claude-sonnet-4-6" {
-		t.Errorf("expected claude-sonnet-4-6 (same family), got %s", best.ModelID)
+	best := rankTestModels(eligible, "claude-sonnet-5")
+	if best.ModelID != "z-claude" {
+		t.Errorf("expected z-claude (same family), got %s", best.ModelID)
 	}
 }
 
-func TestRankBySimilarity_PrefersSameQualityTier(t *testing.T) {
-	floor := CapabilityFloor{MinQualityTier: QualityTierPremium}
+func TestRankEligibleModels_PrefersHigherQualityAboveFloor(t *testing.T) {
 	eligible := []ModelProfile{
 		makeModelProfile("gpt-5.3", ModelFamilyOpenAI, QualityTierHigh, 200000,
 			true, false, true, true, 50),
@@ -231,14 +234,13 @@ func TestRankBySimilarity_PrefersSameQualityTier(t *testing.T) {
 			true, false, true, true, 50),
 	}
 
-	best := rankBySimilarity(eligible, "gpt-5.5", floor)
+	best := rankTestModels(eligible, "gpt-5.5")
 	if best.ModelID != "gpt-5.4" {
-		t.Errorf("expected gpt-5.4 (same quality tier), got %s", best.ModelID)
+		t.Errorf("expected gpt-5.4 (higher quality), got %s", best.ModelID)
 	}
 }
 
-func TestRankBySimilarity_PrefersClosestQualityTarget(t *testing.T) {
-	floor := CapabilityFloor{MinQualityTier: QualityTierHigh}
+func TestRankEligibleModels_DoesNotPenalizeQualityAboveTarget(t *testing.T) {
 	eligible := []ModelProfile{
 		makeModelProfile("k3", ModelFamilyKimi, QualityTierPremium, 200000,
 			true, false, true, true, 1),
@@ -246,13 +248,13 @@ func TestRankBySimilarity_PrefersClosestQualityTarget(t *testing.T) {
 			true, false, true, true, 100),
 	}
 
-	best := rankBySimilarity(eligible, "claude-opus-4-8", floor)
-	if best.ModelID != "kimi-for-coding" {
-		t.Errorf("expected closest high-tier model kimi-for-coding, got %s", best.ModelID)
+	best := rankTestModels(eligible, "claude-opus-4-8")
+	if best.ModelID != "k3" {
+		t.Errorf("expected higher-quality k3, got %s", best.ModelID)
 	}
 }
 
-func TestResolveModel_UsesTaskQualityTarget(t *testing.T) {
+func TestResolveModel_UsesTaskQualityTargetAsFloor(t *testing.T) {
 	profiles := []ModelProfile{
 		makeModelProfile("k3", ModelFamilyKimi, QualityTierPremium, 1_048_576,
 			true, true, true, true, 10),
@@ -269,20 +271,20 @@ func TestResolveModel_UsesTaskQualityTarget(t *testing.T) {
 		wantModel string
 	}{
 		{
-			name: "lightweight 选择最接近的标准模型",
+			name: "lightweight 下限通过后仍选择最高质量模型",
 			profile: RequestProfile{
 				Model: "claude-opus-4-8", ChannelKind: "messages", QualityNeed: QualityTierPremium,
 				TaskClass: TaskClassLightweight, ContextNeed: 1000,
 			},
-			wantModel: "kimi-v2",
+			wantModel: "k3",
 		},
 		{
-			name: "supervisor 选择 high 而不是 premium K3",
+			name: "supervisor 下限通过后选择 premium K3",
 			profile: RequestProfile{
 				Model: "claude-opus-4-8", ChannelKind: "messages", QualityNeed: QualityTierPremium,
 				TaskClass: TaskClassSupervisor, ContextNeed: 1000,
 			},
-			wantModel: "kimi-for-coding",
+			wantModel: "k3",
 		},
 		{
 			name: "大上下文硬约束保留 K3",
@@ -306,23 +308,37 @@ func TestResolveModel_UsesTaskQualityTarget(t *testing.T) {
 	}
 }
 
-func TestRankBySimilarity_PrefersCloserContext(t *testing.T) {
-	floor := CapabilityFloor{MinContextTokens: 100000}
+func TestRankEligibleModels_DoesNotPenalizeLargerContextWindow(t *testing.T) {
 	eligible := []ModelProfile{
-		makeModelProfile("model-far", ModelFamilyClaude, QualityTierNormal, 1000000,
+		makeModelProfile("a-large-window", ModelFamilyClaude, QualityTierNormal, 1000000,
 			false, false, false, true, 100),
-		makeModelProfile("model-close", ModelFamilyClaude, QualityTierNormal, 110000,
+		makeModelProfile("z-small-window", ModelFamilyClaude, QualityTierNormal, 110000,
 			false, false, false, true, 100),
 	}
 
-	best := rankBySimilarity(eligible, "claude-haiku-4-5", floor)
-	if best.ModelID != "model-close" {
-		t.Errorf("expected model-close (closer context), got %s", best.ModelID)
+	best := rankTestModels(eligible, "claude-haiku-4-5")
+	if best.ModelID != "a-large-window" {
+		t.Errorf("expected context size to be ignored after floor filtering, got %s", best.ModelID)
 	}
 }
 
-func TestRankBySimilarity_PrefersLowerLatency(t *testing.T) {
-	floor := CapabilityFloor{}
+func TestRankEligibleModels_PrefersMeasuredProviderQuality(t *testing.T) {
+	higherQuality := makeModelProfile("quality-proven", ModelFamilyClaude, QualityTierNormal, 100000,
+		false, false, false, true, 500)
+	higherQuality.ProviderQualityScore = 0.9
+	higherQuality.ProviderQualityConfidence = 0.8
+	lowerQuality := makeModelProfile("latency-fast", ModelFamilyClaude, QualityTierNormal, 100000,
+		false, false, false, true, 10)
+	lowerQuality.ProviderQualityScore = 0.6
+	lowerQuality.ProviderQualityConfidence = 0.8
+
+	best := rankTestModels([]ModelProfile{lowerQuality, higherQuality}, "claude-haiku-4-5")
+	if best.ModelID != "quality-proven" {
+		t.Errorf("expected provider quality evidence to precede latency, got %s", best.ModelID)
+	}
+}
+
+func TestRankEligibleModels_PrefersLowerLatency(t *testing.T) {
 	eligible := []ModelProfile{
 		makeModelProfile("fast", ModelFamilyClaude, QualityTierNormal, 100000,
 			false, false, false, true, 50),
@@ -330,9 +346,23 @@ func TestRankBySimilarity_PrefersLowerLatency(t *testing.T) {
 			false, false, false, true, 500),
 	}
 
-	best := rankBySimilarity(eligible, "claude-haiku-4-5", floor)
+	best := rankTestModels(eligible, "claude-haiku-4-5")
 	if best.ModelID != "fast" {
 		t.Errorf("expected fast (lower latency tie-break), got %s", best.ModelID)
+	}
+}
+
+func TestRankEligibleModels_PrefersLowerKnownCost(t *testing.T) {
+	eligible := []ModelProfile{
+		makeModelProfile("deepseek-ai/DeepSeek-V3.2", ModelFamilyDeepSeek, QualityTierNormal, 163840,
+			true, false, false, true, 0),
+		makeModelProfile("deepseek-v4-flash", ModelFamilyDeepSeek, QualityTierNormal, 1000000,
+			true, false, true, true, 0),
+	}
+
+	best := rankTestModels(eligible, "claude-sonnet-5")
+	if best.ModelID != "deepseek-v4-flash" {
+		t.Errorf("expected lower-cost deepseek-v4-flash, got %s", best.ModelID)
 	}
 }
 
@@ -392,11 +422,34 @@ func TestResolveModel_FindsBestMatch(t *testing.T) {
 	if !resolved {
 		t.Error("expected resolved=true")
 	}
-	if mapped != "claude-sonnet-4-6" {
-		t.Errorf("expected claude-sonnet-4-6, got %s", mapped)
+	if mapped != "gpt-5.3" {
+		t.Errorf("expected lower-latency gpt-5.3, got %s", mapped)
 	}
 	if reason == "" {
 		t.Error("expected non-empty reason")
+	}
+}
+
+func TestResolveModel_CompshareInventoryPrefersGLM52OverDeepSeekFallbacks(t *testing.T) {
+	profiles := []ModelProfile{
+		makeModelProfile("deepseek-ai/DeepSeek-V3.2", ModelFamilyDeepSeek, QualityTierNormal, 163840,
+			true, false, false, true, 0),
+		makeModelProfile("deepseek-v4-flash", ModelFamilyDeepSeek, QualityTierNormal, 1000000,
+			true, false, true, true, 0),
+		makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierPremium, 1048576,
+			true, false, true, true, 0),
+	}
+	resolver := newTestResolver(t, profiles)
+
+	mapped, resolved, reason := resolver.ResolveModel(
+		"claude-sonnet-5",
+		"ch_test",
+		"messages",
+		"metrics_test",
+		CapabilityFloor{MinContextTokens: 39561, MinQualityTier: QualityTierNormal},
+	)
+	if !resolved || mapped != "glm-5.2" {
+		t.Fatalf("ResolveModel() = (%q, %v, %q), want glm-5.2", mapped, resolved, reason)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/metrics"
 )
 
 // ── CapabilityFloor 能力下界 ──
@@ -149,11 +150,11 @@ func (r *ModelResolver) ResolveModel(
 		return requestModel, false, "exact_model_required"
 	}
 
-	// Step 6: 自适应入口在满足下界的候选中选最佳匹配。
-	best := rankBySimilarity(candidates, requestModel, floor)
-	baseReason := fmt.Sprintf("mapped %s->%s (intent:%s, family:%s, quality:%s)",
-		requestModel, best.ModelID, intent, best.ModelFamily, best.QualityTier)
-	return best.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
+	// Step 6: 自适应入口在满足下界的候选中按模型质量、实测表现和成本选优。
+	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind)
+	baseReason := fmt.Sprintf("mapped %s->%s (intent:%s, %s)",
+		requestModel, best.profile.ModelID, intent, best.reasonSummary())
+	return best.profile.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
 }
 
 // ResolveModelAnyEndpoint 在渠道的所有 endpoint 中判断 requestModel 是否可由自动映射支持。
@@ -229,10 +230,10 @@ func (r *ModelResolver) resolveModelAnyEndpoint(
 		return requestModel, false, "exact_model_required"
 	}
 
-	best := rankBySimilarity(candidates, requestModel, floor)
-	baseReason := fmt.Sprintf("mapped_any_endpoint %s->%s (intent:%s)",
-		requestModel, best.ModelID, intent)
-	return best.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
+	best := r.rankEligibleModels(candidates, requestModel, channelUID, channelKind)
+	baseReason := fmt.Sprintf("mapped_any_endpoint %s->%s (intent:%s, %s)",
+		requestModel, best.profile.ModelID, intent, best.reasonSummary())
+	return best.profile.ModelID, true, modelResolutionReason(baseReason, qualityFallback)
 }
 
 // ── 过滤与排序 ──
@@ -306,72 +307,168 @@ func modelResolutionReason(reason string, qualityFallback bool) string {
 	return "quality_fallback: " + reason
 }
 
-// rankBySimilarity 在满足下界的候选中选择最佳匹配。
+// rankedModelCandidate 保存模型选优所需的软证据。
+// 上下文窗口不在这里评分；它只在 CapabilityFloor 阶段作为硬下限使用。
+type rankedModelCandidate struct {
+	profile               ModelProfile
+	qualityRank           int
+	measuredQualityScore  float64
+	latencyKnown          bool
+	latencyMs             int64
+	costKnown             bool
+	normalizedCostUSD     float64
+	sameFamily            bool
+	normalizedCandidateID string
+}
+
+func (candidate rankedModelCandidate) reasonSummary() string {
+	measuredQuality := "unknown"
+	if candidate.profile.ProviderQualityConfidence >= 0.5 {
+		measuredQuality = fmt.Sprintf("%.3f", candidate.measuredQualityScore)
+	}
+	latency := "unknown"
+	if candidate.latencyKnown {
+		latency = fmt.Sprintf("%dms", candidate.latencyMs)
+	}
+	cost := "unknown"
+	if candidate.costKnown {
+		cost = fmt.Sprintf("%.6f", candidate.normalizedCostUSD)
+	}
+	return fmt.Sprintf("family:%s, quality:%s, measured_quality:%s, latency:%s, normalized_cost_usd:%s",
+		candidate.profile.ModelFamily, candidate.profile.QualityTier, measuredQuality, latency, cost)
+}
+
+// rankEligibleModels 在已经满足能力下界的候选中选择最佳模型。
 //
-// 匹配优先级（高→低）：
-//  1. 与当前任务质量目标的档位距离最近
-//  2. 同模型族（claude→claude, openai→openai）
-//  3. 上下文窗口最接近请求下界（不浪费也不至于不够）
-//  4. 探测延迟最低
-func rankBySimilarity(eligible []ModelProfile, requestModel string, floor CapabilityFloor) ModelProfile {
+// 排序优先级（高→低）：
+//  1. 模型质量档越高越优先；质量目标是准入下限，不再惩罚高于目标的模型
+//  2. 带置信度折算的供应商实测质量越高越优先
+//  3. 已测延迟优先于未知延迟，同为已测时延迟越低越优先
+//  4. 已知公开成本优先于未知成本，同为已知时成本越低越优先
+//  5. 同模型族作为兼容性兜底，最后按 model ID 保证确定性
+func (r *ModelResolver) rankEligibleModels(
+	eligible []ModelProfile,
+	requestModel string,
+	channelUID string,
+	channelKind string,
+) rankedModelCandidate {
 	reqFamily := InferModelFamily(requestModel, "")
-	hasQualityTarget := floor.MinQualityTier != ""
-	reqTierRank := qualityTierRank(floor.MinQualityTier)
+	upstream, global := r.modelRankingCapabilityContext(channelUID, channelKind)
 
-	type scored struct {
-		profile         ModelProfile
-		qualityDistance int
-		sameFamily      bool
-		latency         int64
-		ctxDist         int
-		candID          string
+	ranked := make([]rankedModelCandidate, 0, len(eligible))
+	for _, profile := range eligible {
+		costUSD, costKnown := normalizedModelCostUSD(profile.ModelID, upstream, global)
+		ranked = append(ranked, rankedModelCandidate{
+			profile:               profile,
+			qualityRank:           qualityTierRank(profile.QualityTier),
+			measuredQualityScore:  measuredProviderQualityScore(profile),
+			latencyKnown:          profile.ProbeLatencyMs > 0,
+			latencyMs:             profile.ProbeLatencyMs,
+			costKnown:             costKnown,
+			normalizedCostUSD:     costUSD,
+			sameFamily:            profile.ModelFamily == reqFamily,
+			normalizedCandidateID: strings.ToLower(profile.ModelID),
+		})
 	}
 
-	scoredList := make([]scored, 0, len(eligible))
-	for _, p := range eligible {
-		s := scored{
-			profile:    p,
-			sameFamily: p.ModelFamily == reqFamily,
-			latency:    p.ProbeLatencyMs,
-			candID:     strings.ToLower(p.ModelID),
-		}
-		if hasQualityTarget {
-			s.qualityDistance = absInt(qualityTierRank(p.QualityTier) - reqTierRank)
-		}
-
-		// 上下文窗口距离：越接近下界越好（不浪费也不至于不够）。
-		ctxDist := p.ContextTokens - floor.MinContextTokens
-		if ctxDist < 0 {
-			ctxDist = -ctxDist
-		}
-		s.ctxDist = ctxDist
-		scoredList = append(scoredList, s)
-	}
-
-	// 排序：质量距离升序 → 同派系 → 上下文距离升序 → 延迟升序 → modelID 字典序。
-	bestIdx := 0
-	for i := 1; i < len(scoredList); i++ {
-		a, b := scoredList[bestIdx], scoredList[i]
-		if hasQualityTarget && b.qualityDistance < a.qualityDistance {
-			bestIdx = i
-		} else if (!hasQualityTarget || b.qualityDistance == a.qualityDistance) && b.sameFamily != a.sameFamily {
-			if b.sameFamily {
-				bestIdx = i
-			}
-		} else if (!hasQualityTarget || b.qualityDistance == a.qualityDistance) && b.sameFamily == a.sameFamily {
-			if b.ctxDist < a.ctxDist {
-				bestIdx = i
-			} else if b.ctxDist == a.ctxDist {
-				if b.latency < a.latency {
-					bestIdx = i
-				} else if b.latency == a.latency && b.candID < a.candID {
-					bestIdx = i
-				}
-			}
+	best := ranked[0]
+	for i := 1; i < len(ranked); i++ {
+		if betterRankedModel(ranked[i], best) {
+			best = ranked[i]
 		}
 	}
+	return best
+}
 
-	return scoredList[bestIdx].profile
+func betterRankedModel(candidate, current rankedModelCandidate) bool {
+	if candidate.qualityRank != current.qualityRank {
+		return candidate.qualityRank > current.qualityRank
+	}
+	if candidate.measuredQualityScore != current.measuredQualityScore {
+		return candidate.measuredQualityScore > current.measuredQualityScore
+	}
+	if candidate.latencyKnown != current.latencyKnown {
+		return candidate.latencyKnown
+	}
+	if candidate.latencyKnown && candidate.latencyMs != current.latencyMs {
+		return candidate.latencyMs < current.latencyMs
+	}
+	if candidate.costKnown != current.costKnown {
+		return candidate.costKnown
+	}
+	if candidate.costKnown && candidate.normalizedCostUSD != current.normalizedCostUSD {
+		return candidate.normalizedCostUSD < current.normalizedCostUSD
+	}
+	if candidate.sameFamily != current.sameFamily {
+		return candidate.sameFamily
+	}
+	return candidate.normalizedCandidateID < current.normalizedCandidateID
+}
+
+// measuredProviderQualityScore 将供应商实测质量按置信度向 0.5 中性值收缩。
+// 无可信观测时保持中性，避免零值被误判为最差质量。
+func measuredProviderQualityScore(profile ModelProfile) float64 {
+	confidence := clampUnit(profile.ProviderQualityConfidence)
+	if confidence < 0.5 {
+		return 0.5
+	}
+	quality := clampUnit(profile.ProviderQualityScore)
+	return 0.5 + (quality-0.5)*confidence
+}
+
+// normalizedModelCostUSD 使用统一的 100 万输入 + 100 万输出作为公开价格比较基准。
+// 实际渠道折扣由 endpoint 调度继续处理；这里只用于同一 endpoint 内的模型选优。
+func normalizedModelCostUSD(
+	modelID string,
+	upstream *config.UpstreamConfig,
+	global map[string]config.UpstreamModelCapability,
+) (float64, bool) {
+	resolved := config.ResolveUpstreamCapability(modelID, upstream, global)
+	if !resolved.Known || !hasKnownModelPricing(resolved.Capability.Pricing) {
+		return 0, false
+	}
+	cost := metrics.CalculateTokenCostUSDWithPricing(
+		resolved.Capability.Pricing,
+		1_000_000,
+		1_000_000,
+		0,
+		0,
+	)
+	return cost, true
+}
+
+func hasKnownModelPricing(pricing *config.ModelPricing) bool {
+	if pricing == nil {
+		return false
+	}
+	if pricing.InputCacheHitPrice != nil || pricing.InputCacheMissPrice != nil || pricing.OutputPrice != nil {
+		return true
+	}
+	for _, tier := range pricing.Tiers {
+		if tier.InputCacheHitPrice != nil || tier.InputCacheMissPrice != nil || tier.OutputPrice != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// modelRankingCapabilityContext 返回模型选优使用的能力与价格上下文。
+// 自动解析候选已经是 endpoint 的实际模型名，因此清空 ModelMapping，避免价格查询形成链式重定向。
+func (r *ModelResolver) modelRankingCapabilityContext(
+	channelUID string,
+	channelKind string,
+) (*config.UpstreamConfig, map[string]config.UpstreamModelCapability) {
+	if r.cfgManager == nil {
+		return nil, nil
+	}
+	cfg := r.cfgManager.GetConfig()
+	upstream := r.findUpstream(channelUID, channelKind)
+	if upstream == nil {
+		return nil, cfg.UpstreamModelCapabilities
+	}
+	upstreamCopy := *upstream
+	upstreamCopy.ModelMapping = nil
+	return &upstreamCopy, cfg.UpstreamModelCapabilities
 }
 
 func absInt(value int) int {

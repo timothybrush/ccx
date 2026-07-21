@@ -2501,13 +2501,15 @@ func (r *ModelResolver) ResolveModel(
         return "", false, "no model meets capability floor"
     }
 
-    // 4. 在满足下界的模型中选最佳匹配
-    //    匹配优先级：
-    //    a. 同模型族（opus→opus, sonnet→sonnet）—— 最高优先
-    //    b. 同质量档（premium→premium）
-    //    c. 上下文窗口最接近（不超也不差太多）
-    //    d. 探测延迟最低
-    best := rankBySimilarity(eligible, requestModel, floor)
+    // 4. 在满足下界的模型中选优
+    //    上下文窗口只负责准入，不对更大的窗口扣分。
+    //    排序优先级：
+    //    a. 模型质量档越高越优先
+    //    b. 带置信度折算的供应商实测质量
+    //    c. 探测延迟
+    //    d. 公开模型成本
+    //    e. 同模型族与 model ID 仅作为确定性兜底
+    best := rankEligibleModels(eligible, requestModel)
 
     return best.ModelID, true, fmt.Sprintf("mapped %s→%s (family:%s, quality:%s)",
         requestModel, best.ModelID, best.Family, best.QualityTier)
