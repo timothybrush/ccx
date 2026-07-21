@@ -579,6 +579,15 @@
                           {{ kimiFormatUsedRatio(row.kimiCredential.kimiCodeUsage.subscriptionBalance.kimiCodeUsedRatio) }}
                         </div>
                       </div>
+                      <div v-if="row.kimiCredential.kimiCodeUsage.codeFiveHour?.enabled">
+                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.fiveHourRemaining') }}</div>
+                        <div class="text-body-2 font-weight-medium">
+                          {{ kimiFormatRemainingRatio(row.kimiCredential.kimiCodeUsage.codeFiveHour.ratio) }}
+                        </div>
+                        <div class="text-caption text-disabled">
+                          {{ t('kimiConsoleToken.resetAt') }} {{ kimiFormatDateTime(row.kimiCredential.kimiCodeUsage.codeFiveHour.resetTime) }}
+                        </div>
+                      </div>
                       <div v-if="row.kimiCredential.kimiCodeUsage.codeSevenDay?.enabled">
                         <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.sevenDayRemaining') }}</div>
                         <div class="text-body-2 font-weight-medium">
@@ -1763,20 +1772,37 @@ const compshareFormatDateTime = (value?: string) => {
 
 const compsharePlanDisplayName = (plan: CompsharePlanSnapshot) => plan.displayName || plan.planName || plan.planCode
 
-// Key 行摘要：未绑定 Cookie 时提示绑定，否则展示套餐名与本周余量。
+// Key 行摘要：未绑定 Cookie 时提示绑定，否则展示套餐名与 5 小时/本周/月度余量。
 const compshareUsageSummary = (credential: ManagedAccountCredential): string => {
   if (!credential.hasCompshareConsoleCookie) return t('compshareConsoleCookie.notConfigured')
   const plan = credential.compsharePlan
   if (!plan) return t('compshareConsoleCookie.noUsageData')
-  return `${compsharePlanDisplayName(plan)} · ${t('compshareConsoleCookie.weeklyRemaining')} ${compshareFormatRemaining(plan.weeklyUsage)}`
+  const parts = [compsharePlanDisplayName(plan)]
+  if (plan.fiveHourUsage.limit > 0) {
+    parts.push(`${t('compshareConsoleCookie.fiveHourRemaining')} ${compshareFormatRemaining(plan.fiveHourUsage)}`)
+  }
+  if (plan.weeklyUsage.limit > 0) {
+    parts.push(`${t('compshareConsoleCookie.weeklyRemaining')} ${compshareFormatRemaining(plan.weeklyUsage)}`)
+  }
+  if (plan.monthlyUsage.limit > 0) {
+    parts.push(`${t('compshareConsoleCookie.monthlyRemaining')} ${compshareFormatRemaining(plan.monthlyUsage)}`)
+  }
+  return parts.join(' · ')
 }
 
-// Key 行摘要：未绑定 Cookie 时提示绑定，否则展示套餐名与当前套餐余量。
+// Key 行摘要：未绑定 Cookie 时提示绑定，否则展示套餐名与当前/月度余量。
 const mimoUsageSummary = (credential: ManagedAccountCredential): string => {
   if (!credential.hasMiMoConsoleCookie) return t('mimoConsoleCookie.notConfigured')
   const plan = credential.mimoTokenPlan
   if (!plan) return t('mimoConsoleCookie.noUsageData')
-  return `${plan.planName} · ${t('mimoConsoleCookie.currentRemaining')} ${formatMiMoQuota(plan.currentUsage)}`
+  const parts = [
+    plan.planName,
+    `${t('mimoConsoleCookie.currentRemaining')} ${formatMiMoQuota(plan.currentUsage)}`,
+  ]
+  if (plan.monthUsage.limit > 0) {
+    parts.push(`${t('mimoConsoleCookie.monthRemaining')} ${formatMiMoQuota(plan.monthUsage)}`)
+  }
+  return parts.join(' · ')
 }
 
 const minimaxFormatQuota = (remainingPercent: number, used: number, total: number) => {
@@ -2155,12 +2181,22 @@ const kimiFormatDuration = (seconds: number) => {
   return t('kimiConsoleToken.durationSeconds', { value: Math.max(0, seconds) })
 }
 
-// Key 行摘要：未绑定令牌时提示绑定，否则展示本周用量与订阅剩余。
+// Key 行摘要：未绑定令牌时提示绑定，否则拼接 5 小时/近一周频限、本周与总量额度、订阅剩余。
 const kimiUsageSummary = (credential: ManagedAccountCredential): string => {
   if (!credential.hasKimiConsoleToken) return t('kimiConsoleToken.notConfigured')
   const usage = credential.kimiCodeUsage
   if (!usage) return t('kimiConsoleToken.noUsageData')
-  const parts = [`${t('kimiConsoleToken.weeklyRemaining')} ${kimiFormatQuota(usage.weeklyUsage)}`]
+  const parts: string[] = []
+  if (usage.codeFiveHour?.enabled) {
+    parts.push(`${t('kimiConsoleToken.fiveHourRemaining')} ${kimiFormatRemainingRatio(usage.codeFiveHour.ratio)}`)
+  }
+  if (usage.codeSevenDay?.enabled) {
+    parts.push(`${t('kimiConsoleToken.sevenDayRemaining')} ${kimiFormatRemainingRatio(usage.codeSevenDay.ratio)}`)
+  }
+  parts.push(`${t('kimiConsoleToken.weeklyRemaining')} ${kimiFormatQuota(usage.weeklyUsage)}`)
+  if (usage.totalQuota.limit > 0) {
+    parts.push(`${t('kimiConsoleToken.totalRemaining')} ${kimiFormatQuota(usage.totalQuota)}`)
+  }
   if (usage.subscriptionBalance) {
     parts.push(`${t('kimiConsoleToken.subscriptionRemaining')} ${kimiFormatRemainingRatio(usage.subscriptionBalance.amountUsedRatio)}`)
   }

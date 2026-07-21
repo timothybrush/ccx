@@ -837,6 +837,8 @@
   "kimiConsoleToken.notConfigured": "Token belum terhubung",
   "kimiConsoleToken.noUsageData": "Belum ada data penggunaan",
   "kimiConsoleToken.weeklyRemaining": "Sisa mingguan / total",
+  "kimiConsoleToken.fiveHourRemaining": "Sisa batas 5 jam",
+  "kimiConsoleToken.totalRemaining": "Sisa kuota total / batas",
   "kimiConsoleToken.rateLimitRemaining": "Sisa batas {window} / total",
   "kimiConsoleToken.resetAt": "Reset:",
   "kimiConsoleToken.subscriptionRemaining": "Sisa langganan",

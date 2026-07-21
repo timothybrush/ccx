@@ -837,6 +837,8 @@
   "kimiConsoleToken.notConfigured": "未绑定令牌",
   "kimiConsoleToken.noUsageData": "暂无用量数据",
   "kimiConsoleToken.weeklyRemaining": "本周剩余 / 总量",
+  "kimiConsoleToken.fiveHourRemaining": "5 小时频限剩余",
+  "kimiConsoleToken.totalRemaining": "总额度剩余 / 总量",
   "kimiConsoleToken.rateLimitRemaining": "{window}频限剩余 / 总量",
   "kimiConsoleToken.resetAt": "重置：",
   "kimiConsoleToken.subscriptionRemaining": "订阅额度剩余",

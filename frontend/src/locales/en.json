@@ -837,6 +837,8 @@
   "kimiConsoleToken.notConfigured": "Token not linked",
   "kimiConsoleToken.noUsageData": "No usage data yet",
   "kimiConsoleToken.weeklyRemaining": "Weekly remaining / total",
+  "kimiConsoleToken.fiveHourRemaining": "5-hour rate limit remaining",
+  "kimiConsoleToken.totalRemaining": "Total quota remaining / limit",
   "kimiConsoleToken.rateLimitRemaining": "{window} rate limit remaining / total",
   "kimiConsoleToken.resetAt": "Resets:",
   "kimiConsoleToken.subscriptionRemaining": "Subscription remaining",
