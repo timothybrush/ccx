@@ -24,6 +24,11 @@ help:
 	@echo "  make container-verify - 在 Apple Container 中执行隔离验证"
 	@echo "  make frontend-build - 仅构建前端"
 	@echo "  make clean          - 清理构建文件"
+	@echo ""
+	@echo "$(YELLOW)工具:$(NC)"
+	@echo "  make generate-preset-manifest - 生成预设清单"
+	@echo "  make benchmark-update         - 自动更新模型能力基准数据"
+	@echo "  make benchmark-update-dry     - 预览基准数据变更（不写入）"
 
 install:
 	@echo "$(GREEN)📦 安装前端依赖...$(NC)"
@@ -88,3 +93,9 @@ frontend-build:
 
 generate-preset-manifest:
 	@node scripts/generate-preset-manifest.mjs
+
+benchmark-update:
+	@node scripts/update-benchmark-data.mjs
+
+benchmark-update-dry:
+	@node scripts/update-benchmark-data.mjs --dry-run
