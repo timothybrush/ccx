@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"net/url"
 	"regexp"
 	"strings"
@@ -27,6 +28,9 @@ type ProviderTemplate struct {
 	KeyPrefixRules []KeyPrefixRule     `json:"keyPrefixRules"` // key 前缀 → plan 判别
 	Candidates     []ProviderCandidate `json:"candidates"`     // 默认 route 的候选 baseURL
 	Routes         []ProviderRoute     `json:"routes,omitempty"`
+	// ModelCostMultipliers 描述同一 provider 套餐内每次模型调用的相对消耗。
+	// key 支持模型精确 ID 或通配符；值越低越省，只在质量与实测表现相同后参与选优。
+	ModelCostMultipliers map[string]float64 `json:"modelCostMultipliers,omitempty"`
 }
 
 // ProviderRoute 描述同一 provider 在某个 CCX 渠道协议下使用的原生上游入口。
@@ -196,18 +200,7 @@ var builtinProviderTemplates = []ProviderTemplate{
 		Candidates:  glmClaudeCandidates(),
 		Routes:      standardProviderRoutes("claude", glmClaudeCandidates(), glmOpenAICandidates()),
 	},
-	newProviderTemplate(
-		"compshare",
-		"优云智算套餐",
-		"UCloud 优云智算模型套餐与聚合服务",
-		"relay",
-		"second",
-		standardProviderRoutes("claude", []ProviderCandidate{
-			{BaseURL: "https://cp.compshare.cn", PlanTag: "subscription", Region: "cn", Priority: 0},
-		}, []ProviderCandidate{
-			{BaseURL: "https://cp.compshare.cn/v1", PlanTag: "subscription", Region: "cn", Priority: 0},
-		}),
-	),
+	compshareProviderTemplate(),
 	newProviderTemplate(
 		"sensenova",
 		"SenseNova",
@@ -370,6 +363,31 @@ func newProviderTemplateWithAliases(providerID string, aliases []string, display
 	return tmpl
 }
 
+func compshareProviderTemplate() ProviderTemplate {
+	tmpl := newProviderTemplate(
+		"compshare",
+		"优云智算套餐",
+		"UCloud 优云智算模型套餐与聚合服务",
+		"relay",
+		"second",
+		standardProviderRoutes("claude", []ProviderCandidate{
+			{BaseURL: "https://cp.compshare.cn", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}, []ProviderCandidate{
+			{BaseURL: "https://cp.compshare.cn/v1", PlanTag: "subscription", Region: "cn", Priority: 0},
+		}),
+	)
+	// 优云智算控制台的套餐消耗次数；glm-5.2 当前为限时倍率。
+	tmpl.ModelCostMultipliers = map[string]float64{
+		"glm-5.2":                   2,
+		"glm-5.1":                   6,
+		"MiniMax-M2.7":              2,
+		"kimi-k2.6":                 5,
+		"deepseek-ai/DeepSeek-V3.2": 1,
+		"deepseek-v4-flash":         1,
+	}
+	return tmpl
+}
+
 func deepseekClaudeCandidates() []ProviderCandidate {
 	return []ProviderCandidate{
 		{BaseURL: "https://api.deepseek.com/anthropic", PlanTag: "", Region: "", Priority: 0},
@@ -486,6 +504,19 @@ func GetProviderTemplate(providerID string) (*ProviderTemplate, bool) {
 		}
 	}
 	return nil, false
+}
+
+// ModelCostMultiplierForModel 返回 provider 套餐内指定模型的相对消耗倍率。
+// 精确 ID 优先，随后按最长通配符匹配；非法、负数或非有限值视为未知。
+func (t *ProviderTemplate) ModelCostMultiplierForModel(modelID string) (float64, bool) {
+	if t == nil {
+		return 0, false
+	}
+	multiplier, _, ok := resolvePatternValueFold(modelID, t.ModelCostMultipliers)
+	if !ok || multiplier < 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
+		return 0, false
+	}
+	return multiplier, true
 }
 
 // InferProviderIDFromBaseURL 仅按已知模板候选端点识别 provider。

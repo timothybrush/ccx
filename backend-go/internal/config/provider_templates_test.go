@@ -258,6 +258,42 @@ func TestListAndGetProviderTemplate(t *testing.T) {
 	}
 }
 
+func TestProviderTemplateCompshareModelCostMultipliers(t *testing.T) {
+	tmpl, ok := GetProviderTemplate("compshare")
+	if !ok {
+		t.Fatal("未找到优云智算模板")
+	}
+
+	want := map[string]float64{
+		"glm-5.2":                   2,
+		"glm-5.1":                   6,
+		"minimax-m2.7":              2,
+		"kimi-k2.6":                 5,
+		"deepseek-ai/deepseek-v3.2": 1,
+		"deepseek-v4-flash":         1,
+	}
+	for modelID, expected := range want {
+		got, found := tmpl.ModelCostMultiplierForModel(strings.ToUpper(modelID))
+		if !found || got != expected {
+			t.Errorf("模型 %s 的优云倍率 = %v, %v；期望 %v", modelID, got, found, expected)
+		}
+	}
+	if _, found := tmpl.ModelCostMultiplierForModel("unknown-model"); found {
+		t.Error("未知优云模型不应返回成本倍率")
+	}
+}
+
+func TestProviderTemplateModelCostMultiplierPrefersSpecificPattern(t *testing.T) {
+	tmpl := ProviderTemplate{ModelCostMultipliers: map[string]float64{
+		"deepseek-*":    3,
+		"deepseek-v4-*": 1,
+	}}
+	got, found := tmpl.ModelCostMultiplierForModel("DeepSeek-V4-Flash")
+	if !found || got != 1 {
+		t.Fatalf("最长通配符倍率 = %v, %v；期望 1", got, found)
+	}
+}
+
 func TestEveryProviderCandidateCanBeInferred(t *testing.T) {
 	for _, tmpl := range ListProviderTemplates() {
 		for _, route := range tmpl.AutoAddRoutes() {

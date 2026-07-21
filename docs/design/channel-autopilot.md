@@ -2474,7 +2474,7 @@ type CapabilityFloor struct {
 }
 
 type ModelResolver struct {
-    profileStore *ProfileStore
+    profileStore *ModelProfileStore
 }
 
 // ResolveModel 将请求模型映射到渠道实际支持的模型
@@ -2507,7 +2507,8 @@ func (r *ModelResolver) ResolveModel(
     //    a. 模型质量档越高越优先
     //    b. 带置信度折算的供应商实测质量
     //    c. 探测延迟
-    //    d. 公开模型成本
+    //    d. 同渠道/provider 的模型相对消耗倍率
+    //       倍率相同或缺失时再比较公开模型成本
     //    e. 同模型族与 model ID 仅作为确定性兜底
     best := rankEligibleModels(eligible, requestModel)
 
@@ -2542,6 +2543,23 @@ func filterByCapabilityFloor(profiles []ModelProfile, floor CapabilityFloor) []M
     return eligible
 }
 ```
+
+同渠道套餐倍率与公开 USD/Token 价格是不同单位，禁止直接混算。模型解析器先比较 provider
+提供的相对消耗倍率；只有双方倍率相同，或双方均无倍率时，才回退到统一输入/输出规模下的
+公开价格。优云智算当前内置倍率如下（数字越小越省，`glm-5.2` 的 2 次为限时值）：
+
+| 模型 | 每次调用套餐消耗 |
+|------|-----------------:|
+| `glm-5.2` | 2 |
+| `glm-5.1` | 6 |
+| `MiniMax-M2.7` | 2 |
+| `kimi-k2.6` | 5 |
+| `deepseek-ai/DeepSeek-V3.2` | 1 |
+| `deepseek-v4-flash` | 1 |
+
+该倍率只在模型质量档、供应商实测质量和探测延迟相同后参与排序。因此 `glm-5.2` 即使消耗
+2 次，也仍会在质量档高于 DeepSeek 候选时优先；V3.2 与 V4 Flash 同为 1 次时，再由公开
+价格及最终确定性规则区分。静态 `modelMapping` 仅保留为用户显式覆盖，不承担自动替代策略。
 
 **映射示例**：
 

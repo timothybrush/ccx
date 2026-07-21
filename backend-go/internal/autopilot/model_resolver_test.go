@@ -33,6 +33,10 @@ func makeModelProfile(modelID string, family ModelFamily, tier QualityTier, ctxT
 // newTestResolver 创建带预填充画像的 ModelResolver（无 cfgManager，跳过手动映射检查）。
 func newTestResolver(t *testing.T, profiles []ModelProfile) *ModelResolver {
 	t.Helper()
+	return NewModelResolver(newTestModelProfileStore(profiles), nil)
+}
+
+func newTestModelProfileStore(profiles []ModelProfile) *ModelProfileStore {
 	// 直接构造 ModelProfileStore，仅使用内存缓存（测试不需要 SQLite）。
 	store := &ModelProfileStore{
 		cache:     make(map[string]*ModelProfile),
@@ -42,7 +46,14 @@ func newTestResolver(t *testing.T, profiles []ModelProfile) *ModelResolver {
 		p := profiles[i]
 		_ = store.Upsert(&p)
 	}
-	return NewModelResolver(store, nil)
+	return store
+}
+
+func newTestResolverWithConfig(t *testing.T, profiles []ModelProfile, cfg config.Config) *ModelResolver {
+	t.Helper()
+	cfgManager, cleanup := createTestConfigManagerForResolver(t, cfg)
+	t.Cleanup(cleanup)
+	return NewModelResolver(newTestModelProfileStore(profiles), cfgManager)
 }
 
 func rankTestModels(eligible []ModelProfile, requestModel string) ModelProfile {
@@ -366,6 +377,52 @@ func TestRankEligibleModels_PrefersLowerKnownCost(t *testing.T) {
 	}
 }
 
+func TestRankEligibleModels_PrefersProviderRelativeCost(t *testing.T) {
+	eligible := []ModelProfile{
+		makeModelProfile("glm-5.1", ModelFamilyGLM, QualityTierHigh, 202800,
+			true, false, true, true, 0),
+		makeModelProfile("kimi-k2.6", ModelFamilyKimi, QualityTierHigh, 262144,
+			true, false, true, true, 0),
+	}
+	resolver := newTestResolverWithConfig(t, eligible, config.Config{Upstream: []config.UpstreamConfig{{
+		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
+	}}})
+
+	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages")
+	if best.profile.ModelID != "kimi-k2.6" {
+		t.Fatalf("expected kimi-k2.6 (5 次优于 6 次), got %s", best.profile.ModelID)
+	}
+	if !best.providerCostKnown || best.providerCostMultiplier != 5 || best.providerCostSource != "provider_template:compshare" {
+		t.Fatalf("provider cost evidence = %+v, want compshare multiplier 5", best)
+	}
+}
+
+func TestRankEligibleModels_ProviderCostTieFallsBackToPublicPrice(t *testing.T) {
+	eligible := []ModelProfile{
+		makeModelProfile("deepseek-ai/DeepSeek-V3.2", ModelFamilyDeepSeek, QualityTierNormal, 163840,
+			true, false, false, true, 0),
+		makeModelProfile("deepseek-v4-flash", ModelFamilyDeepSeek, QualityTierNormal, 1000000,
+			true, false, true, true, 0),
+	}
+	resolver := newTestResolverWithConfig(t, eligible, config.Config{Upstream: []config.UpstreamConfig{{
+		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
+	}}})
+
+	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages")
+	if best.profile.ModelID != "deepseek-v4-flash" {
+		t.Fatalf("expected deepseek-v4-flash after equal 1x multipliers fall back to public price, got %s", best.profile.ModelID)
+	}
+}
+
+func TestProviderModelCostMultiplierInfersLegacyCompshareURL(t *testing.T) {
+	multiplier, source, found := providerModelCostMultiplier("GLM-5.2", &config.UpstreamConfig{
+		BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
+	})
+	if !found || multiplier != 2 || source != "provider_template:compshare" {
+		t.Fatalf("providerModelCostMultiplier() = %v, %q, %v; want 2, compshare, true", multiplier, source, found)
+	}
+}
+
 // ── ResolveModel 端到端测试 ──
 
 func TestResolveModel_NoProfiles_ReturnsFalse(t *testing.T) {
@@ -432,14 +489,23 @@ func TestResolveModel_FindsBestMatch(t *testing.T) {
 
 func TestResolveModel_CompshareInventoryPrefersGLM52OverDeepSeekFallbacks(t *testing.T) {
 	profiles := []ModelProfile{
+		makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierPremium, 1048576,
+			true, false, true, true, 0),
+		makeModelProfile("glm-5.1", ModelFamilyGLM, QualityTierHigh, 202800,
+			true, false, true, true, 0),
+		makeModelProfile("MiniMax-M2.7", ModelFamilyMiniMax, QualityTierNormal, 204800,
+			true, false, true, true, 0),
+		makeModelProfile("kimi-k2.6", ModelFamilyKimi, QualityTierHigh, 262144,
+			true, false, true, true, 0),
 		makeModelProfile("deepseek-ai/DeepSeek-V3.2", ModelFamilyDeepSeek, QualityTierNormal, 163840,
 			true, false, false, true, 0),
 		makeModelProfile("deepseek-v4-flash", ModelFamilyDeepSeek, QualityTierNormal, 1000000,
 			true, false, true, true, 0),
-		makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierPremium, 1048576,
-			true, false, true, true, 0),
 	}
-	resolver := newTestResolver(t, profiles)
+	resolver := newTestResolverWithConfig(t, profiles, config.Config{Upstream: []config.UpstreamConfig{{
+		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
+		AutoManaged: true,
+	}}})
 
 	mapped, resolved, reason := resolver.ResolveModel(
 		"claude-sonnet-5",
