@@ -31,6 +31,9 @@ type ProviderTemplate struct {
 	// ModelCostMultipliers 描述同一 provider 套餐内每次模型调用的相对消耗。
 	// key 支持模型精确 ID 或通配符；值越低越省，只在质量与实测表现相同后参与选优。
 	ModelCostMultipliers map[string]float64 `json:"modelCostMultipliers,omitempty"`
+	// ModelQualityPriorities 描述 provider 已确认的同质量档模型能力顺序，值越高越强。
+	// 该映射允许不完整；解析器仅在同档候选全部命中时比较，避免未知模型被无依据降权。
+	ModelQualityPriorities map[string]int `json:"modelQualityPriorities,omitempty"`
 }
 
 // ProviderRoute 描述同一 provider 在某个 CCX 渠道协议下使用的原生上游入口。
@@ -385,6 +388,10 @@ func compshareProviderTemplate() ProviderTemplate {
 		"deepseek-ai/DeepSeek-V3.2": 1,
 		"deepseek-v4-flash":         1,
 	}
+	tmpl.ModelQualityPriorities = map[string]int{
+		"glm-5.1":   2,
+		"kimi-k2.6": 1,
+	}
 	return tmpl
 }
 
@@ -517,6 +524,18 @@ func (t *ProviderTemplate) ModelCostMultiplierForModel(modelID string) (float64,
 		return 0, false
 	}
 	return multiplier, true
+}
+
+// ModelQualityPriorityForModel 返回 provider 已确认的同档模型能力优先级。
+func (t *ProviderTemplate) ModelQualityPriorityForModel(modelID string) (int, bool) {
+	if t == nil {
+		return 0, false
+	}
+	priority, _, ok := resolvePatternValueFold(modelID, t.ModelQualityPriorities)
+	if !ok || priority <= 0 {
+		return 0, false
+	}
+	return priority, true
 }
 
 // InferProviderIDFromBaseURL 仅按已知模板候选端点识别 provider。

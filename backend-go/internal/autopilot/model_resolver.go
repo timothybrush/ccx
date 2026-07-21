@@ -310,21 +310,33 @@ func modelResolutionReason(reason string, qualityFallback bool) string {
 // rankedModelCandidate 保存模型选优所需的软证据。
 // 上下文窗口不在这里评分；它只在 CapabilityFloor 阶段作为硬下限使用。
 type rankedModelCandidate struct {
-	profile                 ModelProfile
-	qualityRank             int
-	measuredQualityScore    float64
-	latencyKnown            bool
-	latencyMs               int64
-	providerCostKnown       bool
-	providerCostMultiplier  float64
-	providerCostSource      string
-	publicCostKnown         bool
-	normalizedPublicCostUSD float64
-	sameFamily              bool
-	normalizedCandidateID   string
+	profile                        ModelProfile
+	qualityRank                    int
+	providerModelQualityKnown      bool
+	providerModelQualityComparable bool
+	providerModelQualityPriority   int
+	providerModelQualitySource     string
+	measuredQualityScore           float64
+	latencyKnown                   bool
+	latencyMs                      int64
+	providerCostKnown              bool
+	providerCostMultiplier         float64
+	providerCostSource             string
+	publicCostKnown                bool
+	normalizedPublicCostUSD        float64
+	sameFamily                     bool
+	normalizedCandidateID          string
 }
 
 func (candidate rankedModelCandidate) reasonSummary() string {
+	providerQuality := "unknown"
+	if candidate.providerModelQualityKnown {
+		status := candidate.providerModelQualitySource
+		if !candidate.providerModelQualityComparable {
+			status += ",inactive_incomplete_tier"
+		}
+		providerQuality = fmt.Sprintf("%d(%s)", candidate.providerModelQualityPriority, status)
+	}
 	measuredQuality := "unknown"
 	if candidate.profile.ProviderQualityConfidence >= 0.5 {
 		measuredQuality = fmt.Sprintf("%.3f", candidate.measuredQualityScore)
@@ -341,18 +353,19 @@ func (candidate rankedModelCandidate) reasonSummary() string {
 	if candidate.publicCostKnown {
 		publicCost = fmt.Sprintf("%.6f", candidate.normalizedPublicCostUSD)
 	}
-	return fmt.Sprintf("family:%s, quality:%s, measured_quality:%s, latency:%s, provider_cost_multiplier:%s, normalized_public_cost_usd:%s",
-		candidate.profile.ModelFamily, candidate.profile.QualityTier, measuredQuality, latency, providerCost, publicCost)
+	return fmt.Sprintf("family:%s, quality:%s, provider_quality_priority:%s, measured_quality:%s, latency:%s, provider_cost_multiplier:%s, normalized_public_cost_usd:%s",
+		candidate.profile.ModelFamily, candidate.profile.QualityTier, providerQuality, measuredQuality, latency, providerCost, publicCost)
 }
 
 // rankEligibleModels 在已经满足能力下界的候选中选择最佳模型。
 //
 // 排序优先级（高→低）：
 //  1. 模型质量档越高越优先；质量目标是准入下限，不再惩罚高于目标的模型
-//  2. 带置信度折算的供应商实测质量越高越优先
-//  3. 已测延迟优先于未知延迟，同为已测时延迟越低越优先
-//  4. 同渠道/provider 的模型相对消耗越低越优先；倍率相同或缺失时回退公开成本
-//  5. 同模型族作为兼容性兜底，最后按 model ID 保证确定性
+//  2. 同档候选均有 provider 已确认的能力顺序时，优先选择更强模型
+//  3. 带置信度折算的供应商实测质量越高越优先
+//  4. 已测延迟优先于未知延迟，同为已测时延迟越低越优先
+//  5. 同渠道/provider 的模型相对消耗越低越优先；倍率相同或缺失时回退公开成本
+//  6. 同模型族作为兼容性兜底，最后按 model ID 保证确定性
 func (r *ModelResolver) rankEligibleModels(
 	eligible []ModelProfile,
 	requestModel string,
@@ -364,22 +377,41 @@ func (r *ModelResolver) rankEligibleModels(
 
 	ranked := make([]rankedModelCandidate, 0, len(eligible))
 	for _, profile := range eligible {
+		qualityPriority, qualitySource, qualityKnown := providerModelQualityPriority(profile.ModelID, upstream)
 		providerMultiplier, providerSource, providerKnown := providerModelCostMultiplier(profile.ModelID, upstream)
 		publicCostUSD, publicCostKnown := normalizedModelCostUSD(profile.ModelID, upstream, global)
 		ranked = append(ranked, rankedModelCandidate{
-			profile:                 profile,
-			qualityRank:             qualityTierRank(profile.QualityTier),
-			measuredQualityScore:    measuredProviderQualityScore(profile),
-			latencyKnown:            profile.ProbeLatencyMs > 0,
-			latencyMs:               profile.ProbeLatencyMs,
-			providerCostKnown:       providerKnown,
-			providerCostMultiplier:  providerMultiplier,
-			providerCostSource:      providerSource,
-			publicCostKnown:         publicCostKnown,
-			normalizedPublicCostUSD: publicCostUSD,
-			sameFamily:              profile.ModelFamily == reqFamily,
-			normalizedCandidateID:   strings.ToLower(profile.ModelID),
+			profile:                      profile,
+			qualityRank:                  qualityTierRank(profile.QualityTier),
+			providerModelQualityKnown:    qualityKnown,
+			providerModelQualityPriority: qualityPriority,
+			providerModelQualitySource:   qualitySource,
+			measuredQualityScore:         measuredProviderQualityScore(profile),
+			latencyKnown:                 profile.ProbeLatencyMs > 0,
+			latencyMs:                    profile.ProbeLatencyMs,
+			providerCostKnown:            providerKnown,
+			providerCostMultiplier:       providerMultiplier,
+			providerCostSource:           providerSource,
+			publicCostKnown:              publicCostKnown,
+			normalizedPublicCostUSD:      publicCostUSD,
+			sameFamily:                   profile.ModelFamily == reqFamily,
+			normalizedCandidateID:        strings.ToLower(profile.ModelID),
 		})
+	}
+	qualityPriorityComplete := make(map[int]bool)
+	qualityRankSeen := make(map[int]bool)
+	for i := range ranked {
+		rank := ranked[i].qualityRank
+		if !qualityRankSeen[rank] {
+			qualityRankSeen[rank] = true
+			qualityPriorityComplete[rank] = true
+		}
+		if !ranked[i].providerModelQualityKnown {
+			qualityPriorityComplete[rank] = false
+		}
+	}
+	for i := range ranked {
+		ranked[i].providerModelQualityComparable = qualityPriorityComplete[ranked[i].qualityRank]
 	}
 
 	best := ranked[0]
@@ -394,6 +426,10 @@ func (r *ModelResolver) rankEligibleModels(
 func betterRankedModel(candidate, current rankedModelCandidate) bool {
 	if candidate.qualityRank != current.qualityRank {
 		return candidate.qualityRank > current.qualityRank
+	}
+	if candidate.providerModelQualityComparable && current.providerModelQualityComparable &&
+		candidate.providerModelQualityPriority != current.providerModelQualityPriority {
+		return candidate.providerModelQualityPriority > current.providerModelQualityPriority
 	}
 	if candidate.measuredQualityScore != current.measuredQualityScore {
 		return candidate.measuredQualityScore > current.measuredQualityScore
@@ -443,20 +479,30 @@ func measuredProviderQualityScore(profile ModelProfile) float64 {
 	return 0.5 + (quality-0.5)*confidence
 }
 
+// providerModelQualityPriority 返回 provider 已确认的同档模型能力顺序。
+// 映射允许不完整；调用方只有在同档候选全部命中时才使用，避免把“未知”误判为低质量。
+func providerModelQualityPriority(
+	modelID string,
+	upstream *config.UpstreamConfig,
+) (int, string, bool) {
+	tmpl, ok := providerTemplateForUpstream(upstream)
+	if !ok {
+		return 0, "", false
+	}
+	priority, ok := tmpl.ModelQualityPriorityForModel(modelID)
+	if !ok {
+		return 0, "", false
+	}
+	return priority, "provider_template:" + tmpl.ProviderID, true
+}
+
 // providerModelCostMultiplier 返回当前渠道/provider 套餐内模型的相对消耗倍率。
 // ProviderID 是首选事实源；旧配置未保存 ProviderID 时，仅按已知模板 URL 做保守识别。
 func providerModelCostMultiplier(
 	modelID string,
 	upstream *config.UpstreamConfig,
 ) (float64, string, bool) {
-	if upstream == nil {
-		return 0, "", false
-	}
-	providerID := strings.TrimSpace(upstream.ProviderID)
-	if providerID == "" {
-		providerID, _ = config.InferProviderIDFromBaseURL(upstream.GetEffectiveBaseURL())
-	}
-	tmpl, ok := config.GetProviderTemplate(providerID)
+	tmpl, ok := providerTemplateForUpstream(upstream)
 	if !ok {
 		return 0, "", false
 	}
@@ -465,6 +511,17 @@ func providerModelCostMultiplier(
 		return 0, "", false
 	}
 	return multiplier, "provider_template:" + tmpl.ProviderID, true
+}
+
+func providerTemplateForUpstream(upstream *config.UpstreamConfig) (*config.ProviderTemplate, bool) {
+	if upstream == nil {
+		return nil, false
+	}
+	providerID := strings.TrimSpace(upstream.ProviderID)
+	if providerID == "" {
+		providerID, _ = config.InferProviderIDFromBaseURL(upstream.GetEffectiveBaseURL())
+	}
+	return config.GetProviderTemplate(providerID)
 }
 
 // normalizedModelCostUSD 使用统一的 100 万输入 + 100 万输出作为公开价格比较基准。

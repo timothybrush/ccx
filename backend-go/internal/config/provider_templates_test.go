@@ -281,6 +281,15 @@ func TestProviderTemplateCompshareModelCostMultipliers(t *testing.T) {
 	if _, found := tmpl.ModelCostMultiplierForModel("unknown-model"); found {
 		t.Error("未知优云模型不应返回成本倍率")
 	}
+
+	glmPriority, glmFound := tmpl.ModelQualityPriorityForModel("GLM-5.1")
+	kimiPriority, kimiFound := tmpl.ModelQualityPriorityForModel("KIMI-K2.6")
+	if !glmFound || !kimiFound || glmPriority <= kimiPriority {
+		t.Fatalf("优云同档质量优先级错误: glm=%d/%v kimi=%d/%v", glmPriority, glmFound, kimiPriority, kimiFound)
+	}
+	if _, found := tmpl.ModelQualityPriorityForModel("unknown-model"); found {
+		t.Error("未知优云模型不应返回质量优先级")
+	}
 }
 
 func TestProviderTemplateModelCostMultiplierPrefersSpecificPattern(t *testing.T) {

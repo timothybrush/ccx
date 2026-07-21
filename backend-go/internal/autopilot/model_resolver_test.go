@@ -377,11 +377,13 @@ func TestRankEligibleModels_PrefersLowerKnownCost(t *testing.T) {
 	}
 }
 
-func TestRankEligibleModels_PrefersProviderRelativeCost(t *testing.T) {
+func TestRankEligibleModels_PrefersProviderModelQualityBeforeRelativeCost(t *testing.T) {
 	eligible := []ModelProfile{
 		makeModelProfile("glm-5.1", ModelFamilyGLM, QualityTierHigh, 202800,
 			true, false, true, true, 0),
 		makeModelProfile("kimi-k2.6", ModelFamilyKimi, QualityTierHigh, 262144,
+			true, false, true, true, 0),
+		makeModelProfile("MiniMax-M2.7", ModelFamilyMiniMax, QualityTierNormal, 204800,
 			true, false, true, true, 0),
 	}
 	resolver := newTestResolverWithConfig(t, eligible, config.Config{Upstream: []config.UpstreamConfig{{
@@ -389,11 +391,35 @@ func TestRankEligibleModels_PrefersProviderRelativeCost(t *testing.T) {
 	}}})
 
 	best := resolver.rankEligibleModels(eligible, "claude-sonnet-5", "ch_test", "messages")
-	if best.profile.ModelID != "kimi-k2.6" {
-		t.Fatalf("expected kimi-k2.6 (5 次优于 6 次), got %s", best.profile.ModelID)
+	if best.profile.ModelID != "glm-5.1" {
+		t.Fatalf("expected glm-5.1 quality to precede 6x vs 5x cost, got %s", best.profile.ModelID)
 	}
-	if !best.providerCostKnown || best.providerCostMultiplier != 5 || best.providerCostSource != "provider_template:compshare" {
-		t.Fatalf("provider cost evidence = %+v, want compshare multiplier 5", best)
+	if !best.providerModelQualityKnown || !best.providerModelQualityComparable ||
+		best.providerModelQualityPriority != 2 || best.providerModelQualitySource != "provider_template:compshare" {
+		t.Fatalf("provider quality evidence = %+v, want compshare priority 2", best)
+	}
+}
+
+func TestRankEligibleModels_PrefersProviderRelativeCostWhenQualityOrderIncomplete(t *testing.T) {
+	eligible := []ModelProfile{
+		makeModelProfile("glm-5.2", ModelFamilyGLM, QualityTierHigh, 1048576,
+			true, false, true, true, 0),
+		makeModelProfile("glm-5.1", ModelFamilyGLM, QualityTierHigh, 202800,
+			true, false, true, true, 0),
+	}
+	resolver := newTestResolverWithConfig(t, eligible, config.Config{Upstream: []config.UpstreamConfig{{
+		ChannelUID: "ch_test", ProviderID: "compshare", BaseURL: "https://cp.compshare.cn", ServiceType: "claude",
+	}}})
+
+	orders := [][]ModelProfile{eligible, {eligible[1], eligible[0]}}
+	for _, order := range orders {
+		best := resolver.rankEligibleModels(order, "claude-sonnet-5", "ch_test", "messages")
+		if best.profile.ModelID != "glm-5.2" {
+			t.Fatalf("expected glm-5.2 (2 次优于 6 次 when quality tier metadata is incomplete), got %s", best.profile.ModelID)
+		}
+		if !best.providerCostKnown || best.providerCostMultiplier != 2 || best.providerModelQualityComparable {
+			t.Fatalf("ranking evidence = %+v, want cost multiplier 2 with inactive quality priority", best)
+		}
 	}
 }
 

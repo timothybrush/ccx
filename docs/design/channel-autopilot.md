@@ -2505,11 +2505,12 @@ func (r *ModelResolver) ResolveModel(
     //    上下文窗口只负责准入，不对更大的窗口扣分。
     //    排序优先级：
     //    a. 模型质量档越高越优先
-    //    b. 带置信度折算的供应商实测质量
-    //    c. 探测延迟
-    //    d. 同渠道/provider 的模型相对消耗倍率
+    //    b. provider 已确认的同档模型能力顺序
+    //    c. 带置信度折算的供应商实测质量
+    //    d. 探测延迟
+    //    e. 同渠道/provider 的模型相对消耗倍率
     //       倍率相同或缺失时再比较公开模型成本
-    //    e. 同模型族与 model ID 仅作为确定性兜底
+    //    f. 同模型族与 model ID 仅作为确定性兜底
     best := rankEligibleModels(eligible, requestModel)
 
     return best.ModelID, true, fmt.Sprintf("mapped %s→%s (family:%s, quality:%s)",
@@ -2557,9 +2558,12 @@ func filterByCapabilityFloor(profiles []ModelProfile, floor CapabilityFloor) []M
 | `deepseek-ai/DeepSeek-V3.2` | 1 |
 | `deepseek-v4-flash` | 1 |
 
-该倍率只在模型质量档、供应商实测质量和探测延迟相同后参与排序。因此 `glm-5.2` 即使消耗
-2 次，也仍会在质量档高于 DeepSeek 候选时优先；V3.2 与 V4 Flash 同为 1 次时，再由公开
-价格及最终确定性规则区分。静态 `modelMapping` 仅保留为用户显式覆盖，不承担自动替代策略。
+provider 可以额外声明同一质量档内已确认的模型能力顺序，但只有该档全部候选都命中该元数据
+时才比较，避免把未知模型误判为弱模型，也保证排序不依赖候选输入顺序。优云模板当前记录
+`glm-5.1 > kimi-k2.6`，因此前者即使消耗 6 次，也会在后者的 5 次成本证据之前胜出。
+`glm-5.2` 即使消耗 2 次，也仍会在质量档高于 DeepSeek 候选时优先；V3.2 与 V4 Flash
+同为 1 次时，再由公开价格及最终确定性规则区分。静态 `modelMapping` 仅保留为用户显式覆盖，
+不承担自动替代策略。
 
 **映射示例**：
 
