@@ -342,6 +342,44 @@ func TestResolveModel_RefreshesLegacyAutoDiscoveryCapabilities(t *testing.T) {
 	}
 }
 
+func TestResolveModel_RefreshesKimiK3VisionCapabilities(t *testing.T) {
+	profile := makeModelProfile("k3", ModelFamilyKimi, QualityTierPremium, 262144,
+		true, false, true, true, 0)
+	profile.Source = "auto_discovery"
+	store := &ModelProfileStore{
+		cache:     make(map[string]*ModelProfile),
+		dirtyKeys: make(map[string]struct{}),
+	}
+	if err := store.Upsert(&profile); err != nil {
+		t.Fatal(err)
+	}
+	cfgManager, cleanup := createTestConfigManagerForResolver(t, config.Config{
+		Upstream: []config.UpstreamConfig{{
+			ChannelUID: "ch_test", AutoManaged: true, ProviderID: "kimi", ServiceType: "claude",
+		}},
+	})
+	defer cleanup()
+	resolver := NewModelResolver(store, cfgManager)
+
+	mapped, resolved, reason := resolver.ResolveModel(
+		"claude-opus-4-8", "ch_test", "messages", "metrics_test",
+		CapabilityFloor{
+			MinContextTokens: 200000,
+			MinQualityTier:   QualityTierPremium,
+			NeedsReasoning:   true,
+			NeedsVision:      true,
+			NeedsToolCalls:   true,
+		})
+	if !resolved || mapped != "k3" {
+		t.Fatalf("ResolveModel() = (%q, %v, %q), want vision-capable k3", mapped, resolved, reason)
+	}
+	refreshed := store.Get("ch_test", "messages", "metrics_test", "k3")
+	if refreshed == nil || !refreshed.SupportsVision || !refreshed.SupportsToolCalls ||
+		!refreshed.SupportsReasoning || refreshed.QualityTier != QualityTierPremium {
+		t.Fatalf("K3 自动发现画像未按当前注册表刷新: %+v", refreshed)
+	}
+}
+
 func TestResolveModelAnyEndpoint_MapsWithoutExactModelMatch(t *testing.T) {
 	profiles := []ModelProfile{
 		makeModelProfile("mimo-v2.5-pro", ModelFamilyMiMo, QualityTierHigh, 1000000,

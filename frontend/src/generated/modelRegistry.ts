@@ -386,6 +386,26 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
     ]
   },
+  "(?:^|[-/])gpt-5\\.6(?=$|@)": {
+    "provider": "amazon-bedrock",
+    "displayName": "Amazon Bedrock GPT-5.6",
+    "contextWindowTokens": 272000,
+    "maxOutputTokens": 128000,
+    "reasoningEfforts": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "capabilities": {
+      "vision": true,
+      "toolCalls": true
+    },
+    "sources": [
+      "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
+    ]
+  },
   "(?:^|[-/])gpt-5\\.6-sol(?=$|@)": {
     "provider": "amazon-bedrock",
     "displayName": "Amazon Bedrock GPT-5.6",
@@ -398,6 +418,10 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "xhigh",
       "max"
     ],
+    "capabilities": {
+      "vision": true,
+      "toolCalls": true
+    },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
     ]
@@ -414,6 +438,10 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "xhigh",
       "max"
     ],
+    "capabilities": {
+      "vision": true,
+      "toolCalls": true
+    },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
     ]
@@ -430,6 +458,10 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "xhigh",
       "max"
     ],
+    "capabilities": {
+      "vision": true,
+      "toolCalls": true
+    },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
     ]
@@ -1060,7 +1092,8 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     ],
     "capabilities": {
       "toolCalls": true,
-      "contextCaching": true
+      "contextCaching": true,
+      "vision": true
     },
     "sources": [
       "https://www.kimi.com/code/docs/kimi-code/models.html"
@@ -1270,7 +1303,11 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "medium",
       "high",
       "max"
-    ]
+    ],
+    "capabilities": {
+      "vision": true,
+      "toolCalls": true
+    }
   },
   "(?:^|[-/])minimax-m2\\.7(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "provider": "minimax",

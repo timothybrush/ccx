@@ -111,7 +111,10 @@
         },
         "passbackReasoningContent": true,
         "normalizeSystemRoleToTopLevel": true,
-        "noVision": true
+        "noVisionModels": [
+          "MiniMax-M2.7"
+        ],
+        "visionFallbackModel": "MiniMax-M3"
       },
       "dashscope": {
         "modelMapping": {

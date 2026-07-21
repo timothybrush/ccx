@@ -62,6 +62,16 @@ func TestAttachAutopilotRequestProfileExtractsProtocolFeatures(t *testing.T) {
 		}
 	})
 
+	t.Run("messages MCP tool names require tool support", func(t *testing.T) {
+		body := `{"model":"claude-opus-4-8","messages":[{"role":"user","content":"inspect this repository"}],"tools":["Bash","mcp__serena__find_symbol"]}`
+		c := newAutopilotProfileTestContext(t, "/v1/messages", body, nil)
+
+		profile := AttachAutopilotRequestProfile(c, scheduler.ChannelKindMessages, "claude-opus-4-8", "completion", "session-test", []byte(body), 0)
+		if !profile.ToolUseNeed {
+			t.Fatal("MCP 工具列表必须设置 ToolUseNeed=true")
+		}
+	})
+
 	t.Run("disabled thinking remains false", func(t *testing.T) {
 		body := `{"model":"claude-sonnet-5","messages":[{"role":"user","content":"hello"}],"thinking":{"type":"disabled"}}`
 		c := newAutopilotProfileTestContext(t, "/v1/messages", body, nil)

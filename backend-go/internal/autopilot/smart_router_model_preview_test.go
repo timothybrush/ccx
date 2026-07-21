@@ -172,6 +172,42 @@ func TestResolveModelSupportWithFloorRejectsIncapableAutoMapping(t *testing.T) {
 	}
 }
 
+func TestResolveModelSupportWithFloorRefreshesLegacyKimiK3Profile(t *testing.T) {
+	cfg := modelPreviewConfig("auto")
+	cfg.Upstream[0].Name = "kimi-auto"
+	cfg.Upstream[0].ChannelUID = "ch_kimi_auto"
+	cfg.Upstream[0].ProviderID = "kimi"
+	cfg.Upstream[0].ServiceType = "claude"
+	cfg.Upstream[0].SupportedModels = nil
+	cfgManager, cleanup := createTestConfigManager(t, cfg)
+	defer cleanup()
+
+	legacyProfile := ModelProfile{
+		ChannelUID: "ch_kimi_auto", ChannelKind: "messages", MetricsKey: "metrics_kimi",
+		ModelID: "k3", ModelFamily: ModelFamilyUnknown, QualityTier: QualityTierLow,
+		ProbeSuccess: true, Source: "auto_discovery",
+	}
+	store := newModelPreviewStore(t, legacyProfile)
+	resolver := NewModelResolver(store, cfgManager)
+	manager := &Manager{cfgManager: cfgManager, modelResolver: resolver}
+	upstream := cfgManager.GetConfig().Upstream[0]
+
+	supported, mapped, source, reason := manager.ResolveModelSupportWithFloor(
+		"messages",
+		&upstream,
+		"claude-opus-4-8",
+		CapabilityFloor{
+			MinQualityTier: QualityTierPremium,
+			NeedsReasoning: true,
+			NeedsToolCalls: true,
+		},
+	)
+	if !supported || mapped != "k3" || source != "auto_resolve" || reason == "" {
+		t.Fatalf("Kimi K3 support = %v mapped=%q source=%q reason=%q",
+			supported, mapped, source, reason)
+	}
+}
+
 func TestResolveModelSupportDoesNotExpandRealCandidatesInShadow(t *testing.T) {
 	cfgManager, cleanup := createTestConfigManager(t, modelPreviewConfig("shadow"))
 	defer cleanup()

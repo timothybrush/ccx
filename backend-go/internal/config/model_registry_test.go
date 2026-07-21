@@ -417,6 +417,37 @@ func TestResolveUpstreamCapability_GPT56BedrockBuiltin(t *testing.T) {
 	if !containsString(resolved.Capability.ReasoningEfforts, "max") {
 		t.Fatalf("ReasoningEfforts = %v, want max", resolved.Capability.ReasoningEfforts)
 	}
+	for _, capability := range []string{"vision", "toolCalls"} {
+		if !resolved.Capability.Capabilities[capability] {
+			t.Fatalf("Capabilities[%q] = false, want true", capability)
+		}
+	}
+}
+
+func TestResolveUpstreamCapability_MultimodalAgentModels(t *testing.T) {
+	for _, model := range []string{
+		"k3",
+		"minimax-m3",
+		"mimo-v2.5",
+		"gpt-5.4",
+		"gpt-5.5",
+		"gpt-5.6",
+		"gpt-5.6-sol",
+		"gpt-5.6-terra",
+		"gpt-5.6-luna",
+	} {
+		t.Run(model, func(t *testing.T) {
+			resolved := ResolveUpstreamCapability(model, nil, nil)
+			if !resolved.Known || resolved.Source != "builtin" {
+				t.Fatalf("resolved = %+v, want builtin capability", resolved)
+			}
+			for _, capability := range []string{"vision", "toolCalls"} {
+				if !resolved.Capability.Capabilities[capability] {
+					t.Fatalf("Capabilities[%q] = false, want true", capability)
+				}
+			}
+		})
+	}
 }
 
 func TestResolveUpstreamCapability_GPT55LiteLLMDefaults(t *testing.T) {

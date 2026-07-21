@@ -213,9 +213,11 @@ export const claudeMessagesPresets: Record<string, ClaudeMessagesPreset> = {
     "normalizeSystemRoleToTopLevel": true,
     "stripImageGenerationTool": false,
     "normalizeNonstandardChatRoles": false,
-    "noVision": true,
-    "noVisionModels": [],
-    "visionFallbackModel": ""
+    "noVision": false,
+    "noVisionModels": [
+      "MiniMax-M2.7"
+    ],
+    "visionFallbackModel": "MiniMax-M3"
   },
   "dashscope": {
     "modelMapping": {

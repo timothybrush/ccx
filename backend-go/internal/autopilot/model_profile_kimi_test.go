@@ -27,3 +27,20 @@ func TestModelProfileQualityTierFromFamily_KimiCodeModels(t *testing.T) {
 		}
 	}
 }
+
+func TestModelProfileQualityTierFromFamily_MultimodalFallbacks(t *testing.T) {
+	tests := []struct {
+		family ModelFamily
+		model  string
+		want   QualityTier
+	}{
+		{family: ModelFamilyMiniMax, model: "minimax-m3", want: QualityTierPremium},
+		{family: ModelFamilyMiMo, model: "mimo-v2.5-pro", want: QualityTierHigh},
+		{family: ModelFamilyMiMo, model: "mimo-v2.5", want: QualityTierNormal},
+	}
+	for _, tt := range tests {
+		if got := ModelProfileQualityTierFromFamily(tt.family, tt.model); got != tt.want {
+			t.Errorf("ModelProfileQualityTierFromFamily(%q) = %q, want %q", tt.model, got, tt.want)
+		}
+	}
+}

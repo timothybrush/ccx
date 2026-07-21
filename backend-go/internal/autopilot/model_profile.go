@@ -287,6 +287,12 @@ func ModelProfileQualityTierFromFamily(family ModelFamily, modelID string) Quali
 		}
 		return QualityTierNormal
 
+	case ModelFamilyMiniMax:
+		if strings.Contains(lowerID, "minimax-m3") {
+			return QualityTierPremium
+		}
+		return QualityTierNormal
+
 	case ModelFamilyQwen:
 		if strings.Contains(lowerID, "max") {
 			return QualityTierHigh
