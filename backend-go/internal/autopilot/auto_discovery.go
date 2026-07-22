@@ -588,8 +588,9 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		}
 
 		keyHash := KeyHashFromAPIKey(apiKey)
-		metricsKey := computeMetricsIdentityKey(ep.BaseURL, apiKey, channel.ServiceType)
-		endpointUID := GenerateEndpointUID(channelUID, ep.BaseURL, keyHash)
+		canonicalBaseURL := utils.CanonicalBaseURL(ep.BaseURL, channel.ServiceType)
+		metricsKey := computeMetricsIdentityKey(canonicalBaseURL, apiKey, channel.ServiceType)
+		endpointUID := GenerateEndpointUID(channelUID, canonicalBaseURL, keyHash)
 
 		// 尝试获取已有画像
 		existing := r.store.Get(endpointUID)
@@ -627,8 +628,8 @@ func (r *AutoDiscoveryRunner) writeProfiles(channelUID string, channel *config.U
 		if profile.CostTier == "" {
 			profile.CostTier = CostTierNormal
 		}
-		profile.BaseURL = ep.BaseURL
-		profile.IdentityBaseURL = utils.MetricsIdentityBaseURL(ep.BaseURL, channel.ServiceType)
+		profile.BaseURL = canonicalBaseURL
+		profile.IdentityBaseURL = utils.MetricsIdentityBaseURL(canonicalBaseURL, channel.ServiceType)
 		profile.KeyMask = ep.KeyMask
 		profile.KeyHash = keyHash
 		profile.MetricsKey = metricsKey

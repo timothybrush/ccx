@@ -676,6 +676,99 @@ func TestWriteProfilesBackfillsLegacyChannelKindForRouting(t *testing.T) {
 	}
 }
 
+// TestWriteProfilesCanonicalBaseURLMatch 回归测试：BaseURL 带默认版本前缀（如 /v1）时，
+// writeProfiles 生成的 endpointUID 必须与 buildEndpointInventory 一致，
+// 确保 ListActiveByChannel 能正确命中画像。
+func TestWriteProfilesCanonicalBaseURLMatch(t *testing.T) {
+	store, err := NewProfileStore(filepath.Join(t.TempDir(), "profiles.db"))
+	if err != nil {
+		t.Fatalf("创建 ProfileStore 失败: %v", err)
+	}
+	defer store.Close()
+
+	const (
+		channelUID = "ch_localhost_8990"
+		apiKey     = "sk-local"
+	)
+	// 原始 BaseURL 带 /v1 后缀，CanonicalBaseURL 会把它截掉
+	rawBaseURL := "http://localhost:8990/v1"
+	canonicalBaseURL := utils.CanonicalBaseURL(rawBaseURL, "openai")
+	if canonicalBaseURL != "http://localhost:8990" {
+		t.Fatalf("测试前提失败: CanonicalBaseURL(%q) = %q, want %q", rawBaseURL, canonicalBaseURL, "http://localhost:8990")
+	}
+
+	channel := &config.UpstreamConfig{
+		ChannelUID:  channelUID,
+		ServiceType: "openai",
+		BaseURL:     rawBaseURL,
+		APIKeys:     []string{apiKey},
+		AutoManaged: false,
+	}
+
+	// 写入发现画像（使用原始 baseURL）
+	runner := NewAutoDiscoveryRunner(store, nil)
+	runner.writeProfiles(channelUID, channel, []EndpointDiscoveryResult{{
+		KeyMask:     utils.MaskAPIKey(apiKey),
+		BaseURL:     rawBaseURL,
+		Models:      []string{"model-a", "model-b"},
+		ModelsCount: 2,
+		ProtocolOk:  true,
+	}}, nil)
+
+	// 验证写入时使用了规范化后的 baseURL
+	expectedEndpointUID := GenerateEndpointUID(channelUID, canonicalBaseURL, KeyHashFromAPIKey(apiKey))
+	profile := store.Get(expectedEndpointUID)
+	if profile == nil {
+		var keys []string
+		for _, p := range store.ListAll() {
+			keys = append(keys, p.EndpointUID)
+		}
+		t.Fatalf("期望 endpointUID=%s 的画像不存在，store 中的 key: %v", expectedEndpointUID, keys)
+	}
+	if profile.BaseURL != canonicalBaseURL {
+		t.Fatalf("profile.BaseURL = %q, want %q", profile.BaseURL, canonicalBaseURL)
+	}
+
+	// 模拟 L1 Worker 的 buildEndpointInventory，验证能匹配到画像
+	// 关键点：buildEndpointInventory 从配置构造 endpointUID，必须和 writeProfiles 一致
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{{
+			ChannelUID:  channelUID,
+			ServiceType: "openai",
+			BaseURL:     rawBaseURL,
+			APIKeys:     []string{apiKey},
+			Status:      "active",
+		}},
+	}
+	inventory := buildEndpointInventory(cfg)
+	found := false
+	for uid := range inventory.EndpointUIDs {
+		if uid == expectedEndpointUID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		var inventoryUIDs []string
+		for uid := range inventory.EndpointUIDs {
+			inventoryUIDs = append(inventoryUIDs, uid)
+		}
+		t.Fatalf("buildEndpointInventory 未生成期望的 endpointUID=%s，生成的 UIDs: %v", expectedEndpointUID, inventoryUIDs)
+	}
+
+	// ReplaceActiveEndpointUIDs 被 Manager 周期性调用；手动模拟以验证 ListActiveByChannel
+	store.ReplaceActiveEndpointUIDs(inventory.EndpointUIDs)
+
+	// 验证 ListActiveByChannel 能返回画像（这才是前端展示的真正数据来源）
+	activeProfiles := store.ListActiveByChannel(channelUID)
+	if len(activeProfiles) != 1 {
+		t.Fatalf("ListActiveByChannel 返回 %d 条画像，期望 1 条", len(activeProfiles))
+	}
+	if len(activeProfiles[0].AvailableModels) != 2 {
+		t.Fatalf("可用模型数 = %d，期望 2", len(activeProfiles[0].AvailableModels))
+	}
+}
+
 func withTestBuiltinManifest(t *testing.T, manifest presetstore.BuiltinModelsManifestEntryPreset) {
 	t.Helper()
 	previous := presetstore.Default()
