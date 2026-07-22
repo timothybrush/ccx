@@ -82,6 +82,10 @@ type SubscriptionProfile struct {
 	// AvailableModels 是账号可用模型快照（GET /api/user/models），供渠道 supportedModels 参考。
 	AvailableModels []string `json:"availableModels,omitempty"`
 
+	// Accounts 是 new-api 订阅的多账号列表（Phase 5）。
+	// 每个账号有独立的 accessToken，可分别创建渠道。
+	Accounts []NewApiAccount `json:"accounts,omitempty"`
+
 	Notes      string     `json:"notes,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	UpdatedAt  time.Time  `json:"updatedAt"`
@@ -95,6 +99,19 @@ type NewApiProvisionedKey struct {
 	Group           string  `json:"group"`
 	GroupMultiplier float64 `json:"groupMultiplier"`
 	TokenID         int     `json:"tokenId"`
+}
+
+// NewApiAccount 描述 new-api 订阅下的单个账号。
+// 用于多账号管理：一个 new-api 订阅可关联多个 accessToken（多个账号）。
+type NewApiAccount struct {
+	AccountUID    string    `json:"accountUid"`
+	AccessToken   string    `json:"accessToken,omitempty"` // 敏感，API 响应中脱敏
+	UserID        string    `json:"userId,omitempty"`
+	DisplayName   string    `json:"displayName,omitempty"` // 用户备注名
+	Balance       float64   `json:"balance,omitempty"`
+	Status        string    `json:"status,omitempty"` // active | expired | error
+	LastCheckedAt time.Time `json:"lastCheckedAt,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // SharedCapability 描述同订阅下所有 endpoint 共享的能力画像。
@@ -273,6 +290,9 @@ func (s *SubscriptionStore) Get(subscriptionUID string) *SubscriptionProfile {
 	if p.ProvisionedKeys != nil {
 		cp.ProvisionedKeys = append([]NewApiProvisionedKey(nil), p.ProvisionedKeys...)
 	}
+	if p.Accounts != nil {
+		cp.Accounts = append([]NewApiAccount(nil), p.Accounts...)
+	}
 	return &cp
 }
 
@@ -334,6 +354,9 @@ func (s *SubscriptionStore) ListAll() []*SubscriptionProfile {
 		if p.ProvisionedKeys != nil {
 			cp.ProvisionedKeys = append([]NewApiProvisionedKey(nil), p.ProvisionedKeys...)
 		}
+		if p.Accounts != nil {
+			cp.Accounts = append([]NewApiAccount(nil), p.Accounts...)
+		}
 		result = append(result, &cp)
 	}
 	return result
@@ -394,6 +417,44 @@ func (s *SubscriptionStore) UnlinkChannel(subscriptionUID, channelUID string) er
 }
 
 // ── 内部辅助 ──
+
+// AddAccount 向指定订阅添加一个账号。
+func (s *SubscriptionStore) AddAccount(subscriptionUID string, account NewApiAccount) error {
+	s.mu.Lock()
+	p, ok := s.cache[subscriptionUID]
+	if !ok {
+		s.mu.Unlock()
+		return fmt.Errorf("[SubscriptionStore-AddAccount] subscription_uid=%s 不存在", subscriptionUID)
+	}
+	p.Accounts = append(p.Accounts, account)
+	p.UpdatedAt = time.Now()
+	s.mu.Unlock()
+	return s.persist(p)
+}
+
+// RemoveAccount 从指定订阅删除一个账号。
+func (s *SubscriptionStore) RemoveAccount(subscriptionUID, accountUID string) error {
+	s.mu.Lock()
+	p, ok := s.cache[subscriptionUID]
+	if !ok {
+		s.mu.Unlock()
+		return fmt.Errorf("[SubscriptionStore-RemoveAccount] subscription_uid=%s 不存在", subscriptionUID)
+	}
+	filtered := make([]NewApiAccount, 0, len(p.Accounts))
+	for _, acc := range p.Accounts {
+		if acc.AccountUID != accountUID {
+			filtered = append(filtered, acc)
+		}
+	}
+	if len(filtered) == len(p.Accounts) {
+		s.mu.Unlock()
+		return fmt.Errorf("[SubscriptionStore-RemoveAccount] account_uid=%s 不存在", accountUID)
+	}
+	p.Accounts = filtered
+	p.UpdatedAt = time.Now()
+	s.mu.Unlock()
+	return s.persist(p)
+}
 
 // persist 将单条订阅画像写入 SQLite（upsert）。
 func (s *SubscriptionStore) persist(profile *SubscriptionProfile) error {
