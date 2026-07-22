@@ -712,6 +712,7 @@ import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, nex
 import draggable from 'vuedraggable'
 import { api, type Channel, type ChannelKind, type ChannelMetrics, type ChannelProtocolRoute, type ChannelStatus, type TimeWindowStats, type ChannelRecentActivity, type SchedulerStatsResponse } from '../services/api'
 import { getChannelTypeApi } from '../utils/channelTypeApi'
+import { isLlmChannelKind } from '../utils/unifiedChannels'
 import { useI18n } from '../i18n'
 import { useGlobalTick } from '../composables/useGlobalTick'
 import { useChannelActivity } from '../composables/useChannelActivity'
@@ -1290,6 +1291,9 @@ const syncActiveOrder = () => {
 
 const canReorderList = computed(() => {
   if (activeChannels.value.length === 0) return true
+  if (isLlmChannelKind(props.channelType)) {
+    return activeChannels.value.every(ch => isLlmChannelKind(getRouteKind(ch)))
+  }
   return activeChannels.value.every(ch => getRouteKind(ch) === props.channelType)
 })
 
@@ -1304,8 +1308,25 @@ const saveOrder = async () => {
   if (!canReorderList.value) return
   isSavingOrder.value = true
   try {
-    const order = activeChannels.value.map(getRouteIndex)
-    await getCurrentChannelTypeApi().reorder(order)
+    if (isLlmChannelKind(props.channelType)) {
+      // 统一 LLM 视图：按协议类型分别提交排序，保证每个协议数组内的顺序与展示一致
+      const orderByKind = new Map<ChannelKind, number[]>()
+      for (const ch of activeChannels.value) {
+        for (const route of ch.protocolRoutes ?? []) {
+          if (!isLlmChannelKind(route.kind)) continue
+          const order = orderByKind.get(route.kind) ?? []
+          order.push(route.index)
+          orderByKind.set(route.kind, order)
+        }
+      }
+      for (const [kind, order] of orderByKind) {
+        if (order.length === 0) continue
+        await getChannelTypeApi(api, kind).reorder(order)
+      }
+    } else {
+      const order = activeChannels.value.map(getRouteIndex)
+      await getCurrentChannelTypeApi().reorder(order)
+    }
     // Do not call emit('refresh') to avoid list flicker caused by parent refresh
   } catch (error) {
     console.error('Failed to save order:', error)
