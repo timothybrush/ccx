@@ -32,7 +32,7 @@ func ProbeSystemHeaderLevel(
 
 	// 从低层级到高层级探测
 	for level := SystemHeaderFilterLevel(0); level <= LevelFirstBlock; level++ {
-		filteredReq := FilterSystemHeader(testReq, level)
+		filteredReq, _ := FilterSystemHeader(testReq, level)
 		err := sendTestRequest(ctx, baseURL, apiKey, filteredReq, model)
 		if err == nil {
 			// 探测成功，记录到缓存

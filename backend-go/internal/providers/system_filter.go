@@ -46,17 +46,19 @@ func isCCIdentityHeader(text string) bool {
 }
 
 // FilterSystemHeader 根据过滤层级过滤 system header
-func FilterSystemHeader(system interface{}, level SystemHeaderFilterLevel) interface{} {
+// 返回过滤后的 system 与是否发生修改
+func FilterSystemHeader(system interface{}, level SystemHeaderFilterLevel) (interface{}, bool) {
 	arr, ok := system.([]interface{})
 	if !ok {
-		return system
+		return system, false
 	}
 
 	if level == LevelNoFilter {
-		return system // 不过滤
+		return system, false
 	}
 
 	newSystem := make([]interface{}, 0, len(arr))
+	modified := false
 	for i, item := range arr {
 		obj, ok := item.(map[string]interface{})
 		if !ok {
@@ -72,21 +74,24 @@ func FilterSystemHeader(system interface{}, level SystemHeaderFilterLevel) inter
 
 		// Level 3: 跳过第一条
 		if level >= LevelFirstBlock && i == 0 {
+			modified = true
 			continue
 		}
 
 		// Level 2: 跳过 billing header
 		if level >= LevelAllCCHeaders && isBillingHeader(text) {
+			modified = true
 			continue
 		}
 
 		// Level 1: 跳过 CC identity 和 subagent header
 		if level >= LevelCCIdentity && isCCIdentityHeader(text) {
+			modified = true
 			continue
 		}
 
 		newSystem = append(newSystem, item)
 	}
 
-	return newSystem
+	return newSystem, modified
 }

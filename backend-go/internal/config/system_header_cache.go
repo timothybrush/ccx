@@ -34,6 +34,7 @@ func GenerateCacheKey(channelUID, keyHash, model string) string {
 }
 
 // Get 获取缓存条目
+// 返回条目副本以避免调用方在锁外读取可变字段
 func (c *SystemHeaderFilterCache) Get(channelUID, keyHash, model string) *SystemHeaderFilterEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -49,7 +50,14 @@ func (c *SystemHeaderFilterCache) Get(channelUID, keyHash, model string) *System
 		return nil
 	}
 
-	return entry
+	// 返回副本，避免外部读取时与写并发竞争
+	return &SystemHeaderFilterEntry{
+		Level:        entry.Level,
+		DetectedAt:   entry.DetectedAt,
+		SuccessCount: entry.SuccessCount,
+		FailureCount: entry.FailureCount,
+		LastError:    entry.LastError,
+	}
 }
 
 // Set 设置缓存条目
@@ -82,6 +90,8 @@ func (c *SystemHeaderFilterCache) RecordFailure(channelUID, keyHash, model strin
 		c.cache[key] = entry
 	}
 
+	// 刷新探测时间，避免首次失败后 Get 立即判定过期
+	entry.DetectedAt = time.Now()
 	entry.FailureCount++
 	entry.LastError = err
 }

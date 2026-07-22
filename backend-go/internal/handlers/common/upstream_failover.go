@@ -603,7 +603,8 @@ func TryUpstreamWithAllKeys(
 					notifyEndpointResultHook(endpointUID, false)
 				}
 				// Phase 2: 记录 system header 过滤失败，触发渐进升级。
-				if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
+				// 仅对 system header 相关错误生效，避免无关故障误判为 header 不兼容。
+				if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" && isSystemHeaderError(err.Error()) {
 					keyHash := autopilot.KeyHashFromAPIKey(apiKey)
 					systemHeaderFilterCache.RecordFailure(upstream.ChannelUID, keyHash, redirectedModel, err.Error())
 					tryUpgradeFilterLevel(upstream.ChannelUID, keyHash, redirectedModel)
@@ -697,11 +698,14 @@ func TryUpstreamWithAllKeys(
 						notifyEndpointResultHook(endpointUID, false)
 					}
 					// Phase 2: 记录 system header 过滤失败，触发渐进升级。
+					// 仅对 system header 相关错误生效，避免无关故障误判为 header 不兼容。
 					if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
 						keyHash := autopilot.KeyHashFromAPIKey(apiKey)
 						errorSummary := errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
-						systemHeaderFilterCache.RecordFailure(upstream.ChannelUID, keyHash, redirectedModel, errorSummary)
-						tryUpgradeFilterLevel(upstream.ChannelUID, keyHash, redirectedModel)
+						if isSystemHeaderError(errorSummary) {
+							systemHeaderFilterCache.RecordFailure(upstream.ChannelUID, keyHash, redirectedModel, errorSummary)
+							tryUpgradeFilterLevel(upstream.ChannelUID, keyHash, redirectedModel)
+						}
 					}
 					errorSummary := errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
 					if errorSummary != "" {
@@ -1368,8 +1372,8 @@ func applySystemHeaderFilterToBody(body []byte, level providers.SystemHeaderFilt
 		return body, false
 	}
 
-	filtered := providers.FilterSystemHeader(systemRaw, level)
-	if filtered == systemRaw {
+	filtered, modified := providers.FilterSystemHeader(systemRaw, level)
+	if !modified {
 		return body, false
 	}
 
@@ -1391,6 +1395,7 @@ func getCurrentFilterLevel(channelUID, keyHash, model string) int {
 
 // tryUpgradeFilterLevel 在失败次数达到阈值时升级到下一过滤层级。
 // 层级上限为 3（LevelFirstBlock）。
+// 只有 system header 相关错误才会触发升级。
 func tryUpgradeFilterLevel(channelUID, keyHash, model string) {
 	entry := systemHeaderFilterCache.Get(channelUID, keyHash, model)
 	if entry == nil {
@@ -1400,4 +1405,24 @@ func tryUpgradeFilterLevel(channelUID, keyHash, model string) {
 	if entry.FailureCount >= failureUpgradeThreshold && entry.Level < int(providers.LevelFirstBlock) {
 		systemHeaderFilterCache.Set(channelUID, keyHash, model, entry.Level+1)
 	}
+}
+
+// isSystemHeaderError 判断错误是否与 system header 相关。
+// 与 providers.isSystemHeaderError 保持一致的 keyword 检测，用于 failover 失败升级。
+func isSystemHeaderError(errStr string) bool {
+	errStr = strings.ToLower(errStr)
+	keywords := []string{
+		"system",
+		"billing",
+		"cch",
+		"header",
+		"instruction",
+		"prompt",
+	}
+	for _, keyword := range keywords {
+		if strings.Contains(errStr, keyword) {
+			return true
+		}
+	}
+	return false
 }
