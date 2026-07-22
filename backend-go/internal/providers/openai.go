@@ -878,6 +878,10 @@ func extractSystemText(system interface{}) string {
 
 func extractSystemTextBlocks(system interface{}, skipLeadingTextBlocks int) string {
 	if str, ok := system.(string); ok {
+		// 字符串形式的 system：检查是否为 CC header，是则返回空
+		if isClaudeCodeSystemHeader(str) {
+			return ""
+		}
 		return str
 	}
 

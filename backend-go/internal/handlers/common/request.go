@@ -736,9 +736,6 @@ func ExtractConversationID(c *gin.Context, bodyBytes []byte) string {
 	return utils.ExtractUnifiedSessionID(c, bodyBytes)
 }
 
-// cchPattern 匹配 cch=xxx; 部分（包括前后空格）
-var cchPattern = regexp.MustCompile(`\s*cch=[^;]*;\s*`)
-
 // billingHeaderPattern 匹配完整的 billing header 行
 var billingHeaderPattern = regexp.MustCompile(`^x-anthropic-billing-header:.*$`)
 
