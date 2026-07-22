@@ -258,6 +258,7 @@ export interface Channel {
   autoManagedAt?: string                     // 开始托管时间（ISO 格式）
   originType?: string                        // 渠道来源类型
   originTier?: string                        // 渠道来源可信层级
+  subscriptionUid?: string                   // 关联的订阅 UID（new-api 自动托管场景）
   rpm?: number                // 能力测试发送速率（仅影响能力测试）
   tags?: string[]             // 用户自定义标签（自由文本，与 PoolTag 完全独立）
 }

@@ -303,6 +303,14 @@ function handleProviderSelect(provider: string) {
   manualForm.value = { subscriptionUid: '', displayName: '', provider: '', originType: '', billingMode: '', currency: '', balance: 0, notes: '' }
 }
 
+async function handleNewApiSubmit() {
+  if (!newApiVerifyResult.value) {
+    await handleNewApiVerify()
+  } else {
+    await handleNewApiProvision()
+  }
+}
+
 async function handleNewApiVerify() {
   if (!canNewApiVerify.value) return
   newApiVerifying.value = true

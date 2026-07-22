@@ -168,6 +168,14 @@ function resetForm() {
   errorMessage.value = ''
 }
 
+async function handleSubmit() {
+  if (!verifyResult.value) {
+    await handleVerify()
+  } else {
+    await handleProvision()
+  }
+}
+
 async function handleVerify() {
   if (!canVerify.value) return
   verifying.value = true
