@@ -43,7 +43,7 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
 
   const restoreDisabledKey = async (apiKey: string) => {
     const channel = options.channel.value
-    if (!channel) return
+    if (!channel || restoringKey.value) return
     restoringKey.value = apiKey
     try {
       const channelId = channel.index
@@ -66,8 +66,10 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
         default:
           await options.apiService.restoreApiKey(channelId, apiKey)
       }
-      localRestoredKeys.value.add(apiKey)
-      options.form.apiKeys.push(apiKey)
+      localRestoredKeys.value = new Set([...localRestoredKeys.value, apiKey])
+      if (!options.form.apiKeys.includes(apiKey)) {
+        options.form.apiKeys = [...options.form.apiKeys, apiKey]
+      }
     } catch (error) {
       options.emitError(error instanceof Error ? error.message : 'Restore failed')
     } finally {
@@ -77,8 +79,9 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
 
   const restoreDisabledKeyModel = async (apiKey: string, model: string) => {
     const channel = options.channel.value
-    if (!channel) return
-    restoringKeyModel.value = keyModelKey(apiKey, model)
+    const key = keyModelKey(apiKey, model)
+    if (!channel || restoringKeyModel.value) return
+    restoringKeyModel.value = key
     try {
       const channelId = channel.index
       switch (options.channelType.value) {
@@ -100,7 +103,7 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
         default:
           await options.apiService.restoreKeyModel(channelId, apiKey, model)
       }
-      localRestoredKeyModels.value.add(keyModelKey(apiKey, model))
+      localRestoredKeyModels.value = new Set([...localRestoredKeyModels.value, key])
     } catch (error) {
       options.emitError(error instanceof Error ? error.message : 'Restore failed')
     } finally {

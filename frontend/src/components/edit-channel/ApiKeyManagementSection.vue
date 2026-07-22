@@ -17,6 +17,21 @@
       </v-card-title>
 
       <v-card-text class="pt-2">
+        <v-alert
+          v-if="restoringKey || restoringKeyModel"
+          color="info"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="d-flex align-center ga-2">
+            <v-progress-circular indeterminate size="16" width="2" />
+            <span>{{ t('channelCard.restoreKeyInProgress') }}</span>
+          </div>
+        </v-alert>
+
         <div v-if="providerId === 'volcengine' && accountUid" class="d-flex align-center justify-space-between ga-3 flex-wrap mb-3">
           <div class="d-flex align-center ga-2">
             <v-icon color="primary" size="small">mdi-shield-key-outline</v-icon>
@@ -285,6 +300,7 @@
                       variant="tonal"
                       rounded="lg"
                       :loading="restoringKey === row.key"
+                      :disabled="!!restoringKey"
                       @click="$emit('restore-key', row.key)"
                     >
                       <v-icon start size="small">mdi-restore</v-icon>
@@ -1158,6 +1174,7 @@
                   variant="tonal"
                   rounded="lg"
                   :loading="restoringKeyModel === (dm.key + '|' + dm.model)"
+                  :disabled="!!restoringKeyModel"
                   @click="$emit('restore-key-model', dm.key, dm.model)"
                 >
                   <v-icon start size="small">mdi-restore</v-icon>

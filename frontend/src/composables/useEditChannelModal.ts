@@ -1017,12 +1017,10 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
 
   const {
     restoringKey,
-    disabledKeys,
     visibleDisabledKeys,
     resetRestoredKeys,
     restoreDisabledKey,
     restoringKeyModel,
-    disabledKeyModels,
     visibleDisabledKeyModels,
     restoreDisabledKeyModel,
   } = useDisabledApiKeys({
@@ -1424,13 +1422,12 @@ export function useEditChannelModal(props: ResolvedEditChannelModalProps, emit: 
     handleSupportedModelsChange,
     restoringKey,
     submitting,
-    disabledKeys,
+    visibleDisabledKeys,
     expectedRequestUrls,
     customHeadersArray,
     updateCustomHeaders,
     restoreDisabledKey,
     restoringKeyModel,
-    disabledKeyModels,
     visibleDisabledKeyModels,
     restoreDisabledKeyModel,
     appendSupportedModelFilter,

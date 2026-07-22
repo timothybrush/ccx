@@ -506,6 +506,7 @@
   "channelCard.noApiKeys": "暂无API密钥",
   "channelCard.disabledKeys": "已拉黑密钥",
   "channelCard.restoreKey": "恢复密钥",
+  "channelCard.restoreKeyInProgress": "正在恢复密钥，服务激活可能需要几秒，请稍候...",
   "channelCard.disabledKeyModels": "受限的密钥-模型组合",
   "channelCard.modelNotFound": "模型不可用",
   "channelCard.recoverAt": "自动恢复时间",

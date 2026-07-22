@@ -69,8 +69,8 @@
             <section :ref="(el: any) => setSectionRef('auth', el)" data-section-id="auth" class="pa-6 scroll-mt-4">
               <ApiKeyManagementSection
                 :api-keys="form.apiKeys"
-                :disabled-keys="disabledKeys"
-                :disabled-key-models="disabledKeyModels"
+                :disabled-keys="visibleDisabledKeys"
+                :disabled-key-models="visibleDisabledKeyModels"
                 :key-models-status="keyModelsStatus"
                 :is-editing="isEditing"
                 :restoring-key="restoringKey"
@@ -560,13 +560,13 @@ const {
   handleSupportedModelsChange,
   restoringKey,
   submitting,
-  disabledKeys,
+  visibleDisabledKeys,
   expectedRequestUrls,
   customHeadersArray,
   updateCustomHeaders,
   restoreDisabledKey,
   restoringKeyModel,
-  disabledKeyModels,
+  visibleDisabledKeyModels,
   restoreDisabledKeyModel,
   appendSupportedModelFilter,
   ensureTargetModelsLoaded,
