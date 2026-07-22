@@ -1261,12 +1261,12 @@ func main() {
 				CfgManager: cfgManager,
 				Runner:     autoDiscoveryRunner,
 			})
-				// new-api 多账号管理 API
-				autopilot.RegisterSubscriptionAccountRoutes(apiGroup, &autopilot.NewApiRouteDeps{
-					Store:      autopilotManager.SubscriptionStore(),
-					CfgManager: cfgManager,
-					Runner:     autoDiscoveryRunner,
-				})
+			// new-api 多账号管理 API
+			autopilot.RegisterSubscriptionAccountRoutes(apiGroup, &autopilot.NewApiRouteDeps{
+				Store:      autopilotManager.SubscriptionStore(),
+				CfgManager: cfgManager,
+				Runner:     autoDiscoveryRunner,
+			})
 			// 本地 Runtime API
 			autopilot.RegisterLocalRuntimeRoutes(apiGroup, autopilotManager.LocalRuntimeStore())
 			// 手动意图 API

@@ -3,6 +3,7 @@
 ### 新增
 
 - **Claude Code System Header 过滤** - OpenAI/Gemini/Responses provider 自动过滤 CC billing header、identity 与 subagent 角色描述，减少上游噪音；StripBillingHeader 扩展为完整移除 billing block
+- **分层 system header 过滤接入请求流程** - Messages 入口按 channel-keyHash-model 记忆最优过滤层级，连接错误与 HTTP failover 失败时渐进升级，成功后巩固层级；仅影响 Claude 透传入口，其余 provider 保持原有过滤
 - **托管渠道模型清单重新发现** - 编辑渠道对话框为托管渠道提供重新发现按钮，触发 auto-discover 后轮询任务状态并自动刷新模型清单，支持 zh-CN/en/id 三语
 - **Kimi Code 套餐用量查询** - Kimi 自动托管凭证支持绑定本地 Web 会话令牌，查询并刷新周额度、短期频限、订阅与赠送余额；绑定、刷新与账号列表接口均不回显令牌
 - **DeepSeek 官方账号自动托管** - 快速添加同时创建 Messages、Chat 与 Responses 协议渠道，模型发现统一使用官方 `/models`，编辑渠道时可按凭证查询余额
@@ -13,6 +14,8 @@
 
 ### 修复
 
+- **本地部署渠道重新发现后显示"来源未知/历史记录未保存"** - `writeProfiles` 与 `buildEndpointInventory` 统一用 `CanonicalBaseURL` 规范化 baseURL，修复带 `/v1` 后缀时 endpointUID 不一致导致画像写入后无法被 `ListActiveByChannel` 命中的问题
+- **套餐型 Provider Key 限额重置后不自动恢复** - Kimi/MiMo/优云智算/火山用量刷新后新增 `TryRestoreDisabledKeysByUsage`，按各 Provider 用量快照的重置时间与剩余额度自动恢复因余额/限额不足被拉黑的 Key；同时修复 `syncManagedAccountsFromChannels` 仅从活跃 Key 重建凭证池、导致被拉黑托管 Key 的 Console token/AccessKey/用量快照在下次配置保存时丢失的问题
 - **Provider 多协议账号部分写入** - 首次创建与旧账号补协议改为验证后单次提交，失败不残留半成品渠道，并保留 MiMo 区域及火山套餐端点亲和性
 - **快速添加成功后对话框未关闭** - provider 自动托管创建成功后立即结束交互，模型发现继续在后台执行
 - **Autopilot 配置迁移与运行态隔离** - 旧配置块解析或升级失败时回退安全默认值，支持结构体指针叠加，并避免环境急停经管理 API 写回配置文件
