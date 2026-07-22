@@ -1,4 +1,4 @@
-## [Unreleased]
+## [v3.0.0] - 2026-07-23
 
 ### 新增
 
@@ -11,6 +11,47 @@
 - **Autopilot 规范模型能力基准** - 模型注册表新增独立 benchmark 领域向量，按渠道质量证据向下折算并写入路由 trace；首批覆盖 Claude Opus 4.8、GPT-5.6 Terra 与 GPT-5.6 Sol
 - **Autopilot 手动 L3 供应商质量探测** - 新增固定 canary、每日预算与 endpoint×model 画像回写，支持 Messages、Chat、Responses、Gemini 上游协议，响应和持久化均不包含明文 Key 或模型原始输出
 - **new-api 多账号管理** - 支持为已有 new-api 订阅添加多个账号（accessToken），后端提供账号 CRUD API，渠道编辑页面可管理账号列表
+- **Autopilot 智能路由引擎（Phase 1-4 全部完成）** - SmartRouter 评分引擎（§5.3 九项公式 + §5.5 派系偏好 + §5.6 价格偏向）、确定性 TaskClassifier + 路由配置/kill switch、shadow 注入与 assist/auto 模式语义转正、EndpointAttemptPolicy（§4.6.2）+ TryUpstreamWithAllKeys、CapabilityFloor + MinQualityTier reasons、enforce model routing policy boundaries、接入模型注册表能力下界与上下文窗口硬约束、Phase 1 收尾接线、Phase 2 剩余5项集成、P1.5 迁移与回滚契约
+- **Autopilot 画像与健康诊断系统** - ProfileStore（内存缓存 + SQLite 异步持久化）、Profiler L1 被动画像推导、HealthAnalyzer L1 被动健康诊断、后台聚合 worker、健康中心只读 API 与前端视图、LocalModelRuntimeProfile 本地运行时画像与探测、LocalCandidateProvider 进入 endpoint 候选池
+- **Autopilot TrustedRoutingAdvisor 与决策追踪** - 五态状态机 + AdvisorHintEffect 路由约束解析、shadow 评估 + 决策记录 + API、画像变更事件推送与前端时间线（Phase 3A）、RoutingDecisionTrace + TraceStore + trace handlers、智能路由诊断面板与自动模型映射诊断预览
+- **Autopilot 时序与限流感知** - TimeBucketMetrics + QualityTrend 检测（§3.10）、RateLimitDiscoverer shadow（§4.5）、GroupChangeDetector 分组变更检测（§3.9）、FastDecay shadow 评分 + 批量查询 + RPM 运行态注入、接线限流信号/时序/分组变更到 Manager 与健康中心 API
+- **Autopilot L2 探测与模型映射** - L2 轻量探测 worker + 每日预算 + 探测队列、模型自动映射闭环（Phase 3B-2）、StabilityTier 晋降级滞后（Phase 3B-3）、L2 探测自愈闭环（Phase 3B-1）、自动发现完成后一致结果自动写入 SupportedModels
+- **Autopilot 订阅与用量画像** - SubscriptionProfile + 驾驶舱聚合 API + 三 store 接线、§3.2.3 订阅级能力共享 + §3.2.4 用量窗口 Phase 1 shadow、订阅中心 provider adapter（余额自动刷新）
+- **Autopilot 人工路由意图** - ManualRoutingIntent（Phase 1 shadow）、参与 SmartRouter 路由（§4.6.4 人工意图执行语义）
+- **Autopilot 真实请求画像与自适应超时** - 基于真实请求画像、TTFB 自适应响应头超时、采集端点响应头延迟画像、跨重启保留 TTFB 画像
+- **Autopilot auto 上线闸门与自动降级** - auto 上线闸门、自动降级、终态渠道降至 assist 队尾
+- **Autopilot A/B 测试** - 低比例统计抽样双发、ABTestConfig.Validate() 补齐负值/越界兜底
+- **Autopilot SLO regression 自动回滚**
+- **Autopilot 本地任务模板系统**
+- **Autopilot 用户自定义标签系统** (Phase 4 Item 1)
+- **Autopilot 成本报表** - 按用户/模型/渠道/key (Phase 4 Item 2)
+- **Autopilot 渠道推荐** (Phase 4 Item 4)
+- **Autopilot 批量渠道管理** - 导入/导出/模板 (Phase 4 Item 5)
+- **Autopilot new-api 订阅集成** - 后端 adapter + 前端
+- **Autopilot 火山方舟套餐用量查询与展示** - 未绑定 Access Key 时回退内置兜底模型清单，兜底模型清单区分 Agent Plan 与 Coding Plan
+- **Autopilot MiniMax Token Plan 用量查询** - MiMo 绑定控制台 Cookie 查询 Token Plan
+- **渠道自动探测与聚合** - 自动探测并聚合多协议渠道、在编辑页展示协议可用模型、自动识别发现协议类型与展示自动探测协议地址
+- **智谱官方渠道自动识别** - 自动识别智谱官方渠道模板，补齐桌面端渠道自动识别模板
+- **快速添加渠道 Provider 模板化** - 选 provider + 输 key 即可创建、per-key baseURL 探测与绑定
+- **多协议渠道统一展示** - 统一展示多协议渠道、按上游协议展示渠道标签、稳定多协议渠道排序
+- **渠道保活验证模块** - 新增渠道保活验证、渠道健康检查配置与持久化
+- **(Key,模型) 组合级限制与定时自动恢复** - failover 新增组合级限制，定时自动恢复
+- **内置模型清单增强** - /v1/models 补充 max_output_tokens (#266)、同步 LiteLLM 能力与 DeepSWE 证据
+- **模型能力基准数据自动更新** - benchmark 自动更新模型能力基准数据
+- **优云智算套餐余量查询** - compshare 绑定优云智算套餐余量查询、同步套餐并发限速
+- **Kimi Code 模型与按 Key 发现**
+- **火山引擎 Agent 与 Coding Plan 自动识别**
+- **自动托管账号持久化层级** - 账号级凭证接口、切换凭证差异更新、聚合旧版托管协议渠道
+- **new-api 安全分组倍率路由**
+- **远程预置更新运行时** - 预置数据集中管理 + 运行时可更新架构（Phase 1）、完成远程预置更新运行时
+- **订阅来源等级只读展示** - 来源等级由来源类型系统推导，改为只读展示
+- **火山引擎与 BytePlus 赞助**
+- **套餐类渠道 Key 行余量摘要补齐多时间窗**
+- **桌面端 autopilot 对齐** - 管理面板+健康中心+骨架（第一波）、cockpit概览+new-api订阅+试用意图（第二波）
+- **桌面端渠道自动探测与复用同步** - 同步渠道自动探测与复用、托管渠道识别模板与徽章、Codex 生图工具权限探测、TTFB 首字节 P95 列、auto 上线闸门与自动降级到桌面端健康中心
+- **Responses 音频 content block 丢弃告警** - converters: Responses 音频 content block 丢弃时输出告警日志
+- **前端 Health Center / Subscriptions / Cockpit 视图**
+- **渠道卡片健康 badge + 来源标签系统（§8.2）**
 
 ### 修复
 
@@ -21,10 +62,86 @@
 - **Autopilot 配置迁移与运行态隔离** - 旧配置块解析或升级失败时回退安全默认值，支持结构体指针叠加，并避免环境急停经管理 API 写回配置文件
 - **辅助路由协议回归** - `assist` 保留无法评分的原候选供 failover，真实路由 trace 回填实际渠道，修复模型不支持错误重试、普通 Key 的模型限制执行、relay 耗尽误限制及 Messages 响应模型字段丢失
 - **new-api 验证失败** - 修复某些 new-api fork（如 Veloera/voapi）要求 `New-API-User` header 导致的 401 错误，新增 VerifyWithFallback 两阶段验证回退逻辑
+- **套餐 Key 恢复边界条件收紧** - P1 收紧恢复条件为 AND 语义、P2 修复 Kimi/火山套餐恢复边界条件
+- **system header 过滤稳定性修复** - 修复 panic、过期误判与误升级问题、字符串形式 system 未过滤 CC header 的问题
+- **Autopilot 替代模型选择优化** - 按任务难度选择替代模型、优先选择更强同档模型、使用渠道模型倍率排序、按能力下限优化排序、避免常规任务过度升级模型、修正多模态模型能力路由
+- **Autopilot 模型发现与画像修复** - 记录模型发现来源与时间、自适应模型解析修正、endpoint metrics identity 对齐、profile model support decisions 遵守、当前有效画像清单对账
+- **Autopilot 路由约束对齐** - scheduler diagnose 与 request profile 对齐、shadow 与自动路由约束对齐、dry-run 与自动路由决策对齐、诊断画像与路由追踪统一
+- **Autopilot 配置迁移与隔离修复** - 自动升级旧版 Autopilot 配置、配置迁移隔离完善、环境急停经管理 API 写回配置文件隔离
+- **火山方舟 Agent Plan 修复** - 探针与协议入口区分、Key 端点验证修复、套餐 Key 验证请求特征对齐、Coding Plan 用量刷新修复、套餐模型发现签名修复
+- **渠道展示与编辑修复** - 托管渠道真实模型范围展示、额度禁用状态与用量展示修正、渠道行展示与官方渠道命名/官网编辑优化、渠道添加与官方渠道编辑流程简化
+- **自动托管渠道编辑精简** - 多轮精简自动托管渠道编辑项、收敛编辑项
+- **Autopilot 端到端流程修复** - auto-add/auto-status 端到端流程、辅助路由协议回归、终态渠道降至 assist 队尾
+- **MiMo 自动发现修复** - 自动发现状态修复、自动发现失败修复、自动添加多协议渠道
+- **桌面端同步修复** - 额度禁用状态与 Key 计数、baseUrl 清理路径、自动渠道命名简化
+- **前端图标注册修复** - mdi-check-all、DeepSeek 余额图标、mdi-connection、ApiKeyManagementSection 缺失 mdi 图标、官方渠道标识图标
+- **前端 TypeScript 编译错误修复**
+- **Compshare system roles 规范化** - messages: normalize Compshare system roles
+- **LLM 统一渠道视图置顶/置底排序修复**
+- **模型定价同步与未配置成本标记**
+- **重新发现轮询识别 failed 状态并展示错误**
+- **拉取渠道模型列表时使用 key 级绑定 baseUrl**
+- **模型能力基准多来源更新与图表生成修复**
+- **熔断引入模型多样性门槛与渠道组合失败熔断**
+- **自动托管渠道官网地址持久化**
+- **快速添加渠道名称预览修复**
+- **最终上游模型日志记录** - logging: record final upstream model
+- **内部元数据泄漏到续轮请求阻止** - responses: 阻止内部元数据泄漏到续轮请求
+- **快速添加前去重 API Key**
+- **渠道自动命名简化与仪表盘轮询合并**
+- **容器后端验证的前端嵌入修复**
+- **baseUrl 清理剔除 /api-keys 创建页路径**
+- **disabled managed credentials 跳过** - routing: skip disabled managed credentials
+- **Claude Code system 指纹与客户端探针特征对齐**
+- **小屏协议地址布局优化与协议名称换行避免**
+- **添加弹窗正文滚动与 usage 控制台路径识别**
+- **Autopilot 按真实协议创建自定义渠道**
+- **Autopilot DeepSeek 官方账号托管完善**
+- **逻辑渠道多协议日志汇总**
+- **按客户端协议持久化画像分类与发现完成后立即持久化**
+- **绑定模型发现结果保留**
+- **官方 provider 凭证池复用与自动托管官方渠道身份标明**
+- **按 endpoint binding 隔离模型调度** - routing: 按 endpoint binding 隔离模型调度
+- **旧版托管协议渠道聚合**
+- **官方渠道改用智能调度**
+- **快速添加成功后关闭弹窗**
+- **content_part 流式事件识别** - responses: 识别 content_part 流式事件
+- **schema 迁移幂等自愈 advisor_decisions.reason 列**
+- **scoreEndpointForKey EndpointUID 与 handlers 层不一致修复**
+- **RateLimitApplier kill switch 测试闭包捕获值拷贝问题**
+- **Responses input item additional_tools 剥离**
+- **未知健康状态徽标颜色调整**
+- **快速添加上游类型选择移除**
+- **黑名单密钥恢复状态提示**
 
 ### 重构
 
 - **订阅中心重构为 Provider 卡片式快捷接入面板** - 移除订阅列表表格展示，改为双栏布局：左侧 Provider 卡片（GitHub Copilot/new-api/手动添加），右侧详情表单；订阅中心只负责接入新订阅
+- **Agent skills 迁移至 .claude/skills** - 通过 symlink 将 agent skills 迁移到 .claude/skills 目录
+- **协议模型可用性 diff 视图重新设计** - frontend: 重新设计协议模型可用性差异视图
+- **Kimi 用量展示简化** - frontend: 简化 Kimi 用量展示以匹配官方 CLI
+
+### 优化
+
+- **路由性能优化** - config: clone only selected upstream；routing: cache request channel snapshots、prefilter incapable managed channels、prefilter channels without usable keys
+
+### 文档
+
+- **Autopilot 设计文档** - 新增同订阅多 Key 能力共享/配额负载均衡(§3.2.3)与用量窗口(§3.2.4)设计、任务域优势矩阵(§5.7)与思考等级差异(§5.8)设计、内置模型清单设计(§4.2.1)、new-api 集成与订阅 Provider Adapter 框架、Phase 3A/3B/4 全部完成状态更新
+- **桌面端文档** - 补充后端发现与端口附着约定
+- **Codex 上游协议变更评估** - 追加 Codex rust-v0.145.0 上游协议变更评估、新增 gpt-5.6 适配与 codex imagegen 上游文生图待办
+- **SignPath 代码签名致谢** - 文档站首页与 README 添加 SignPath 代码签名致谢，logo 放大并链接到官网
+- **Star History 图表更新** - 调整为 Markdown 图片并更新 token
+- **火山引擎推广链接** - README 为火山引擎注册即领 2500 万 Tokens 添加推广链接
+
+### 其他
+
+- **Windows 签名切换至正式证书策略** - ci: 切换 Windows 签名至正式证书策略
+- **Serena 项目配置更新**
+- **Autopilot 日志降噪** - 降低画像落盘成功日志噪声、移除画像推导冗余日志
+- **Codex 0.143.0 upstream check 记录**
+- **Apple Container 隔离验证** - 添加 Apple Container 隔离验证环境
+- **下载按钮改为两行网格布局** - style: 下载按钮改为两行网格布局
 
 ## [v2.9.37] - 2026-07-07
 
