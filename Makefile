@@ -27,7 +27,7 @@ help:
 	@echo ""
 	@echo "$(YELLOW)工具:$(NC)"
 	@echo "  make generate-preset-manifest - 生成预设清单"
-	@echo "  make benchmark-update         - 自动更新模型能力基准数据"
+	@echo "  make benchmark-update         - 更新模型能力基准数据并生成多来源图表"
 	@echo "  make benchmark-update-dry     - 预览基准数据变更（不写入）"
 	@echo "  make benchmark-chart          - 生成能力-成本边界曲线"
 

@@ -10,15 +10,20 @@ import {
   toBenchmarkEvidence as toDeepSWEEvidence,
 } from './deepswe.mjs'
 import {
+  extractTableCacheVersion,
   extractBestPerModel as extractDradarBest,
+  extractLeaderboardFromTable,
   toBenchmarkEvidence as toDradarEvidence,
 } from './dradar.mjs'
 import { extractModelInfo } from './litellm.mjs'
 import {
+  mergeBenchlmData,
   mergeDeepsweData,
   mergeLitellmData,
   validateRegistry,
 } from '../update-benchmark-data.mjs'
+import { buildBenchmarkVisualizationData } from './visualization.mjs'
+import { renderBenchmarkChart, validateVisualizationData } from '../generate-benchmark-chart.mjs'
 
 function emptyReport() {
   return { updated: [], added: [], errors: [], litellmUpdated: [], litellmSkipped: [] }
@@ -46,6 +51,32 @@ test('DeepSWE percentile and cohort use one best row per model', () => {
   assert.equal(evidence.taskCount, 100)
 })
 
+test('benchmark evidence normalizes missing effort to default', () => {
+  const deepEvidence = toDeepSWEEvidence({
+    deepsweModel: 'model-a',
+    score: 0.5,
+    nTasks: 100,
+    reasoningEffort: null,
+  }, [{ score: 0.5 }])
+  const radarEvidence = toDradarEvidence({
+    deepsweModel: 'model-a',
+    passRate: 0.5,
+    cells: 100,
+    bestEffort: null,
+  }, [{ passRate: 0.5 }])
+
+  assert.equal(deepEvidence.effort, 'default')
+  assert.equal(radarEvidence.effort, 'default')
+})
+
+test('CodexRadar table cache version is read from the live page contract', () => {
+  assert.equal(
+    extractTableCacheVersion('var TABLE_CACHE_VERSION = "20260718-discrimination-toggle-2";'),
+    '20260718-discrimination-toggle-2',
+  )
+  assert.throws(() => extractTableCacheVersion('<html></html>'), /TABLE_CACHE_VERSION/)
+})
+
 test('dradar cohort size is model count rather than graded run count', () => {
   const best = extractDradarBest({
     models: [
@@ -57,6 +88,29 @@ test('dradar cohort size is model count rather than graded run count', () => {
 
   assert.equal(evidence.cohortSize, 2)
   assert.equal(evidence.cohortPercentile, 1)
+  assert.equal(evidence.benchmark, 'codexradar')
+  assert.equal(evidence.benchmarkVersion, 'v1')
+})
+
+test('CodexRadar leaderboard aggregation uses strict cell majority', () => {
+  const leaderboard = extractLeaderboardFromTable({
+    cells: {
+      'task-a|gpt-5.6-sol|low': { n: 3, p: 2 },
+      'task-b|gpt-5.6-sol|low': { n: 2, p: 1 },
+      'task-c|gpt-5.6-sol|low': { n: 3, p: 3 },
+      'task-d|ignored|low': { n: 3, p: 3 },
+    },
+  }, { 'gpt-5.6-sol': 'gpt-5.6-sol' })
+
+  assert.deepEqual(leaderboard.models, [{
+    model: 'gpt-5.6-sol',
+    effort: 'low',
+    graded: 8,
+    passed: 6,
+    cells: 3,
+    cells_passed: 2,
+    pass_rate: 2 / 3,
+  }])
 })
 
 test('LiteLLM keeps missing capabilities unknown and maps function calling to toolCalls', () => {
@@ -100,6 +154,77 @@ test('benchmark merge creates a complete valid profile', () => {
   assert.doesNotThrow(() => validateRegistry(registry))
   assert.deepEqual(registry.benchmarkProfiles[0].sources, ['https://deepswe.example/'])
   assert.equal(registry.benchmarkProfiles[0].sharedResults, 4)
+})
+
+test('BenchLM zero comparable categories do not erase valid evidence metadata', () => {
+  const registry = {
+    benchmarkProfiles: [{
+      patterns: ['(?:^|[-/])kimi-k2\\.7-code(?=$|@)'],
+      canonicalModel: 'kimi-k2.7-code',
+      benchmarkEvidence: [{
+        benchmark: 'deepswe',
+        benchmarkVersion: 'v1.1',
+        domain: 'coding',
+        sourceUrl: 'https://deepswe.example/',
+        cohortSize: 16,
+      }],
+      sources: ['https://deepswe.example/'],
+      verifiedAt: '2026-07-21',
+      lane: 'provisional',
+      sharedResults: 16,
+      comparableCategories: 1,
+      totalCategories: 1,
+    }],
+  }
+  mergeBenchlmData(registry, {
+    'kimi-k2.7-code': {
+      overallScore: 55,
+      categoryScores: {},
+      counts: { sharedBenchmarkCount: 18, comparableCategoryCount: 0, totalCategoryCount: 8 },
+      sources: ['https://benchlm.example/compare'],
+    },
+  }, emptyReport(), null)
+
+  const profile = registry.benchmarkProfiles[0]
+  assert.equal(profile.sharedResults, 18)
+  assert.equal(profile.comparableCategories, 1)
+  assert.equal(profile.totalCategories, 8)
+  assert.doesNotThrow(() => validateRegistry(registry))
+})
+
+test('visualization combines DeepSWE, BenchLM and CodexRadar sources', () => {
+  const evidence = (benchmark, benchmarkVersion, rawValue) => ({
+    benchmark,
+    benchmarkVersion,
+    domain: 'coding',
+    metric: 'pass_at_1',
+    rawValue,
+    effort: 'high',
+  })
+  const visualization = buildBenchmarkVisualizationData({
+    modelMap: { source: 'model' },
+    deepsweLeaderboard: { rows: [{
+      model: 'source', reasoning_effort: 'high', pass_at_1: 0.7,
+      mean_cost_usd: 2, median_cost_usd: 1.5,
+    }] },
+    deepsweProfiles: { model: { benchmarkEvidence: [evidence('deepswe', 'v1.1', 0.7)] } },
+    benchlmProfiles: { model: { overallScore: 80, categoryScores: { coding: 75 } } },
+    dradarProfiles: { model: {
+      benchmarkEvidence: [evidence('codexradar', 'v1', 0.6)],
+      efforts: { high: { passRate: 0.6 } },
+      costData: { high: { meanCost: 1, medianCost: 0.8 } },
+    } },
+  })
+
+  assert.deepEqual([...new Set(visualization.data.map(row => row.source))].sort(), ['CodexRadar', 'DeepSWE v1.1'])
+  assert.deepEqual(
+    [...new Set(visualization.comparisons.map(row => row.source))].sort(),
+    ['BenchLM.ai', 'CodexRadar', 'DeepSWE v1.1'],
+  )
+  const validated = validateVisualizationData(visualization)
+  const html = renderBenchmarkChart(validated.rows, validated.comparisons)
+  assert.match(html, /多来源能力比较/)
+  assert.match(html, /BenchLM\.ai/)
 })
 
 test('LiteLLM fills only unknown capabilities', () => {

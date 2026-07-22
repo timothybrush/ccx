@@ -127,6 +127,25 @@ export function methodologyUrl() {
   return `${BASE_URL}/methodology`
 }
 
+function mergeComparisonCounts(current = {}, candidate = {}) {
+  const merged = { ...current, ...candidate }
+  for (const field of [
+    'sharedBenchmarkCount',
+    'sharedCategoryCount',
+    'aOnlyCount',
+    'bOnlyCount',
+    'comparableCategoryCount',
+    'totalCategoryCount',
+  ]) {
+    merged[field] = Math.max(
+      Number.isFinite(current[field]) ? current[field] : 0,
+      Number.isFinite(candidate[field]) ? candidate[field] : 0,
+    )
+  }
+  merged.isCoverageLimited = Boolean(current.isCoverageLimited || candidate.isCoverageLimited)
+  return merged
+}
+
 /**
  * 预定义的对比组合
  * 根据 CCX 注册表中的 benchmarkProfiles，选择有意义的对比
@@ -209,6 +228,8 @@ export async function fetchBenchlmData(modelMap, categoryMap) {
             scoreEvidence: data.scoreEvidence,
             sources: [],
           }
+        } else {
+          result[canonical].counts = mergeComparisonCounts(result[canonical].counts, data.counts)
         }
 
         // 合并 categoryScores (取最大值，因为不同对比可能覆盖不同分类)

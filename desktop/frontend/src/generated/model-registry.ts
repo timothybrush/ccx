@@ -39,7 +39,19 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "medium",
       "high",
       "max"
-    ]
+    ],
+    "capabilities": {
+      "reasoning": true,
+      "vision": true,
+      "toolCalls": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 3,
+      "outputPrice": 15,
+      "inputCacheHitPrice": 0.3
+    }
   },
   "(?:^|[-/])claude-opus-4-6(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "provider": "anthropic",
@@ -80,7 +92,19 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "high",
       "xhigh",
       "max"
-    ]
+    ],
+    "capabilities": {
+      "reasoning": true,
+      "vision": true,
+      "toolCalls": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 25,
+      "inputCacheHitPrice": 0.5
+    }
   },
   "(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "provider": "anthropic",
@@ -94,7 +118,19 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "high",
       "xhigh",
       "max"
-    ]
+    ],
+    "capabilities": {
+      "reasoning": true,
+      "vision": true,
+      "toolCalls": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 2,
+      "outputPrice": 10,
+      "inputCacheHitPrice": 0.19999999999999998
+    }
   },
   "(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "provider": "anthropic",
@@ -108,7 +144,19 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
       "high",
       "xhigh",
       "max"
-    ]
+    ],
+    "capabilities": {
+      "reasoning": true,
+      "vision": true,
+      "toolCalls": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 10,
+      "outputPrice": 50,
+      "inputCacheHitPrice": 1
+    }
   },
   "(?:^|[-/])claude-mythos-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "provider": "anthropic",
@@ -316,7 +364,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -338,7 +396,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -400,7 +468,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     ],
     "capabilities": {
       "vision": true,
-      "toolCalls": true
+      "toolCalls": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
@@ -420,7 +498,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     ],
     "capabilities": {
       "vision": true,
-      "toolCalls": true
+      "toolCalls": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
@@ -440,7 +528,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     ],
     "capabilities": {
       "vision": true,
-      "toolCalls": true
+      "toolCalls": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
@@ -460,7 +558,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     ],
     "capabilities": {
       "vision": true,
-      "toolCalls": true
+      "toolCalls": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 5,
+      "outputPrice": 30,
+      "inputCacheHitPrice": 0.5
     },
     "sources": [
       "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
@@ -482,7 +590,16 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 2.5,
+      "outputPrice": 15,
+      "inputCacheHitPrice": 0.25
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -504,7 +621,16 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 2.5,
+      "outputPrice": 15,
+      "inputCacheHitPrice": 0.25
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -567,7 +693,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 0.75,
+      "outputPrice": 4.5,
+      "inputCacheHitPrice": 0.075
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -588,7 +724,17 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
     "capabilities": {
       "vision": true,
       "toolCalls": true,
-      "jsonMode": true
+      "jsonMode": true,
+      "reasoning": true,
+      "parallelFunctionCalling": true,
+      "webSearch": true
+    },
+    "pricing": {
+      "unit": "per_1m_tokens_usd",
+      "currency": "USD",
+      "inputCacheMissPrice": 0.75,
+      "outputPrice": 4.5,
+      "inputCacheHitPrice": 0.075
     },
     "sources": [
       "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
@@ -1567,208 +1713,352 @@ export const builtinUpstreamModelCapabilities: Record<string, UpstreamModelCapab
 export const builtinModelBenchmarkProfiles: Record<string, ModelBenchmarkProfile> = {
   "(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "claude-opus-4-8",
-    "overallScore": 85,
+    "overallScore": 78.34,
     "categoryScores": {
+      "agentic": 80.3,
+      "coding": 81.1,
       "knowledge": 62.7,
       "math": 53.9,
-      "coding": 76.4,
-      "agentic": 80.3,
       "multimodal": 77
     },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "claude-opus-4.8",
+        "sourceModel": "claude-opus-4-8",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.59,
-        "uncertainty": 0.02,
-        "cohortPercentile": 0.6,
-        "taskCount": 113,
-        "cohortSize": 16,
+        "rawValue": 0.5897435897435898,
+        "uncertainty": 0.01764815347429254,
+        "cohortPercentile": 0.6153846153846154,
+        "taskCount": 111,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
       "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
       "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
-      "https://benchlm.ai/methodology"
+      "https://benchlm.ai/methodology",
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-5",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-fable-5",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-5",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-glm-5-2",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-4"
     ],
-    "verifiedAt": "2026-07-13",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 30,
+    "sharedResults": 43,
     "comparableCategories": 5,
     "totalCategories": 8
   },
   "(?:^|[-/])gpt-5\\.6-terra(?=$|@)": {
     "canonicalModel": "gpt-5.6-terra",
-    "overallScore": 85,
+    "overallScore": 72.57,
     "categoryScores": {
+      "agentic": 87.4,
+      "coding": 63.4,
       "knowledge": 92.9,
       "math": 80.8,
-      "coding": 63.4,
-      "agentic": 87.4,
       "multimodal": 80.7
     },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "gpt-5.6-terra",
+        "sourceModel": "gpt-5-6-terra",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.7,
-        "uncertainty": 0.03,
-        "cohortPercentile": 0.9333333333333333,
+        "rawValue": 0.6962305986696231,
+        "uncertainty": 0.025569389504458404,
+        "cohortPercentile": 0.8461538461538461,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
+      },
+      {
+        "benchmark": "codexradar",
+        "benchmarkVersion": "v1",
+        "sourceModel": "gpt-5.6-terra",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.6696428571428571,
+        "uncertainty": 0,
+        "cohortPercentile": 0.75,
+        "taskCount": 112,
+        "cohortSize": 4,
+        "effort": "ultra",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deng.codexradar.com/",
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
       "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
-      "https://benchlm.ai/methodology"
+      "https://benchlm.ai/methodology",
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-sol",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-5",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-terra",
+      "https://deng.codexradar.com/"
     ],
-    "verifiedAt": "2026-07-13",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 30,
+    "sharedResults": 43,
     "comparableCategories": 5,
     "totalCategories": 8
   },
   "(?:^|[-/])gpt-5\\.6-sol(?=$|@)": {
     "canonicalModel": "gpt-5.6-sol",
-    "overallScore": 86,
+    "overallScore": 81.96,
     "categoryScores": {
+      "agentic": 92,
+      "coding": 64.6,
       "knowledge": 94.6,
       "math": 87.5,
-      "coding": 64.6,
-      "agentic": 92,
       "multimodal": 83
     },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "gpt-5.6-sol",
+        "sourceModel": "gpt-5-6-sol",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.73,
-        "uncertainty": 0.03,
+        "rawValue": 0.7266666666666667,
+        "uncertainty": 0.02829822249837175,
         "cohortPercentile": 1,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
+      },
+      {
+        "benchmark": "codexradar",
+        "benchmarkVersion": "v1",
+        "sourceModel": "gpt-5.6-sol",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.7142857142857143,
+        "uncertainty": 0,
+        "cohortPercentile": 1,
+        "taskCount": 112,
+        "cohortSize": 4,
+        "effort": "max",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deng.codexradar.com/",
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
       "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
-      "https://benchlm.ai/methodology"
+      "https://benchlm.ai/methodology",
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-sol",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-5",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-sol",
+      "https://deng.codexradar.com/"
     ],
-    "verifiedAt": "2026-07-13",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 30,
+    "sharedResults": 43,
     "comparableCategories": 5,
     "totalCategories": 8
   },
   "(?:^|[-/])gpt-5\\.6-luna(?=$|@)": {
     "canonicalModel": "gpt-5.6-luna",
+    "overallScore": 67.17,
+    "categoryScores": {
+      "agentic": 84.1,
+      "coding": 62.7,
+      "knowledge": 92.3,
+      "math": 73.6,
+      "multimodal": 78.4
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "gpt-5.6-luna",
+        "sourceModel": "gpt-5-6-luna",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.67,
-        "uncertainty": 0.04,
-        "cohortPercentile": 0.7333333333333333,
+        "rawValue": 0.671875,
+        "uncertainty": 0.03992001235671055,
+        "cohortPercentile": 0.7692307692307693,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
+      },
+      {
+        "benchmark": "codexradar",
+        "benchmarkVersion": "v1",
+        "sourceModel": "gpt-5.6-luna",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.5982142857142857,
+        "uncertainty": 0,
+        "cohortPercentile": 0.25,
+        "taskCount": 112,
+        "cohortSize": 4,
+        "effort": "max",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deng.codexradar.com/",
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-6-luna",
+      "https://benchlm.ai/compare/gpt-5-6-luna-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-luna",
+      "https://benchlm.ai/methodology",
+      "https://deng.codexradar.com/"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 41,
+    "comparableCategories": 5,
+    "totalCategories": 8
   },
   "(?:^|[-/])gpt-5\\.5(?=$|@)": {
     "canonicalModel": "gpt-5.5",
+    "overallScore": 73.51,
+    "categoryScores": {
+      "agentic": 81.6,
+      "coding": 58.6,
+      "knowledge": 57.8,
+      "math": 47.6,
+      "multimodal": 70.4
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
+        "sourceModel": "gpt-5-5",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.6703539823008849,
+        "uncertainty": 0.06465646340908864,
+        "cohortPercentile": 0.6923076923076923,
+        "taskCount": 113,
+        "cohortSize": 13,
+        "effort": "xhigh",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
+      },
+      {
+        "benchmark": "codexradar",
+        "benchmarkVersion": "v1",
         "sourceModel": "gpt-5.5",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.67,
-        "uncertainty": 0.06,
-        "cohortPercentile": 0.7333333333333333,
-        "taskCount": 113,
-        "cohortSize": 16,
+        "rawValue": 0.6517857142857143,
+        "uncertainty": 0,
+        "cohortPercentile": 0.5,
+        "taskCount": 112,
+        "cohortSize": 4,
         "effort": "xhigh",
         "selectionBasis": "best_available_effort",
-        "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "sourceUrl": "https://deng.codexradar.com/",
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-5",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-5",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-5",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-5",
+      "https://benchlm.ai/compare/gpt-5-5-vs-gpt-5-4",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-5",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+      "https://benchlm.ai/methodology",
+      "https://deng.codexradar.com/"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 43,
+    "comparableCategories": 5,
+    "totalCategories": 8
   },
   "(?:^|[-/])gpt-5\\.4(?:-openai-compact)?(?=$|@)": {
     "canonicalModel": "gpt-5.4",
+    "overallScore": 74.24,
+    "categoryScores": {
+      "agentic": 77.2,
+      "coding": 57.7,
+      "knowledge": 57.6,
+      "math": 42.5,
+      "multimodal": 73.2
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "gpt-5.4",
+        "sourceModel": "gpt-5-4",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.52,
-        "uncertainty": 0.02,
-        "cohortPercentile": 0.3333333333333333,
+        "rawValue": 0.5176991150442478,
+        "uncertainty": 0.015021049567382833,
+        "cohortPercentile": 0.46153846153846156,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "xhigh",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-4",
+      "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-4",
+      "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-4",
+      "https://benchlm.ai/compare/gpt-5-6-luna-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-4",
+      "https://benchlm.ai/compare/gpt-5-5-vs-gpt-5-4",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-4",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+      "https://benchlm.ai/compare/gemini-3-5-flash-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-haiku-4-5-vs-gpt-5-4",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 40,
+    "comparableCategories": 5,
+    "totalCategories": 8
   },
   "(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "claude-fable-5",
+    "overallScore": 83.68,
+    "categoryScores": {
+      "agentic": 84.6,
+      "coding": 89.2,
+      "multimodal": 57.9
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
@@ -1776,28 +2066,44 @@ export const builtinModelBenchmarkProfiles: Record<string, ModelBenchmarkProfile
         "sourceModel": "claude-fable-5",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.7,
-        "uncertainty": 0.04,
-        "cohortPercentile": 0.9333333333333333,
+        "rawValue": 0.6991150442477876,
+        "uncertainty": 0.03244917575471319,
+        "cohortPercentile": 0.9230769230769231,
         "taskCount": 113,
-        "cohortSize": 16,
-        "effort": "max",
+        "cohortSize": 13,
+        "effort": "xhigh",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-fable-5",
+      "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-5",
+      "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-5",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-4",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-terra",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-sol",
+      "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-luna",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 32,
+    "comparableCategories": 3,
+    "totalCategories": 8
   },
   "(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "claude-sonnet-5",
+    "overallScore": 65.32,
+    "categoryScores": {
+      "agentic": 81.9,
+      "coding": 76.7,
+      "knowledge": 57.4,
+      "multimodal": 88.3
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
@@ -1805,198 +2111,420 @@ export const builtinModelBenchmarkProfiles: Record<string, ModelBenchmarkProfile
         "sourceModel": "claude-sonnet-5",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.54,
-        "uncertainty": 0.04,
-        "cohortPercentile": 0.5333333333333333,
+        "rawValue": 0.5384615384615384,
+        "uncertainty": 0.04236916470174386,
+        "cohortPercentile": 0.5384615384615384,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-5",
+      "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-5",
+      "https://benchlm.ai/compare/claude-sonnet-5-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 34,
+    "comparableCategories": 4,
+    "totalCategories": 8
   },
   "(?:^|[-/])claude-sonnet-4-6(?:-thinking)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "claude-sonnet-4-6",
+    "overallScore": 65.07,
+    "categoryScores": {
+      "agentic": 65.2,
+      "coding": 69.1,
+      "knowledge": 66,
+      "math": 26.4,
+      "multimodal": 77.4
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "claude-sonnet-4.6",
+        "sourceModel": "claude-sonnet-4-6",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.3,
-        "uncertainty": 0.04,
-        "cohortPercentile": 0.06666666666666667,
+        "rawValue": 0.29933481152993346,
+        "uncertainty": 0.04092141269189136,
+        "cohortPercentile": 0.15384615384615385,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "high",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/compare/claude-sonnet-5-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-4-6",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 24,
+    "comparableCategories": 5,
+    "totalCategories": 8
   },
   "(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "glm-5.2",
+    "overallScore": 63.96,
+    "categoryScores": {
+      "agentic": 81,
+      "coding": 62.1,
+      "knowledge": 59.6,
+      "math": 95.9
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "glm-5.2",
+        "sourceModel": "glm-5-2",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.44,
-        "uncertainty": 0.02,
-        "cohortPercentile": 0.26666666666666666,
+        "rawValue": 0.43777777777777777,
+        "uncertainty": 0.01725629620580811,
+        "cohortPercentile": 0.38461538461538464,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-glm-5-2",
+      "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-4",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-5",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 36,
+    "comparableCategories": 4,
+    "totalCategories": 8
   },
   "(?:^|[-/])glm-5p2(?=$|@)": {
     "canonicalModel": "glm-5.2",
+    "overallScore": 63.96,
+    "categoryScores": {
+      "agentic": 81,
+      "coding": 62.1,
+      "knowledge": 59.6,
+      "math": 95.9
+    },
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "glm-5.2",
+        "sourceModel": "glm-5-2",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.44,
-        "uncertainty": 0.02,
-        "cohortPercentile": 0.26666666666666666,
+        "rawValue": 0.43777777777777777,
+        "uncertainty": 0.01725629620580811,
+        "cohortPercentile": 0.38461538461538464,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "max",
         "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-glm-5-2",
+      "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-4",
+      "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-5",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
-    "comparableCategories": 1,
-    "totalCategories": 1
+    "sharedResults": 36,
+    "comparableCategories": 4,
+    "totalCategories": 8
   },
   "(?:^|[-/])kimi-k2\\.7(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "kimi-k2.7-code",
+    "overallScore": 55,
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "kimi-k2.7-code",
+        "sourceModel": "kimi-k2-7-code",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.31,
-        "uncertainty": 0.01,
-        "cohortPercentile": 0.13333333333333333,
+        "rawValue": 0.3053097345132743,
+        "uncertainty": 0.005007016522460913,
+        "cohortPercentile": 0.23076923076923078,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "default",
-        "selectionBasis": "published_default",
+        "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
+    "sharedResults": 19,
     "comparableCategories": 1,
-    "totalCategories": 1
+    "totalCategories": 8
   },
   "(?:^|[-/])kimi-k2\\.7-code(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
     "canonicalModel": "kimi-k2.7-code",
+    "overallScore": 55,
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "kimi-k2.7-code",
+        "sourceModel": "kimi-k2-7-code",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.31,
-        "uncertainty": 0.01,
-        "cohortPercentile": 0.13333333333333333,
+        "rawValue": 0.3053097345132743,
+        "uncertainty": 0.005007016522460913,
+        "cohortPercentile": 0.23076923076923078,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "default",
-        "selectionBasis": "published_default",
+        "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
-      "https://deepswe.datacurve.ai/"
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+      "https://benchlm.ai/methodology"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
+    "sharedResults": 19,
     "comparableCategories": 1,
-    "totalCategories": 1
+    "totalCategories": 8
   },
   "(?:^|[-/])kimi-for-coding(?:-highspeed)?(?=$|@)": {
     "canonicalModel": "kimi-k2.7-code",
+    "overallScore": 55,
     "benchmarkEvidence": [
       {
         "benchmark": "deepswe",
         "benchmarkVersion": "v1.1",
-        "sourceModel": "kimi-k2.7-code",
+        "sourceModel": "kimi-k2-7-code",
         "domain": "coding",
         "metric": "pass_at_1",
-        "rawValue": 0.31,
-        "uncertainty": 0.01,
-        "cohortPercentile": 0.13333333333333333,
+        "rawValue": 0.3053097345132743,
+        "uncertainty": 0.005007016522460913,
+        "cohortPercentile": 0.23076923076923078,
         "taskCount": 113,
-        "cohortSize": 16,
+        "cohortSize": 13,
         "effort": "default",
-        "selectionBasis": "published_default",
+        "selectionBasis": "best_available_effort",
         "sourceUrl": "https://deepswe.datacurve.ai/",
-        "capturedAt": "2026-07-18"
+        "capturedAt": "2026-07-22"
+      }
+    ],
+    "sources": [
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+      "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+      "https://benchlm.ai/methodology"
+    ],
+    "verifiedAt": "2026-07-22",
+    "lane": "provisional",
+    "sharedResults": 19,
+    "comparableCategories": 1,
+    "totalCategories": 8
+  },
+  "(?:^|[-/])gemini-3.5-flash(?=$|@)": {
+    "canonicalModel": "gemini-3.5-flash",
+    "overallScore": 64.75,
+    "categoryScores": {
+      "agentic": 77.2,
+      "coding": 53.9,
+      "knowledge": 47.2,
+      "math": 32.9,
+      "multimodal": 83.8
+    },
+    "benchmarkEvidence": [
+      {
+        "benchmark": "deepswe",
+        "benchmarkVersion": "v1.1",
+        "sourceModel": "gemini-3-5-flash",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.37389380530973454,
+        "uncertainty": 0.01787862506784315,
+        "cohortPercentile": 0.3076923076923077,
+        "taskCount": 113,
+        "cohortSize": 13,
+        "effort": "medium",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
+      }
+    ],
+    "sources": [
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/gemini-3-5-flash-vs-claude-haiku-4-5",
+      "https://benchlm.ai/compare/gemini-3-5-flash-vs-gpt-5-4",
+      "https://benchlm.ai/methodology"
+    ],
+    "verifiedAt": "2026-07-22",
+    "lane": "provisional",
+    "sharedResults": 33,
+    "comparableCategories": 5,
+    "totalCategories": 8
+  },
+  "(?:^|[-/])gemini-3.1-pro(?=$|@)": {
+    "canonicalModel": "gemini-3.1-pro",
+    "benchmarkEvidence": [
+      {
+        "benchmark": "deepswe",
+        "benchmarkVersion": "v1.1",
+        "sourceModel": "gemini-3-1-pro-preview",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.11751662971175167,
+        "uncertainty": 0.024885460821025294,
+        "cohortPercentile": 0.07692307692307693,
+        "taskCount": 113,
+        "cohortSize": 13,
+        "effort": "high",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
       }
     ],
     "sources": [
       "https://deepswe.datacurve.ai/"
     ],
-    "verifiedAt": "2026-07-18",
+    "verifiedAt": "2026-07-22",
     "lane": "provisional",
-    "sharedResults": 16,
+    "sharedResults": 13,
     "comparableCategories": 1,
     "totalCategories": 1
+  },
+  "(?:^|[-/])gpt-5\\.4-mini(?=$|@)": {
+    "canonicalModel": "gpt-5.4-mini",
+    "benchmarkEvidence": [
+      {
+        "benchmark": "deepswe",
+        "benchmarkVersion": "v1",
+        "sourceModel": "gpt-5-4-mini",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.24336283185840707,
+        "uncertainty": 0.029621909222176883,
+        "cohortPercentile": 0.5,
+        "taskCount": 113,
+        "cohortSize": 8,
+        "effort": "default",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
+      }
+    ],
+    "sources": [
+      "https://deepswe.datacurve.ai/"
+    ],
+    "verifiedAt": "2026-07-22",
+    "lane": "provisional",
+    "sharedResults": 8,
+    "comparableCategories": 1,
+    "totalCategories": 1
+  },
+  "(?:^|[-/])gemini-3-flash(?=$|@)": {
+    "canonicalModel": "gemini-3-flash",
+    "benchmarkEvidence": [
+      {
+        "benchmark": "deepswe",
+        "benchmarkVersion": "v1",
+        "sourceModel": "gemini-3-flash-preview",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.051622418879056046,
+        "uncertainty": 0.024774168218621773,
+        "cohortPercentile": 0.25,
+        "taskCount": 113,
+        "cohortSize": 8,
+        "effort": "default",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
+      }
+    ],
+    "sources": [
+      "https://deepswe.datacurve.ai/"
+    ],
+    "verifiedAt": "2026-07-22",
+    "lane": "provisional",
+    "sharedResults": 8,
+    "comparableCategories": 1,
+    "totalCategories": 1
+  },
+  "(?:^|[-/])claude-haiku-4.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)": {
+    "canonicalModel": "claude-haiku-4.5",
+    "overallScore": 56.58,
+    "categoryScores": {
+      "coding": 73.3,
+      "math": 4.9
+    },
+    "benchmarkEvidence": [
+      {
+        "benchmark": "deepswe",
+        "benchmarkVersion": "v1",
+        "sourceModel": "claude-haiku-4-5",
+        "domain": "coding",
+        "metric": "pass_at_1",
+        "rawValue": 0.0022123893805309734,
+        "uncertainty": 0.004336203505619588,
+        "cohortPercentile": 0.125,
+        "taskCount": 113,
+        "cohortSize": 8,
+        "effort": "default",
+        "selectionBasis": "best_available_effort",
+        "sourceUrl": "https://deepswe.datacurve.ai/",
+        "capturedAt": "2026-07-22"
+      }
+    ],
+    "sources": [
+      "https://deepswe.datacurve.ai/",
+      "https://benchlm.ai/compare/gemini-3-5-flash-vs-claude-haiku-4-5",
+      "https://benchlm.ai/compare/claude-haiku-4-5-vs-gpt-5-4",
+      "https://benchlm.ai/methodology"
+    ],
+    "verifiedAt": "2026-07-22",
+    "lane": "provisional",
+    "sharedResults": 8,
+    "comparableCategories": 2,
+    "totalCategories": 8
   }
 }

@@ -7,7 +7,8 @@
  * 3. 映射到 CCX 模型注册表
  * 4. 更新 shared/model-registry/ccx_model_registry.json
  * 5. 运行 generate-model-registry.mjs 重新生成代码
- * 6. 输出变更报告
+ * 6. 生成多来源 benchmark 可视化
+ * 7. 输出变更报告
  *
  * 用法：
  *   node scripts/update-benchmark-data.mjs [--dry-run] [--skip-*] [--models <model1,model2>]
@@ -33,13 +34,16 @@ import {
   canonicalModelToPattern,
   deepsweModelToPattern,
 } from './benchmark-sources/mapper.mjs'
-import { fetchDeepsweData } from './benchmark-sources/deepswe.mjs'
+import { fetchDeepsweDataset } from './benchmark-sources/deepswe.mjs'
 import { fetchBenchlmData } from './benchmark-sources/benchlm.mjs'
 import { fetchDradarData, DRADAR_MODEL_MAP } from './benchmark-sources/dradar.mjs'
 import { fetchLitellmModelInfo, LITELLM_MODEL_MAP } from './benchmark-sources/litellm.mjs'
+import { buildBenchmarkVisualizationData } from './benchmark-sources/visualization.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const registryPath = join(root, 'shared/model-registry/ccx_model_registry.json')
+const chartDataPath = '/tmp/benchmark-viz-data.json'
+const chartOutputPath = '/tmp/benchmark-chart.html'
 
 // 命令行参数
 const args = process.argv.slice(2)
@@ -195,7 +199,11 @@ export function mergeBenchlmData(registry, benchlmData, report, models = targetM
       continue
     }
 
+    const categoryCount = Object.keys(data.categoryScores || {}).length
     const idx = findProfileIndex(registry.benchmarkProfiles, canonical)
+    if (idx < 0 && categoryCount === 0) {
+      continue
+    }
     const profile = idx >= 0 ? registry.benchmarkProfiles[idx] : createProfile(canonical)
 
     // 更新 overallScore
@@ -204,15 +212,26 @@ export function mergeBenchlmData(registry, benchlmData, report, models = targetM
     }
 
     // 更新 categoryScores
-    if (Object.keys(data.categoryScores).length > 0) {
+    if (categoryCount > 0) {
       profile.categoryScores = data.categoryScores
     }
 
-    // 更新 counts
+    // 不让缺少可比分组的页面用 0 覆盖其他来源的有效元数据
     if (data.counts) {
-      profile.sharedResults = data.counts.sharedBenchmarkCount
-      profile.comparableCategories = data.counts.comparableCategoryCount
-      profile.totalCategories = data.counts.totalCategoryCount
+      const sharedResults = Number(data.counts.sharedBenchmarkCount) || 0
+      const comparableCategories = Math.max(
+        Number(data.counts.comparableCategoryCount) || 0,
+        categoryCount,
+      )
+      const totalCategories = Number(data.counts.totalCategoryCount) || 0
+      profile.sharedResults = sharedResults > 0 ? sharedResults : Math.max(Number(profile.sharedResults) || 0, 1)
+      profile.comparableCategories = comparableCategories > 0
+        ? comparableCategories
+        : Math.max(Number(profile.comparableCategories) || 0, 1)
+      profile.totalCategories = Math.max(
+        totalCategories > 0 ? totalCategories : Number(profile.totalCategories) || 0,
+        profile.comparableCategories,
+      )
     }
 
     // 更新 sources
@@ -221,6 +240,7 @@ export function mergeBenchlmData(registry, benchlmData, report, models = targetM
       const newSources = [...new Set([...existingSources, ...data.sources])]
       profile.sources = newSources
     }
+    ensureEvidenceProfileMetadata(profile)
 
     // 更新 verifiedAt
     profile.verifiedAt = new Date().toISOString().split('T')[0]
@@ -257,22 +277,18 @@ export function mergeDradarData(registry, dradarData, report, models = targetMod
       profile.benchmarkEvidence = []
     }
 
-    // 移除旧的 deepswe-codexradar 证据（dradar 的 benchmark 是 deepswe，但版本是 codexradar）
+    // 移除当前及旧格式的 codexradar 证据
     profile.benchmarkEvidence = profile.benchmarkEvidence.filter(
-      e => !(e.benchmark === 'deepswe' && e.benchmarkVersion === 'codexradar')
+      e => e.benchmark !== 'codexradar' &&
+        !(e.benchmark === 'deepswe' && e.benchmarkVersion === 'codexradar')
     )
 
     // 添加新的 dradar 证据
     profile.benchmarkEvidence.push(...data.benchmarkEvidence)
     ensureEvidenceProfileMetadata(profile)
 
-    // 添加 cost 数据作为额外字段（如果 profile 支持）
-    if (data.costData && Object.keys(data.costData).length > 0) {
-      if (!profile.costData) {
-        profile.costData = {}
-      }
-      profile.costData = data.costData
-    }
+    // 成本明细仅用于临时图表输入，不属于 ModelBenchmarkProfile 注册表结构
+    delete profile.costData
 
     // 更新 verifiedAt
     profile.verifiedAt = new Date().toISOString().split('T')[0]
@@ -421,6 +437,19 @@ function runCodeGeneration() {
   }
 }
 
+function generateBenchmarkChart(data) {
+  atomicWrite(chartDataPath, JSON.stringify(data, null, 2) + '\n')
+  console.log('\n[chart] Generating multi-source benchmark chart...')
+  execFileSync('node', [
+    join(root, 'scripts/generate-benchmark-chart.mjs'),
+    '--input', chartDataPath,
+    '--output', chartOutputPath,
+  ], {
+    stdio: 'inherit',
+    cwd: root,
+  })
+}
+
 function saveAndGenerateAtomically(registry) {
   const trackedPaths = [registryPath, ...generatedPaths]
   const snapshots = new Map(
@@ -470,13 +499,21 @@ export async function main() {
     litellmUpdated: [],
     litellmSkipped: [],
   }
+  const visualizationSources = {
+    deepsweProfiles: {},
+    deepsweLeaderboard: null,
+    benchlmProfiles: {},
+    dradarProfiles: {},
+  }
 
   // 抓取 deepswe 数据
   if (!skipDeepswe) {
     try {
       console.log('\n--- Fetching deepswe data ---')
-      const deepsweData = await fetchDeepsweData(DEEPSWE_MODEL_MAP)
-      mergeDeepsweData(registry, deepsweData, report)
+      const deepsweDataset = await fetchDeepsweDataset(DEEPSWE_MODEL_MAP)
+      visualizationSources.deepsweProfiles = deepsweDataset.profiles
+      visualizationSources.deepsweLeaderboard = deepsweDataset.liveLeaderboard
+      mergeDeepsweData(registry, deepsweDataset.profiles, report)
     } catch (err) {
       report.errors.push({ source: 'deepswe', error: err.message })
       console.error('[deepswe] Failed:', err.message)
@@ -488,6 +525,7 @@ export async function main() {
     try {
       console.log('\n--- Fetching benchlm.ai data ---')
       const benchlmData = await fetchBenchlmData(BENCHLM_MODEL_MAP, BENCHLM_CATEGORY_MAP)
+      visualizationSources.benchlmProfiles = benchlmData
       mergeBenchlmData(registry, benchlmData, report)
     } catch (err) {
       report.errors.push({ source: 'benchlm', error: err.message })
@@ -500,6 +538,7 @@ export async function main() {
     try {
       console.log('\n--- Fetching dradar (codexradar) data ---')
       const dradarData = await fetchDradarData(DRADAR_MODEL_MAP)
+      visualizationSources.dradarProfiles = dradarData
       mergeDradarData(registry, dradarData, report)
     } catch (err) {
       report.errors.push({ source: 'dradar', error: err.message })
@@ -533,6 +572,17 @@ export async function main() {
     console.log(`[save] Registry and generated code updated atomically`)
   } else {
     console.log('\n--- DRY RUN: No changes saved ---')
+  }
+
+  const visualizationData = buildBenchmarkVisualizationData({
+    ...visualizationSources,
+    modelMap: DEEPSWE_MODEL_MAP,
+    models: targetModels,
+  })
+  if (visualizationData.data.length > 0 || visualizationData.comparisons.length > 0) {
+    generateBenchmarkChart(visualizationData)
+  } else {
+    console.log('\n[chart] No benchmark data available; chart generation skipped')
   }
 
   // 输出报告

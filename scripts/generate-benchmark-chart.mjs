@@ -14,19 +14,26 @@ function optionValue(args, name, fallback) {
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback
 }
 
-function validateRows(raw) {
+export function validateVisualizationData(raw) {
   if (!raw || !Array.isArray(raw.data)) throw new Error('输入文件缺少 data 数组')
   const rows = raw.data.filter(row => (
     row && typeof row.model === 'string' && typeof row.source === 'string'
       && Number.isFinite(row.pass_rate)
       && (Number.isFinite(row.mean_cost) || Number.isFinite(row.median_cost))
   ))
-  if (rows.length === 0) throw new Error('输入文件没有可绘制的 benchmark 数据')
-  return rows
+  const comparisons = (Array.isArray(raw.comparisons) ? raw.comparisons : []).filter(row => (
+    row && typeof row.model === 'string' && typeof row.source === 'string'
+      && typeof row.category === 'string' && Number.isFinite(row.score)
+  ))
+  if (rows.length === 0 && comparisons.length === 0) {
+    throw new Error('输入文件没有可绘制的 benchmark 数据')
+  }
+  return { rows, comparisons }
 }
 
-export function renderBenchmarkChart(rows) {
+export function renderBenchmarkChart(rows, comparisons = []) {
   const serializedRows = JSON.stringify(rows).replaceAll('<', '\\u003c')
+  const serializedComparisons = JSON.stringify(comparisons).replaceAll('<', '\\u003c')
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -119,6 +126,16 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
 .legend { display: flex; flex-wrap: wrap; gap: 7px 15px; min-height: 24px; margin: 4px 0 20px; color: var(--muted); font-size: 11px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-line { width: 17px; height: 3px; border-radius: 2px; }
+.comparison-section { margin: 28px 0 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.comparison-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.section-note { max-width: 720px; margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.comparison-chart .comparison-row { stroke: var(--grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.comparison-chart .comparison-range { stroke: var(--border); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.comparison-chart .comparison-point { stroke: var(--surface); stroke-width: 1.5; cursor: crosshair; vector-effect: non-scaling-stroke; }
+.comparison-chart .comparison-value { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.comparison-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+#comparison-summary { color: var(--muted); font-size: 11px; }
+.hidden { display: none !important; }
 .table-section { border-top: 1px solid var(--border); padding-top: 14px; }
 .table-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 h2 { margin: 0; font-size: 15px; font-weight: 500; }
@@ -140,6 +157,7 @@ tbody tr:hover { background: var(--accent-soft); }
   header { display: block; }
   #summary { margin-top: 6px; text-align: left; }
   .controls { align-items: stretch; gap: 12px; }
+  .comparison-heading, .comparison-meta { align-items: stretch; flex-direction: column; }
   .control { flex: 1 1 140px; }
   .segmented { display: flex; }
   .segmented button { flex: 1; }
@@ -193,6 +211,33 @@ tbody tr:hover { background: var(--accent-soft); }
     <div class="tooltip" id="tooltip" role="status"></div>
   </section>
   <div class="legend" id="legend" aria-label="模型图例"></div>
+  <section class="comparison-section" id="comparison-section">
+    <div class="comparison-heading">
+      <div>
+        <h2>多来源能力比较</h2>
+        <p class="section-note">按同一能力类别展示 BenchLM.ai、DeepSWE 与 CodexRadar 的原始分数。不同基准的任务集和评分口径不同，仅用于观察来源内相对位置。</p>
+      </div>
+      <label class="control" for="comparison-category-control">
+        <span class="control-label">能力类别</span>
+        <select id="comparison-category-control"></select>
+      </label>
+    </div>
+    <div class="chart-shell" id="comparison-shell">
+      <svg class="benchmark-chart comparison-chart" id="comparison-chart" role="img" aria-labelledby="comparison-title comparison-description">
+        <title id="comparison-title">多来源模型能力分数比较</title>
+        <desc id="comparison-description">同一模型在不同 benchmark 来源中的原始能力分数。</desc>
+        <g id="comparison-grid"></g>
+        <g id="comparison-axes"></g>
+        <g id="comparison-ranges"></g>
+        <g id="comparison-points"></g>
+      </svg>
+      <div class="tooltip" id="comparison-tooltip" role="status"></div>
+    </div>
+    <div class="comparison-meta">
+      <div class="legend" id="comparison-legend" aria-label="数据来源图例"></div>
+      <div id="comparison-summary" aria-live="polite"></div>
+    </div>
+  </section>
   <section class="table-section">
     <div class="table-heading"><h2>当前范围</h2><span id="table-count"></span></div>
     <table>
@@ -207,6 +252,7 @@ tbody tr:hover { background: var(--accent-soft); }
 </main>
 <script>
 const RAW_ROWS = ${serializedRows};
+const COMPARISON_ROWS = ${serializedComparisons};
 const state = { metric: 'mean_cost', range: 'focus', source: 'all' };
 const effortRank = new Map([['low', 0], ['medium', 1], ['high', 2], ['xhigh', 3], ['max', 4]]);
 const palette = Array.from({ length: 10 }, (_, index) => 'var(--series-' + (index + 1) + ')');
@@ -215,6 +261,15 @@ const colors = new Map(modelNames.map((model, index) => [model, palette[index % 
 const svg = document.getElementById('chart');
 const shell = document.getElementById('chart-shell');
 const tooltip = document.getElementById('tooltip');
+const comparisonSvg = document.getElementById('comparison-chart');
+const comparisonShell = document.getElementById('comparison-shell');
+const comparisonTooltip = document.getElementById('comparison-tooltip');
+const comparisonSources = [...new Set(COMPARISON_ROWS.map(row => row.source))].sort();
+const comparisonColors = new Map(comparisonSources.map((source, index) => [source, palette[index % palette.length]]));
+const categoryLabels = {
+  overall: '综合', knowledge: '知识', math: '数学', coding: '编程', agentic: '智能体', multimodal: '多模态',
+};
+const comparisonState = { category: null };
 const ns = 'http://www.w3.org/2000/svg';
 let geometry = null;
 
@@ -333,13 +388,14 @@ function renderTrajectories(rows, g) {
   container.replaceChildren();
   const groups = new Map();
   rows.forEach(row => {
-    if (!groups.has(row.model)) groups.set(row.model, []);
-    groups.get(row.model).push(row);
+    const key = row.model + '|' + row.source;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
   });
-  groups.forEach((points, model) => {
+  groups.forEach(points => {
     points.sort((a, b) => (effortRank.get(a.effort) ?? 99) - (effortRank.get(b.effort) ?? 99));
     if (points.length < 2) return;
-    container.append(svgNode('path', { class: 'trajectory', d: linePath(points, g.x, g.y), stroke: colors.get(model) }));
+    container.append(svgNode('path', { class: 'trajectory', d: linePath(points, g.x, g.y), stroke: colors.get(points[0].model) }));
   });
 }
 
@@ -464,7 +520,7 @@ function update() {
   if (!allRows.length) return;
   const g = setGeometry(allRows);
   const visibleRows = allRows.filter(row => row.cost <= g.xMax + 1e-9);
-  const frontier = paretoFrontier(allRows);
+  const frontier = state.source === 'all' && sources.length > 1 ? [] : paretoFrontier(allRows);
   const visibleFrontier = frontier.filter(row => row.cost <= g.xMax + 1e-9);
   const frontierKeys = new Set(frontier.map(row => row.key));
   renderAxes(g);
@@ -476,8 +532,122 @@ function update() {
   renderTable(visibleRows, frontierKeys);
   const hidden = allRows.length - visibleRows.length;
   const modelCount = new Set(visibleRows.map(row => row.model)).size;
-  document.getElementById('summary').textContent = visibleRows.length + ' 个点 · ' + modelCount + ' 个模型 · ' + visibleFrontier.length + ' 个 Pareto 点' + (hidden ? ' · 隐藏 ' + hidden + ' 个高成本点' : '');
+  const frontierSummary = frontier.length > 0
+    ? ' · ' + visibleFrontier.length + ' 个 Pareto 点'
+    : (sources.length > 1 ? ' · 跨来源不计算 Pareto' : '');
+  document.getElementById('summary').textContent = visibleRows.length + ' 个点 · ' + modelCount + ' 个模型' + frontierSummary + (hidden ? ' · 隐藏 ' + hidden + ' 个高成本点' : '');
   tooltip.classList.remove('visible');
+}
+
+function comparisonCategoryLabel(category) {
+  return categoryLabels[category] || category;
+}
+
+function currentComparisonRows() {
+  return COMPARISON_ROWS
+    .filter(row => row.category === comparisonState.category)
+    .filter(row => Number.isFinite(row.score) && row.score >= 0 && row.score <= 100);
+}
+
+function renderComparisonLegend(rows) {
+  const legend = document.getElementById('comparison-legend');
+  legend.replaceChildren();
+  [...new Set(rows.map(row => row.source))].sort().forEach(source => {
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    const swatch = document.createElement('span');
+    swatch.className = 'legend-line';
+    swatch.style.background = comparisonColors.get(source);
+    const label = document.createElement('span');
+    label.textContent = source;
+    item.append(swatch, label);
+    legend.append(item);
+  });
+}
+
+function showComparisonTooltip(row, pointX, pointY, g) {
+  const effort = row.effort ? ' · ' + escapeHtml(row.effort) : '';
+  comparisonTooltip.innerHTML = '<strong>' + escapeHtml(row.model) + '</strong>'
+    + '<div class="tooltip-line">' + escapeHtml(row.source) + effort + '</div>'
+    + '<div class="tooltip-line">' + escapeHtml(comparisonCategoryLabel(row.category)) + ' ' + row.score.toFixed(1) + '</div>';
+  comparisonTooltip.classList.add('visible');
+  const shellRect = comparisonShell.getBoundingClientRect();
+  const svgRect = comparisonSvg.getBoundingClientRect();
+  const anchorX = svgRect.left - shellRect.left + pointX * svgRect.width / g.width;
+  const anchorY = svgRect.top - shellRect.top + pointY * svgRect.height / g.height;
+  const tooltipRect = comparisonTooltip.getBoundingClientRect();
+  comparisonTooltip.style.left = Math.min(comparisonShell.clientWidth - tooltipRect.width - 6, Math.max(6, anchorX + 12)) + 'px';
+  comparisonTooltip.style.top = Math.min(comparisonShell.clientHeight - tooltipRect.height - 6, Math.max(6, anchorY - tooltipRect.height - 10)) + 'px';
+}
+
+function updateComparison() {
+  const rows = currentComparisonRows();
+  if (!rows.length) return;
+
+  const grouped = new Map();
+  rows.forEach(row => {
+    if (!grouped.has(row.model)) grouped.set(row.model, []);
+    grouped.get(row.model).push(row);
+  });
+  const models = [...grouped.keys()].sort((a, b) => (
+    Math.max(...grouped.get(b).map(row => row.score)) - Math.max(...grouped.get(a).map(row => row.score)) || a.localeCompare(b)
+  ));
+  const width = Math.max(300, Math.round(comparisonShell.clientWidth));
+  const margin = { top: 28, right: 52, bottom: 44, left: width < 560 ? 122 : 190 };
+  const rowHeight = width < 560 ? 30 : 34;
+  const height = Math.max(250, margin.top + margin.bottom + models.length * rowHeight);
+  const plotWidth = Math.max(140, width - margin.left - margin.right);
+  const x = value => margin.left + value / 100 * plotWidth;
+  const y = index => margin.top + index * rowHeight + rowHeight / 2;
+  const g = { width, height, margin, plotWidth, rowHeight, x, y };
+
+  comparisonSvg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+  comparisonSvg.style.height = height + 'px';
+  const grid = document.getElementById('comparison-grid');
+  const axes = document.getElementById('comparison-axes');
+  const ranges = document.getElementById('comparison-ranges');
+  const points = document.getElementById('comparison-points');
+  grid.replaceChildren();
+  axes.replaceChildren();
+  ranges.replaceChildren();
+  points.replaceChildren();
+
+  [0, 20, 40, 60, 80, 100].forEach(value => {
+    const pointX = x(value);
+    grid.append(svgNode('line', { class: 'grid-line', x1: pointX, x2: pointX, y1: margin.top, y2: height - margin.bottom }));
+    axes.append(svgNode('text', { class: 'axis-text', x: pointX, y: height - 17, 'text-anchor': 'middle' }, String(value)));
+  });
+  axes.append(svgNode('text', { class: 'axis-title', x: margin.left + plotWidth / 2, y: height - 2, 'text-anchor': 'middle' }, '原始分数（0–100）'));
+
+  models.forEach((model, modelIndex) => {
+    const modelRows = grouped.get(model).sort((a, b) => a.source.localeCompare(b.source));
+    const centerY = y(modelIndex);
+    grid.append(svgNode('line', { class: 'comparison-row', x1: margin.left, x2: margin.left + plotWidth, y1: centerY, y2: centerY }));
+    axes.append(svgNode('text', { class: 'axis-text', x: margin.left - 10, y: centerY + 4, 'text-anchor': 'end' }, model));
+    if (modelRows.length > 1) {
+      const scores = modelRows.map(row => row.score);
+      ranges.append(svgNode('line', {
+        class: 'comparison-range', x1: x(Math.min(...scores)), x2: x(Math.max(...scores)), y1: centerY, y2: centerY,
+      }));
+    }
+    modelRows.forEach((row, sourceIndex) => {
+      const offset = (sourceIndex - (modelRows.length - 1) / 2) * 8;
+      const pointX = x(row.score);
+      const pointY = centerY + offset;
+      const circle = svgNode('circle', {
+        class: 'comparison-point', cx: pointX, cy: pointY, r: 5, fill: comparisonColors.get(row.source),
+      });
+      circle.append(svgNode('title', {}, row.model + ' · ' + row.source + ' · ' + row.score.toFixed(1)));
+      circle.addEventListener('mouseenter', () => showComparisonTooltip(row, pointX, pointY, g));
+      circle.addEventListener('mouseleave', () => comparisonTooltip.classList.remove('visible'));
+      points.append(circle);
+      points.append(svgNode('text', { class: 'comparison-value', x: pointX + 8, y: pointY + 3 }, row.score.toFixed(1)));
+    });
+  });
+
+  renderComparisonLegend(rows);
+  document.getElementById('comparison-summary').textContent = models.length + ' 个模型 · ' + new Set(rows.map(row => row.source)).size + ' 个来源';
+  comparisonTooltip.classList.remove('visible');
 }
 
 function bindSegmented(id, field) {
@@ -501,8 +671,37 @@ const sources = [...new Set(RAW_ROWS.map(row => row.source))].sort();
 sourceControl.addEventListener('change', () => { state.source = sourceControl.value; update(); });
 bindSegmented('metric-control', 'metric');
 bindSegmented('range-control', 'range');
-new ResizeObserver(() => update()).observe(shell);
-update();
+if (RAW_ROWS.length > 0) {
+  new ResizeObserver(() => update()).observe(shell);
+  update();
+}
+
+const comparisonSection = document.getElementById('comparison-section');
+const comparisonCategoryControl = document.getElementById('comparison-category-control');
+const categoryOrder = ['coding', 'overall', 'agentic', 'knowledge', 'math', 'multimodal'];
+const comparisonCategories = [...new Set(COMPARISON_ROWS.map(row => row.category))]
+  .sort((a, b) => {
+    const rankA = categoryOrder.indexOf(a);
+    const rankB = categoryOrder.indexOf(b);
+    return (rankA < 0 ? 99 : rankA) - (rankB < 0 ? 99 : rankB) || a.localeCompare(b);
+  });
+if (comparisonCategories.length === 0) {
+  comparisonSection.classList.add('hidden');
+} else {
+  comparisonState.category = comparisonCategories[0];
+  comparisonCategories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = comparisonCategoryLabel(category);
+    comparisonCategoryControl.append(option);
+  });
+  comparisonCategoryControl.addEventListener('change', () => {
+    comparisonState.category = comparisonCategoryControl.value;
+    updateComparison();
+  });
+  new ResizeObserver(() => updateComparison()).observe(comparisonShell);
+  updateComparison();
+}
 </script>
 </body>
 </html>
@@ -514,9 +713,9 @@ async function main() {
   const input = resolve(optionValue(args, '--input', DEFAULT_INPUT))
   const output = resolve(optionValue(args, '--output', DEFAULT_OUTPUT))
   const raw = JSON.parse(await readFile(input, 'utf8'))
-  const rows = validateRows(raw)
-  await writeFile(output, renderBenchmarkChart(rows), 'utf8')
-  console.log(`已生成 ${output}（${rows.length} 个数据点）`)
+  const { rows, comparisons } = validateVisualizationData(raw)
+  await writeFile(output, renderBenchmarkChart(rows, comparisons), 'utf8')
+  console.log(`已生成 ${output}（${rows.length} 个成本点，${comparisons.length} 个多来源比较点）`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

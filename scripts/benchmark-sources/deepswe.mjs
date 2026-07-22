@@ -152,10 +152,75 @@ export function toBenchmarkEvidence(modelData, cohortModels, benchmarkVersion = 
     cohortPercentile: percentile,
     taskCount: modelData.nTasks,
     cohortSize: cohortModels.length,
-    effort: modelData.reasoningEffort,
+    effort: modelData.reasoningEffort || 'default',
     selectionBasis: 'best_available_effort',
     sourceUrl: `${BASE_URL}/`,
     capturedAt: new Date().toISOString().split('T')[0],
+  }
+}
+
+function buildDeepsweProfiles(v11Data, v1Data, modelMap) {
+  const result = {}
+
+  // 处理 v1.1 (live leaderboard)
+  if (v11Data?.rows) {
+    const bestV11 = extractBestPerModel(v11Data, modelMap)
+    for (const model of bestV11) {
+      const evidence = toBenchmarkEvidence(model, bestV11, 'v1.1')
+      if (!result[model.canonicalModel]) {
+        result[model.canonicalModel] = { benchmarkEvidence: [], deepsweMeta: {} }
+      }
+      result[model.canonicalModel].benchmarkEvidence.push(evidence)
+      result[model.canonicalModel].deepsweMeta = {
+        deepsweModel: model.deepsweModel,
+        harness: model.harness,
+        reasoningEffort: model.reasoningEffort,
+        passAt4: model.passAt4,
+        ciLo: model.ciLo,
+        ciHi: model.ciHi,
+        nRuns: model.nRuns,
+      }
+    }
+  }
+
+  // 处理 v1 (frozen, 作为参考)
+  if (v1Data?.rows) {
+    const bestV1 = extractBestPerModel(v1Data, modelMap)
+    for (const model of bestV1) {
+      if (!result[model.canonicalModel]) {
+        result[model.canonicalModel] = { benchmarkEvidence: [], deepsweMeta: {} }
+      }
+      // v1 数据作为补充，如果 v1.1 没有该模型的数据则添加
+      const existingEvidence = result[model.canonicalModel].benchmarkEvidence.find(
+        e => e.benchmark === 'deepswe' && e.benchmarkVersion === 'v1.1'
+      )
+      if (!existingEvidence) {
+        const evidence = toBenchmarkEvidence(model, bestV1, 'v1')
+        result[model.canonicalModel].benchmarkEvidence.push(evidence)
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * 抓取注册表数据与绘图所需的 live leaderboard，避免同一次更新重复请求。
+ * @param {Object} modelMap - deepswe 模型名 -> CCX canonicalModel 映射
+ * @returns {Promise<{profiles: Object, liveLeaderboard: Object}>}
+ */
+export async function fetchDeepsweDataset(modelMap) {
+  try {
+    const [v11Data, v1Data] = await Promise.all([
+      fetchLeaderboard('v1.1'),
+      fetchLeaderboard('v1').catch(() => null), // v1 是 frozen，可能不可用
+    ])
+    const profiles = buildDeepsweProfiles(v11Data, v1Data, modelMap)
+    console.log(`[deepswe] Extracted data for ${Object.keys(profiles).length} models`)
+    return { profiles, liveLeaderboard: v11Data }
+  } catch (err) {
+    console.error(`[deepswe] Failed to fetch data:`, err.message)
+    throw err
   }
 }
 
@@ -165,57 +230,6 @@ export function toBenchmarkEvidence(modelData, cohortModels, benchmarkVersion = 
  * @returns {Promise<Object>} - {canonicalModel: {benchmarkEvidence, deepsweMeta}}
  */
 export async function fetchDeepsweData(modelMap) {
-  try {
-    const [v11Data, v1Data] = await Promise.all([
-      fetchLeaderboard('v1.1'),
-      fetchLeaderboard('v1').catch(() => null), // v1 是 frozen，可能不可用
-    ])
-
-    const result = {}
-
-    // 处理 v1.1 (live leaderboard)
-    if (v11Data?.rows) {
-      const bestV11 = extractBestPerModel(v11Data, modelMap)
-      for (const model of bestV11) {
-        const evidence = toBenchmarkEvidence(model, bestV11, 'v1.1')
-        if (!result[model.canonicalModel]) {
-          result[model.canonicalModel] = { benchmarkEvidence: [], deepsweMeta: {} }
-        }
-        result[model.canonicalModel].benchmarkEvidence.push(evidence)
-        result[model.canonicalModel].deepsweMeta = {
-          deepsweModel: model.deepsweModel,
-          harness: model.harness,
-          reasoningEffort: model.reasoningEffort,
-          passAt4: model.passAt4,
-          ciLo: model.ciLo,
-          ciHi: model.ciHi,
-          nRuns: model.nRuns,
-        }
-      }
-    }
-
-    // 处理 v1 (frozen, 作为参考)
-    if (v1Data?.rows) {
-      const bestV1 = extractBestPerModel(v1Data, modelMap)
-      for (const model of bestV1) {
-        if (!result[model.canonicalModel]) {
-          result[model.canonicalModel] = { benchmarkEvidence: [], deepsweMeta: {} }
-        }
-        // v1 数据作为补充，如果 v1.1 没有该模型的数据则添加
-        const existingEvidence = result[model.canonicalModel].benchmarkEvidence.find(
-          e => e.benchmark === 'deepswe' && e.benchmarkVersion === 'v1.1'
-        )
-        if (!existingEvidence) {
-          const evidence = toBenchmarkEvidence(model, bestV1, 'v1')
-          result[model.canonicalModel].benchmarkEvidence.push(evidence)
-        }
-      }
-    }
-
-    console.log(`[deepswe] Extracted data for ${Object.keys(result).length} models`)
-    return result
-  } catch (err) {
-    console.error(`[deepswe] Failed to fetch data:`, err.message)
-    throw err
-  }
+  const { profiles } = await fetchDeepsweDataset(modelMap)
+  return profiles
 }

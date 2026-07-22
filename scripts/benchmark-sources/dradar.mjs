@@ -26,6 +26,28 @@ export const DRADAR_MODEL_MAP = {
 }
 
 const BASE_URL = 'https://api.codexradar.com'
+const SITE_URL = 'https://deng.codexradar.com/'
+const TABLE_FETCH_TIMEOUT_MS = 45_000
+
+export function extractTableCacheVersion(html) {
+  const match = String(html).match(/TABLE_CACHE_VERSION\s*=\s*["']([^"']+)["']/)
+  if (!match?.[1]) throw new Error('TABLE_CACHE_VERSION not found on CodexRadar site')
+  return match[1]
+}
+
+async function fetchTableCacheVersion() {
+  console.log(`[dradar] Fetching ${SITE_URL} for table cache version`)
+  const resp = await fetchWithTimeout(SITE_URL, {
+    headers: {
+      'User-Agent': 'ccx-benchmark-updater/1.0',
+      Accept: 'text/html',
+    },
+  })
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} ${resp.statusText} for ${SITE_URL}`)
+  }
+  return extractTableCacheVersion(await resp.text())
+}
 
 /**
  * 获取 dradar leaderboard 数据
@@ -55,7 +77,8 @@ export async function fetchLeaderboard() {
  * @returns {Promise<Object>}
  */
 export async function fetchTable() {
-  const url = `${BASE_URL}/api/v1/table?ui=v1`
+  const cacheVersion = await fetchTableCacheVersion()
+  const url = `${BASE_URL}/api/v1/table?ui=${encodeURIComponent(cacheVersion)}`
 
   console.log(`[dradar] Fetching ${url}`)
 
@@ -64,7 +87,7 @@ export async function fetchTable() {
       'User-Agent': 'ccx-benchmark-updater/1.0',
       Accept: 'application/json',
     },
-  })
+  }, TABLE_FETCH_TIMEOUT_MS)
 
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status} ${resp.statusText} for ${url}`)
@@ -123,6 +146,45 @@ export function extractBestPerModel(data, modelMap) {
   }
 
   return result
+}
+
+/**
+ * 从版本化 table 直接聚合 leaderboard，避免额外请求冷启动的 /leaderboard。
+ * table 的每个 cell 代表一个任务投票，严格多数通过才算 cells_passed。
+ */
+export function extractLeaderboardFromTable(data, modelMap) {
+  const aggregates = new Map()
+  for (const [key, cell] of Object.entries(data?.cells || {})) {
+    const [taskId, dradarModel, effort] = key.split('|')
+    const canonical = modelMap[dradarModel]
+    const graded = Number(cell?.n)
+    const passed = Number(cell?.p)
+    if (!taskId || !canonical || !effort || !Number.isFinite(graded) || graded <= 0) continue
+
+    const aggregateKey = `${canonical}|${effort}`
+    if (!aggregates.has(aggregateKey)) {
+      aggregates.set(aggregateKey, {
+        model: dradarModel,
+        effort,
+        graded: 0,
+        passed: 0,
+        cells: 0,
+        cells_passed: 0,
+      })
+    }
+    const aggregate = aggregates.get(aggregateKey)
+    aggregate.graded += graded
+    aggregate.passed += Number.isFinite(passed) ? passed : 0
+    aggregate.cells += 1
+    if (Number.isFinite(passed) && passed * 2 > graded) aggregate.cells_passed += 1
+  }
+
+  return {
+    models: [...aggregates.values()].map(aggregate => ({
+      ...aggregate,
+      pass_rate: aggregate.cells > 0 ? aggregate.cells_passed / aggregate.cells : 0,
+    })),
+  }
 }
 
 /**
@@ -200,8 +262,8 @@ export function toBenchmarkEvidence(modelData, allModels) {
   const percentile = allRates.length > 0 ? atOrBelow / allRates.length : 0
 
   return {
-    benchmark: 'deepswe',
-    benchmarkVersion: 'codexradar',
+    benchmark: 'codexradar',
+    benchmarkVersion: 'v1',
     sourceModel: modelData.deepsweModel,
     domain: 'coding',
     metric: 'pass_at_1',
@@ -210,7 +272,7 @@ export function toBenchmarkEvidence(modelData, allModels) {
     cohortPercentile: percentile,
     taskCount: modelData.cells,
     cohortSize: allModels.length,
-    effort: modelData.bestEffort,
+    effort: modelData.bestEffort || 'default',
     selectionBasis: 'best_available_effort',
     sourceUrl: 'https://deng.codexradar.com/',
     capturedAt: new Date().toISOString().split('T')[0],
@@ -224,13 +286,14 @@ export function toBenchmarkEvidence(modelData, allModels) {
  */
 export async function fetchDradarData(modelMap) {
   try {
-    const [leaderboard, table] = await Promise.all([
-      fetchLeaderboard(),
-      fetchTable().catch(() => null), // table 可能不可用
-    ])
+    const table = await fetchTable()
+    const leaderboard = extractLeaderboardFromTable(table, modelMap)
 
     const bestPerModel = extractBestPerModel(leaderboard, modelMap)
-    const costData = table ? extractCostData(table, modelMap) : {}
+    const costData = extractCostData(table, modelMap)
+    if (Object.keys(costData).length === 0) {
+      throw new Error('table response contains no mapped cost data')
+    }
 
     const result = {}
 
