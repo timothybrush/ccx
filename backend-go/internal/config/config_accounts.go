@@ -1123,26 +1123,29 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 			if !IsAutoRecoverableDisabledReason(dk.Reason) {
 				return false
 			}
-			if kimiRatioWindowReset(usage.CodeFiveHour, now) {
-				return true
+			// 所有可用限额窗口均已重置且仍有余量时才恢复（AND 语义）。
+			if usage.CodeFiveHour != nil && usage.CodeFiveHour.Enabled {
+				if !kimiRatioWindowReset(usage.CodeFiveHour, now) {
+					return false
+				}
 			}
-			if kimiRatioWindowReset(usage.CodeSevenDay, now) {
-				return true
+			if usage.CodeSevenDay != nil && usage.CodeSevenDay.Enabled {
+				if !kimiRatioWindowReset(usage.CodeSevenDay, now) {
+					return false
+				}
 			}
 			for _, rl := range usage.RateLimits {
 				if rl.Usage.ResetTime != "" {
-					if rt, err := time.Parse(time.RFC3339Nano, rl.Usage.ResetTime); err == nil && now.After(rt) && rl.Usage.Remaining > 0 {
-						return true
+					rt, err := time.Parse(time.RFC3339Nano, rl.Usage.ResetTime)
+					if err != nil || !now.After(rt) || rl.Usage.Remaining <= 0 {
+						return false
 					}
 				}
 			}
-			if usage.WeeklyUsage.Remaining > 0 {
-				return true
+			if usage.WeeklyUsage.Limit > 0 && usage.WeeklyUsage.Remaining <= 0 {
+				return false
 			}
-			if usage.SubscriptionBalance != nil && usage.SubscriptionBalance.AmountUsedRatio < 1.0 {
-				return true
-			}
-			return false
+			return true
 		}
 	case credential.MiMoConsole != nil:
 		usage := credential.MiMoConsole
@@ -1150,10 +1153,8 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 			if !IsAutoRecoverableDisabledReason(dk.Reason) {
 				return false
 			}
-			if usage.CurrentUsage.Limit > 0 && usage.CurrentUsage.Used < usage.CurrentUsage.Limit {
-				return true
-			}
-			return !usage.Expired
+			hasQuota := usage.CurrentUsage.Limit > 0 && usage.CurrentUsage.Used < usage.CurrentUsage.Limit
+			return hasQuota && !usage.Expired
 		}
 	case credential.CompshareConsole != nil:
 		usage := credential.CompshareConsole
@@ -1161,17 +1162,16 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 			if !IsAutoRecoverableDisabledReason(dk.Reason) {
 				return false
 			}
+			// 所有可用窗口均有剩余额度时才恢复（AND 语义）。
 			for _, w := range []CompsharePlanUsageWindow{usage.FiveHourUsage, usage.WeeklyUsage, usage.MonthlyUsage} {
-				if w.Limit <= 0 || w.Used >= w.Limit {
-					continue
+				if w.Limit <= 0 {
+					continue // 无限制窗口不阻止恢复
 				}
-				if w.NextResetAt > 0 && now.Unix() < w.NextResetAt {
-					// 窗口未到重置点但仍有剩余额度，同样可用
-					return true
+				if w.Used >= w.Limit {
+					return false
 				}
-				return true
 			}
-			return false
+			return true
 		}
 	case credential.VolcengineAccessKey != nil && credential.VolcengineAccessKey.Usage != nil:
 		usage := credential.VolcengineAccessKey.Usage
@@ -1180,20 +1180,19 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 				return false
 			}
 			nowMs := now.UnixMilli()
+			// 所有非 nil 窗口均有余量时才恢复（AND 语义）。
 			for _, w := range []*VolcenginePlanUsageWindow{usage.FiveHour, usage.Daily, usage.Weekly, usage.Monthly} {
 				if w == nil {
 					continue
 				}
-				// Agent Plan：有配额，直接看是否还有余量
-				if w.Quota > 0 && w.Used < w.Quota {
-					return true
+				if w.Quota > 0 && w.Used >= w.Quota {
+					return false
 				}
-				// Coding Plan：只有百分比，看重置时间是否已过
-				if w.UsedPercent != nil && w.ResetTime > 0 && nowMs >= w.ResetTime {
-					return true
+				if w.UsedPercent != nil && w.ResetTime > 0 && nowMs < w.ResetTime {
+					return false
 				}
 			}
-			return false
+			return true
 		}
 	default:
 		return

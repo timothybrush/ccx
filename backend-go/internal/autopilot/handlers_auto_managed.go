@@ -631,7 +631,10 @@ func handleSetMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
+		// Cookie 采用了新 Key 时，旧 Key 不再属于当前账号，不触发恢复。
+		if replacementKey == "" {
+			config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
+		}
 		started := 0
 		if replacementKey != "" {
 			for _, channel := range deps.CfgManager.GetAccountChannels(accountUID) {
