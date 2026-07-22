@@ -3,6 +3,7 @@ package converters
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -194,6 +195,10 @@ func convertMessageItem(item gjson.Result, out string) string {
 					if imageBlock := responsesImageContentToChatBlock(contentItem); imageBlock != "" {
 						chatContent, _ = sjson.SetRaw(chatContent, "-1", imageBlock)
 						hasMedia = true
+					}
+				default:
+					if strings.HasPrefix(contentType, "input_audio") || strings.HasPrefix(contentType, "audio") {
+						log.Printf("[Converter-Responses] 音频 content block 在转换路径下被丢弃 (type=%s)，当前 Chat Completions 格式不支持音频输入", contentType)
 					}
 				}
 				return true
