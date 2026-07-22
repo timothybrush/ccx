@@ -2,6 +2,7 @@
 
 ### 新增
 
+- **Claude Code System Header 过滤** - OpenAI/Gemini/Responses provider 自动过滤 CC billing header、identity 与 subagent 角色描述，减少上游噪音；StripBillingHeader 扩展为完整移除 billing block
 - **托管渠道模型清单重新发现** - 编辑渠道对话框为托管渠道提供重新发现按钮，触发 auto-discover 后轮询任务状态并自动刷新模型清单，支持 zh-CN/en/id 三语
 - **Kimi Code 套餐用量查询** - Kimi 自动托管凭证支持绑定本地 Web 会话令牌，查询并刷新周额度、短期频限、订阅与赠送余额；绑定、刷新与账号列表接口均不回显令牌
 - **DeepSeek 官方账号自动托管** - 快速添加同时创建 Messages、Chat 与 Responses 协议渠道，模型发现统一使用官方 `/models`，编辑渠道时可按凭证查询余额
