@@ -76,3 +76,11 @@ https://github.com/QuantumNous/new-api/issues/5513
 - 保持现有个人版行为和配置文件向后兼容，并为四种套餐组合、无席位、多个套餐并存和 `AccessDenied` 增加测试。
 
 参考：https://github.com/volcengine/ark-cli/blob/main/skills/arkcli-usage/references/arkcli-usage-plan.md
+
+---
+
+> **上游版本变更**
+
+## [ ] Codex rust-v0.145.0 上游协议/工具变更评估
+
+发现协议/工具/用法变更：audio inputs/outputs、reasoning parameters、response item ID prefixes、realtime V3、multi-agent V2、memories/paginated history。请评估对 ccx Responses 渠道的影响。
