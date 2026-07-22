@@ -147,6 +147,21 @@ func initSchema(db *sql.DB) error {
 			PRIMARY KEY (metrics_key, api_type)
 		);
 
+		-- 渠道保活验证结果表（幂等创建，无需迁移版本号）
+		CREATE TABLE IF NOT EXISTS key_health (
+			channel_type TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			key_mask TEXT NOT NULL,
+			check_kind TEXT NOT NULL,
+			last_check_at INTEGER NOT NULL,
+			last_status TEXT NOT NULL DEFAULT 'ok',
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			latency_ms INTEGER NOT NULL DEFAULT 0,
+			model_count INTEGER NOT NULL DEFAULT 0,
+			detail TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (channel_type, channel_id, key_mask, check_kind)
+		);
+
 		-- 索引：按 api_type 和时间查询
 		CREATE INDEX IF NOT EXISTS idx_records_api_type_timestamp
 			ON request_records(api_type, timestamp);

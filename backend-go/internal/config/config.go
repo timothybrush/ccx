@@ -121,6 +121,8 @@ type UpstreamConfig struct {
 	// 用户自定义标签（自由文本，与受限枚举 PoolTag 完全独立）。
 	// Tags 只做用户侧组织/筛选，不接入任何调度逻辑。
 	Tags []string `json:"tags,omitempty"`
+	// 渠道级保活验证配置（可选，nil 时继承全局与 OriginTier 分档默认）
+	HealthCheck *ChannelHealthCheckConfig `json:"healthCheck,omitempty"`
 }
 
 // APIKeyConfig 描述单个 API Key 的附加调度配置。
@@ -819,6 +821,9 @@ type Config struct {
 
 	// 熔断器运行时配置（可选，nil 使用环境变量或代码默认值）
 	CircuitBreaker *CircuitBreakerConfig `json:"circuitBreaker,omitempty"`
+
+	// 渠道保活验证全局配置（可选，nil 使用默认值）
+	HealthCheck *GlobalHealthCheckConfig `json:"healthCheck,omitempty"`
 }
 
 // FailedKey 失败密钥记录
