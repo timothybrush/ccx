@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/BenedictKing/ccx/internal/utils"
 )
@@ -986,17 +987,34 @@ func (c *Config) syncManagedAccountsFromChannels() {
 			}
 			seen := credentialSeen[channel.AccountUID]
 			if seen == nil {
-				seen = make(map[string]bool, len(channel.APIKeys))
+				seen = make(map[string]bool, len(channel.APIKeys)+len(channel.DisabledAPIKeys))
 				credentialSeen[channel.AccountUID] = seen
 			}
+			addCredential := func(apiKey string, cfg *APIKeyConfig) {
+				uid := ""
+				if cfg != nil && cfg.CredentialUID != "" {
+					uid = cfg.CredentialUID
+				}
+				if uid == "" {
+					uid = channel.CredentialUIDForKey(apiKey)
+				}
+				if seen[uid] {
+					return
+				}
+				credential := existingCredentials[channel.AccountUID][uid]
+				credential.CredentialUID = uid
+				credential.APIKey = apiKey
+				account.Credentials = append(account.Credentials, credential)
+				seen[uid] = true
+			}
 			for _, apiKey := range channel.APIKeys {
-				uid := channel.CredentialUIDForKey(apiKey)
-				if !seen[uid] {
-					credential := existingCredentials[channel.AccountUID][uid]
-					credential.CredentialUID = uid
-					credential.APIKey = apiKey
-					account.Credentials = append(account.Credentials, credential)
-					seen[uid] = true
+				addCredential(apiKey, nil)
+			}
+			// 被余额/限额不足拉黑的托管 Key 仍属于该账号凭证池，
+			// 不能因暂时移出 APIKeys 就丢失其 Console token / AccessKey / 用量快照。
+			for _, dk := range channel.DisabledAPIKeys {
+				if dk.Key != "" {
+					addCredential(dk.Key, dk.Config)
 				}
 			}
 			accounts[channel.AccountUID] = account
@@ -1082,4 +1100,171 @@ func managedAccountName(channelName string) string {
 		channelName = strings.TrimSuffix(channelName, suffix)
 	}
 	return channelName
+}
+
+// TryRestoreDisabledKeysByUsage 在套餐型 Provider 用量刷新后，检查因余额/限额不足
+// 被禁用的 Key 是否已满足恢复条件（限额已重置或仍有剩余额度），是则自动恢复。
+// 支持 Kimi、MiMo、优云智算(Compshare)、火山(Volcengine) 四类套餐凭证；
+// 非套餐凭证或非余额/限额类拉黑原因不受影响。
+func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey string, credentialUID string) {
+	if cm == nil || accountUID == "" || apiKey == "" {
+		return
+	}
+	credential, ok := cm.GetManagedAccountCredential(accountUID, credentialUID)
+	if !ok {
+		return
+	}
+
+	var canRecover func(dk DisabledKeyInfo, now time.Time) bool
+	switch {
+	case credential.KimiConsole != nil:
+		usage := credential.KimiConsole.Usage
+		canRecover = func(dk DisabledKeyInfo, now time.Time) bool {
+			if !IsAutoRecoverableDisabledReason(dk.Reason) {
+				return false
+			}
+			if kimiRatioWindowReset(usage.CodeFiveHour, now) {
+				return true
+			}
+			if kimiRatioWindowReset(usage.CodeSevenDay, now) {
+				return true
+			}
+			for _, rl := range usage.RateLimits {
+				if rl.Usage.ResetTime != "" {
+					if rt, err := time.Parse(time.RFC3339Nano, rl.Usage.ResetTime); err == nil && now.After(rt) && rl.Usage.Remaining > 0 {
+						return true
+					}
+				}
+			}
+			if usage.WeeklyUsage.Remaining > 0 {
+				return true
+			}
+			if usage.SubscriptionBalance != nil && usage.SubscriptionBalance.AmountUsedRatio < 1.0 {
+				return true
+			}
+			return false
+		}
+	case credential.MiMoConsole != nil:
+		usage := credential.MiMoConsole
+		canRecover = func(dk DisabledKeyInfo, _ time.Time) bool {
+			if !IsAutoRecoverableDisabledReason(dk.Reason) {
+				return false
+			}
+			if usage.CurrentUsage.Limit > 0 && usage.CurrentUsage.Used < usage.CurrentUsage.Limit {
+				return true
+			}
+			return !usage.Expired
+		}
+	case credential.CompshareConsole != nil:
+		usage := credential.CompshareConsole
+		canRecover = func(dk DisabledKeyInfo, now time.Time) bool {
+			if !IsAutoRecoverableDisabledReason(dk.Reason) {
+				return false
+			}
+			for _, w := range []CompsharePlanUsageWindow{usage.FiveHourUsage, usage.WeeklyUsage, usage.MonthlyUsage} {
+				if w.Limit <= 0 || w.Used >= w.Limit {
+					continue
+				}
+				if w.NextResetAt > 0 && now.Unix() < w.NextResetAt {
+					// 窗口未到重置点但仍有剩余额度，同样可用
+					return true
+				}
+				return true
+			}
+			return false
+		}
+	case credential.VolcengineAccessKey != nil && credential.VolcengineAccessKey.Usage != nil:
+		usage := credential.VolcengineAccessKey.Usage
+		canRecover = func(dk DisabledKeyInfo, now time.Time) bool {
+			if !IsAutoRecoverableDisabledReason(dk.Reason) {
+				return false
+			}
+			nowMs := now.UnixMilli()
+			for _, w := range []*VolcenginePlanUsageWindow{usage.FiveHour, usage.Daily, usage.Weekly, usage.Monthly} {
+				if w == nil {
+					continue
+				}
+				// Agent Plan：有配额，直接看是否还有余量
+				if w.Quota > 0 && w.Used < w.Quota {
+					return true
+				}
+				// Coding Plan：只有百分比，看重置时间是否已过
+				if w.UsedPercent != nil && w.ResetTime > 0 && nowMs >= w.ResetTime {
+					return true
+				}
+			}
+			return false
+		}
+	default:
+		return
+	}
+
+	now := time.Now()
+	cfg := cm.GetConfig()
+	slices := []struct {
+		kind     string
+		channels []UpstreamConfig
+	}{
+		{"messages", cfg.Upstream},
+		{"chat", cfg.ChatUpstream},
+		{"responses", cfg.ResponsesUpstream},
+		{"gemini", cfg.GeminiUpstream},
+		{"images", cfg.ImagesUpstream},
+		{"vectors", cfg.VectorsUpstream},
+	}
+	for _, s := range slices {
+		for i := range s.channels {
+			ch := &s.channels[i]
+			if ch.AccountUID != accountUID {
+				continue
+			}
+			restorable := make([]string, 0, 1)
+			for _, dk := range ch.DisabledAPIKeys {
+				if dk.Key == apiKey && canRecover(dk, now) {
+					restorable = append(restorable, apiKey)
+					break
+				}
+			}
+			if len(restorable) == 0 {
+				continue
+			}
+			if _, err := cm.RestoreDisabledKeys(kindToAPIType(s.kind), i, restorable); err != nil {
+				log.Printf("[Provider-UsageRecover] 渠道 %s (kind=%s) 用量刷新后恢复 Key %s 失败: %v",
+					ch.Name, s.kind, utils.MaskAPIKey(apiKey), err)
+			} else {
+				log.Printf("[Provider-UsageRecover] 渠道 %s (kind=%s) 用量刷新后自动恢复 Key %s",
+					ch.Name, s.kind, utils.MaskAPIKey(apiKey))
+			}
+		}
+	}
+}
+
+// kimiRatioWindowReset 判断 Kimi 比例限额窗口是否已重置且仍有余量。
+func kimiRatioWindowReset(window *KimiCodeRatioWindow, now time.Time) bool {
+	if window == nil || !window.Enabled || window.ResetTime == "" {
+		return false
+	}
+	rt, err := time.Parse(time.RFC3339Nano, window.ResetTime)
+	if err != nil {
+		return false
+	}
+	return now.After(rt) && window.Ratio < 1.0
+}
+
+// kindToAPIType 将账号渠道 kind 映射为 ConfigManager 使用的 apiType。
+func kindToAPIType(kind string) string {
+	switch kind {
+	case "chat":
+		return "Chat"
+	case "responses":
+		return "Responses"
+	case "gemini":
+		return "Gemini"
+	case "images":
+		return "Images"
+	case "vectors":
+		return "Vectors"
+	default:
+		return "Messages"
+	}
 }

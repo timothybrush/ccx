@@ -631,6 +631,7 @@ func handleSetMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		started := 0
 		if replacementKey != "" {
 			for _, channel := range deps.CfgManager.GetAccountChannels(accountUID) {
@@ -676,6 +677,7 @@ func handleRefreshMiMoConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		c.JSON(http.StatusOK, gin.H{"tokenPlan": mimoTokenPlanView(&verification.Snapshot)})
 	}
 }
@@ -740,6 +742,7 @@ func handleSetCompshareConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		c.JSON(http.StatusOK, gin.H{
 			"accountUid": accountUID, "credentialUid": credentialUID, "plan": compsharePlanView(snapshot),
 		})
@@ -767,6 +770,7 @@ func handleRefreshCompshareConsoleCookie(deps *AutoManagedDeps) gin.HandlerFunc 
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		c.JSON(http.StatusOK, gin.H{"plan": compsharePlanView(snapshot)})
 	}
 }
@@ -806,7 +810,8 @@ func handleSetKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
 			return
 		}
 		accountUID, credentialUID := strings.TrimSpace(c.Param("accountUid")), strings.TrimSpace(c.Param("credentialUid"))
-		if _, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID); !ok {
+		credential, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID)
+		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"error": "推理 Key 凭证不存在"})
 			return
 		}
@@ -824,6 +829,7 @@ func handleSetKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		c.JSON(http.StatusOK, gin.H{
 			"accountUid": accountUID, "credentialUid": credentialUID, "usage": console.Usage,
 		})
@@ -851,6 +857,7 @@ func handleRefreshKimiConsoleToken(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		c.JSON(http.StatusOK, gin.H{"usage": console.Usage})
 	}
 }
@@ -899,7 +906,8 @@ func handleSetVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "仅火山方舟自动托管账号支持绑定 Access Key"})
 			return
 		}
-		if _, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID); !ok {
+		credential, ok := deps.CfgManager.GetManagedAccountCredential(accountUID, credentialUID)
+		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"error": "推理 Key 凭证不存在"})
 			return
 		}
@@ -942,6 +950,9 @@ func handleSetVolcengineAccessKey(deps *AutoManagedDeps) gin.HandlerFunc {
 		}
 		if err := deps.CfgManager.SetManagedAccountVolcenginePlanUsage(accountUID, credentialUID, usage); err != nil {
 			log.Printf("[Volcengine-Usage] 保存套餐用量失败: %v", err)
+		}
+		if usageErr == nil {
+			config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		}
 		started := 0
 		for _, channel := range deps.CfgManager.GetAccountChannels(accountUID) {
@@ -1011,6 +1022,9 @@ func handleRefreshVolcenginePlanUsage(deps *AutoManagedDeps) gin.HandlerFunc {
 		}
 		if saveErr := deps.CfgManager.SetManagedAccountVolcenginePlanUsage(accountUID, credentialUID, usage); saveErr != nil {
 			log.Printf("[Volcengine-Usage] 保存套餐用量失败: %v", saveErr)
+		}
+		if err == nil {
+			config.TryRestoreDisabledKeysByUsage(deps.CfgManager, accountUID, credential.APIKey, credentialUID)
 		}
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "usage": usage})
