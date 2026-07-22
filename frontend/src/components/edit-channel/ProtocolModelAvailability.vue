@@ -224,14 +224,23 @@ const handleRediscover = async (route: ChannelProtocolRoute) => {
     }
 
     const deadline = Date.now() + REDISCOVER_POLL_TIMEOUT_MS
+    let discoveryError = ''
     for (;;) {
       await sleep(REDISCOVER_POLL_INTERVAL_MS)
       const status = await getChannelAutoStatus(route.kind, key)
       const discovery = status.discovery
+      if (discovery?.status === 'failed') {
+        discoveryError = discovery.error || t('channelEditor.protocolModels.rediscoverFailed')
+        break
+      }
       if (!discovery || (discovery.status !== 'pending' && discovery.status !== 'running')) {
         break
       }
       if (Date.now() >= deadline) break
+    }
+    if (discoveryError) {
+      state.error = discoveryError
+      return
     }
 
     // 任务结束后通知父组件刷新模型清单。
