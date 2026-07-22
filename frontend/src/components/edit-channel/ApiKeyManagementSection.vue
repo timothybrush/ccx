@@ -547,78 +547,31 @@
                   </div>
 
                   <template v-if="row.kimiCredential.kimiCodeUsage">
-                    <div class="kimi-quota-grid mb-3">
+                    <div v-if="kimiPlanUsageRows(row.kimiCredential.kimiCodeUsage).length" class="kimi-plan-usage mb-3">
                       <div
-                        v-for="item in kimiQuotaItems(row.kimiCredential.kimiCodeUsage)"
+                        v-for="item in kimiPlanUsageRows(row.kimiCredential.kimiCodeUsage)"
                         :key="item.label"
-                        class="kimi-quota-item"
+                        class="kimi-plan-usage-row"
                       >
-                        <div class="text-caption text-medium-emphasis">{{ item.label }}</div>
-                        <div class="text-body-2 font-weight-medium">{{ kimiFormatQuota(item.window) }}</div>
+                        <span class="text-body-2 text-medium-emphasis">{{ item.label }}</span>
                         <v-progress-linear
-                          :model-value="kimiQuotaUsedPercent(item.window)"
-                          :color="kimiUsageColor(kimiQuotaUsedPercent(item.window))"
-                          height="4"
+                          :model-value="item.usedPercent"
+                          :color="kimiUsageColor(item.usedPercent)"
+                          height="6"
                           rounded
-                          class="my-2"
                         />
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.resetAt') }} {{ kimiFormatDateTime(item.window.resetTime) }}
-                        </div>
+                        <span class="text-body-2 font-weight-medium text-no-wrap">
+                          {{ t('kimiConsoleToken.percentUsed', { percent: Math.round(item.usedPercent) }) }}
+                        </span>
+                        <span
+                          class="text-caption text-disabled text-no-wrap"
+                          :title="kimiFormatDateTime(item.resetTime)"
+                        >
+                          {{ t('kimiConsoleToken.resetsIn', { duration: kimiFormatCountdown(item.resetTime) }) }}
+                        </span>
                       </div>
                     </div>
-
-                    <div class="kimi-balance-grid mb-2">
-                      <div v-if="row.kimiCredential.kimiCodeUsage.subscriptionBalance">
-                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.subscriptionRemaining') }}</div>
-                        <div class="text-body-2 font-weight-medium">
-                          {{ kimiFormatRemainingRatio(row.kimiCredential.kimiCodeUsage.subscriptionBalance.amountUsedRatio) }}
-                        </div>
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.codeUsed') }}
-                          {{ kimiFormatUsedRatio(row.kimiCredential.kimiCodeUsage.subscriptionBalance.kimiCodeUsedRatio) }}
-                        </div>
-                      </div>
-                      <div v-if="row.kimiCredential.kimiCodeUsage.codeFiveHour?.enabled">
-                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.fiveHourRemaining') }}</div>
-                        <div class="text-body-2 font-weight-medium">
-                          {{ kimiFormatRemainingRatio(row.kimiCredential.kimiCodeUsage.codeFiveHour.ratio) }}
-                        </div>
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.resetAt') }} {{ kimiFormatDateTime(row.kimiCredential.kimiCodeUsage.codeFiveHour.resetTime) }}
-                        </div>
-                      </div>
-                      <div v-if="row.kimiCredential.kimiCodeUsage.codeSevenDay?.enabled">
-                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.sevenDayRemaining') }}</div>
-                        <div class="text-body-2 font-weight-medium">
-                          {{ kimiFormatRemainingRatio(row.kimiCredential.kimiCodeUsage.codeSevenDay.ratio) }}
-                        </div>
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.resetAt') }} {{ kimiFormatDateTime(row.kimiCredential.kimiCodeUsage.codeSevenDay.resetTime) }}
-                        </div>
-                      </div>
-                      <div v-if="row.kimiCredential.kimiCodeUsage.subscriptionBalance?.expireTime">
-                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.expiresAt') }}</div>
-                        <div class="text-body-2 font-weight-medium">
-                          {{ kimiFormatDateTime(row.kimiCredential.kimiCodeUsage.subscriptionBalance.expireTime) }}
-                        </div>
-                      </div>
-                      <div
-                        v-for="(gift, index) in kimiVisibleGifts(row.kimiCredential.kimiCodeUsage)"
-                        :key="`${gift.type}-${gift.expireTime}-${index}`"
-                      >
-                        <div class="text-caption text-medium-emphasis">{{ t('kimiConsoleToken.giftBalance') }}</div>
-                        <div class="text-body-2 font-weight-medium">
-                          {{ kimiFormatRemainingRatio(gift.amountUsedRatio) }}
-                        </div>
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.codeUsed') }} {{ kimiFormatUsedRatio(gift.kimiCodeUsedRatio) }}
-                        </div>
-                        <div class="text-caption text-disabled">
-                          {{ t('kimiConsoleToken.expiresAt') }} {{ kimiFormatDateTime(gift.expireTime) }}
-                        </div>
-                      </div>
-                    </div>
+                    <div v-else class="text-caption text-disabled mb-3">{{ t('kimiConsoleToken.noUsageData') }}</div>
                     <div class="text-caption text-disabled mb-3">
                       {{ t('kimiConsoleToken.validatedAt') }} {{ kimiFormatDateTime(row.kimiCredential.kimiCodeUsage.validatedAt) }}
                     </div>
@@ -1229,7 +1182,6 @@ import type {
   DeepSeekCredentialBalance,
   DisabledKeyInfo,
   EndpointDetailItem,
-  KimiCodeQuotaWindow,
   KimiCodeUsageSnapshot,
   ManagedAccountCredential,
   MiMoTokenPlanQuota,
@@ -2130,16 +2082,6 @@ const clearKimiToken = async (credential: ManagedAccountCredential) => {
   }
 }
 
-const kimiQuotaItems = (usage: KimiCodeUsageSnapshot) => [
-  { label: t('kimiConsoleToken.weeklyRemaining'), window: usage.weeklyUsage },
-  ...(usage.rateLimits ?? []).map(limit => ({
-    label: t('kimiConsoleToken.rateLimitRemaining', { window: kimiFormatDuration(limit.windowSeconds) }),
-    window: limit.usage,
-  })),
-]
-
-const kimiNumberFormat = new Intl.NumberFormat()
-const kimiPercentFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 })
 const kimiDateTimeFormat = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: '2-digit',
@@ -2148,12 +2090,24 @@ const kimiDateTimeFormat = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 })
 
-const kimiFormatQuota = (window: KimiCodeQuotaWindow) =>
-  `${kimiNumberFormat.format(Math.max(0, window.remaining))} / ${kimiNumberFormat.format(Math.max(0, window.limit))}`
-
-const kimiQuotaUsedPercent = (window: KimiCodeQuotaWindow) => {
-  if (window.limit <= 0) return 0
-  return Math.max(0, Math.min(100, (window.used / window.limit) * 100))
+// 与 Kimi Code 官方 CLI 的 Plan usage 保持一致：Weekly limit（7 天频限）+ 5h limit（5 小时频限）。
+const kimiPlanUsageRows = (usage: KimiCodeUsageSnapshot) => {
+  const rows: Array<{ label: string; usedPercent: number; resetTime?: string }> = []
+  if (usage.codeSevenDay?.enabled) {
+    rows.push({
+      label: t('kimiConsoleToken.weeklyLimit'),
+      usedPercent: Math.max(0, Math.min(100, usage.codeSevenDay.ratio * 100)),
+      resetTime: usage.codeSevenDay.resetTime,
+    })
+  }
+  if (usage.codeFiveHour?.enabled) {
+    rows.push({
+      label: t('kimiConsoleToken.fiveHourLimit'),
+      usedPercent: Math.max(0, Math.min(100, usage.codeFiveHour.ratio * 100)),
+      resetTime: usage.codeFiveHour.resetTime,
+    })
+  }
+  return rows
 }
 
 const kimiUsageColor = (percent: number) => {
@@ -2162,50 +2116,39 @@ const kimiUsageColor = (percent: number) => {
   return 'success'
 }
 
-const kimiFormatRemainingRatio = (usedRatio: number) => `${kimiPercentFormat.format(Math.max(0, (1 - usedRatio) * 100))}%`
-const kimiFormatUsedRatio = (usedRatio: number) => `${kimiPercentFormat.format(Math.max(0, usedRatio * 100))}%`
-
 const kimiFormatDateTime = (value?: string) => {
   if (!value) return '-'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '-' : kimiDateTimeFormat.format(date)
 }
 
-const kimiFormatDuration = (seconds: number) => {
-  if (seconds > 0 && seconds % 3600 === 0) {
-    return t('kimiConsoleToken.durationHours', { value: seconds / 3600 })
-  }
-  if (seconds > 0 && seconds % 60 === 0) {
-    return t('kimiConsoleToken.durationMinutes', { value: seconds / 60 })
-  }
-  return t('kimiConsoleToken.durationSeconds', { value: Math.max(0, seconds) })
+// 官方风格的相对重置倒计时，如 "5d 16h 29m"。
+const kimiFormatCountdown = (resetTime?: string) => {
+  if (!resetTime) return '-'
+  const resetAt = new Date(resetTime).getTime()
+  if (Number.isNaN(resetAt)) return '-'
+  const totalMinutes = Math.max(0, Math.floor((resetAt - Date.now()) / 60000))
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  const parts: string[] = []
+  if (days > 0) parts.push(t('kimiConsoleToken.durationDay', { value: days }))
+  if (days > 0 || hours > 0) parts.push(t('kimiConsoleToken.durationHour', { value: hours }))
+  parts.push(t('kimiConsoleToken.durationMinute', { value: minutes }))
+  return parts.join(' ')
 }
 
-// Key 行摘要：未绑定令牌时提示绑定，否则拼接 5 小时/近一周频限、本周与总量额度、订阅剩余。
+// Key 行摘要：未绑定令牌时提示绑定，否则与官方 Plan usage 一致，拼接各限额已用百分比。
 const kimiUsageSummary = (credential: ManagedAccountCredential): string => {
   if (!credential.hasKimiConsoleToken) return t('kimiConsoleToken.notConfigured')
   const usage = credential.kimiCodeUsage
   if (!usage) return t('kimiConsoleToken.noUsageData')
-  const parts: string[] = []
-  if (usage.codeFiveHour?.enabled) {
-    parts.push(`${t('kimiConsoleToken.fiveHourRemaining')} ${kimiFormatRemainingRatio(usage.codeFiveHour.ratio)}`)
-  }
-  if (usage.codeSevenDay?.enabled) {
-    parts.push(`${t('kimiConsoleToken.sevenDayRemaining')} ${kimiFormatRemainingRatio(usage.codeSevenDay.ratio)}`)
-  }
-  parts.push(`${t('kimiConsoleToken.weeklyRemaining')} ${kimiFormatQuota(usage.weeklyUsage)}`)
-  if (usage.totalQuota.limit > 0) {
-    parts.push(`${t('kimiConsoleToken.totalRemaining')} ${kimiFormatQuota(usage.totalQuota)}`)
-  }
-  if (usage.subscriptionBalance) {
-    parts.push(`${t('kimiConsoleToken.subscriptionRemaining')} ${kimiFormatRemainingRatio(usage.subscriptionBalance.amountUsedRatio)}`)
-  }
-  return parts.join(' · ')
+  const rows = kimiPlanUsageRows(usage)
+  if (!rows.length) return t('kimiConsoleToken.noUsageData')
+  return rows
+    .map(item => `${item.label} ${t('kimiConsoleToken.percentUsed', { percent: Math.round(item.usedPercent) })}`)
+    .join(' · ')
 }
-
-// 上游对无赠送账号也返回一条 0/0 的占位赠送额度，过滤掉避免误导；有真实消耗时再展示。
-const kimiVisibleGifts = (usage: KimiCodeUsageSnapshot) =>
-  (usage.giftBalances ?? []).filter(gift => gift.amountUsedRatio > 0 || gift.kimiCodeUsedRatio > 0)
 
 const handleInput = () => {
   apiKeyError.value = ''
@@ -2460,15 +2403,17 @@ const getDisabledKeyLabel = (reason: string) => {
   gap: 12px;
 }
 
-.kimi-quota-grid,
-.kimi-balance-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+.kimi-plan-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.kimi-quota-item {
-  min-width: 0;
+.kimi-plan-usage-row {
+  display: grid;
+  grid-template-columns: 110px minmax(120px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
 }
 
 .compshare-usage-grid,
@@ -2491,9 +2436,12 @@ const getDisabledKeyLabel = (reason: string) => {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .kimi-quota-grid,
-  .kimi-balance-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .kimi-plan-usage-row {
+    grid-template-columns: 90px minmax(0, 1fr) auto;
+  }
+
+  .kimi-plan-usage-row > :last-child {
+    grid-column: 1 / -1;
   }
 
   .compshare-usage-grid,
