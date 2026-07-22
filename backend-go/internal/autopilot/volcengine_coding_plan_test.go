@@ -18,9 +18,12 @@ import (
 func TestApplyVolcengineSignature(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "https://ark.cn-beijing.volces.com/?Version=2024-01-01&Action=ListArkAgentPlanModel", bytes.NewBufferString("{}"))
 	applyVolcengineSignature(req, []byte("{}"), "AKIDTEST", "test-secret", "ark_stg", time.Date(2026, 4, 24, 12, 20, 3, 0, time.UTC))
-	want := "HMAC-SHA256 Credential=AKIDTEST/20260424/cn-beijing/ark_stg/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=072882a505a7ea44d8b029876785a8a0dc4722899b95d18951b48f946e6d7589"
+	want := "HMAC-SHA256 Credential=AKIDTEST/20260424/cn-beijing/ark_stg/request, SignedHeaders=host;x-content-sha256;x-date, Signature=fd133cc24e26945cd275f65b3922bd7dfffbf5810f56a575c3dbf23d3a59ca58"
 	if got := req.Header.Get("Authorization"); got != want {
 		t.Fatalf("Authorization 签名不匹配\ngot:  %s\nwant: %s", got, want)
+	}
+	if got := req.Header.Get("Content-Type"); got != volcengineContentType {
+		t.Fatalf("Content-Type=%q", got)
 	}
 	if got := req.Header.Get("X-Date"); got != "20260424T122003Z" {
 		t.Fatalf("X-Date=%q", got)

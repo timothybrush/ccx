@@ -25,8 +25,11 @@ const (
 	volcengineRegion         = "cn-beijing"
 	volcengineAPIVersion     = "2024-01-01"
 	volcengineContentType    = "application/json; charset=UTF-8"
-	volcenginePlanAgent      = "agent_plan"
-	volcenginePlanCoding     = "coding_plan"
+	// 火山方舟管控面示例要求只对这三个请求头签名。Content-Type 仍会发送，
+	// 但不能列入 SignedHeaders，否则套餐模型列表接口会拒绝签名。
+	volcengineSignedHeaders = "host;x-content-sha256;x-date"
+	volcenginePlanAgent     = "agent_plan"
+	volcenginePlanCoding    = "coding_plan"
 )
 
 type volcenginePlanInfo struct {
@@ -319,12 +322,10 @@ func applyVolcengineSignature(req *http.Request, body []byte, accessKeyID, secre
 	xDate := now.UTC().Format("20060102T150405Z")
 	shortDate := xDate[:8]
 	host := req.URL.Host
-	signedHeaders := "content-type;host;x-content-sha256;x-date"
-	canonicalHeaders := "content-type:" + volcengineContentType + "\n" +
-		"host:" + host + "\n" +
+	canonicalHeaders := "host:" + host + "\n" +
 		"x-content-sha256:" + payloadHash + "\n" +
 		"x-date:" + xDate + "\n"
-	canonicalRequest := req.Method + "\n" + canonicalURI(req.URL) + "\n" + canonicalQuery(req.URL) + "\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash
+	canonicalRequest := req.Method + "\n" + canonicalURI(req.URL) + "\n" + canonicalQuery(req.URL) + "\n" + canonicalHeaders + "\n" + volcengineSignedHeaders + "\n" + payloadHash
 	credentialScope := shortDate + "/" + volcengineRegion + "/" + service + "/request"
 	stringToSign := "HMAC-SHA256\n" + xDate + "\n" + credentialScope + "\n" + sha256Hex([]byte(canonicalRequest))
 	kDate := hmacSHA256([]byte(secretAccessKey), shortDate)
@@ -336,7 +337,7 @@ func applyVolcengineSignature(req *http.Request, body []byte, accessKeyID, secre
 	req.Header.Set("Content-Type", volcengineContentType)
 	req.Header.Set("X-Date", xDate)
 	req.Header.Set("X-Content-Sha256", payloadHash)
-	req.Header.Set("Authorization", "HMAC-SHA256 Credential="+accessKeyID+"/"+credentialScope+", SignedHeaders="+signedHeaders+", Signature="+signature)
+	req.Header.Set("Authorization", "HMAC-SHA256 Credential="+accessKeyID+"/"+credentialScope+", SignedHeaders="+volcengineSignedHeaders+", Signature="+signature)
 }
 
 func canonicalURI(value *url.URL) string {
