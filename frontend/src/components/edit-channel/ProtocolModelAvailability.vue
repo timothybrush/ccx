@@ -39,9 +39,27 @@
           <v-chip size="x-small" variant="tonal" color="secondary">
             {{ route.discoverySourceLabel }}
           </v-chip>
+          <v-btn
+            v-if="route.channelUid"
+            class="protocol-model-route__rediscover"
+            size="x-small"
+            variant="tonal"
+            color="primary"
+            :loading="isRediscovering(route)"
+            :disabled="isRediscovering(route)"
+            @click="handleRediscover(route)"
+          >
+            <v-icon start size="14">mdi-refresh</v-icon>
+            {{ isRediscovering(route)
+              ? t('channelEditor.protocolModels.rediscovering')
+              : t('channelEditor.protocolModels.rediscover') }}
+          </v-btn>
           <span v-if="route.modelDiscoveryMessage" class="text-caption text-medium-emphasis">
             {{ route.modelDiscoveryMessage }}
           </span>
+        </div>
+        <div v-if="route.rediscoverError" class="text-caption text-error">
+          {{ route.rediscoverError }}
         </div>
 
         <!-- 多 Key 场景只显示差异：列出未被全部 Key 覆盖的模型及缺失的 Key -->
@@ -119,10 +137,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 
 import { useI18n } from '../../i18n'
 import type { ChannelKind, ChannelProtocolRoute } from '../../services/api'
+import { autoDiscoverChannel, getChannelAutoStatus } from '../../services/autopilot-api'
 
 interface ProtocolDefinition {
   labelKey: string
@@ -170,7 +189,59 @@ const props = withDefaults(defineProps<{
   loading: false,
 })
 
+const emit = defineEmits<{
+  refreshed: []
+}>()
+
 const { t } = useI18n()
+
+// 每个 route 的重新发现状态（按 channelUid 跟踪）。
+const rediscoverState = reactive<Record<string, { running: boolean; error: string }>>({})
+
+const routeKey = (route: ChannelProtocolRoute) => route.channelUid ?? ''
+
+const isRediscovering = (route: ChannelProtocolRoute) => rediscoverState[routeKey(route)]?.running === true
+
+const REDISCOVER_POLL_INTERVAL_MS = 1500
+const REDISCOVER_POLL_TIMEOUT_MS = 30000
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const handleRediscover = async (route: ChannelProtocolRoute) => {
+  const key = routeKey(route)
+  if (!key || rediscoverState[key]?.running) return
+  const state = (rediscoverState[key] ??= { running: false, error: '' })
+  state.running = true
+  state.error = ''
+
+  try {
+    try {
+      await autoDiscoverChannel(route.kind, key)
+    } catch (err) {
+      // 409 表示发现任务已在运行，直接进入轮询等待，不算错误。
+      const status = (err as { status?: number }).status
+      if (status !== 409) throw err
+    }
+
+    const deadline = Date.now() + REDISCOVER_POLL_TIMEOUT_MS
+    for (;;) {
+      await sleep(REDISCOVER_POLL_INTERVAL_MS)
+      const status = await getChannelAutoStatus(route.kind, key)
+      const discovery = status.discovery
+      if (!discovery || (discovery.status !== 'pending' && discovery.status !== 'running')) {
+        break
+      }
+      if (Date.now() >= deadline) break
+    }
+
+    // 任务结束后通知父组件刷新模型清单。
+    emit('refreshed')
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : t('channelEditor.protocolModels.rediscoverFailed')
+  } finally {
+    state.running = false
+  }
+}
 
 const discoverySourceKey: Record<string, string> = {
   control_plane: 'channelEditor.protocolModels.source.controlPlane',
@@ -239,6 +310,7 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
     hasInventory: hasDiscoveredInventory || models.length > 0,
     discoveryTime: formatDiscoveryTime(route.modelsDiscoveredAt),
     discoverySourceLabel: discoverySourceLabel(route.modelDiscoverySource),
+    rediscoverError: rediscoverState[routeKey(route)]?.error ?? '',
   }
 }))
 </script>
@@ -293,6 +365,10 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.protocol-model-route__rediscover {
+  margin-left: auto;
 }
 
 .protocol-model-route__path {

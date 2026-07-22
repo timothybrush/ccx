@@ -62,7 +62,7 @@
                 @update:base-urls-text="baseUrlsText = $event"
                 @menu-update="onMenuUpdate"
               />
-              <ProtocolModelAvailability :routes="protocolModelRoutes" :loading="managedModelsLoading" />
+              <ProtocolModelAvailability :routes="protocolModelRoutes" :loading="managedModelsLoading" @refreshed="handleProtocolModelsRefreshed" />
             </section>
 
             <!-- 身份认证 -->
@@ -467,33 +467,42 @@ const protocolModelRoutes = computed(() => {
   return buildNativeProtocolModelRoutes(routes, managedAccountChannels.value)
 })
 
+const reloadManagedModels = async (accountUid: string) => {
+  const requestId = ++managedModelsRequestId
+  managedModelsLoading.value = true
+  try {
+    let accountChannels: ManagedAccountChannel[] = []
+    try {
+      const response = await managedAccountsApi.getManagedAccounts()
+      accountChannels = response.accounts.find(account => account.accountUid === accountUid)?.channels ?? []
+    } catch {
+      // 旧后端或账号接口暂时失败时，继续尝试渠道 models API。
+    }
+    if (requestId !== managedModelsRequestId) return
+    accountChannels = await loadLegacyManagedModelAvailability(
+      managedAccountsApi,
+      props.channel?.protocolRoutes,
+      accountChannels,
+    )
+    if (requestId === managedModelsRequestId) managedAccountChannels.value = accountChannels
+  } finally {
+    if (requestId === managedModelsRequestId) managedModelsLoading.value = false
+  }
+}
+
+const handleProtocolModelsRefreshed = () => {
+  const accountUid = props.channel?.accountUid
+  if (accountUid) void reloadManagedModels(accountUid)
+}
+
 watch(
   [() => props.show, () => props.channel?.accountUid],
   async ([show, accountUid]) => {
-    const requestId = ++managedModelsRequestId
+    managedModelsRequestId++
     managedAccountChannels.value = []
     managedModelsLoading.value = false
     if (!show || !accountUid) return
-
-    managedModelsLoading.value = true
-    try {
-      let accountChannels: ManagedAccountChannel[] = []
-      try {
-        const response = await managedAccountsApi.getManagedAccounts()
-        accountChannels = response.accounts.find(account => account.accountUid === accountUid)?.channels ?? []
-      } catch {
-        // 旧后端或账号接口暂时失败时，继续尝试渠道 models API。
-      }
-      if (requestId !== managedModelsRequestId) return
-      accountChannels = await loadLegacyManagedModelAvailability(
-        managedAccountsApi,
-        props.channel?.protocolRoutes,
-        accountChannels,
-      )
-      if (requestId === managedModelsRequestId) managedAccountChannels.value = accountChannels
-    } finally {
-      if (requestId === managedModelsRequestId) managedModelsLoading.value = false
-    }
+    await reloadManagedModels(accountUid)
   },
   { immediate: true },
 )

@@ -277,7 +277,7 @@ export function extractAutoAddErrorMessage(err: unknown): string {
  * 查询渠道自动托管状态
  * GET /api/{kind}/channels/{id}/auto-status
  */
-export async function getChannelAutoStatus(kind: string, channelId: number): Promise<ChannelAutoStatusResponse> {
+export async function getChannelAutoStatus(kind: string, channelId: number | string): Promise<ChannelAutoStatusResponse> {
   const url = `${API_BASE}/${kind}/channels/${channelId}/auto-status`
   const response = await fetch(url, {
     method: 'GET',
@@ -287,6 +287,31 @@ export async function getChannelAutoStatus(kind: string, channelId: number): Pro
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText)
     throw new Error(`auto-status failed (${response.status}): ${text}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * 重新触发渠道自动发现（托管渠道）
+ * POST /api/{kind}/channels/{id}/auto-discover
+ * channelId 可为 channelUid（后端按 UID 匹配）或整数下标。
+ */
+export async function autoDiscoverChannel(
+  kind: string,
+  channelId: number | string,
+): Promise<{ channelUid: string; discoveryStarted: boolean }> {
+  const url = `${API_BASE}/${kind}/channels/${channelId}/auto-discover`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.statusText)
+    const err = new Error(`auto-discover failed (${response.status}): ${text}`) as Error & { status?: number }
+    err.status = response.status
+    throw err
   }
 
   return response.json()
