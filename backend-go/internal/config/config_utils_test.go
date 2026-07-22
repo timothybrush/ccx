@@ -154,6 +154,23 @@ func TestRuntimeUpstreamForAutoManagedProviderReappliesNativeDefaults(t *testing
 	}
 }
 
+func TestRuntimeUpstreamForAutoManagedProviderAppliesCompshareMessagesDefaults(t *testing.T) {
+	upstream := &UpstreamConfig{
+		ProviderID:                    "compshare",
+		AutoManaged:                   true,
+		ServiceType:                   "claude",
+		NormalizeSystemRoleToTopLevel: false,
+	}
+
+	runtime := RuntimeUpstreamForAutoManagedProvider(upstream)
+	if !runtime.NormalizeSystemRoleToTopLevel {
+		t.Fatalf("Compshare Claude runtime 应启用 system role 归一化: %#v", runtime)
+	}
+	if upstream.NormalizeSystemRoleToTopLevel {
+		t.Fatalf("原始配置不应被运行时默认值修改: %#v", upstream)
+	}
+}
+
 func TestIsValidSupportedModelPattern(t *testing.T) {
 	tests := []struct {
 		name    string

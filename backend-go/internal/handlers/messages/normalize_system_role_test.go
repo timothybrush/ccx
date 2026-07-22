@@ -148,3 +148,61 @@ func TestMessagesHandler_NormalizeSystemRoleToTopLevel(t *testing.T) {
 		})
 	}
 }
+
+func TestMessagesHandler_AutoManagedCompshareNormalizesSystemRoles(t *testing.T) {
+	const reqBody = `{"model":"claude-sonnet-5","system":[{"type":"text","text":"base prompt"}],"messages":[{"role":"user","content":[{"type":"text","text":"first user"}]},{"role":"system","content":"mid prompt"},{"role":"assistant","content":[{"type":"text","text":"prior answer"}]},{"role":"user","content":[{"type":"text","text":"second user"}]},{"role":"system","content":[{"type":"text","text":"tail prompt"}]}]}`
+
+	var captured []byte
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream request: %v", err)
+		}
+		captured = body
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"msg","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer upstream.Close()
+
+	router := newMessagesTestRouter(t, config.UpstreamConfig{
+		Name:        "compshare-claude",
+		BaseURL:     upstream.URL,
+		APIKeys:     []string{"sk-test"},
+		ServiceType: "claude",
+		ProviderID:  "compshare",
+		AutoManaged: true,
+		Status:      "active",
+	})
+
+	w := performMessagesHandlerRequest(t, router, reqBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var forwarded map[string]interface{}
+	if err := json.Unmarshal(captured, &forwarded); err != nil {
+		t.Fatalf("unmarshal upstream request: %v", err)
+	}
+	system, _ := forwarded["system"].(string)
+	for _, want := range []string{"base prompt", "mid prompt", "tail prompt"} {
+		if !strings.Contains(system, want) {
+			t.Fatalf("top-level system missing %q: %q; body=%s", want, system, string(captured))
+		}
+	}
+
+	messages, ok := forwarded["messages"].([]interface{})
+	if !ok {
+		t.Fatalf("messages shape invalid: %s", string(captured))
+	}
+	wantRoles := []string{"user", "assistant", "user"}
+	if len(messages) != len(wantRoles) {
+		t.Fatalf("message count = %d, want %d; body=%s", len(messages), len(wantRoles), string(captured))
+	}
+	for i, wantRole := range wantRoles {
+		message, _ := messages[i].(map[string]interface{})
+		if role, _ := message["role"].(string); role != wantRole {
+			t.Fatalf("messages[%d].role = %q, want %q; body=%s", i, role, wantRole, string(captured))
+		}
+	}
+}

@@ -450,6 +450,12 @@ func ApplyProviderUpstreamDefaults(providerID string, upstream *UpstreamConfig) 
 			upstream.ReasoningParamStyle = "reasoning_effort"
 			upstream.PassbackReasoningContent = true
 		}
+	case "compshare":
+		// Compshare 的 Claude 兼容端点只接受 user/assistant 消息。最新 Claude Code
+		// 会在 messages 中插入 system 角色，因此必须先抽取到顶层 system 字段。
+		if strings.EqualFold(strings.TrimSpace(upstream.ServiceType), "claude") {
+			upstream.NormalizeSystemRoleToTopLevel = true
+		}
 	}
 }
 
