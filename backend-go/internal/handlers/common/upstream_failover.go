@@ -3,6 +3,7 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -139,6 +140,10 @@ var usagePatternRecorderHook func(proxyKeyMask, channelKind, channelUID, model s
 func SetUsagePatternRecorderHook(hook func(proxyKeyMask, channelKind, channelUID, model string)) {
 	usagePatternRecorderHook = hook
 }
+
+// systemHeaderFilterCache 按渠道-keyHash-模型记忆最优 system header 过滤层级。
+// 仅对 Claude Messages 入口生效；其余入口的过滤由 provider 层负责。
+var systemHeaderFilterCache = config.NewSystemHeaderFilterCache()
 
 func shouldNormalizeMetadataUserID(kind scheduler.ChannelKind, upstream *config.UpstreamConfig) bool {
 	if upstream == nil {
@@ -405,6 +410,20 @@ func TryUpstreamWithAllKeys(
 				continue
 			}
 
+			// Phase 2: 分层 system header 过滤。
+			// 仅对 Claude Messages 入口生效；缓存 key 为 channelUID:keyHash:model。
+			if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
+				keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+				if entry := systemHeaderFilterCache.Get(upstream.ChannelUID, keyHash, redirectedModel); entry != nil && entry.Level > 0 {
+					if filtered, modified := applySystemHeaderFilterToBody(attemptBody, providers.SystemHeaderFilterLevel(entry.Level)); modified {
+						attemptBody = filtered
+						RestoreRequestBody(c, attemptBody)
+						c.Set("requestBodyBytes", attemptBody)
+						RequestLogf(c, "[%s-SystemFilter] 渠道 %s 应用过滤层级 %d", apiType, upstream.Name, entry.Level)
+					}
+				}
+			}
+
 			// 检查熔断状态
 			circuitState := metricsManager.GetKeyCircuitState(currentBaseURL, apiKey, metricsServiceType)
 			if circuitState == metrics.CircuitStateOpen {
@@ -583,6 +602,12 @@ func TryUpstreamWithAllKeys(
 					endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
 					notifyEndpointResultHook(endpointUID, false)
 				}
+				// Phase 2: 记录 system header 过滤失败，触发渐进升级。
+				if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
+					keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+					systemHeaderFilterCache.RecordFailure(upstream.ChannelUID, keyHash, redirectedModel, err.Error())
+					tryUpgradeFilterLevel(upstream.ChannelUID, keyHash, redirectedModel)
+				}
 				// 记录渠道日志
 				// 完成日志记录
 				CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, err.Error(), isRetryAttempt)
@@ -670,6 +695,13 @@ func TryUpstreamWithAllKeys(
 						keyHash := autopilot.KeyHashFromAPIKey(apiKey)
 						endpointUID := autopilot.GenerateEndpointUID(upstream.ChannelUID, currentBaseURL, keyHash)
 						notifyEndpointResultHook(endpointUID, false)
+					}
+					// Phase 2: 记录 system header 过滤失败，触发渐进升级。
+					if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
+						keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+						errorSummary := errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
+						systemHeaderFilterCache.RecordFailure(upstream.ChannelUID, keyHash, redirectedModel, errorSummary)
+						tryUpgradeFilterLevel(upstream.ChannelUID, keyHash, redirectedModel)
 					}
 					errorSummary := errorBodySummaryForLog(apiType, resp.StatusCode, respBodyBytes)
 					if errorSummary != "" {
@@ -827,6 +859,13 @@ func TryUpstreamWithAllKeys(
 			}
 			metricsManager.RecordRequestFinalizeSuccess(currentBaseURL, apiKey, metricsServiceType, requestID, usage)
 			channelScheduler.RecordRequestEnd(currentBaseURL, apiKey, metricsServiceType, kind)
+
+			// Phase 2: 记录 system header 过滤成功，巩固当前过滤层级。
+			if kind == scheduler.ChannelKindMessages && upstream.ChannelUID != "" {
+				keyHash := autopilot.KeyHashFromAPIKey(apiKey)
+				systemHeaderFilterCache.Set(upstream.ChannelUID, keyHash, redirectedModel, getCurrentFilterLevel(upstream.ChannelUID, keyHash, redirectedModel))
+			}
+
 			if probeKey := currentBaseURL + "|" + apiKey; probeAcquired[probeKey] {
 				metricsManager.ReleaseProbe(currentBaseURL, apiKey, metricsServiceType)
 				delete(probeAcquired, probeKey)
@@ -1310,4 +1349,55 @@ func trackStreamingConversation(c *gin.Context, channelScheduler *scheduler.Chan
 
 	channelScheduler.TrackConversationWithStatusAndMessages(kind, userID, model, channelIndex, channelName, "", lastUserMsgStr, lastUserMessages, userMsgCountInt, agentRole, "streaming", AgentContextFromGin(c))
 	return userID
+}
+
+// applySystemHeaderFilterToBody 对请求体的 system 字段应用分层过滤。
+// 返回过滤后的请求体与是否发生修改。
+func applySystemHeaderFilterToBody(body []byte, level providers.SystemHeaderFilterLevel) ([]byte, bool) {
+	if level <= providers.LevelNoFilter {
+		return body, false
+	}
+
+	var reqMap map[string]interface{}
+	if err := json.Unmarshal(body, &reqMap); err != nil {
+		return body, false
+	}
+
+	systemRaw, ok := reqMap["system"]
+	if !ok || systemRaw == nil {
+		return body, false
+	}
+
+	filtered := providers.FilterSystemHeader(systemRaw, level)
+	if filtered == systemRaw {
+		return body, false
+	}
+
+	reqMap["system"] = filtered
+	newBody, err := json.Marshal(reqMap)
+	if err != nil {
+		return body, false
+	}
+	return newBody, true
+}
+
+// getCurrentFilterLevel 获取当前缓存的过滤层级；无记录时返回 0（不过滤）。
+func getCurrentFilterLevel(channelUID, keyHash, model string) int {
+	if entry := systemHeaderFilterCache.Get(channelUID, keyHash, model); entry != nil {
+		return entry.Level
+	}
+	return 0
+}
+
+// tryUpgradeFilterLevel 在失败次数达到阈值时升级到下一过滤层级。
+// 层级上限为 3（LevelFirstBlock）。
+func tryUpgradeFilterLevel(channelUID, keyHash, model string) {
+	entry := systemHeaderFilterCache.Get(channelUID, keyHash, model)
+	if entry == nil {
+		return
+	}
+	const failureUpgradeThreshold = 3
+	if entry.FailureCount >= failureUpgradeThreshold && entry.Level < int(providers.LevelFirstBlock) {
+		systemHeaderFilterCache.Set(channelUID, keyHash, model, entry.Level+1)
+	}
 }

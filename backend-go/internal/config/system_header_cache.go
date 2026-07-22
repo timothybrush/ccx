@@ -10,9 +10,9 @@ import (
 type SystemHeaderFilterEntry struct {
 	Level        int       `json:"level"`         // 0-3
 	DetectedAt   time.Time `json:"detected_at"`   // 探测时间
-	SuccessCount int       `json:"success_count"`  // 成功次数
-	FailureCount int       `json:"failure_count"`  // 失败次数
-	LastError    string    `json:"last_error"`     // 最近错误
+	SuccessCount int       `json:"success_count"` // 成功次数
+	FailureCount int       `json:"failure_count"` // 失败次数
+	LastError    string    `json:"last_error"`    // 最近错误
 }
 
 // SystemHeaderFilterCache 管理 system header 过滤层级的缓存

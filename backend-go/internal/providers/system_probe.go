@@ -71,7 +71,7 @@ func buildMinimalTestRequest() interface{} {
 		},
 		"messages": []interface{}{
 			map[string]interface{}{
-				"role": "user",
+				"role":    "user",
 				"content": "Hi",
 			},
 		},
@@ -83,7 +83,7 @@ func buildMinimalTestRequest() interface{} {
 func sendTestRequest(ctx context.Context, baseURL string, apiKey string, req interface{}, model string) error {
 	// 构造完整请求
 	fullReq := map[string]interface{}{
-		"model": model,
+		"model":      model,
 		"max_tokens": 10,
 	}
 
