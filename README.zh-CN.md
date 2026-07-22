@@ -23,6 +23,10 @@ CCX 是一个高性能的 AI API 代理与协议转换网关，支持 Claude、O
 
 <table>
 <tr>
+<td width="180"><a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=ccx"><img src="docs/sponsors/volcengine.png" alt="火山引擎" width="150"></a></td>
+<td>感谢 <a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=ccx">字节火山引擎</a> 赞助本项目！【专属活动优惠】19元Tokens包！享字节自研豆包模型+满血版开源 SOTA模型，覆盖文本、VLM、图像生成，全模态一站配齐：Seed-2.1、Seedream-5.0、GLM-5.2、DeepSeek等。不止编程、更能解决 Agent 复杂长程任务 -->注册即领2500万Tokens，<a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=ccx">立即前往</a></td>
+</tr>
+<tr>
 <td width="180"><a href="https://www.compshare.cn/?ytag=GPU_YY_git_ccx"><img src="docs/sponsors/youyun-zhisuan.png" alt="优云智算" width="150"></a></td>
 <td>感谢 <a href="https://www.compshare.cn/?ytag=GPU_YY_git_ccx">优云智算</a> 赞助了本项目！优云智算是 UCloud 旗下 AI 云平台，主打包月、按次的高性价比国模 Agent Plan 套餐，低至 49 元/月起。同时提供官转稳定海外模型，支持接入 Claude Code、Codex 及 API 调用，支持企业高并发、7*24 技术支持、自助开票。通过<a href="https://www.compshare.cn/?ytag=GPU_YY_git_ccx">此链接</a>注册的用户，可得免费 5 元平台体验金！</td>
 </tr>

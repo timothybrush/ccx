@@ -12,9 +12,11 @@ import { maskApiKey } from '@/utils/api-key-mask'
 import compshareIcon from '@/assets/compshare.png'
 import runapiIcon from '@/assets/runapi.svg'
 import unity2Icon from '@/assets/unity2.jpg'
+import byteplusIcon from '@/assets/byteplus.png'
+import volcArkIcon from '@/assets/volc-ark.png'
 import type { ProviderPreset, ProviderPlan, ChannelTarget, ProviderKeyAsset } from '@/types'
 
-const { t, tf } = useLanguage()
+const { t, tf, locale } = useLanguage()
 const { isChannelPageActive } = useDesktopActivity()
 const emit = defineEmits<{
   created: [target: string]
@@ -31,11 +33,12 @@ const {
   createChannel,
 } = useChannelPresets()
 
-const providerIcons: Record<string, string> = {
+const providerIcons = computed<Record<string, string>>(() => ({
   compshare: compshareIcon,
   runapi: runapiIcon,
   unity2: unity2Icon,
-}
+  'volc-ark': locale.value === 'zh-CN' ? volcArkIcon : byteplusIcon,
+}))
 
 const selectedProvider = ref('')
 const selectedTarget = ref('')
@@ -346,8 +349,12 @@ const submit = async () => {
               :src="providerIcons[preset.id]"
               :alt="`${preset.label} icon`"
               :class="[
-                'mt-0.5 shrink-0 bg-secondary object-cover ring-1 ring-border',
-                preset.id === 'runapi' ? 'h-9 w-9 rounded-xl' : 'h-8 w-8 rounded-lg',
+                'mt-0.5 shrink-0 bg-secondary ring-1 ring-border',
+                preset.id === 'runapi'
+                  ? 'h-9 w-9 rounded-xl object-cover'
+                  : preset.id === 'volc-ark'
+                    ? 'h-8 w-16 rounded-lg object-contain p-1 dark:bg-white'
+                    : 'h-8 w-8 rounded-lg object-cover',
               ]"
             >
             <div class="min-w-0 flex-1">
