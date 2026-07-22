@@ -419,17 +419,21 @@ func extractResponsesInstructions(system interface{}) string {
 		return extractSystemText(system)
 	}
 
-	first, ok := arr[0].(map[string]interface{})
-	if !ok || first["type"] != "text" {
-		return extractSystemText(system)
+	// 过滤所有 Claude Code header blocks
+	parts := []string{}
+	for _, item := range arr {
+		obj, ok := item.(map[string]interface{})
+		if !ok || obj["type"] != "text" {
+			continue
+		}
+		if text, ok := obj["text"].(string); ok {
+			if isClaudeCodeSystemHeader(text) {
+				continue // 跳过 Claude Code 注入的 header
+			}
+			parts = append(parts, text)
+		}
 	}
-
-	text, ok := first["text"].(string)
-	if !ok || !strings.HasPrefix(text, "x-anthropic-billing-header:") {
-		return extractSystemText(system)
-	}
-
-	return extractSystemTextBlocks(system, 1)
+	return strings.Join(parts, "\n")
 }
 
 func responsesTextContentType(role string) string {

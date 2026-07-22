@@ -739,8 +739,11 @@ func ExtractConversationID(c *gin.Context, bodyBytes []byte) string {
 // cchPattern 匹配 cch=xxx; 部分（包括前后空格）
 var cchPattern = regexp.MustCompile(`\s*cch=[^;]*;\s*`)
 
-// RemoveBillingHeaders 移除请求体 system 数组中第一个包含 cch= 的文本块的 cch 参数
-// 仅移除 cch=xxx; 部分，保留其他计费参数（如 cc_version、cc_entrypoint）
+// billingHeaderPattern 匹配完整的 billing header 行
+var billingHeaderPattern = regexp.MustCompile(`^x-anthropic-billing-header:.*$`)
+
+// RemoveBillingHeaders 移除请求体 system 数组中的 billing header
+// 当 StripBillingHeader=true 时，移除整个 billing header block（不仅是 cch= 参数）
 // enableLog: 是否输出日志（由 envCfg.EnableRequestLogs 控制）
 // apiType: 接口类型（Messages/Responses/Gemini），用于日志标签前缀
 func RemoveBillingHeaders(bodyBytes []byte, enableLog bool, apiType string) ([]byte, bool) {
@@ -762,33 +765,40 @@ func RemoveBillingHeadersWithContext(c *gin.Context, bodyBytes []byte, enableLog
 	}
 
 	modified := false
+	newSystemArr := make([]interface{}, 0, len(systemArr))
 	for _, item := range systemArr {
 		itemMap, ok := item.(map[string]interface{})
 		if !ok {
+			newSystemArr = append(newSystemArr, item)
 			continue
 		}
 
 		text, ok := itemMap["text"].(string)
-		if !ok || !strings.Contains(text, "cch=") {
+		if !ok {
+			newSystemArr = append(newSystemArr, item)
 			continue
 		}
 
-		// 移除 cch=xxx; 部分
-		newText := cchPattern.ReplaceAllString(text, "")
-		// 清理末尾多余空格
-		newText = strings.TrimRight(newText, " ")
-		itemMap["text"] = newText
-		modified = true
-
-		if enableLog {
-			RequestLogf(c, "[%s-Preprocess] 已移除 system 文本块中的 cch 计费参数", apiType)
+		// 检查是否为 billing header block
+		if billingHeaderPattern.MatchString(text) {
+			// 移除整个 billing header block
+			modified = true
+			if enableLog {
+				RequestLogf(c, "[%s-Preprocess] 已移除 system 中的 billing header block", apiType)
+			}
+			continue // 跳过此 block
 		}
-		break // 只处理第一个匹配的元素
+
+		// 非 billing header block，保留
+		newSystemArr = append(newSystemArr, item)
 	}
 
 	if !modified {
 		return bodyBytes, false
 	}
+
+	// 更新 system 数组
+	data["system"] = newSystemArr
 
 	newBytes, err := utils.MarshalJSONNoEscape(data)
 	if err != nil {

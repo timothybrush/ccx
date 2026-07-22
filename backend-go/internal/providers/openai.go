@@ -853,6 +853,25 @@ func processToolUsePart(id, name string, input interface{}, index int) []string 
 
 // 辅助函数
 
+// claudeCodeSystemPatterns 匹配 Claude Code 注入的 system header 文本
+var claudeCodeSystemPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`^x-anthropic-billing-header:`),
+	regexp.MustCompile(`^You are Claude Code, Anthropic's official CLI for Claude\.`),
+	regexp.MustCompile(`^You are a Claude agent, built on Anthropic's Claude Agent SDK\.`),
+	regexp.MustCompile(`^You are an? .+ (?:specialist|agent) for Claude Code`),
+}
+
+// isClaudeCodeSystemHeader 判断 system text block 是否为 Claude Code 注入的 header
+func isClaudeCodeSystemHeader(text string) bool {
+	text = strings.TrimSpace(text)
+	for _, pattern := range claudeCodeSystemPatterns {
+		if pattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
 func extractSystemText(system interface{}) string {
 	return extractSystemTextBlocks(system, 0)
 }
@@ -881,6 +900,9 @@ func extractSystemTextBlocks(system interface{}, skipLeadingTextBlocks int) stri
 			continue
 		}
 		if text, ok := obj["text"].(string); ok {
+			if isClaudeCodeSystemHeader(text) {
+				continue // 跳过 Claude Code 注入的 header
+			}
 			parts = append(parts, text)
 		}
 	}
