@@ -1145,6 +1145,9 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 			if usage.WeeklyUsage.Limit > 0 && usage.WeeklyUsage.Remaining <= 0 {
 				return false
 			}
+			if usage.SubscriptionBalance != nil && usage.SubscriptionBalance.AmountUsedRatio >= 1.0 {
+				return false
+			}
 			return true
 		}
 	case credential.MiMoConsole != nil:
@@ -1189,6 +1192,10 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 					return false
 				}
 				if w.UsedPercent != nil && w.ResetTime > 0 && nowMs < w.ResetTime {
+					return false
+				}
+				// Coding Plan：已耗尽但无重置时间，无法判断何时恢复
+				if w.UsedPercent != nil && *w.UsedPercent >= 100.0 && w.ResetTime == 0 {
 					return false
 				}
 			}
