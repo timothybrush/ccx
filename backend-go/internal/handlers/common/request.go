@@ -739,6 +739,12 @@ func ExtractConversationID(c *gin.Context, bodyBytes []byte) string {
 // billingHeaderPattern 匹配完整的 billing header 行
 var billingHeaderPattern = regexp.MustCompile(`^x-anthropic-billing-header:.*$`)
 
+// isBillingHeaderBlock 判断是否为 billing header block
+// 使用 x-anthropic-billing-header: 前缀或 cch= 参数作为识别条件
+func isBillingHeaderBlock(text string) bool {
+	return billingHeaderPattern.MatchString(text) || strings.Contains(text, "cch=")
+}
+
 // RemoveBillingHeaders 移除请求体 system 数组中的 billing header
 // 当 StripBillingHeader=true 时，移除整个 billing header block（不仅是 cch= 参数）
 // enableLog: 是否输出日志（由 envCfg.EnableRequestLogs 控制）
@@ -777,7 +783,7 @@ func RemoveBillingHeadersWithContext(c *gin.Context, bodyBytes []byte, enableLog
 		}
 
 		// 检查是否为 billing header block
-		if billingHeaderPattern.MatchString(text) {
+		if isBillingHeaderBlock(text) {
 			// 移除整个 billing header block
 			modified = true
 			if enableLog {
