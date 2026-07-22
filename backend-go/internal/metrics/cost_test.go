@@ -16,6 +16,29 @@ func TestCalculateTokenCostUSD_NoPricing(t *testing.T) {
 	if cost := CalculateTokenCostUSD("unknown", 1_000_000, 1_000_000, 0, 0); cost != 0 {
 		t.Fatalf("expected 0 for unknown model, got %v", cost)
 	}
+	if _, pricingComplete := CalculateTokenCostUSDWithStatus("unknown", 1_000_000, 1_000_000, 0, 0); pricingComplete {
+		t.Fatal("unknown model must not be reported as fully priced")
+	}
+}
+
+func TestCalculateTokenCostUSDWithStatus_UsesRuntimePresetPricing(t *testing.T) {
+	cost, pricingComplete := CalculateTokenCostUSDWithStatus("claude-opus-4-8", 1_000_000, 1_000_000, 0, 0)
+	if !pricingComplete {
+		t.Fatal("claude-opus-4-8 pricing from the runtime preset must be complete")
+	}
+	if math.Abs(cost-30) > 0.0001 {
+		t.Fatalf("expected 30 USD from runtime preset, got %v", cost)
+	}
+}
+
+func TestPricingCoversTokenUsage(t *testing.T) {
+	pricing := &config.ModelPricing{OutputPrice: floatPtr(3)}
+	if pricingCoversTokenUsage(pricing, 1_000_000, 1_000_000, 0, 0) {
+		t.Fatal("missing input price must make mixed token usage incomplete")
+	}
+	if !pricingCoversTokenUsage(pricing, 0, 1_000_000, 0, 0) {
+		t.Fatal("output-only usage should be complete when output price is known")
+	}
 }
 
 func TestCalculateTokenCostUSD_CNYConversion(t *testing.T) {

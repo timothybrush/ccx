@@ -3,7 +3,9 @@
   "pricingUnit": "per_1m_tokens_usd",
   "upstreamCapabilities": [
     {
-      "patterns": ["(?:^|[-/])claude-haiku-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-haiku-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Haiku 4.5",
       "contextWindowTokens": 200000,
@@ -11,7 +13,9 @@
       "thinkingMode": "extended"
     },
     {
-      "patterns": ["(?:^|[-/])claude-sonnet-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-sonnet-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Sonnet 4.5",
       "contextWindowTokens": 200000,
@@ -19,84 +23,196 @@
       "thinkingMode": "extended"
     },
     {
-      "patterns": ["(?:^|[-/])claude-opus-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-opus-4-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Opus 4.5",
       "contextWindowTokens": 200000,
       "maxOutputTokens": 64000,
       "thinkingMode": "extended",
-      "reasoningEfforts": ["low", "medium", "high"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])claude-sonnet-4-6(?:-thinking)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-sonnet-4-6(?:-thinking)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Sonnet 4.6",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 64000,
       "thinkingMode": "adaptive",
-      "reasoningEfforts": ["low", "medium", "high", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 3,
+        "outputPrice": 15,
+        "inputCacheHitPrice": 0.3
+      },
+      "capabilities": {
+        "reasoning": true,
+        "vision": true,
+        "toolCalls": true
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-opus-4-6(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-opus-4-6(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Opus 4.6",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive",
-      "reasoningEfforts": ["low", "medium", "high", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])claude-opus-4-7(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-opus-4-7(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Opus 4.7",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive_only",
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Opus 4.8",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive_only",
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 5,
+        "outputPrice": 25,
+        "inputCacheHitPrice": 0.5
+      },
+      "capabilities": {
+        "reasoning": true,
+        "vision": true,
+        "toolCalls": true
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Sonnet 5",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive_only",
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 2,
+        "outputPrice": 10,
+        "inputCacheHitPrice": 0.19999999999999998
+      },
+      "capabilities": {
+        "reasoning": true,
+        "vision": true,
+        "toolCalls": true
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Fable 5",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive_always_on",
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 10,
+        "outputPrice": 50,
+        "inputCacheHitPrice": 1
+      },
+      "capabilities": {
+        "reasoning": true,
+        "vision": true,
+        "toolCalls": true
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-mythos-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-mythos-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Mythos 5",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
       "thinkingMode": "adaptive_always_on",
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])claude-mythos-preview(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-mythos-preview(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "anthropic",
       "displayName": "Claude Mythos Preview",
       "contextWindowTokens": 1000000,
       "thinkingMode": "adaptive",
-      "reasoningEfforts": ["max"]
+      "reasoningEfforts": [
+        "max"
+      ]
     },
     {
       "patterns": [
@@ -107,27 +223,45 @@
       "displayName": "GPT-5.2",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.2-chat-latest(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.2-chat-latest(?=$|@)"
+      ],
       "provider": "openai",
       "displayName": "GPT-5.2 Chat Latest",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 16384,
-      "reasoningEfforts": ["minimal", "low", "medium", "high"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
       "patterns": [
@@ -138,55 +272,91 @@
       "displayName": "GPT-5.2 Pro",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.2-codex(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.2-codex(?=$|@)"
+      ],
       "provider": "openai",
       "displayName": "GPT-5.2 Codex",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.3-codex(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.3-codex(?=$|@)"
+      ],
       "provider": "openai",
       "displayName": "GPT-5.3 Codex",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["minimal", "low", "medium", "high"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.3-chat-latest(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.3-chat-latest(?=$|@)"
+      ],
       "provider": "openai",
       "displayName": "GPT-5.3 Chat Latest",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 16384,
-      "reasoningEfforts": ["minimal", "low", "medium", "high"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
       "patterns": [
@@ -197,13 +367,32 @@
       "displayName": "GPT-5.5",
       "contextWindowTokens": 1050000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
-        "jsonMode": true
+        "jsonMode": true,
+        "reasoning": true,
+        "parallelFunctionCalling": true,
+        "webSearch": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 5,
+        "outputPrice": 30,
+        "inputCacheHitPrice": 0.5
+      }
     },
     {
       "patterns": [
@@ -214,13 +403,21 @@
       "displayName": "GPT-5.5 Pro",
       "contextWindowTokens": 1050000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": false
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
       "patterns": [
@@ -233,12 +430,30 @@
       "displayName": "Amazon Bedrock GPT-5.6",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
-        "toolCalls": true
+        "toolCalls": true,
+        "reasoning": true,
+        "parallelFunctionCalling": true,
+        "webSearch": true
       },
-      "sources": ["https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"]
+      "sources": [
+        "https://github.com/openai/codex/compare/rust-v0.142.2...rust-v0.142.3"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 5,
+        "outputPrice": 30,
+        "inputCacheHitPrice": 0.5
+      }
     },
     {
       "patterns": [
@@ -249,13 +464,31 @@
       "displayName": "GPT-5.4",
       "contextWindowTokens": 1050000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
-        "jsonMode": true
+        "jsonMode": true,
+        "reasoning": true,
+        "parallelFunctionCalling": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 2.5,
+        "outputPrice": 15,
+        "inputCacheHitPrice": 0.25
+      }
     },
     {
       "patterns": [
@@ -266,13 +499,21 @@
       "displayName": "GPT-5.4 Pro",
       "contextWindowTokens": 1050000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["minimal", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": false
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
       "patterns": [
@@ -283,13 +524,31 @@
       "displayName": "GPT-5.4 Mini",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["none", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
-        "jsonMode": true
+        "jsonMode": true,
+        "reasoning": true,
+        "parallelFunctionCalling": true,
+        "webSearch": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ],
+      "pricing": {
+        "unit": "per_1m_tokens_usd",
+        "currency": "USD",
+        "inputCacheMissPrice": 0.75,
+        "outputPrice": 4.5,
+        "inputCacheHitPrice": 0.075
+      }
     },
     {
       "patterns": [
@@ -300,23 +559,42 @@
       "displayName": "GPT-5.4 Nano",
       "contextWindowTokens": 272000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["none", "low", "medium", "high", "xhigh"],
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)", "(?:^|[-/])glm-5p2(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)",
+        "(?:^|[-/])glm-5p2(?=$|@)"
+      ],
       "provider": "zai",
       "displayName": "GLM-5.2",
       "description": "Zhipu flagship coding model with dynamic thinking, configurable reasoning effort, and streaming tool-call arguments on the OpenAI Chat API.",
       "contextWindowTokens": 1048576,
       "maxOutputTokens": 131072,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+      "reasoningEfforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
       "capabilities": {
         "toolCalls": true,
         "streamingToolCalls": true,
@@ -329,52 +607,78 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])glm-5\\.1(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)", "(?:^|[-/])glm-5p1(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])glm-5\\.1(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)",
+        "(?:^|[-/])glm-5p1(?=$|@)"
+      ],
       "provider": "zai",
       "displayName": "GLM-5.1",
       "contextWindowTokens": 202800,
       "maxOutputTokens": 131072,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": [
+        "high",
+        "max"
+      ],
       "capabilities": {
         "toolCalls": true,
         "jsonMode": true
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])glm-5(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])glm-5(?=$|@)"
+      ],
       "provider": "zai",
       "displayName": "GLM-5",
       "description": "Zhipu GLM-5 family fallback. Pricing comes from LiteLLM zai/glm-5.",
       "contextWindowTokens": 200000,
       "maxOutputTokens": 128000,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": [
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheHitPrice": 0.2,
         "inputCacheMissPrice": 1,
         "outputPrice": 3.2
       },
-      "sources": ["https://docs.z.ai/guides/overview/pricing"]
+      "sources": [
+        "https://docs.z.ai/guides/overview/pricing"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])sensenova-6\\.7-flash-lite(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])sensenova-6\\.7-flash-lite(?=$|@)"
+      ],
       "provider": "sensenova",
       "displayName": "SenseNova 6.7 Flash-Lite",
       "description": "Lightweight multimodal agent model for text chat, image understanding, tool calling, and streaming responses.",
       "contextWindowTokens": 256000,
       "maxOutputTokens": 65536,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["none", "low", "medium", "high"],
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true
       },
-      "sources": ["https://platform.sensenova.cn/docs"]
+      "sources": [
+        "https://platform.sensenova.cn/docs"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])longcat-2\\.0(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])longcat-2\\.0(?=$|@)"
+      ],
       "provider": "longcat",
       "displayName": "LongCat-2.0",
       "description": "LongCat API model available through OpenAI-compatible and Anthropic-compatible endpoints. Pricing uses the published limited-time discounted API pay-as-you-go rates.",
@@ -392,13 +696,19 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])step-3\\.7-flash(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])step-3\\.7-flash(?=$|@)"
+      ],
       "provider": "stepfun",
       "displayName": "Step 3.7 Flash",
       "description": "StepFun flagship multimodal reasoning model with native image/video input, tool calling, and three reasoning-effort levels.",
       "contextWindowTokens": 262144,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["low", "medium", "high"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high"
+      ],
       "capabilities": {
         "vision": true,
         "videoInput": true,
@@ -416,14 +726,21 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])qwen3\\.7-max(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])qwen3\\.7-max(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "dashscope",
       "displayName": "Qwen3.7 Max",
       "description": "Qwen3.7 Max text model. The model detail page states this release is functionally equivalent to snapshot qwen3.7-max-2026-05-20.",
       "contextWindowTokens": 991808,
       "maxOutputTokens": 65536,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "toolCalls": true,
         "jsonOutput": true,
@@ -437,17 +754,26 @@
         "inputCacheMissPrice": 12,
         "outputPrice": 36
       },
-      "sources": ["https://bailian.console.aliyun.com/cn-beijing?tab=model#/model-market/detail/qwen3.7-max?serviceSite=asia-pacific-china"]
+      "sources": [
+        "https://bailian.console.aliyun.com/cn-beijing?tab=model#/model-market/detail/qwen3.7-max?serviceSite=asia-pacific-china"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])qwen3\\.7-plus(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])qwen3\\.7-plus(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "dashscope",
       "displayName": "Qwen3.7 Plus",
       "description": "Qwen3.7 Plus multimodal model. The model detail page states this release is functionally equivalent to snapshot qwen3.7-plus-2026-05-26. Pricing is tiered by input length; top-level prices mirror the <=256K tier for compatibility.",
       "contextWindowTokens": 991808,
       "maxOutputTokens": 65536,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true,
@@ -479,34 +805,63 @@
           }
         ]
       },
-      "sources": ["https://bailian.console.aliyun.com/cn-beijing?tab=model#/model-market/detail/qwen3.7-plus?serviceSite=asia-pacific-china"]
+      "sources": [
+        "https://bailian.console.aliyun.com/cn-beijing?tab=model#/model-market/detail/qwen3.7-plus?serviceSite=asia-pacific-china"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])qwen3\\.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])qwen3\\.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "dashscope",
       "displayName": "Qwen3.5",
       "contextWindowTokens": 991808,
       "maxOutputTokens": 65536,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
-      "sources": ["https://www.alibabacloud.com/help/en/model-studio/models"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "sources": [
+        "https://www.alibabacloud.com/help/en/model-studio/models"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])qwen3-coder(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])qwen3-coder(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "dashscope",
       "displayName": "Qwen3 Coder",
       "contextWindowTokens": 997952,
       "maxOutputTokens": 65536,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
-      "sources": ["https://www.alibabacloud.com/help/en/model-studio/models"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "sources": [
+        "https://www.alibabacloud.com/help/en/model-studio/models"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])qwen3-max(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])qwen3-max(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "dashscope",
       "displayName": "Qwen3 Max",
       "contextWindowTokens": 258048,
       "maxOutputTokens": 65536,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
-      "sources": ["https://www.alibabacloud.com/help/en/model-studio/models"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "sources": [
+        "https://www.alibabacloud.com/help/en/model-studio/models"
+      ]
     },
     {
       "patterns": [
@@ -519,7 +874,10 @@
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 384000,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": [
+        "high",
+        "max"
+      ],
       "capabilities": {
         "jsonOutput": true,
         "toolCalls": true,
@@ -550,7 +908,10 @@
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 384000,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": [
+        "high",
+        "max"
+      ],
       "capabilities": {
         "jsonOutput": true,
         "toolCalls": true,
@@ -571,26 +932,41 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])deepseek-v3\\.2(?:-think|-terminus)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])deepseek-v3\\.2(?:-think|-terminus)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "deepseek",
       "displayName": "DeepSeek V3.2",
       "contextWindowTokens": 163840,
       "maxOutputTokens": 163840,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheMissPrice": 0.28,
         "outputPrice": 0.4
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])k3(?:\\[1m\\])?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])k3(?:\\[1m\\])?(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K3",
       "description": "Kimi Code flagship coding model. Moderato supports 256K context; Allegretto and above can unlock up to 1M. CCX uses the 256K entitlement as the conservative routing baseline.",
       "contextWindowTokens": 262144,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["low", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "toolCalls": true,
         "contextCaching": true,
@@ -601,7 +977,9 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])kimi-for-coding(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])kimi-for-coding(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K2.7 Code",
       "description": "Kimi Code standard coding model. Thinking is enabled by the service and the model is available to all Kimi Code membership tiers.",
@@ -610,7 +988,9 @@
       "defaultOutputTokens": 32768,
       "recommendedOutputTokens": 32768,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high"],
+      "reasoningEfforts": [
+        "high"
+      ],
       "capabilities": {
         "toolCalls": true,
         "contextCaching": true
@@ -620,7 +1000,9 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])kimi-for-coding-highspeed(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])kimi-for-coding-highspeed(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K2.7 Code HighSpeed",
       "description": "Kimi Code high-speed K2.7 Code variant. It uses the same model capability with approximately 5-6x output speed and higher quota consumption; availability depends on the membership tier.",
@@ -629,7 +1011,9 @@
       "defaultOutputTokens": 32768,
       "recommendedOutputTokens": 32768,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high"],
+      "reasoningEfforts": [
+        "high"
+      ],
       "capabilities": {
         "toolCalls": true,
         "contextCaching": true
@@ -651,7 +1035,10 @@
       "defaultOutputTokens": 32768,
       "recommendedOutputTokens": 32768,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["high", "max"],
+      "reasoningEfforts": [
+        "high",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
         "videoInput": true,
@@ -673,7 +1060,9 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])kimi-k2\\.6(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])kimi-k2\\.6(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K2.6",
       "description": "Multimodal Kimi model with text, image and video input, thinking/non-thinking modes, tool calls and JSON mode.",
@@ -681,7 +1070,12 @@
       "maxOutputTokens": 262144,
       "defaultOutputTokens": 32768,
       "recommendedOutputTokens": 262144,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
         "videoInput": true,
@@ -703,7 +1097,9 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])kimi-k2\\.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])kimi-k2\\.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K2.5",
       "description": "Multimodal Kimi model with text, image and video input, thinking/non-thinking modes, tool calls and JSON mode.",
@@ -732,7 +1128,9 @@
       ]
     },
     {
-      "patterns": ["(?:^|[-/])kimi-k2-thinking(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])kimi-k2-thinking(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "moonshot",
       "displayName": "Kimi K2 Thinking",
       "contextWindowTokens": 262144,
@@ -740,71 +1138,119 @@
       "defaultOutputTokens": 64000,
       "recommendedOutputTokens": 262144,
       "thinkingMode": "thinking",
-      "reasoningEfforts": ["low", "medium", "high", "max"],
-      "sources": ["https://platform.kimi.com/docs/guide/benchmark-best-practice"]
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "sources": [
+        "https://platform.kimi.com/docs/guide/benchmark-best-practice"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])minimax-m3(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])minimax-m3(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "minimax",
       "displayName": "MiniMax M3",
       "contextWindowTokens": 1000000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true
       }
     },
     {
-      "patterns": ["(?:^|[-/])minimax-m2\\.7(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])minimax-m2\\.7(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "minimax",
       "displayName": "MiniMax M2.7",
       "contextWindowTokens": 204800,
       "maxOutputTokens": 131072,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheHitPrice": 0.03,
         "inputCacheMissPrice": 0.3,
         "outputPrice": 1.2
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])minimax-m2\\.5(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])minimax-m2\\.5(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "minimax",
       "displayName": "MiniMax M2.5",
       "contextWindowTokens": 204800,
       "maxOutputTokens": 131072,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheHitPrice": 0.03,
         "inputCacheMissPrice": 0.3,
         "outputPrice": 1.2
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])minimax-m2\\.1(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])minimax-m2\\.1(?:-highspeed)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "minimax",
       "displayName": "MiniMax M2.1",
       "contextWindowTokens": 204800,
       "maxOutputTokens": 131072,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheHitPrice": 0.03,
         "inputCacheMissPrice": 0.3,
         "outputPrice": 1.2
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])mimo-v2\\.5(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])mimo-v2\\.5(?=$|@)"
+      ],
       "provider": "xiaomi",
       "displayName": "MiMo V2.5",
       "description": "MiMo multimodal model with text, image, video and audio input.",
       "contextWindowTokens": 1048576,
       "maxOutputTokens": 131072,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "contextCaching": true,
         "jsonOutput": true,
@@ -816,13 +1262,20 @@
       }
     },
     {
-      "patterns": ["(?:^|[-/])mimo-v2\\.5-pro(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])mimo-v2\\.5-pro(?=$|@)"
+      ],
       "provider": "xiaomi",
       "displayName": "MiMo V2.5 Pro",
       "description": "MiMo flagship text-only model.",
       "contextWindowTokens": 1048576,
       "maxOutputTokens": 131072,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "contextCaching": true,
         "jsonOutput": true,
@@ -831,47 +1284,76 @@
       }
     },
     {
-      "patterns": ["(?:^|[-/])mimo-v2-flash(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])mimo-v2-flash(?=$|@)"
+      ],
       "provider": "xiaomi",
       "displayName": "MiMo V2 Flash",
       "contextWindowTokens": 262144,
       "maxOutputTokens": 16384,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheHitPrice": 0,
         "inputCacheMissPrice": 0.09,
         "outputPrice": 0.29
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])doubao-seed-2-0(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])doubao-seed-2-0(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "provider": "volcengine",
       "displayName": "Doubao Seed 2.0",
       "contextWindowTokens": 256000,
       "maxOutputTokens": 128000,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "capabilities": {
         "vision": true,
         "toolCalls": true
       },
-      "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+      "sources": [
+        "https://www.volcengine.com/docs/82379/1330310"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])ernie-4\\.5(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])ernie-4\\.5(?=$|@)"
+      ],
       "provider": "baidu",
       "displayName": "ERNIE 4.5",
       "contextWindowTokens": 131072,
       "maxOutputTokens": 65536,
-      "reasoningEfforts": ["low", "medium", "high", "max"],
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
       "pricing": {
         "inputCacheMissPrice": 0.07,
         "outputPrice": 0.28
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])baichuan-m2(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])baichuan-m2(?=$|@)"
+      ],
       "provider": "baichuan",
       "displayName": "Baichuan M2",
       "contextWindowTokens": 131072,
@@ -880,10 +1362,14 @@
         "inputCacheMissPrice": 0.07,
         "outputPrice": 0.07
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])yi-34b-200k(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])yi-34b-200k(?=$|@)"
+      ],
       "provider": "01-ai",
       "displayName": "Yi 34B 200K",
       "contextWindowTokens": 200000,
@@ -892,10 +1378,14 @@
         "inputCacheMissPrice": 0.9,
         "outputPrice": 0.9
       },
-      "sources": ["https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"]
+      "sources": [
+        "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])agnes-2\\.0-flash(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])agnes-2\\.0-flash(?=$|@)"
+      ],
       "provider": "agnes",
       "displayName": "Agnes 2.0 Flash",
       "description": "Fast and efficient language model by Sapiens AI, optimized for agent workflows, tool calling, coding, multi-turn dialogue, reasoning, and image understanding. Scores Pass^3 60.9% (rank 9) on Claw-Eval. Supports thinking mode via chat_template_kwargs or Anthropic-compatible thinking parameter.",
@@ -910,244 +1400,416 @@
         "inputCacheMissPrice": 0.03,
         "outputPrice": 0.15
       },
-      "sources": ["https://agnes-ai.com/zh-Hans/docs/agnes-20-flash"]
+      "sources": [
+        "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])agnes-image-2\\.0-flash(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])agnes-image-2\\.0-flash(?=$|@)"
+      ],
       "provider": "agnes",
       "displayName": "Agnes Image 2.0 Flash",
       "description": "High-performance image generation and editing model by Sapiens AI. Supports text-to-image, image-to-image, and multi-image composition. Ranked Top 20 (ELO 1184) on Artificial Analysis image editing leaderboard. API uses OpenAI-compatible /v1/images/generations endpoint. Standard price $0.003/image.",
       "capabilities": {
         "imageGeneration": true
       },
-      "sources": ["https://agnes-ai.com/zh-Hans/docs/agnes-image-20-flash"]
+      "sources": [
+        "https://agnes-ai.com/zh-Hans/docs/agnes-image-20-flash"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])agnes-image-2\\.1-flash(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])agnes-image-2\\.1-flash(?=$|@)"
+      ],
       "provider": "agnes",
       "displayName": "Agnes Image 2.1 Flash",
       "description": "Upgraded image generation model by Sapiens AI, optimized for high information density images, complex compositions, and rich visual details. Supports text-to-image and image-to-image with composition preservation. API uses OpenAI-compatible /v1/images/generations endpoint. Standard price $0.003/image.",
       "capabilities": {
         "imageGeneration": true
       },
-      "sources": ["https://agnes-ai.com/zh-Hans/docs/agnes-image-21-flash"]
+      "sources": [
+        "https://agnes-ai.com/zh-Hans/docs/agnes-image-21-flash"
+      ]
     },
     {
-      "patterns": ["(?:^|[-/])agnes-video-v2\\.0(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])agnes-video-v2\\.0(?=$|@)"
+      ],
       "provider": "agnes",
       "displayName": "Agnes Video V2.0",
       "description": "Production-grade video generation model by Sapiens AI. Supports text-to-video, image-to-video, multi-image video, and keyframe animation. Uses async task API (POST /v1/videos to create, GET to poll). Supports up to 441 frames (approx 18s at 24fps). Standard price $0.005/second.",
       "capabilities": {
         "videoGeneration": true
       },
-      "sources": ["https://agnes-ai.com/zh-Hans/docs/agnes-video-v20"]
+      "sources": [
+        "https://agnes-ai.com/zh-Hans/docs/agnes-video-v20"
+      ]
     }
   ],
   "benchmarkProfiles": [
     {
-      "patterns": ["(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-opus-4-8(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "canonicalModel": "claude-opus-4-8",
-      "overallScore": 85,
+      "overallScore": 78.34,
       "categoryScores": {
+        "agentic": 80.3,
+        "coding": 81.1,
         "knowledge": 62.7,
         "math": 53.9,
-        "coding": 76.4,
-        "agentic": 80.3,
-        "multimodal": 77.0
+        "multimodal": 77
       },
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "claude-opus-4.8",
+          "sourceModel": "claude-opus-4-8",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.59,
-          "uncertainty": 0.02,
-          "cohortPercentile": 0.6,
-          "taskCount": 113,
-          "cohortSize": 16,
+          "rawValue": 0.5897435897435898,
+          "uncertainty": 0.01764815347429254,
+          "cohortPercentile": 0.6153846153846154,
+          "taskCount": 111,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
       "sources": [
         "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
         "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
-        "https://benchlm.ai/methodology"
+        "https://benchlm.ai/methodology",
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-5",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-fable-5",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-5",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-glm-5-2",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-4"
       ],
-      "verifiedAt": "2026-07-13",
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 30,
+      "sharedResults": 43,
       "comparableCategories": 5,
       "totalCategories": 8
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.6-terra(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.6-terra(?=$|@)"
+      ],
       "canonicalModel": "gpt-5.6-terra",
-      "overallScore": 85,
+      "overallScore": 72.57,
       "categoryScores": {
+        "agentic": 87.4,
+        "coding": 63.4,
         "knowledge": 92.9,
         "math": 80.8,
-        "coding": 63.4,
-        "agentic": 87.4,
         "multimodal": 80.7
       },
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "gpt-5.6-terra",
+          "sourceModel": "gpt-5-6-terra",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.7,
-          "uncertainty": 0.03,
-          "cohortPercentile": 0.9333333333333333,
+          "rawValue": 0.6962305986696231,
+          "uncertainty": 0.025569389504458404,
+          "cohortPercentile": 0.8461538461538461,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
+        },
+        {
+          "benchmark": "codexradar",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gpt-5.6-terra",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.6696428571428571,
+          "uncertainty": 0,
+          "cohortPercentile": 0.75,
+          "taskCount": 112,
+          "cohortSize": 4,
+          "effort": "ultra",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deng.codexradar.com/",
+          "capturedAt": "2026-07-22"
         }
       ],
       "sources": [
         "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-terra",
-        "https://benchlm.ai/methodology"
+        "https://benchlm.ai/methodology",
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-sol",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-5",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-terra",
+        "https://deng.codexradar.com/"
       ],
-      "verifiedAt": "2026-07-13",
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 30,
+      "sharedResults": 43,
       "comparableCategories": 5,
       "totalCategories": 8
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.6-sol(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.6-sol(?=$|@)"
+      ],
       "canonicalModel": "gpt-5.6-sol",
-      "overallScore": 86,
+      "overallScore": 81.96,
       "categoryScores": {
+        "agentic": 92,
+        "coding": 64.6,
         "knowledge": 94.6,
         "math": 87.5,
-        "coding": 64.6,
-        "agentic": 92.0,
-        "multimodal": 83.0
+        "multimodal": 83
       },
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "gpt-5.6-sol",
+          "sourceModel": "gpt-5-6-sol",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.73,
-          "uncertainty": 0.03,
+          "rawValue": 0.7266666666666667,
+          "uncertainty": 0.02829822249837175,
           "cohortPercentile": 1,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
+        },
+        {
+          "benchmark": "codexradar",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gpt-5.6-sol",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.7142857142857143,
+          "uncertainty": 0,
+          "cohortPercentile": 1,
+          "taskCount": 112,
+          "cohortSize": 4,
+          "effort": "max",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deng.codexradar.com/",
+          "capturedAt": "2026-07-22"
         }
       ],
       "sources": [
         "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-sol",
-        "https://benchlm.ai/methodology"
+        "https://benchlm.ai/methodology",
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-sol",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-5",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-sol",
+        "https://deng.codexradar.com/"
       ],
-      "verifiedAt": "2026-07-13",
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 30,
+      "sharedResults": 43,
       "comparableCategories": 5,
       "totalCategories": 8
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.6-luna(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.6-luna(?=$|@)"
+      ],
       "canonicalModel": "gpt-5.6-luna",
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "gpt-5.6-luna",
+          "sourceModel": "gpt-5-6-luna",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.67,
-          "uncertainty": 0.04,
-          "cohortPercentile": 0.7333333333333333,
+          "rawValue": 0.671875,
+          "uncertainty": 0.03992001235671055,
+          "cohortPercentile": 0.7692307692307693,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
+        },
+        {
+          "benchmark": "codexradar",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gpt-5.6-luna",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.5982142857142857,
+          "uncertainty": 0,
+          "cohortPercentile": 0.25,
+          "taskCount": 112,
+          "cohortSize": 4,
+          "effort": "max",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deng.codexradar.com/",
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-6-luna",
+        "https://benchlm.ai/compare/gpt-5-6-luna-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-luna",
+        "https://benchlm.ai/methodology",
+        "https://deng.codexradar.com/"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 41,
+      "comparableCategories": 5,
+      "totalCategories": 8,
+      "overallScore": 67.17,
+      "categoryScores": {
+        "agentic": 84.1,
+        "coding": 62.7,
+        "knowledge": 92.3,
+        "math": 73.6,
+        "multimodal": 78.4
+      }
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.5(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.5(?=$|@)"
+      ],
       "canonicalModel": "gpt-5.5",
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "gpt-5.5",
+          "sourceModel": "gpt-5-5",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.67,
-          "uncertainty": 0.06,
-          "cohortPercentile": 0.7333333333333333,
+          "rawValue": 0.6703539823008849,
+          "uncertainty": 0.06465646340908864,
+          "cohortPercentile": 0.6923076923076923,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "xhigh",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
+        },
+        {
+          "benchmark": "codexradar",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gpt-5.5",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.6517857142857143,
+          "uncertainty": 0,
+          "cohortPercentile": 0.5,
+          "taskCount": 112,
+          "cohortSize": 4,
+          "effort": "xhigh",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deng.codexradar.com/",
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-5",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-5",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-5",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-5",
+        "https://benchlm.ai/compare/gpt-5-5-vs-gpt-5-4",
+        "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-5",
+        "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+        "https://benchlm.ai/methodology",
+        "https://deng.codexradar.com/"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 43,
+      "comparableCategories": 5,
+      "totalCategories": 8,
+      "overallScore": 73.51,
+      "categoryScores": {
+        "agentic": 81.6,
+        "coding": 58.6,
+        "knowledge": 57.8,
+        "math": 47.6,
+        "multimodal": 70.4
+      }
     },
     {
-      "patterns": ["(?:^|[-/])gpt-5\\.4(?:-openai-compact)?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.4(?:-openai-compact)?(?=$|@)"
+      ],
       "canonicalModel": "gpt-5.4",
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "gpt-5.4",
+          "sourceModel": "gpt-5-4",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.52,
-          "uncertainty": 0.02,
-          "cohortPercentile": 0.3333333333333333,
+          "rawValue": 0.5176991150442478,
+          "uncertainty": 0.015021049567382833,
+          "cohortPercentile": 0.46153846153846156,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "xhigh",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-gpt-5-4",
+        "https://benchlm.ai/compare/gpt-5-6-terra-vs-gpt-5-4",
+        "https://benchlm.ai/compare/gpt-5-6-sol-vs-gpt-5-4",
+        "https://benchlm.ai/compare/gpt-5-6-luna-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-4",
+        "https://benchlm.ai/compare/gpt-5-5-vs-gpt-5-4",
+        "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-4",
+        "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+        "https://benchlm.ai/compare/gemini-3-5-flash-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-haiku-4-5-vs-gpt-5-4",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 40,
+      "comparableCategories": 5,
+      "totalCategories": 8,
+      "overallScore": 74.24,
+      "categoryScores": {
+        "agentic": 77.2,
+        "coding": 57.7,
+        "knowledge": 57.6,
+        "math": 42.5,
+        "multimodal": 73.2
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-fable-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "canonicalModel": "claude-fable-5",
       "benchmarkEvidence": [
         {
@@ -1156,26 +1818,45 @@
           "sourceModel": "claude-fable-5",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.7,
-          "uncertainty": 0.04,
-          "cohortPercentile": 0.9333333333333333,
+          "rawValue": 0.6991150442477876,
+          "uncertainty": 0.03244917575471319,
+          "cohortPercentile": 0.9230769230769231,
           "taskCount": 113,
-          "cohortSize": 16,
-          "effort": "max",
+          "cohortSize": 13,
+          "effort": "xhigh",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-fable-5",
+        "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-5",
+        "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-5",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-4",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-terra",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-sol",
+        "https://benchlm.ai/compare/claude-fable-5-vs-gpt-5-6-luna",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 32,
+      "comparableCategories": 3,
+      "totalCategories": 8,
+      "overallScore": 83.68,
+      "categoryScores": {
+        "agentic": 84.6,
+        "coding": 89.2,
+        "multimodal": 57.9
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-sonnet-5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "canonicalModel": "claude-sonnet-5",
       "benchmarkEvidence": [
         {
@@ -1184,79 +1865,125 @@
           "sourceModel": "claude-sonnet-5",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.54,
-          "uncertainty": 0.04,
-          "cohortPercentile": 0.5333333333333333,
+          "rawValue": 0.5384615384615384,
+          "uncertainty": 0.04236916470174386,
+          "cohortPercentile": 0.5384615384615384,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-5",
+        "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-5",
+        "https://benchlm.ai/compare/claude-sonnet-5-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 34,
+      "comparableCategories": 4,
+      "totalCategories": 8,
+      "overallScore": 65.32,
+      "categoryScores": {
+        "agentic": 81.9,
+        "coding": 76.7,
+        "knowledge": 57.4,
+        "multimodal": 88.3
+      }
     },
     {
-      "patterns": ["(?:^|[-/])claude-sonnet-4-6(?:-thinking)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])claude-sonnet-4-6(?:-thinking)?(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
       "canonicalModel": "claude-sonnet-4-6",
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "claude-sonnet-4.6",
+          "sourceModel": "claude-sonnet-4-6",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.3,
-          "uncertainty": 0.04,
-          "cohortPercentile": 0.06666666666666667,
+          "rawValue": 0.29933481152993346,
+          "uncertainty": 0.04092141269189136,
+          "cohortPercentile": 0.15384615384615385,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "high",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/compare/claude-sonnet-5-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/compare/claude-fable-5-vs-claude-sonnet-4-6",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 24,
+      "comparableCategories": 5,
+      "totalCategories": 8,
+      "overallScore": 65.07,
+      "categoryScores": {
+        "agentic": 65.2,
+        "coding": 69.1,
+        "knowledge": 66,
+        "math": 26.4,
+        "multimodal": 77.4
+      }
     },
     {
-      "patterns": ["(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)", "(?:^|[-/])glm-5p2(?=$|@)"],
+      "patterns": [
+        "(?:^|[-/])glm-5\\.2(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)",
+        "(?:^|[-/])glm-5p2(?=$|@)"
+      ],
       "canonicalModel": "glm-5.2",
       "benchmarkEvidence": [
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "glm-5.2",
+          "sourceModel": "glm-5-2",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.44,
-          "uncertainty": 0.02,
-          "cohortPercentile": 0.26666666666666666,
+          "rawValue": 0.43777777777777777,
+          "uncertainty": 0.01725629620580811,
+          "cohortPercentile": 0.38461538461538464,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "max",
           "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-glm-5-2",
+        "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+        "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-4",
+        "https://benchlm.ai/compare/glm-5-2-vs-gpt-5-5",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
-      "comparableCategories": 1,
-      "totalCategories": 1
+      "sharedResults": 36,
+      "comparableCategories": 4,
+      "totalCategories": 8,
+      "overallScore": 63.96,
+      "categoryScores": {
+        "agentic": 81,
+        "coding": 62.1,
+        "knowledge": 59.6,
+        "math": 95.9
+      }
     },
     {
       "patterns": [
@@ -1269,26 +1996,213 @@
         {
           "benchmark": "deepswe",
           "benchmarkVersion": "v1.1",
-          "sourceModel": "kimi-k2.7-code",
+          "sourceModel": "kimi-k2-7-code",
           "domain": "coding",
           "metric": "pass_at_1",
-          "rawValue": 0.31,
-          "uncertainty": 0.01,
-          "cohortPercentile": 0.13333333333333333,
+          "rawValue": 0.3053097345132743,
+          "uncertainty": 0.005007016522460913,
+          "cohortPercentile": 0.23076923076923078,
           "taskCount": 113,
-          "cohortSize": 16,
+          "cohortSize": 13,
           "effort": "default",
-          "selectionBasis": "published_default",
+          "selectionBasis": "best_available_effort",
           "sourceUrl": "https://deepswe.datacurve.ai/",
-          "capturedAt": "2026-07-18"
+          "capturedAt": "2026-07-22"
         }
       ],
-      "sources": ["https://deepswe.datacurve.ai/"],
-      "verifiedAt": "2026-07-18",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/claude-opus-4-8-vs-kimi-k2-7-code",
+        "https://benchlm.ai/compare/glm-5-2-vs-kimi-k2-7-code",
+        "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-4",
+        "https://benchlm.ai/compare/kimi-k2-7-code-vs-gpt-5-5",
+        "https://benchlm.ai/methodology"
+      ],
+      "verifiedAt": "2026-07-22",
       "lane": "provisional",
-      "sharedResults": 16,
+      "sharedResults": 19,
       "comparableCategories": 1,
-      "totalCategories": 1
+      "totalCategories": 8,
+      "overallScore": 55
+    },
+    {
+      "patterns": [
+        "(?:^|[-/])gemini-3.5-flash(?=$|@)"
+      ],
+      "canonicalModel": "gemini-3.5-flash",
+      "verifiedAt": "2026-07-22",
+      "lane": "provisional",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/gemini-3-5-flash-vs-claude-haiku-4-5",
+        "https://benchlm.ai/compare/gemini-3-5-flash-vs-gpt-5-4",
+        "https://benchlm.ai/methodology"
+      ],
+      "sharedResults": 33,
+      "comparableCategories": 5,
+      "totalCategories": 8,
+      "benchmarkEvidence": [
+        {
+          "benchmark": "deepswe",
+          "benchmarkVersion": "v1.1",
+          "sourceModel": "gemini-3-5-flash",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.37389380530973454,
+          "uncertainty": 0.01787862506784315,
+          "cohortPercentile": 0.3076923076923077,
+          "taskCount": 113,
+          "cohortSize": 13,
+          "effort": "medium",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deepswe.datacurve.ai/",
+          "capturedAt": "2026-07-22"
+        }
+      ],
+      "overallScore": 64.75,
+      "categoryScores": {
+        "agentic": 77.2,
+        "coding": 53.9,
+        "knowledge": 47.2,
+        "math": 32.9,
+        "multimodal": 83.8
+      }
+    },
+    {
+      "patterns": [
+        "(?:^|[-/])gemini-3.1-pro(?=$|@)"
+      ],
+      "canonicalModel": "gemini-3.1-pro",
+      "verifiedAt": "2026-07-22",
+      "lane": "provisional",
+      "sources": [
+        "https://deepswe.datacurve.ai/"
+      ],
+      "sharedResults": 13,
+      "comparableCategories": 1,
+      "totalCategories": 1,
+      "benchmarkEvidence": [
+        {
+          "benchmark": "deepswe",
+          "benchmarkVersion": "v1.1",
+          "sourceModel": "gemini-3-1-pro-preview",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.11751662971175167,
+          "uncertainty": 0.024885460821025294,
+          "cohortPercentile": 0.07692307692307693,
+          "taskCount": 113,
+          "cohortSize": 13,
+          "effort": "high",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deepswe.datacurve.ai/",
+          "capturedAt": "2026-07-22"
+        }
+      ]
+    },
+    {
+      "patterns": [
+        "(?:^|[-/])gpt-5\\.4-mini(?=$|@)"
+      ],
+      "canonicalModel": "gpt-5.4-mini",
+      "verifiedAt": "2026-07-22",
+      "lane": "provisional",
+      "sources": [
+        "https://deepswe.datacurve.ai/"
+      ],
+      "sharedResults": 8,
+      "comparableCategories": 1,
+      "totalCategories": 1,
+      "benchmarkEvidence": [
+        {
+          "benchmark": "deepswe",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gpt-5-4-mini",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.24336283185840707,
+          "uncertainty": 0.029621909222176883,
+          "cohortPercentile": 0.5,
+          "taskCount": 113,
+          "cohortSize": 8,
+          "effort": "default",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deepswe.datacurve.ai/",
+          "capturedAt": "2026-07-22"
+        }
+      ]
+    },
+    {
+      "patterns": [
+        "(?:^|[-/])gemini-3-flash(?=$|@)"
+      ],
+      "canonicalModel": "gemini-3-flash",
+      "verifiedAt": "2026-07-22",
+      "lane": "provisional",
+      "sources": [
+        "https://deepswe.datacurve.ai/"
+      ],
+      "sharedResults": 8,
+      "comparableCategories": 1,
+      "totalCategories": 1,
+      "benchmarkEvidence": [
+        {
+          "benchmark": "deepswe",
+          "benchmarkVersion": "v1",
+          "sourceModel": "gemini-3-flash-preview",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.051622418879056046,
+          "uncertainty": 0.024774168218621773,
+          "cohortPercentile": 0.25,
+          "taskCount": 113,
+          "cohortSize": 8,
+          "effort": "default",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deepswe.datacurve.ai/",
+          "capturedAt": "2026-07-22"
+        }
+      ]
+    },
+    {
+      "patterns": [
+        "(?:^|[-/])claude-haiku-4.5(?:-\\d{4}-\\d{2}-\\d{2}|-\\d{6,8})?(?=$|@)"
+      ],
+      "canonicalModel": "claude-haiku-4.5",
+      "verifiedAt": "2026-07-22",
+      "lane": "provisional",
+      "sources": [
+        "https://deepswe.datacurve.ai/",
+        "https://benchlm.ai/compare/gemini-3-5-flash-vs-claude-haiku-4-5",
+        "https://benchlm.ai/compare/claude-haiku-4-5-vs-gpt-5-4",
+        "https://benchlm.ai/methodology"
+      ],
+      "sharedResults": 8,
+      "comparableCategories": 2,
+      "totalCategories": 8,
+      "benchmarkEvidence": [
+        {
+          "benchmark": "deepswe",
+          "benchmarkVersion": "v1",
+          "sourceModel": "claude-haiku-4-5",
+          "domain": "coding",
+          "metric": "pass_at_1",
+          "rawValue": 0.0022123893805309734,
+          "uncertainty": 0.004336203505619588,
+          "cohortPercentile": 0.125,
+          "taskCount": 113,
+          "cohortSize": 8,
+          "effort": "default",
+          "selectionBasis": "best_available_effort",
+          "sourceUrl": "https://deepswe.datacurve.ai/",
+          "capturedAt": "2026-07-22"
+        }
+      ],
+      "overallScore": 56.58,
+      "categoryScores": {
+        "coding": 73.3,
+        "math": 4.9
+      }
     }
   ]
 }

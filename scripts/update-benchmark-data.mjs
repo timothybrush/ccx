@@ -6,7 +6,7 @@
  * 2. 从 litellm 抓取价格/上下文窗口数据
  * 3. 映射到 CCX 模型注册表
  * 4. 更新 shared/model-registry/ccx_model_registry.json
- * 5. 运行 generate-model-registry.mjs 重新生成代码
+ * 5. 运行 generate-model-registry.mjs 重新生成代码和运行时预置
  * 6. 生成多来源 benchmark 可视化
  * 7. 输出变更报告
  *
@@ -39,6 +39,7 @@ import { fetchBenchlmData } from './benchmark-sources/benchlm.mjs'
 import { fetchDradarData, DRADAR_MODEL_MAP } from './benchmark-sources/dradar.mjs'
 import { fetchLitellmModelInfo, LITELLM_MODEL_MAP } from './benchmark-sources/litellm.mjs'
 import { buildBenchmarkVisualizationData } from './benchmark-sources/visualization.mjs'
+import { presetArtifactPaths } from './generate-preset-manifest.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const registryPath = join(root, 'shared/model-registry/ccx_model_registry.json')
@@ -56,10 +57,11 @@ const modelsArg = args.find(a => a.startsWith('--models='))
 const modelsArgIndex = args.indexOf('--models')
 const modelsValue = modelsArg?.split('=', 2)[1] ?? (modelsArgIndex >= 0 ? args[modelsArgIndex + 1] : '')
 const targetModels = modelsValue ? modelsValue.split(',').map(model => model.trim()).filter(Boolean) : null
-const generatedPaths = [
+export const generatedArtifactPaths = [
   join(root, 'backend-go/internal/config/generated_model_registry.go'),
   join(root, 'frontend/src/generated/modelRegistry.ts'),
   join(root, 'desktop/frontend/src/generated/model-registry.ts'),
+  ...presetArtifactPaths,
 ]
 
 /**
@@ -424,7 +426,7 @@ export function validateRegistry(registry) {
  * 运行代码生成
  */
 function runCodeGeneration() {
-  console.log('\n[generate] Running generate-model-registry.mjs...')
+  console.log('\n[generate] Running generate-model-registry.mjs (code and presets)...')
   try {
     execFileSync('node', [join(root, 'scripts/generate-model-registry.mjs')], {
       stdio: 'inherit',
@@ -451,7 +453,7 @@ function generateBenchmarkChart(data) {
 }
 
 function saveAndGenerateAtomically(registry) {
-  const trackedPaths = [registryPath, ...generatedPaths]
+  const trackedPaths = [registryPath, ...generatedArtifactPaths]
   const snapshots = new Map(
     trackedPaths
       .filter(path => existsSync(path))
@@ -464,6 +466,11 @@ function saveAndGenerateAtomically(registry) {
   } catch (error) {
     for (const [path, content] of snapshots) {
       atomicWrite(path, content)
+    }
+    for (const path of trackedPaths) {
+      if (!snapshots.has(path) && existsSync(path)) {
+        unlinkSync(path)
+      }
     }
     throw error
   }
@@ -569,7 +576,7 @@ export async function main() {
   if (!dryRun) {
     console.log('\n--- Saving registry ---')
     saveAndGenerateAtomically(registry)
-    console.log(`[save] Registry and generated code updated atomically`)
+    console.log(`[save] Registry and generated artifacts updated atomically`)
   } else {
     console.log('\n--- DRY RUN: No changes saved ---')
   }

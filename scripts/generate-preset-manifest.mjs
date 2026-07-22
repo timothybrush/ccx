@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -40,7 +40,9 @@ const CHANNEL_PRESET_SOURCES = {
   openAIMessages: join(root, 'shared/channel-presets/openai-messages.json'),
 }
 
-function main() {
+export const presetArtifactPaths = buildPresetArtifactPaths()
+
+export function generatePresetManifest() {
   mkdirSync(docsOutputDir, { recursive: true })
   mkdirSync(embeddedOutputDir, { recursive: true })
 
@@ -55,6 +57,17 @@ function main() {
     writeArtifact(docsOutputDir, shard.fileName, shard.content)
     writeArtifact(embeddedOutputDir, shard.fileName, shard.content)
   }
+}
+
+function buildPresetArtifactPaths() {
+  const paths = []
+  const fileNames = ['index.json', ...SHARDS.map(shard => shard.fileName)]
+  for (const outputDir of [docsOutputDir, embeddedOutputDir]) {
+    for (const fileName of fileNames) {
+      paths.push(join(outputDir, fileName), join(outputDir, `${fileName}.sha256`))
+    }
+  }
+  return paths
 }
 
 function renderShard(shard) {
@@ -238,4 +251,7 @@ function relativeToRoot(path) {
   return path.startsWith(root) ? path.slice(root.length + 1) : path
 }
 
-main()
+const invokedPath = process.argv[1] ? resolve(process.argv[1]) : ''
+if (invokedPath === fileURLToPath(import.meta.url)) {
+  generatePresetManifest()
+}

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,7 +20,7 @@ type testCostReportStore struct {
 	reportRowsErr error
 }
 
-func (t *testCostReportStore) AddRecord(record metrics.PersistentRecord)              {}
+func (t *testCostReportStore) AddRecord(record metrics.PersistentRecord) {}
 func (t *testCostReportStore) LoadRecords(since time.Time, apiType string) ([]metrics.PersistentRecord, error) {
 	return nil, nil
 }
@@ -114,6 +115,54 @@ func TestGetCostReport_BasicFlow(t *testing.T) {
 	}
 	if row0["totalRequests"].(float64) != 100 {
 		t.Errorf("expected totalRequests=100, got %v", row0["totalRequests"])
+	}
+}
+
+func TestGetCostReport_ReportsIncompletePricing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	store := &testCostReportStore{
+		reportRows: []metrics.CostReportRow{{
+			GroupKey: "sk-aa****bb", TotalRequests: 2, SuccessCount: 2,
+			InputTokens: 2_000_000, OutputTokens: 2_000_000,
+		}},
+		modelRows: []metrics.ModelCostBreakdownRow{
+			{Model: "claude-opus-4-8", InputTokens: 1_000_000, OutputTokens: 1_000_000},
+			{Model: "unpriced-model", InputTokens: 1_000_000, OutputTokens: 1_000_000},
+		},
+	}
+	deps := &CostReportDeps{MetricsManagers: map[string]*metrics.MetricsManager{
+		"messages": newTestMetricsManager(store),
+	}}
+
+	w := httptest.NewRecorder()
+	c, r := gin.CreateTestContext(w)
+	r.GET("/api/reports/cost", GetCostReport(deps))
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/reports/cost?type=messages", nil)
+	r.ServeHTTP(w, c.Request)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response struct {
+		Rows []costReportRow `json:"rows"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(response.Rows) != 1 {
+		t.Fatalf("expected one row, got %d", len(response.Rows))
+	}
+	row := response.Rows[0]
+	if row.PricingComplete {
+		t.Fatal("row with an unpriced model must not be reported as fully priced")
+	}
+	if math.Abs(row.ListCostUSD-30) > 0.0001 {
+		t.Fatalf("expected known cost subtotal 30 USD, got %v", row.ListCostUSD)
+	}
+	if len(row.UnpricedModels) != 1 || row.UnpricedModels[0] != "unpriced-model" {
+		t.Fatalf("unpricedModels = %v, want [unpriced-model]", row.UnpricedModels)
 	}
 }
 
@@ -230,9 +279,9 @@ func TestParseCostReportDuration(t *testing.T) {
 		{"30d", 30 * 24 * time.Hour},
 		{"90d", 90 * 24 * time.Hour},
 		{"365d", 365 * 24 * time.Hour},
-		{"", 7 * 24 * time.Hour},          // default
-		{"invalid", 7 * 24 * time.Hour},    // fallback
-		{"5m", 5 * time.Minute},            // standard Go duration
+		{"", 7 * 24 * time.Hour},                // default
+		{"invalid", 7 * 24 * time.Hour},         // fallback
+		{"5m", 5 * time.Minute},                 // standard Go duration
 		{"2h30m", 2*time.Hour + 30*time.Minute}, // standard Go duration
 	}
 

@@ -97,7 +97,10 @@
       <v-col cols="6" sm="3">
         <v-card variant="outlined" class="pa-3 text-center">
           <div class="text-caption text-medium-emphasis">官方定价成本</div>
-          <div class="text-h6 font-weight-bold">${{ totalListCostUSD.toFixed(4) }}</div>
+          <div :class="['text-h6 font-weight-bold', { 'text-warning': !pricingComplete }]">
+            {{ formatCost(totalListCostUSD, pricingComplete, 4) }}
+          </div>
+          <div v-if="!pricingComplete" class="text-caption text-warning">含未配置定价模型</div>
         </v-card>
       </v-col>
     </v-row>
@@ -144,7 +147,17 @@
             <td class="text-right">{{ formatTokens(row.outputTokens) }}</td>
             <td class="text-right">{{ formatTokens(row.cacheCreationTokens) }}</td>
             <td class="text-right">{{ formatTokens(row.cacheReadTokens) }}</td>
-            <td class="text-right font-weight-bold">${{ row.listCostUSD.toFixed(6) }}</td>
+            <td class="text-right font-weight-bold">
+              <span :class="{ 'text-warning': !isPricingComplete(row) }">
+                {{ formatCost(row.listCostUSD, isPricingComplete(row)) }}
+              </span>
+              <v-tooltip v-if="!isPricingComplete(row)" location="top">
+                <template #activator="{ props }">
+                  <v-icon v-bind="props" class="ml-1" color="warning" size="16">mdi-alert-circle-outline</v-icon>
+                </template>
+                {{ pricingHint(row) }}
+              </v-tooltip>
+            </td>
           </tr>
         </tbody>
       </v-table>
@@ -194,6 +207,7 @@ const totalRequests = computed(() => rows.value.reduce((s, r) => s + r.totalRequ
 const totalSuccess = computed(() => rows.value.reduce((s, r) => s + r.successCount, 0))
 const totalInputTokens = computed(() => rows.value.reduce((s, r) => s + r.inputTokens, 0))
 const totalListCostUSD = computed(() => rows.value.reduce((s, r) => s + r.listCostUSD, 0))
+const pricingComplete = computed(() => rows.value.every(isPricingComplete))
 const successRate = computed(() => {
   if (totalRequests.value === 0) return '0.0'
   return ((totalSuccess.value / totalRequests.value) * 100).toFixed(1)
@@ -209,6 +223,21 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M'
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
   return n.toString()
+}
+
+function isPricingComplete(row: CostReportRow): boolean {
+  return row.pricingComplete !== false
+}
+
+function formatCost(costUSD: number, complete: boolean, decimals = 6): string {
+  return `$${costUSD.toFixed(decimals)}${complete ? '' : '+'}`
+}
+
+function pricingHint(row: CostReportRow): string {
+  if (row.unpricedModels?.length) {
+    return `以下模型缺少完整定价：${row.unpricedModels.join('、')}；显示金额为已知部分下界。`
+  }
+  return '定价信息不完整；显示金额为已知部分下界。'
 }
 
 async function fetchReport() {
@@ -229,12 +258,13 @@ function exportCSV() {
 
   const headers = [
     groupByLabel.value, '请求数', '成功数', '输入Token', '输出Token',
-    '缓存创建Token', '缓存读取Token', '官方成本USD'
+    '缓存创建Token', '缓存读取Token', '官方成本USD（已知部分）', '定价状态', '未配置定价模型'
   ]
   const csvRows = rows.value.map(r => [
     r.groupKey, r.totalRequests, r.successCount,
     r.inputTokens, r.outputTokens, r.cacheCreationTokens,
     r.cacheReadTokens, r.listCostUSD.toFixed(6),
+    isPricingComplete(r) ? '完整' : '部分', r.unpricedModels?.join(' | ') || '',
   ])
 
   const csv = [headers.join(','), ...csvRows.map(r => r.join(','))].join('\n')

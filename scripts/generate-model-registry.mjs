@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { generatePresetManifest } from './generate-preset-manifest.mjs'
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const registryPath = join(root, 'shared/model-registry/ccx_model_registry.json')
 const registry = JSON.parse(readFileSync(registryPath, 'utf8'))
@@ -294,3 +296,6 @@ writeFileSync(
   join(root, 'desktop/frontend/src/generated/model-registry.ts'),
   generateDesktopTs(patternMap, benchmarkPatternMap),
 )
+
+// 运行时优先加载预置注册表；代码生成时必须同步该副本，避免其覆盖最新定价。
+generatePresetManifest()

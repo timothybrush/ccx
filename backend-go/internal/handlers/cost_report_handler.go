@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/metrics"
@@ -17,15 +18,17 @@ type CostReportDeps struct {
 
 // costReportRow 成本报表响应行
 type costReportRow struct {
-	GroupKey            string  `json:"groupKey"`
-	TotalRequests       int64   `json:"totalRequests"`
-	SuccessCount        int64   `json:"successCount"`
-	InputTokens         int64   `json:"inputTokens"`
-	OutputTokens        int64   `json:"outputTokens"`
-	CacheCreationTokens int64   `json:"cacheCreationTokens"`
-	CacheReadTokens     int64   `json:"cacheReadTokens"`
-	ListCostUSD         float64 `json:"listCostUSD"`
-	EffectiveCostUSD    float64 `json:"effectiveCostUSD"`
+	GroupKey            string   `json:"groupKey"`
+	TotalRequests       int64    `json:"totalRequests"`
+	SuccessCount        int64    `json:"successCount"`
+	InputTokens         int64    `json:"inputTokens"`
+	OutputTokens        int64    `json:"outputTokens"`
+	CacheCreationTokens int64    `json:"cacheCreationTokens"`
+	CacheReadTokens     int64    `json:"cacheReadTokens"`
+	ListCostUSD         float64  `json:"listCostUSD"`
+	EffectiveCostUSD    float64  `json:"effectiveCostUSD"`
+	PricingComplete     bool     `json:"pricingComplete"`
+	UnpricedModels      []string `json:"unpricedModels,omitempty"`
 }
 
 // GetCostReport 返回按维度聚合的成本报表。
@@ -73,24 +76,38 @@ func GetCostReport(deps *CostReportDeps) gin.HandlerFunc {
 				OutputTokens:        row.OutputTokens,
 				CacheCreationTokens: row.CacheCreationTokens,
 				CacheReadTokens:     row.CacheReadTokens,
+				PricingComplete:     true,
 			}
 
 			// 按模型明细计算成本（需要逐模型定价）
 			modelBreakdowns, err := store.QueryModelCostBreakdown(apiType, since, groupBy, row.GroupKey)
 			if err != nil {
 				log.Printf("[CostReport-CostCalc] 查询模型明细失败 (groupKey=%s): %v", row.GroupKey, err)
-				// 成本计算失败不阻断报表，留零
+				// 成本计算失败不阻断报表，但不能把未知成本误报为零。
+				cr.PricingComplete = false
 				result = append(result, cr)
 				continue
 			}
 
+			unpricedModels := make(map[string]struct{})
 			for _, mb := range modelBreakdowns {
-				listCost := metrics.CalculateTokenCostUSD(mb.Model, mb.InputTokens, mb.OutputTokens, mb.CacheCreationTokens, mb.CacheReadTokens)
+				listCost, pricingComplete := metrics.CalculateTokenCostUSDWithStatus(mb.Model, mb.InputTokens, mb.OutputTokens, mb.CacheCreationTokens, mb.CacheReadTokens)
 				cr.ListCostUSD += listCost
+				if !pricingComplete {
+					cr.PricingComplete = false
+					unpricedModels[mb.Model] = struct{}{}
+				}
 				// EffectiveCostMultiplier 由 autopilot 层管理；报表 handler 不反向依赖 autopilot，
 				// 暂时 EffectiveCostUSD == ListCostUSD。后续接入 autopilot.KeyEndpointProfile 后，
 				// 调用 metrics.ApplyEffectiveCostMultiplier(listCost, multiplier) 即可。
 				cr.EffectiveCostUSD += listCost
+			}
+			if len(unpricedModels) > 0 {
+				cr.UnpricedModels = make([]string, 0, len(unpricedModels))
+				for model := range unpricedModels {
+					cr.UnpricedModels = append(cr.UnpricedModels, model)
+				}
+				sort.Strings(cr.UnpricedModels)
 			}
 
 			result = append(result, cr)

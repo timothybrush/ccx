@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -17,17 +18,38 @@ import {
 } from './dradar.mjs'
 import { extractModelInfo } from './litellm.mjs'
 import {
+  generatedArtifactPaths,
   mergeBenchlmData,
   mergeDeepsweData,
   mergeLitellmData,
   validateRegistry,
 } from '../update-benchmark-data.mjs'
+import { presetArtifactPaths } from '../generate-preset-manifest.mjs'
 import { buildBenchmarkVisualizationData } from './visualization.mjs'
 import { renderBenchmarkChart, validateVisualizationData } from '../generate-benchmark-chart.mjs'
 
 function emptyReport() {
   return { updated: [], added: [], errors: [], litellmUpdated: [], litellmSkipped: [] }
 }
+
+function readJson(relativePath) {
+  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'))
+}
+
+test('runtime and published preset registries stay synchronized with the shared source', () => {
+  const source = readJson('../../shared/model-registry/ccx_model_registry.json')
+  const embedded = readJson('../../backend-go/internal/presetstore/embedded/model-registry.json')
+  const published = readJson('../../docs/public/presets/model-registry.json')
+
+  assert.deepEqual(embedded, source)
+  assert.deepEqual(published, source)
+})
+
+test('benchmark updater rolls preset artifacts into its generated output transaction', () => {
+  for (const artifactPath of presetArtifactPaths) {
+    assert.ok(generatedArtifactPaths.includes(artifactPath), `${artifactPath} is not tracked`)
+  }
+})
 
 test('canonical pattern generation accepts canonical and source model names', () => {
   const expected = '(?:^|[-/])gpt-5\\.6-sol(?=$|@)'
@@ -125,6 +147,20 @@ test('LiteLLM keeps missing capabilities unknown and maps function calling to to
   assert.equal(info.supports.vision, undefined)
   assert.equal(info.supports.reasoning, undefined)
   assert.equal(Object.hasOwn(info.supports, 'functionCalling'), false)
+})
+
+test('LiteLLM preserves explicit zero prices', () => {
+  const info = extractModelInfo({
+    source: {
+      input_cost_per_token: 0,
+      output_cost_per_token: 0,
+      cache_read_input_token_cost: 0,
+    },
+  }, { source: 'canonical' }).canonical
+
+  assert.equal(info.pricing.inputCacheMissPrice, 0)
+  assert.equal(info.pricing.outputPrice, 0)
+  assert.equal(info.pricing.inputCacheHitPrice, 0)
 })
 
 test('benchmark merge creates a complete valid profile', () => {

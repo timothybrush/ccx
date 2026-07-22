@@ -1811,6 +1811,8 @@ export interface CostReportRow {
   cacheReadTokens: number
   listCostUSD: number
   effectiveCostUSD: number
+  pricingComplete?: boolean
+  unpricedModels?: string[]
 }
 
 export interface CostReportResponse {

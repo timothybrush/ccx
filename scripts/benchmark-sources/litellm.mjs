@@ -15,6 +15,12 @@ import { execFileSync } from 'node:child_process'
 const REPO = 'BerriAI/litellm'
 const FILE_PATH = 'model_prices_and_context_window.json'
 
+function pricePerMillionOrNull(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value * 1_000_000
+    : null
+}
+
 /**
  * 通过 gh CLI 获取文件内容
  * @returns {Promise<Object>}
@@ -98,15 +104,9 @@ export function extractModelInfo(data, modelMap) {
       pricing: {
         unit: 'per_1m_tokens_usd',
         currency: 'USD',
-        inputCacheHitPrice: info.cache_read_input_token_cost
-          ? info.cache_read_input_token_cost * 1_000_000
-          : null,
-        inputCacheMissPrice: info.input_cost_per_token
-          ? info.input_cost_per_token * 1_000_000
-          : null,
-        outputPrice: info.output_cost_per_token
-          ? info.output_cost_per_token * 1_000_000
-          : null,
+        inputCacheHitPrice: pricePerMillionOrNull(info.cache_read_input_token_cost),
+        inputCacheMissPrice: pricePerMillionOrNull(info.input_cost_per_token),
+        outputPrice: pricePerMillionOrNull(info.output_cost_per_token),
       },
       supports: {
         reasoning: knownBoolean(info, 'supports_reasoning'),
