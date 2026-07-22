@@ -11,10 +11,10 @@ import (
 // AdvisorHintEffect 描述 advisor hint 转化后的路由约束效果。
 // 当 Applied=false 时调用方应忽略此效果，按默认路由。
 type AdvisorHintEffect struct {
-	Applied            bool        // 是否真的生效（false 时调用方应忽略，按默认路由）
-	MinQualityTier     QualityTier // 生效时的质量下界；hint 不确定时取 QualityTierHigh（§4.7.3）
-	AllowLocalCandidate bool       // 是否允许本地模型进入候选集
-	Reasons            []string    // 生效/未生效的原因记录
+	Applied             bool        // 是否真的生效（false 时调用方应忽略，按默认路由）
+	MinQualityTier      QualityTier // 生效时的质量下界；hint 不确定时取 QualityTierHigh（§4.7.3）
+	AllowLocalCandidate bool        // 是否允许本地模型进入候选集
+	Reasons             []string    // 生效/未生效的原因记录
 }
 
 // ResolveAdvisorHintEffect 根据 advisor hint + 配置 + 任务类别，判定 hint 是否真正生效及生效后的约束。
@@ -95,10 +95,10 @@ func ResolveAdvisorHintEffect(
 
 	// ── 所有前置检查通过 → Applied=true ──
 	effect := AdvisorHintEffect{
-		Applied:            true,
-		MinQualityTier:     hint.SuggestedMinQualityTier,
+		Applied:             true,
+		MinQualityTier:      hint.SuggestedMinQualityTier,
 		AllowLocalCandidate: hint.AllowLocalCandidate,
-		Reasons:            append([]string{}, hint.Reasons...), // 拷贝避免外部修改
+		Reasons:             append([]string{}, hint.Reasons...), // 拷贝避免外部修改
 	}
 
 	effect.Reasons = append(effect.Reasons, fmt.Sprintf(

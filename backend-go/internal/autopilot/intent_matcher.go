@@ -19,12 +19,12 @@ type IntentMatchResult struct {
 // IntentMatchContext 意图匹配上下文，聚合请求画像中的可用维度。
 // 不要求全部字段都有值；缺失字段（零值）跳过对应匹配维度。
 type IntentMatchContext struct {
-	ChannelKind string     // 必填
-	Model       string     // model_trial 匹配
-	TaskClass   TaskClass  // TaskClasses 过滤
-	AgentRole   string     // AgentRoles 过滤
-	SessionID   string     // session_pin 匹配
-	PromptHash  string     // 确定性流量分配
+	ChannelKind string    // 必填
+	Model       string    // model_trial 匹配
+	TaskClass   TaskClass // TaskClasses 过滤
+	AgentRole   string    // AgentRoles 过滤
+	SessionID   string    // session_pin 匹配
+	PromptHash  string    // 确定性流量分配
 }
 
 // MatchIntent 从活跃意图列表中查找最匹配的意图。

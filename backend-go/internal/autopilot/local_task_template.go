@@ -243,7 +243,7 @@ func (s *LocalTaskTemplateStore) FindBestPrompt(taskClass, domain, transcript st
 	defer s.mu.RUnlock()
 
 	type candidate struct {
-		t        *LocalTaskTemplate
+		t         *LocalTaskTemplate
 		createdAt time.Time
 	}
 

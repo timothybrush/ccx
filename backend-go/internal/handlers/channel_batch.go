@@ -14,16 +14,16 @@ import (
 // ChannelPack 导出的渠道包格式。
 // 包含元数据和渠道列表，用于跨实例迁移或模板分享。
 type ChannelPack struct {
-	Version   int              `json:"version"`
-	ExportedAt string           `json:"exportedAt"`
-	Channels  []ChannelPackEntry `json:"channels"`
+	Version    int                `json:"version"`
+	ExportedAt string             `json:"exportedAt"`
+	Channels   []ChannelPackEntry `json:"channels"`
 }
 
 // ChannelPackEntry 渠道包中的单条渠道记录。
 // ChannelType 标识该渠道属于哪类数组（messages/chat/responses/gemini/images/vectors），
 // 导入时据此分发到对应的 Upstream 数组。
 type ChannelPackEntry struct {
-	ChannelType string               `json:"channelType"`
+	ChannelType string                `json:"channelType"`
 	Channel     config.UpstreamConfig `json:"channel"`
 }
 
@@ -142,9 +142,9 @@ func isValidChannelType(ct string) bool {
 // ExportChannels 导出渠道为渠道包 JSON。
 //
 // 安全约束：
-// - 默认排除 APIKeys 明文（includeKeys=false）
-// - includeKeys=true 需要 admin 鉴权（WebAuthMiddleware 已对 /api/* 强制 admin 鉴权，
-//   此处额外校验请求头中的 admin key 以防止 proxy-only key 越权导出凭证）
+//   - 默认排除 APIKeys 明文（includeKeys=false）
+//   - includeKeys=true 需要 admin 鉴权（WebAuthMiddleware 已对 /api/* 强制 admin 鉴权，
+//     此处额外校验请求头中的 admin key 以防止 proxy-only key 越权导出凭证）
 func ExportChannels(envCfg *config.EnvConfig, cfgManager *config.ConfigManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req ExportChannelsRequest

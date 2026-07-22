@@ -90,6 +90,19 @@
               />
             </section>
 
+            <!-- new-api 账号管理 -->
+            <section
+              v-if="isNewApiChannel"
+              :ref="(el: any) => setSectionRef('accounts', el)"
+              data-section-id="accounts"
+              class="pa-6 scroll-mt-4"
+            >
+              <NewApiAccountPanel
+                :subscription-uid="props.channel?.subscriptionUid || ''"
+                @updated="handleAccountsUpdated"
+              />
+            </section>
+
             <!-- 模型重定向（模型映射 + Vision 回退 + 模型过滤） -->
             <section v-if="!isAutoManagedChannel" :ref="(el: any) => setSectionRef('redirect', el)" data-section-id="redirect" class="pa-6 scroll-mt-4">
               <v-alert
@@ -440,6 +453,7 @@ import StreamTimeoutSection from './edit-channel/StreamTimeoutSection.vue'
 import AdvancedOptionsSection from './edit-channel/AdvancedOptionsSection.vue'
 import TransportConfigGroup from './edit-channel/TransportConfigGroup.vue'
 import RateLimitGroup from './edit-channel/RateLimitGroup.vue'
+import NewApiAccountPanel from './edit-channel/NewApiAccountPanel.vue'
 import { useEditChannelModal, type EditChannelModalEmits, type EditChannelModalProps } from '../composables/useEditChannelModal'
 import { ApiService } from '../services/api'
 import type { ManagedAccountChannel } from '../services/api-types'
@@ -593,6 +607,15 @@ const {
   setSectionRef,
   t,
 } = useEditChannelModal(props, emit)
+
+// new-api 渠道判断：autoManaged + originType=relay + 无 providerId
+const isNewApiChannel = computed(() =>
+  props.channel?.originType === 'relay' && props.channel?.autoManaged && !props.channel?.providerId
+)
+const handleAccountsUpdated = () => {
+  // 账号更新后刷新渠道状态
+  console.log('[EditChannelModal] Accounts updated')
+}
 </script>
 
 <style scoped src="./edit-channel/edit-channel-modal.css"></style>

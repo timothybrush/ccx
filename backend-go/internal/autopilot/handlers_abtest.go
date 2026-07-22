@@ -31,16 +31,16 @@ func RegisterABTestRoutes(group *gin.RouterGroup, deps *ABTestDeps) {
 
 // ABTestResultsResponse GET /api/autopilot/ab-test-results 响应体。
 type ABTestResultsResponse struct {
-	Enabled            bool               `json:"enabled"`
-	SampleRatio        float64            `json:"sampleRatio"`
+	Enabled              bool            `json:"enabled"`
+	SampleRatio          float64         `json:"sampleRatio"`
 	ShadowCandidateCount int             `json:"shadowCandidateCount"`
-	BudgetUsed         int                `json:"budgetUsed"`
-	BudgetRemaining    int                `json:"budgetRemaining"`
-	MaxBudgetPerHour   int                `json:"maxBudgetPerHour"`
-	KillSwitchActive   bool               `json:"killSwitchActive"`
-	Stats              *ABTestStats       `json:"stats"`
-	RecentRecords      []*ABTestRecord    `json:"recentRecords"`
-	TotalShadowCostUSD float64            `json:"totalShadowCostUsd"`
+	BudgetUsed           int             `json:"budgetUsed"`
+	BudgetRemaining      int             `json:"budgetRemaining"`
+	MaxBudgetPerHour     int             `json:"maxBudgetPerHour"`
+	KillSwitchActive     bool            `json:"killSwitchActive"`
+	Stats                *ABTestStats    `json:"stats"`
+	RecentRecords        []*ABTestRecord `json:"recentRecords"`
+	TotalShadowCostUSD   float64         `json:"totalShadowCostUsd"`
 }
 
 // ─── 处理函数 ──────────────────────────────────────────────────────────────────────

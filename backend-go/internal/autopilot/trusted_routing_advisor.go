@@ -72,8 +72,8 @@ type AdvisorBackend interface {
 // TrustedRoutingAdvisor 可信模型路由辅助器。
 // Phase 1 shadow：只生成 hint 并记录，绝不影响真实调度。
 type TrustedRoutingAdvisor struct {
-	state            AdvisorState
-	backend          AdvisorBackend
+	state             AdvisorState
+	backend           AdvisorBackend
 	regressionStreaks map[string]int // channelUID -> 连续 degrading 窗口计数（Phase 4 Item 3）
 }
 
@@ -81,8 +81,8 @@ type TrustedRoutingAdvisor struct {
 // Phase 1 默认使用 heuristicBackend，初始状态 shadow。
 func NewTrustedRoutingAdvisor() *TrustedRoutingAdvisor {
 	return &TrustedRoutingAdvisor{
-		state:            AdvisorStateShadow,
-		backend:          &heuristicBackend{},
+		state:             AdvisorStateShadow,
+		backend:           &heuristicBackend{},
 		regressionStreaks: make(map[string]int),
 	}
 }
@@ -90,8 +90,8 @@ func NewTrustedRoutingAdvisor() *TrustedRoutingAdvisor {
 // NewTrustedRoutingAdvisorWithBackend 使用自定义 backend 创建（便于测试）。
 func NewTrustedRoutingAdvisorWithBackend(state AdvisorState, backend AdvisorBackend) *TrustedRoutingAdvisor {
 	return &TrustedRoutingAdvisor{
-		state:            state,
-		backend:          backend,
+		state:             state,
+		backend:           backend,
 		regressionStreaks: make(map[string]int),
 	}
 }

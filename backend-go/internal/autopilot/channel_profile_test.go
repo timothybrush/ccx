@@ -8,7 +8,7 @@ func TestAggregateChannelProfile_UsesEffectiveStabilityTierWhenSet(t *testing.T)
 		HealthState:            HealthStateHealthy,
 		QualityTier:            QualityTierNormal,
 		StabilityTier:          StabilityTierUnstable, // raw tier = unstable
-		EffectiveStabilityTier: StabilityTierStable,    // 但滞后后为 stable
+		EffectiveStabilityTier: StabilityTierStable,   // 但滞后后为 stable
 		SpeedTier:              SpeedTierNormal,
 		CostTier:               CostTierNormal,
 		Confidence:             0.5,
@@ -17,8 +17,8 @@ func TestAggregateChannelProfile_UsesEffectiveStabilityTierWhenSet(t *testing.T)
 		EndpointUID:            "ep-2",
 		HealthState:            HealthStateHealthy,
 		QualityTier:            QualityTierNormal,
-		StabilityTier:          StabilityTierNormal,  // raw tier = normal
-		EffectiveStabilityTier: StabilityTierNormal,   // 滞后后也为 normal
+		StabilityTier:          StabilityTierNormal, // raw tier = normal
+		EffectiveStabilityTier: StabilityTierNormal, // 滞后后也为 normal
 		SpeedTier:              SpeedTierNormal,
 		CostTier:               CostTierNormal,
 		Confidence:             0.5,
@@ -40,7 +40,7 @@ func TestAggregateChannelProfile_FallsBackToStabilityTierWhenEffectiveEmpty(t *t
 		HealthState:            HealthStateHealthy,
 		QualityTier:            QualityTierNormal,
 		StabilityTier:          StabilityTierStable, // raw tier = stable
-		EffectiveStabilityTier: "",                   // 未经过滞后
+		EffectiveStabilityTier: "",                  // 未经过滞后
 		SpeedTier:              SpeedTierNormal,
 		CostTier:               CostTierNormal,
 		Confidence:             0.5,
@@ -49,8 +49,8 @@ func TestAggregateChannelProfile_FallsBackToStabilityTierWhenEffectiveEmpty(t *t
 		EndpointUID:            "ep-2",
 		HealthState:            HealthStateHealthy,
 		QualityTier:            QualityTierNormal,
-		StabilityTier:          StabilityTierNormal,  // raw tier = normal
-		EffectiveStabilityTier: StabilityTierNormal,   // 有滞后值
+		StabilityTier:          StabilityTierNormal, // raw tier = normal
+		EffectiveStabilityTier: StabilityTierNormal, // 有滞后值
 		SpeedTier:              SpeedTierNormal,
 		CostTier:               CostTierNormal,
 		Confidence:             0.5,

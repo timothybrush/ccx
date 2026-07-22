@@ -238,12 +238,12 @@ func TestIntentExec_AutoMode_HardConstraintFallback(t *testing.T) {
 
 	// 创建 model_trial 意图指向 ch-economy
 	intent := &ManualRoutingIntent{
-		IntentType:     IntentTypeModelTrial,
-		ChannelKind:    "messages",
-		ChannelUID:     ch2UID,
-		Model:          "claude-sonnet-4",
-		TrafficPercent: 100,
-		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		IntentType:        IntentTypeModelTrial,
+		ChannelKind:       "messages",
+		ChannelUID:        ch2UID,
+		Model:             "claude-sonnet-4",
+		TrafficPercent:    100,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		FallbackOnFailure: true,
 	}
 	intentStore.Create(intent)

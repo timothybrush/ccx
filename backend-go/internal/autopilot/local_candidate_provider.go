@@ -34,7 +34,7 @@ type LocalCandidateEntry struct {
 //   - 只返回 status==LocalRuntimeHealthy 的运行时
 //
 // 注意：本函数只负责门槛过滤和数据转换。调用方必须在硬约束过滤
-//（vision/tool/reasoning）之后才将条目真正纳入候选列表。
+// （vision/tool/reasoning）之后才将条目真正纳入候选列表。
 func CollectLocalCandidates(
 	store *LocalRuntimeStore,
 	cfg config.LocalModelRoutingConfig,

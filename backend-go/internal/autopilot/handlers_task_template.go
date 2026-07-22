@@ -40,10 +40,10 @@ type UpdateTaskTemplateRequest struct {
 
 // TaskTemplateResponse 单条模板响应。
 type TaskTemplateResponse struct {
-	TemplateID string     `json:"templateId"`
-	Name       string     `json:"name"`
-	Description string    `json:"description,omitempty"`
-	OutputMode OutputMode `json:"outputMode"`
+	TemplateID  string     `json:"templateId"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	OutputMode  OutputMode `json:"outputMode"`
 
 	MatchTaskClasses []string `json:"matchTaskClasses,omitempty"`
 	MatchDomains     []string `json:"matchDomains,omitempty"`

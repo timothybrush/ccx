@@ -71,7 +71,10 @@ import type {
   NewApiVerifyRequest,
   NewApiVerifyResponse,
   NewApiProvisionRequest,
-  NewApiProvisionResponse
+  NewApiProvisionResponse,
+  NewApiAccountCreateRequest,
+  NewApiAccountItem,
+  NewApiAccountListResponse,
 } from './api-types'
 
 export * from './api-helpers'
@@ -1291,6 +1294,33 @@ export class ApiService {
     return this.request('/subscriptions/newapi/provision', {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  /** 获取 new-api 订阅下的账号列表 */
+  async getSubscriptionAccounts(uid: string): Promise<NewApiAccountListResponse> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}/accounts`)
+  }
+
+  /** 为 new-api 订阅添加新账号 */
+  async addSubscriptionAccount(uid: string, data: NewApiAccountCreateRequest): Promise<NewApiAccountItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}/accounts`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  /** 删除 new-api 订阅下的账号 */
+  async deleteSubscriptionAccount(uid: string, accountUid: string): Promise<void> {
+    await this.request(`/subscriptions/${encodeURIComponent(uid)}/accounts/${encodeURIComponent(accountUid)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  /** 刷新 new-api 账号余额 */
+  async refreshSubscriptionAccount(uid: string, accountUid: string): Promise<NewApiAccountItem> {
+    return this.request(`/subscriptions/${encodeURIComponent(uid)}/accounts/${encodeURIComponent(accountUid)}/refresh`, {
+      method: 'POST',
     })
   }
 

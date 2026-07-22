@@ -94,7 +94,7 @@ func TestCapabilityFloorReasons(t *testing.T) {
 				ReasoningNeed: true,
 				ContextNeed:   128000,
 			},
-			wantLen: 3,
+			wantLen:  3,
 			wantMsgs: []string{"工具调用能力不满足", "推理能力不满足", "上下文窗口不满足"},
 		},
 		{
@@ -109,7 +109,7 @@ func TestCapabilityFloorReasons(t *testing.T) {
 				ReasoningNeed: true,
 				ContextNeed:   128000,
 			},
-			wantLen: 2,
+			wantLen:  2,
 			wantMsgs: []string{"工具调用能力不满足", "推理能力不满足"},
 		},
 		{
@@ -124,7 +124,7 @@ func TestCapabilityFloorReasons(t *testing.T) {
 				ReasoningNeed: true,
 				ContextNeed:   100000,
 			},
-			wantLen: 2,
+			wantLen:  2,
 			wantMsgs: []string{"工具调用能力不满足", "上下文窗口不满足"},
 		},
 	}

@@ -276,10 +276,10 @@ func TestRefreshBudget_DailyReset(t *testing.T) {
 
 // mockBalanceFetcher 用于测试的 mock fetcher。
 type mockBalanceFetcher struct {
-	provider string
-	balance  float64
-	currency string
-	err      error
+	provider  string
+	balance   float64
+	currency  string
+	err       error
 	callCount atomic.Int32
 }
 
@@ -607,12 +607,12 @@ func TestSubscriptionRefreshWorker_RefreshAll_CooldownRespected(t *testing.T) {
 
 	lastRefresh := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC) // 2小时前
 	store.Create(&SubscriptionProfile{
-		SubscriptionUID:        "sub-cooldown",
-		DisplayName:            "Cooldown",
-		Provider:               "openai",
-		BillingAPIKey:          "sk-test",
-		AutoRefreshEnabled:     true,
-		LastBalanceRefreshAt:   &lastRefresh,
+		SubscriptionUID:      "sub-cooldown",
+		DisplayName:          "Cooldown",
+		Provider:             "openai",
+		BillingAPIKey:        "sk-test",
+		AutoRefreshEnabled:   true,
+		LastBalanceRefreshAt: &lastRefresh,
 	})
 
 	// 2小时前刷新过，24h 冷却期内应跳过

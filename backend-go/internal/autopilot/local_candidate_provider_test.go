@@ -56,9 +56,9 @@ func TestCollectLocalCandidates(t *testing.T) {
 		name      string
 		cfg       config.LocalModelRoutingConfig
 		taskClass TaskClass
-		wantLen   int        // 期望返回条目数
-		wantUIDs  []string   // 期望返回的 RuntimeUID 列表（有序）
-		wantEmpty bool       // 期望返回 nil/空列表
+		wantLen   int      // 期望返回条目数
+		wantUIDs  []string // 期望返回的 RuntimeUID 列表（有序）
+		wantEmpty bool     // 期望返回 nil/空列表
 	}{
 		{
 			name: "默认配置_Mode=shadow_返回空_零行为不变量",
@@ -220,11 +220,11 @@ func TestCollectLocalCandidates_DisplayNameFallback(t *testing.T) {
 
 	// Name 为空的运行时
 	rtNoName := &LocalModelRuntimeProfile{
-		RuntimeUID:        "lr_noname01",
-		Name:              "", // 无显示名
-		RuntimeType:       RuntimeTypeOllama,
-		Status:            LocalRuntimeHealthy,
-		ContextTokens:     4096,
+		RuntimeUID:    "lr_noname01",
+		Name:          "", // 无显示名
+		RuntimeType:   RuntimeTypeOllama,
+		Status:        LocalRuntimeHealthy,
+		ContextTokens: 4096,
 	}
 	require.NoError(t, store.Upsert(rtNoName))
 

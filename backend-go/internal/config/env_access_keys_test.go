@@ -157,7 +157,7 @@ func TestNewEnvConfig_ParsesExtraProxyAccessKeys(t *testing.T) {
 
 func TestEnvConfig_ProxyKeyMaskForRequest(t *testing.T) {
 	envCfg := &EnvConfig{
-		ProxyAccessKey:       "sk-aaaaaaaaaaaaaaaaaaaa",        // 23 chars
+		ProxyAccessKey:       "sk-aaaaaaaaaaaaaaaaaaaa",           // 23 chars
 		ExtraProxyAccessKeys: []string{"sk-bbbbbbbbbbbbbbbbbbbb"}, // 23 chars
 	}
 

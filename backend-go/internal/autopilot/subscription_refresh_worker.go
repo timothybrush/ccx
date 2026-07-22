@@ -12,8 +12,8 @@ import (
 // ── 默认配置 ──
 
 const (
-	DefaultRefreshInterval   = 24 * time.Hour // 每张卡默认刷新间隔
-	DefaultRefreshDailyBudget = 100            // 每日刷新调用上限
+	DefaultRefreshInterval    = 24 * time.Hour   // 每张卡默认刷新间隔
+	DefaultRefreshDailyBudget = 100              // 每日刷新调用上限
 	DefaultRefreshTimeout     = 15 * time.Second // 单次刷新超时
 )
 
@@ -136,12 +136,12 @@ func (b *RefreshBudget) Used() int {
 //   - 订阅 AutoRefreshEnabled = true 且 BillingAPIKey 非空
 //   - Provider 在 supportedAutoRefreshProviders 白名单内
 type SubscriptionRefreshWorker struct {
-	subStore  *SubscriptionStore
-	fetchers  *BalanceFetcherRegistry
-	config    SubscriptionRefreshWorkerConfig
-	budget    *RefreshBudget
-	timeFn    func() time.Time
-	enabled   func() bool // 从配置读取全局开关（热重载感知）
+	subStore *SubscriptionStore
+	fetchers *BalanceFetcherRegistry
+	config   SubscriptionRefreshWorkerConfig
+	budget   *RefreshBudget
+	timeFn   func() time.Time
+	enabled  func() bool // 从配置读取全局开关（热重载感知）
 
 	cancel func()
 	wg     sync.WaitGroup

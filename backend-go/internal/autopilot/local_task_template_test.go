@@ -246,12 +246,12 @@ func TestLocalTaskTemplateStore_FindBestPrompt(t *testing.T) {
 			Enabled:          true,
 		},
 		{
-			TemplateID:       "tpl_default",
-			Name:             "Default",
-			OutputMode:       OutputModeSummarize,
-			PromptTemplate:   "Default summary: {{original_content}}",
-			Priority:         0,
-			Enabled:          true,
+			TemplateID:     "tpl_default",
+			Name:           "Default",
+			OutputMode:     OutputModeSummarize,
+			PromptTemplate: "Default summary: {{original_content}}",
+			Priority:       0,
+			Enabled:        true,
 		},
 		{
 			TemplateID:       "tpl_disabled",
@@ -283,11 +283,11 @@ func TestLocalTaskTemplateStore_FindBestPrompt(t *testing.T) {
 	transcript := "Hello, this is the conversation."
 
 	tests := []struct {
-		name     string
-		taskClass string
-		domain   string
+		name       string
+		taskClass  string
+		domain     string
 		wantPrefix string
-		wantEmpty bool
+		wantEmpty  bool
 	}{
 		{
 			name:       "exact match: worker + coding -> coding template (highest priority)",

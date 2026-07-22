@@ -13,9 +13,9 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 	// 辅助：构造 active 模式的有效配置
 	activeCfg := func() config.TrustedRoutingAdvisorConfig {
 		return config.TrustedRoutingAdvisorConfig{
-			Enabled:              true,
-			Mode:                 "active",
-			MinAdvisorConfidence: 0.75,
+			Enabled:                true,
+			Mode:                   "active",
+			MinAdvisorConfidence:   0.75,
 			NeverDemoteTaskClasses: []string{"supervisor", "vision", "long_context"},
 		}
 	}
@@ -151,8 +151,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierLow,
+				Applied:             true,
+				MinQualityTier:      QualityTierLow,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -235,8 +235,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierLow,
+				Applied:             true,
+				MinQualityTier:      QualityTierLow,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -246,8 +246,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassWorker,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierNormal,
+				Applied:             true,
+				MinQualityTier:      QualityTierNormal,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -264,8 +264,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierHigh,
+				Applied:             true,
+				MinQualityTier:      QualityTierHigh,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -280,8 +280,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierHigh,
+				Applied:             true,
+				MinQualityTier:      QualityTierHigh,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -297,8 +297,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			cfg:       activeCfg(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierLow,
+				Applied:             true,
+				MinQualityTier:      QualityTierLow,
 				AllowLocalCandidate: false,
 			},
 		},
@@ -314,8 +314,8 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 			}(),
 			taskClass: TaskClassLightweight,
 			want: AdvisorHintEffect{
-				Applied:            true,
-				MinQualityTier:     QualityTierLow,
+				Applied:             true,
+				MinQualityTier:      QualityTierLow,
 				AllowLocalCandidate: true,
 			},
 		},
@@ -339,9 +339,9 @@ func TestResolveAdvisorHintEffect(t *testing.T) {
 // TestResolveAdvisorHintEffect_Reasons 测试 Reasons 搭载内容是否合理。
 func TestResolveAdvisorHintEffect_Reasons(t *testing.T) {
 	cfg := config.TrustedRoutingAdvisorConfig{
-		Enabled:              true,
-		Mode:                 "active",
-		MinAdvisorConfidence: 0.70,
+		Enabled:                true,
+		Mode:                   "active",
+		MinAdvisorConfidence:   0.70,
 		NeverDemoteTaskClasses: []string{"supervisor", "vision", "long_context"},
 	}
 

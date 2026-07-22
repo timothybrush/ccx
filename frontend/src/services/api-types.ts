@@ -1194,6 +1194,29 @@ export interface NewApiProvisionResponse {
   discoveryStarted: boolean
 }
 
+// ============== new-api 多账号类型 ==============
+
+export interface NewApiAccountCreateRequest {
+  accessToken: string
+  userId?: string
+  displayName?: string
+  authTokenMode?: string
+}
+
+export interface NewApiAccountItem {
+  accountUid: string
+  userId?: string
+  displayName?: string
+  balance?: number
+  status?: string
+  lastCheckedAt?: string
+  createdAt: string
+}
+
+export interface NewApiAccountListResponse {
+  accounts: NewApiAccountItem[]
+}
+
 // ============== 驾驶舱类型 ==============
 
 export interface CockpitHealthSummary {

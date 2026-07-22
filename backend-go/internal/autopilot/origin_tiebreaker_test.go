@@ -20,8 +20,8 @@ func makeScored(uid string, score float64) ScoredCandidate {
 func TestBreakTieByOriginTier_NonTiePreservesScoreOrder(t *testing.T) {
 	// 核心不变量：非平局输入排序结果与纯 Score 排序完全一致
 	candidates := []ScoredCandidate{
-		makeScored("ch-relay", 50.0),   // second
-		makeScored("ch-official", 80.0), // first
+		makeScored("ch-relay", 50.0),     // second
+		makeScored("ch-official", 80.0),  // first
 		makeScored("ch-community", 30.0), // third
 	}
 	originTiers := map[string]ChannelOriginTier{
@@ -41,8 +41,8 @@ func TestBreakTieByOriginTier_TieBreakByOriginTier(t *testing.T) {
 	// 平局输入按 OriginTier 正确排序
 	candidates := []ScoredCandidate{
 		makeScored("ch-community", 50.0), // third  → rank 1
-		makeScored("ch-relay", 50.0),      // second → rank 2
-		makeScored("ch-official", 50.0),   // first  → rank 3
+		makeScored("ch-relay", 50.0),     // second → rank 2
+		makeScored("ch-official", 50.0),  // first  → rank 3
 	}
 	originTiers := map[string]ChannelOriginTier{
 		"ch-official":  OriginTierFirst,
@@ -60,12 +60,12 @@ func TestBreakTieByOriginTier_TieBreakByOriginTier(t *testing.T) {
 func TestBreakTieByOriginTier_MixedTieAndNonTie(t *testing.T) {
 	// 混合平局+非平局输入：非平局区间不变，平局区间按 OriginTier 排序
 	candidates := []ScoredCandidate{
-		makeScored("ch-community", 30.0),  // third → rank 1
-		makeScored("ch-relay-b", 50.0),     // second → rank 2
-		makeScored("ch-relay-a", 50.0),      // second → rank 2（同分同 tier，顺序稳定）
-		makeScored("ch-official", 50.0),    // first → rank 3
-		makeScored("ch-local", 30.0),       // local → rank 1
-		makeScored("ch-high", 90.0),        // first → rank 3
+		makeScored("ch-community", 30.0), // third → rank 1
+		makeScored("ch-relay-b", 50.0),   // second → rank 2
+		makeScored("ch-relay-a", 50.0),   // second → rank 2（同分同 tier，顺序稳定）
+		makeScored("ch-official", 50.0),  // first → rank 3
+		makeScored("ch-local", 30.0),     // local → rank 1
+		makeScored("ch-high", 90.0),      // first → rank 3
 	}
 	originTiers := map[string]ChannelOriginTier{
 		"ch-high":      OriginTierFirst,
@@ -96,8 +96,8 @@ func TestBreakTieByOriginTier_MixedTieAndNonTie(t *testing.T) {
 func TestBreakTieByOriginTier_MissingChannelUID(t *testing.T) {
 	// originTiers map 中缺失某 ChannelUID 时按 unknown(rank 0) 处理，不 panic
 	candidates := []ScoredCandidate{
-		makeScored("ch-missing", 50.0),    // 不在 map → unknown → rank 0
-		makeScored("ch-official", 50.0),   // first → rank 3
+		makeScored("ch-missing", 50.0),      // 不在 map → unknown → rank 0
+		makeScored("ch-official", 50.0),     // first → rank 3
 		makeScored("ch-also-missing", 50.0), // 不在 map → unknown → rank 0
 	}
 	originTiers := map[string]ChannelOriginTier{
@@ -115,8 +115,8 @@ func TestBreakTieByOriginTier_MissingChannelUID(t *testing.T) {
 func TestBreakTieByOriginTier_LocalEqualsThird(t *testing.T) {
 	// local 和 third 同 rank=1，平局时不应区分
 	candidates := []ScoredCandidate{
-		makeScored("ch-local", 50.0),      // local → rank 1
-		makeScored("ch-community", 50.0),  // third → rank 1
+		makeScored("ch-local", 50.0),     // local → rank 1
+		makeScored("ch-community", 50.0), // third → rank 1
 	}
 	originTiers := map[string]ChannelOriginTier{
 		"ch-local":     OriginTierLocal,
@@ -150,8 +150,8 @@ func TestBreakTieByOriginTier_SingleAndEmpty(t *testing.T) {
 func TestBreakTieByOriginTier_NearEqualScoresNotTreatedAsTie(t *testing.T) {
 	// 分数微小差异（非严格相等）不应被 tie-breaker 干扰
 	candidates := []ScoredCandidate{
-		makeScored("ch-community", 50.0),   // third, 略低
-		makeScored("ch-official", 50.001),   // first, 略高
+		makeScored("ch-community", 50.0),  // third, 略低
+		makeScored("ch-official", 50.001), // first, 略高
 	}
 	originTiers := map[string]ChannelOriginTier{
 		"ch-official":  OriginTierFirst,

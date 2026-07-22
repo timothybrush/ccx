@@ -41,10 +41,10 @@ type ABTestRecord struct {
 
 // ABTestStats A/B 测试聚合统计。
 type ABTestStats struct {
-	TotalRecords     int     `json:"totalRecords"`
-	ShadowSuccessCnt int     `json:"shadowSuccessCount"`
-	ShadowFailCnt    int     `json:"shadowFailCount"`
-	ShadowSuccessRate float64 `json:"shadowSuccessRate"`
+	TotalRecords       int     `json:"totalRecords"`
+	ShadowSuccessCnt   int     `json:"shadowSuccessCount"`
+	ShadowFailCnt      int     `json:"shadowFailCount"`
+	ShadowSuccessRate  float64 `json:"shadowSuccessRate"`
 	AvgShadowLatencyMs float64 `json:"avgShadowLatencyMs"`
 	TotalShadowCostUSD float64 `json:"totalShadowCostUsd"`
 	// 按渠道分组的影子成功率
@@ -53,12 +53,12 @@ type ABTestStats struct {
 
 // ABTestChannelStats 按渠道分组的 A/B 测试统计。
 type ABTestChannelStats struct {
-	ChannelUID     string  `json:"channelUid"`
-	Count          int     `json:"count"`
-	SuccessCount   int     `json:"successCount"`
-	SuccessRate    float64 `json:"successRate"`
-	AvgLatencyMs   float64 `json:"avgLatencyMs"`
-	TotalCostUSD   float64 `json:"totalCostUsd"`
+	ChannelUID   string  `json:"channelUid"`
+	Count        int     `json:"count"`
+	SuccessCount int     `json:"successCount"`
+	SuccessRate  float64 `json:"successRate"`
+	AvgLatencyMs float64 `json:"avgLatencyMs"`
+	TotalCostUSD float64 `json:"totalCostUsd"`
 }
 
 // ABTestStore 管理 A/B 测试结果的内存缓存与 SQLite 持久化。
