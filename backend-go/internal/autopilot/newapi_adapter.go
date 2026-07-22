@@ -200,6 +200,46 @@ func (a *NewApiAdapter) Verify(ctx context.Context, baseURL, accessToken, userID
 	return &self, nil
 }
 
+// VerifyWithFallback 两阶段验证：先尝试用提供的 userID（可能为空），
+// 若因缺少 New-API-User header 失败，则尝试使用默认 userID="1" 重试。
+// 返回 (用户信息, 实际使用的 userID, 错误)。
+func (a *NewApiAdapter) VerifyWithFallback(ctx context.Context, baseURL, accessToken, userID, authTokenMode string) (*NewApiUserSelf, string, error) {
+	// 第一阶段：使用提供的 userID（可能为空，标准 new-api 支持）
+	self, err := a.Verify(ctx, baseURL, accessToken, userID, authTokenMode)
+	if err == nil {
+		derivedUserID := userID
+		if derivedUserID == "" {
+			derivedUserID = fmt.Sprintf("%d", self.ID)
+		}
+		return self, derivedUserID, nil
+	}
+
+	// 检查是否是 New-API-User header 缺失错误
+	if !isNewApiUserHeaderError(err) {
+		return nil, "", err
+	}
+
+	// 第二阶段：尝试使用 userID="1"（某些 fork 的默认管理员 ID）
+	if userID == "" {
+		self, err = a.Verify(ctx, baseURL, accessToken, "1", authTokenMode)
+		if err == nil {
+			return self, "1", nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("[NewApiAdapter-VerifyWithFallback] New-API-User header required but no valid userID available: %w", err)
+}
+
+// isNewApiUserHeaderError 检查错误是否因缺少 New-API-User header 导致。
+func isNewApiUserHeaderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "new-api-user header not provided") ||
+		strings.Contains(errStr, "new-api-user") && strings.Contains(errStr, "unauthorized")
+}
+
 // FetchBalance 查询余额（复用 Verify，返回 quota 原值 + 固定 currency="quota"）。
 // 满足 SubscriptionBalanceFetcher 风格，但 new-api 需要 userID，因此不直接实现该接口，
 // 由订阅 handler 层组合调用。

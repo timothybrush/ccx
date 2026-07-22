@@ -251,16 +251,11 @@ func handleNewApiVerify(deps *NewApiRouteDeps) gin.HandlerFunc {
 
 		adapter := &NewApiAdapter{}
 
-		// 1) 校验 + 取用户信息
-		self, err := adapter.Verify(ctx, req.BaseURL, req.AccessToken, req.UserID, req.AuthTokenMode)
+		// 1) 校验 + 取用户信息（支持 New-API-User header 缺失回退）
+		self, derivedUserID, err := adapter.VerifyWithFallback(ctx, req.BaseURL, req.AccessToken, req.UserID, req.AuthTokenMode)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("校验失败: %v", err)})
 			return
-		}
-		// 若前端没传 userId，用站点回填的 id 自动回填
-		derivedUserID := req.UserID
-		if derivedUserID == "" {
-			derivedUserID = fmt.Sprintf("%d", self.ID)
 		}
 
 		// 2) 拉分组倍率（验证阶段不阻断，但把失败原因明确回传给界面）。
@@ -339,15 +334,11 @@ func handleNewApiProvision(deps *NewApiRouteDeps) gin.HandlerFunc {
 
 		adapter := &NewApiAdapter{}
 
-		// 1) 校验 + 拉用户信息（同时获取 userId 兜底）
-		self, err := adapter.Verify(ctx, req.BaseURL, req.AccessToken, req.UserID, req.AuthTokenMode)
+		// 1) 校验 + 拉用户信息（支持 New-API-User header 缺失回退）
+		self, derivedUserID, err := adapter.VerifyWithFallback(ctx, req.BaseURL, req.AccessToken, req.UserID, req.AuthTokenMode)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("校验失败: %v", err)})
 			return
-		}
-		derivedUserID := req.UserID
-		if derivedUserID == "" {
-			derivedUserID = fmt.Sprintf("%d", self.ID)
 		}
 
 		// 2) 拉分组倍率并强制校验。分组未知时不能安全决定要创建或调用哪一把 Key。
