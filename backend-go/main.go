@@ -891,6 +891,27 @@ func main() {
 			log.Printf("[Scheduler-Recovery] UTC 自动恢复完成：恢复 %d 个 key，%d 个 (key,模型) 组合，激活 %d 个渠道", restoredKeys, restoredKeyModels, activatedChannels)
 			return true
 		}
+		runDueRecovery := func(now time.Time) {
+			results, err := channelScheduler.RunDueRecoveries(now.UTC())
+			if err != nil {
+				log.Printf("[Scheduler-Recovery] 警告: 到期恢复执行失败: %v", err)
+				return
+			}
+			if len(results) == 0 {
+				return
+			}
+			restoredKeys := 0
+			restoredKeyModels := 0
+			activatedChannels := 0
+			for _, result := range results {
+				restoredKeys += len(result.RestoredKeys)
+				restoredKeyModels += len(result.RestoredKeyModels)
+				if result.ActivatedChannel {
+					activatedChannels++
+				}
+			}
+			log.Printf("[Scheduler-Recovery] 到期恢复完成：恢复 %d 个 key，%d 个 (key,模型) 组合，激活 %d 个渠道", restoredKeys, restoredKeyModels, activatedChannels)
+		}
 
 		recordRecoveryCheck := func(checkedAt time.Time) {
 			if err := saveScheduledRecoveryLastCheck(paths.ScheduledRecoveryStatePath, checkedAt); err != nil {
@@ -913,6 +934,7 @@ func main() {
 		}
 
 		startupNow := time.Now().UTC()
+		runDueRecovery(startupNow)
 		if !lastRecoveryCheck.IsZero() {
 			if missedSlot, ok := scheduler.MissedScheduledRecoveryTimeUTC(lastRecoveryCheck, startupNow); ok {
 				commitRecoveryCheck(startupNow, true, runScheduledRecovery(startupNow, missedSlot))
@@ -948,6 +970,7 @@ func main() {
 				}
 			case tickAt := <-recoveryFallbackTicker.C:
 				now := tickAt.UTC()
+				runDueRecovery(now)
 				if missedSlot, ok := scheduler.MissedScheduledRecoveryTimeUTC(lastRecoveryCheck, now); ok {
 					commitRecoveryCheck(now, true, runScheduledRecovery(now, missedSlot))
 				} else {

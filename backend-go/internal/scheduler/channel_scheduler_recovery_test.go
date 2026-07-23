@@ -216,3 +216,40 @@ func TestRunScheduledRecoveries_UsesRecoverAtWhenPresent(t *testing.T) {
 		t.Fatalf("APIKeys = %v, want [sk-ready]", updated.Upstream[0].APIKeys)
 	}
 }
+
+func TestRunDueRecoveries_RestoresOnlyReachedRecoverAt(t *testing.T) {
+	now := time.Date(2026, 4, 20, 8, 39, 36, 0, time.UTC)
+	cfg := config.Config{
+		Upstream: []config.UpstreamConfig{{
+			Name:        "msg-channel",
+			BaseURL:     "https://a.example.com",
+			Status:      "suspended",
+			ServiceType: "claude",
+			DisabledAPIKeys: []config.DisabledKeyInfo{
+				{Key: "sk-ready", Reason: "insufficient_quota", DisabledAt: now.Add(-5 * time.Hour).Format(time.RFC3339), RecoverAt: now.Add(-time.Second).Format(time.RFC3339)},
+				{Key: "sk-wait", Reason: "insufficient_quota", DisabledAt: now.Add(-5 * time.Hour).Format(time.RFC3339), RecoverAt: now.Add(time.Hour).Format(time.RFC3339)},
+				{Key: "sk-legacy", Reason: "insufficient_quota", DisabledAt: now.Add(-2 * time.Hour).Format(time.RFC3339)},
+				{Key: "sk-auth", Reason: "authentication_error", DisabledAt: now.Add(-5 * time.Hour).Format(time.RFC3339), RecoverAt: now.Add(-time.Second).Format(time.RFC3339)},
+			},
+		}},
+	}
+
+	scheduler, cleanup := createTestScheduler(t, cfg)
+	defer cleanup()
+
+	results, err := scheduler.RunDueRecoveries(now)
+	if err != nil {
+		t.Fatalf("RunDueRecoveries() error = %v", err)
+	}
+	if len(results) != 1 || len(results[0].RestoredKeys) != 1 || results[0].RestoredKeys[0] != "sk-ready" {
+		t.Fatalf("RunDueRecoveries() = %+v, want only sk-ready", results)
+	}
+
+	updated := scheduler.configManager.GetConfig()
+	if len(updated.Upstream[0].DisabledAPIKeys) != 3 {
+		t.Fatalf("DisabledAPIKeys = %+v, want sk-wait, sk-legacy, sk-auth", updated.Upstream[0].DisabledAPIKeys)
+	}
+	if len(updated.Upstream[0].APIKeys) != 1 || updated.Upstream[0].APIKeys[0] != "sk-ready" {
+		t.Fatalf("APIKeys = %v, want [sk-ready]", updated.Upstream[0].APIKeys)
+	}
+}

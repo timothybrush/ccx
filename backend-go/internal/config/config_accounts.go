@@ -1192,12 +1192,12 @@ func TryRestoreDisabledKeysByUsage(cm *ConfigManager, accountUID string, apiKey 
 				if w.Quota > 0 && w.Used >= w.Quota {
 					return false
 				}
-				if w.UsedPercent != nil && w.ResetTime > 0 && nowMs < w.ResetTime {
-					return false
-				}
-				// Coding Plan：已耗尽但无重置时间，无法判断何时恢复
-				if w.UsedPercent != nil && *w.UsedPercent >= 100.0 && w.ResetTime == 0 {
-					return false
+				if w.UsedPercent != nil && *w.UsedPercent >= 100.0 {
+					// Coding Plan 仅报告百分比。窗口仍耗尽且重置尚未到达（或未给出重置时间）时，
+					// 不能恢复；有余量的周/月窗口不应阻止五小时窗口恢复。
+					if w.ResetTime == 0 || nowMs < w.ResetTime {
+						return false
+					}
 				}
 			}
 			return true

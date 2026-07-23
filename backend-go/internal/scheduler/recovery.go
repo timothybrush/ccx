@@ -146,6 +146,16 @@ func shouldSkipScheduledRecovery(disabledAt, recoverAt string, now time.Time) bo
 	return now.Sub(parsed.UTC()) < time.Hour
 }
 
+type disabledKeyRecoveryPredicate func(config.DisabledKeyInfo, time.Time) bool
+
+func hasReachedRecoverAt(recoverAt string, now time.Time) bool {
+	if recoverAt == "" {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, recoverAt)
+	return err == nil && !now.Before(parsed.UTC())
+}
+
 func kindAPIType(kind ChannelKind) string {
 	switch kind {
 	case ChannelKindResponses:
@@ -167,7 +177,11 @@ func (s *ChannelScheduler) scheduledRecoveryKinds() []ChannelKind {
 	return []ChannelKind{ChannelKindMessages, ChannelKindResponses, ChannelKindGemini, ChannelKindChat, ChannelKindImages, ChannelKindVectors}
 }
 
-func (s *ChannelScheduler) restoreScheduledKeysForKind(kind ChannelKind, now time.Time) ([]ScheduledRecoveryResult, error) {
+func (s *ChannelScheduler) restoreKeysForKind(
+	kind ChannelKind,
+	now time.Time,
+	shouldRestore disabledKeyRecoveryPredicate,
+) ([]ScheduledRecoveryResult, error) {
 	cfg := s.configManager.GetConfig()
 	var upstreams []config.UpstreamConfig
 	switch kind {
@@ -205,7 +219,7 @@ func (s *ChannelScheduler) restoreScheduledKeysForKind(kind ChannelKind, now tim
 			if !config.IsAutoRecoverableDisabledReason(dk.Reason) {
 				continue
 			}
-			if shouldSkipScheduledRecovery(dk.DisabledAt, dk.RecoverAt, now) {
+			if !shouldRestore(dk, now) {
 				continue
 			}
 			keysToRestore = append(keysToRestore, dk.Key)
@@ -270,11 +284,37 @@ func (s *ChannelScheduler) restoreScheduledKeysForKind(kind ChannelKind, now tim
 	return results, nil
 }
 
+func (s *ChannelScheduler) restoreScheduledKeysForKind(kind ChannelKind, now time.Time) ([]ScheduledRecoveryResult, error) {
+	return s.restoreKeysForKind(kind, now, func(disabled config.DisabledKeyInfo, now time.Time) bool {
+		return !shouldSkipScheduledRecovery(disabled.DisabledAt, disabled.RecoverAt, now)
+	})
+}
+
+func (s *ChannelScheduler) restoreDueKeysForKind(kind ChannelKind, now time.Time) ([]ScheduledRecoveryResult, error) {
+	return s.restoreKeysForKind(kind, now, func(disabled config.DisabledKeyInfo, now time.Time) bool {
+		return hasReachedRecoverAt(disabled.RecoverAt, now)
+	})
+}
+
 // RunScheduledRecoveries 执行一次自动恢复扫描。
 func (s *ChannelScheduler) RunScheduledRecoveries(now time.Time) ([]ScheduledRecoveryResult, error) {
 	results := make([]ScheduledRecoveryResult, 0)
 	for _, kind := range s.scheduledRecoveryKinds() {
 		kindResults, err := s.restoreScheduledKeysForKind(kind, now.UTC())
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, kindResults...)
+	}
+	return results, nil
+}
+
+// RunDueRecoveries 恢复已到达 RecoverAt 的 key 和 (key,模型) 组合。
+// 它不处理没有 RecoverAt 的旧记录，后者仍由定时恢复槽位兜底。
+func (s *ChannelScheduler) RunDueRecoveries(now time.Time) ([]ScheduledRecoveryResult, error) {
+	results := make([]ScheduledRecoveryResult, 0)
+	for _, kind := range s.scheduledRecoveryKinds() {
+		kindResults, err := s.restoreDueKeysForKind(kind, now.UTC())
 		if err != nil {
 			return nil, err
 		}

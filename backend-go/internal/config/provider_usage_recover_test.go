@@ -155,6 +155,59 @@ func TestTryRestore_Volcengine_ResetPassed(t *testing.T) {
 	}
 }
 
+func TestTryRestore_Volcengine_CodingPlanRemainingUsageBeforeLongerWindowReset(t *testing.T) {
+	cm, cleanup := testConfigManager(t)
+	defer cleanup()
+
+	seedManagedProvider(cm, "acct-vr", "c-vr", "volcengine", "sk-vr")
+	blacklistTestKey(t, cm, "sk-vr", "insufficient_quota")
+
+	fiveHourPct := 0.0
+	weeklyPct := 58.0
+	monthlyPct := 33.0
+	futureMs := time.Now().Add(7 * 24 * time.Hour).UnixMilli()
+	cm.config.ManagedAccounts[0].Credentials[0].VolcengineAccessKey = &VolcengineAccessKeyPair{
+		AccessKeyID: "ak", SecretAccessKey: "sk", Plan: "coding",
+		PlanTier: "basic", PlanStatus: "active",
+		Usage: &VolcenginePlanUsage{
+			FiveHour:  &VolcenginePlanUsageWindow{UsedPercent: &fiveHourPct},
+			Weekly:    &VolcenginePlanUsageWindow{UsedPercent: &weeklyPct, ResetTime: futureMs},
+			Monthly:   &VolcenginePlanUsageWindow{UsedPercent: &monthlyPct, ResetTime: futureMs},
+			FetchedAt: time.Now(),
+		},
+	}
+
+	TryRestoreDisabledKeysByUsage(cm, "acct-vr", "sk-vr", "c-vr")
+
+	if isTestKeyDisabled(cm, "sk-vr") {
+		t.Fatal("五小时窗口已恢复且周/月仍有余量时，火山 Coding Plan Key 应恢复")
+	}
+}
+
+func TestTryRestore_Volcengine_CodingPlanExhaustedWindowNotReset(t *testing.T) {
+	cm, cleanup := testConfigManager(t)
+	defer cleanup()
+
+	seedManagedProvider(cm, "acct-vr", "c-vr", "volcengine", "sk-vr")
+	blacklistTestKey(t, cm, "sk-vr", "insufficient_quota")
+
+	exhaustedPct := 100.0
+	cm.config.ManagedAccounts[0].Credentials[0].VolcengineAccessKey = &VolcengineAccessKeyPair{
+		AccessKeyID: "ak", SecretAccessKey: "sk", Plan: "coding",
+		PlanTier: "basic", PlanStatus: "active",
+		Usage: &VolcenginePlanUsage{
+			FiveHour:  &VolcenginePlanUsageWindow{UsedPercent: &exhaustedPct, ResetTime: time.Now().Add(time.Hour).UnixMilli()},
+			FetchedAt: time.Now(),
+		},
+	}
+
+	TryRestoreDisabledKeysByUsage(cm, "acct-vr", "sk-vr", "c-vr")
+
+	if !isTestKeyDisabled(cm, "sk-vr") {
+		t.Fatal("仍耗尽且五小时窗口未重置时，火山 Coding Plan Key 不应恢复")
+	}
+}
+
 // ── 非自动恢复原因 ───────────────────────────────────────────────
 
 func TestTryRestore_SkipsNonAutoRecoverable(t *testing.T) {
