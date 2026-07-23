@@ -163,7 +163,7 @@ func (c *volcenginePlanClient) FetchModels(ctx context.Context, pair *config.Vol
 		return nil, fmt.Errorf("未知的火山套餐类型: %s", plan)
 	}
 	var decoded volcengineResponse
-	if err := c.doAction(ctx, pair, action, "ark_stg", struct{}{}, &decoded); err != nil {
+	if err := c.doAction(ctx, pair, action, "ark", struct{}{}, &decoded); err != nil {
 		return nil, err
 	}
 	seen := make(map[string]bool)

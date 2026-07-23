@@ -17,9 +17,9 @@ import (
 )
 
 func TestApplyVolcengineSignature(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "https://ark.cn-beijing.volces.com/?Version=2024-01-01&Action=ListArkAgentPlanModel", bytes.NewBufferString("{}"))
-	applyVolcengineSignature(req, []byte("{}"), "AKIDTEST", "test-secret", "ark_stg", time.Date(2026, 4, 24, 12, 20, 3, 0, time.UTC))
-	want := "HMAC-SHA256 Credential=AKIDTEST/20260424/cn-beijing/ark_stg/request, SignedHeaders=host;x-content-sha256;x-date, Signature=fd133cc24e26945cd275f65b3922bd7dfffbf5810f56a575c3dbf23d3a59ca58"
+	req := httptest.NewRequest(http.MethodPost, "https://ark.cn-beijing.volcengineapi.com/?Version=2024-01-01&Action=ListArkAgentPlanModel", bytes.NewBufferString("{}"))
+	applyVolcengineSignature(req, []byte("{}"), "AKIDTEST", "test-secret", "ark", time.Date(2026, 4, 24, 12, 20, 3, 0, time.UTC))
+	want := "HMAC-SHA256 Credential=AKIDTEST/20260424/cn-beijing/ark/request, SignedHeaders=host;x-content-sha256;x-date, Signature=7f13d6f457c76d2fb9d1c3f2be1165eaa90d681bcfd231db0d223994190217aa"
 	if got := req.Header.Get("Authorization"); got != want {
 		t.Fatalf("Authorization 签名不匹配\ngot:  %s\nwant: %s", got, want)
 	}
