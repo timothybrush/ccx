@@ -212,6 +212,12 @@ func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *co
 	baseURLs := channel.GetAllBaseURLs()
 	keys := channel.APIKeys
 
+	// 自动托管渠道的 APIKeys 在持久化时被脱敏，运行时从 apiKeyConfigs
+	// 或 ManagedAccountCredential 获取实际密钥，确保管控面模型发现不被跳过。
+	if len(keys) == 0 && channel.AutoManaged && len(managers) > 0 && managers[0] != nil {
+		keys = r.resolveAutoManagedKeys(channel, managers[0])
+	}
+
 	if len(baseURLs) == 0 || len(keys) == 0 {
 		return nil
 	}
@@ -249,6 +255,33 @@ func (r *AutoDiscoveryRunner) discoverEndpoints(ctx context.Context, channel *co
 		}
 	}
 	return results
+}
+
+// resolveAutoManagedKeys 从 apiKeyConfigs 和 ManagedAccountCredential 获取自动托管渠道的实际密钥。
+// 自动托管渠道的 APIKeys 在持久化时被脱敏，运行时可能为空，需要从凭证系统获取。
+func (r *AutoDiscoveryRunner) resolveAutoManagedKeys(channel *config.UpstreamConfig, cfgManager *config.ConfigManager) []string {
+	if cfgManager == nil || channel == nil || channel.AccountUID == "" {
+		return nil
+	}
+	var keys []string
+	seen := make(map[string]bool)
+	for _, cfg := range channel.APIKeyConfigs {
+		// 优先使用已回填的 Key
+		if cfg.Key != "" && !seen[cfg.Key] {
+			keys = append(keys, cfg.Key)
+			seen[cfg.Key] = true
+			continue
+		}
+		// 从凭证获取实际 Key
+		if cfg.CredentialUID != "" {
+			cred, ok := cfgManager.GetManagedAccountCredential(channel.AccountUID, cfg.CredentialUID)
+			if ok && cred.APIKey != "" && !seen[cred.APIKey] {
+				keys = append(keys, cred.APIKey)
+				seen[cred.APIKey] = true
+			}
+		}
+	}
+	return keys
 }
 
 func (r *AutoDiscoveryRunner) discoverVolcenginePlanEndpoint(

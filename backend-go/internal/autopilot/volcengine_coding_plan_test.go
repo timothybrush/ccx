@@ -188,6 +188,56 @@ func TestVolcenginePlanClientFetchUsage(t *testing.T) {
 	})
 }
 
+func TestVolcengineAutoDiscoveryResolvesKeysFromCredentials(t *testing.T) {
+	// 验证当 APIKeys 为空时，discoverEndpoints 从 apiKeyConfigs 和凭证系统获取实际密钥。
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("Action") {
+		case "GetPersonalPlan":
+			_, _ = w.Write([]byte(`{"Result":{"PlanType":"Large","Status":"Running"}}`))
+		case "ListArkAgentPlanModel":
+			_, _ = w.Write([]byte(`{"Result":{"Datas":[{"ModelID":"doubao-seed-code"}]}}`))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	// 模拟 APIKeys 被脱敏后的配置：apiKeys 为空，仅靠 apiKeyConfigs 维持凭证关联。
+	data := `{
+  "managedAccounts":[{"accountUid":"acct_volc","providerId":"volcengine","name":"volc","credentials":[{"credentialUid":"cred_volc","apiKey":"ark-inference","volcengineAccessKey":{"accessKeyId":"AKID","secretAccessKey":"SECRET"}}]}],
+  "upstream":[{"accountUid":"acct_volc","channelUid":"ch_volc","providerId":"volcengine","name":"volc","serviceType":"claude","autoManaged":true,"baseUrl":"https://ark.cn-beijing.volces.com/api/plan","apiKeyConfigs":[{"credentialUid":"cred_volc","baseUrl":"https://ark.cn-beijing.volces.com/api/plan"}]}],
+  "chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[],"vectorsUpstream":[]
+}`
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := config.NewConfigManager(configPath, filepath.Join(dir, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer errutil.IgnoreDeferred(manager.Close)
+	channels := manager.GetAccountChannels("acct_volc")
+	if len(channels) != 1 {
+		t.Fatalf("channels=%d", len(channels))
+	}
+	// 确保 APIKeys 为空，模拟脱敏场景。
+	channel := channels[0].Upstream
+	channel.APIKeys = nil
+
+	runner := NewAutoDiscoveryRunner(nil, nil)
+	runner.client = server.Client()
+	runner.volcengineControlPlaneEndpoint = server.URL
+	results := runner.discoverEndpoints(context.Background(), &channel, manager)
+	if len(results) != 1 || !results[0].ProtocolOk || strings.Join(results[0].Models, ",") != "doubao-seed-code" {
+		t.Fatalf("results=%+v", results)
+	}
+	if results[0].ModelDiscoverySource != ModelDiscoverySourceControlPlane {
+		t.Fatalf("期望管控面来源，实际: %s", results[0].ModelDiscoverySource)
+	}
+}
+
 func TestVolcengineAutoDiscoveryUsesControlPlaneModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("Action") {
