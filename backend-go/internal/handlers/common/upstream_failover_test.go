@@ -15,6 +15,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -269,7 +270,9 @@ func TestTryUpstreamWithAllKeysRejectsOversizedVisionFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建临时目录失败: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	configPath := filepath.Join(tmpDir, "config.json")
 	cfgData, err := json.Marshal(cfg)
@@ -284,7 +287,7 @@ func TestTryUpstreamWithAllKeysRejectsOversizedVisionFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	messagesMetrics := metrics.NewMetricsManager()
 	responsesMetrics := metrics.NewMetricsManager()
@@ -411,7 +414,9 @@ func TestTryUpstreamWithAllKeysOverloadedCooldownSingleModelNoCircuit(t *testing
 			if err != nil {
 				t.Fatalf("创建临时目录失败: %v", err)
 			}
-			defer os.RemoveAll(tmpDir)
+			defer func() {
+				_ = os.RemoveAll(tmpDir)
+			}()
 
 			configPath := filepath.Join(tmpDir, "config.json")
 			cfgData, err := json.Marshal(cfg)
@@ -426,7 +431,7 @@ func TestTryUpstreamWithAllKeysOverloadedCooldownSingleModelNoCircuit(t *testing
 			if err != nil {
 				t.Fatalf("创建配置管理器失败: %v", err)
 			}
-			defer cfgManager.Close()
+			defer errutil.IgnoreDeferred(cfgManager.Close)
 
 			messagesMetrics := metrics.NewMetricsManager()
 			responsesMetrics := metrics.NewMetricsManager()
@@ -1135,17 +1140,17 @@ func newTestFailoverDependencies(t *testing.T, upstream config.UpstreamConfig) (
 	configPath := filepath.Join(tmpDir, "config.json")
 	cfgData, err := json.Marshal(cfg)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("序列化配置失败: %v", err)
 	}
 	if err := os.WriteFile(configPath, cfgData, 0644); err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("写入配置失败: %v", err)
 	}
 
 	cfgManager, err := config.NewConfigManager(configPath, "")
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
 
@@ -1167,13 +1172,13 @@ func newTestFailoverDependencies(t *testing.T, upstream config.UpstreamConfig) (
 	)
 
 	cleanup := func() {
-		cfgManager.Close()
+		_ = cfgManager.Close()
 		messagesMetrics.Stop()
 		responsesMetrics.Stop()
 		geminiMetrics.Stop()
 		chatMetrics.Stop()
 		imagesMetrics.Stop()
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return cfgManager, channelScheduler, messagesMetrics, cleanup

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestQueryAggregatedHistoryWaitsForFlushAndFlushesBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	record := PersistentRecord{
 		MetricsKey:  GenerateMetricsKey("https://example.com", "sk-test"),

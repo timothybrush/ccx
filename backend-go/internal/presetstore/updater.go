@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -469,7 +470,7 @@ func (u *PresetUpdater) fetchBytes(ctx context.Context, rawURL string, limit int
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)

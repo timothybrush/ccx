@@ -614,11 +614,6 @@ func runRoundRobinTests(ctx context.Context, channel *config.UpstreamConfig, pro
 	return orderedResults
 }
 
-func isCapabilityJobCancelled(jobID string) bool {
-	job, ok := capabilityJobs.get(jobID)
-	return ok && job.Lifecycle == CapabilityLifecycleCancelled
-}
-
 // executeModelTest 单模型测试（不调用 AcquireSendSlot，由编排器负责限流）
 // 原生协议测试直接用原始模型名发请求，不走 ModelMapping 重定向
 func executeModelTest(ctx context.Context, channel *config.UpstreamConfig, protocol, model string, timeout time.Duration, jobID string, cfgManager *config.ConfigManager, channelID int, channelKind, apiKey string, channelLogStore *metrics.ChannelLogStore) ModelTestResult {

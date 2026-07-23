@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -84,7 +85,7 @@ func handleChangelogEvents(mgr *Manager) gin.HandlerFunc {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer errutil.IgnoreDeferred(conn.Close)
 
 		ch, unsubscribe := mgr.EventHub().Subscribe()
 		defer unsubscribe()

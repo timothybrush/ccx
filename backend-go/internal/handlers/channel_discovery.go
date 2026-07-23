@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -1470,7 +1471,7 @@ func discoverTransientModels(ctx context.Context, channel *config.UpstreamConfig
 	if err != nil {
 		return DiscoveryModelsResult{Source: "models_endpoint", URL: modelsURL, Warnings: []string{err.Error()}}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

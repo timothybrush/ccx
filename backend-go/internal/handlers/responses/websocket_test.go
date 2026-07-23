@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -123,7 +124,7 @@ func TestResponsesWebSocketHandler_ResponsesUpstreamUsesHTTPBridge(t *testing.T)
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
-	defer conn.Close()
+	defer errutil.IgnoreDeferred(conn.Close)
 
 	err = conn.WriteJSON(map[string]interface{}{
 		"type":            "response.create",
@@ -204,7 +205,7 @@ func TestResponsesWebSocketHandler_NonResponsesUpstreamKeepsHTTPBridge(t *testin
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
-	defer conn.Close()
+	defer errutil.IgnoreDeferred(conn.Close)
 
 	if err := conn.WriteJSON(map[string]interface{}{
 		"type":            "response.create",

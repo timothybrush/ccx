@@ -4,6 +4,7 @@ package copilot
 import (
 	"context"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"strings"
@@ -81,7 +82,7 @@ func probeModels(ctx context.Context, client *http.Client, url string, copilotTo
 	if err != nil {
 		return 0, "", err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 512))
 	if err != nil {

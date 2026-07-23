@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"strings"
@@ -70,7 +71,7 @@ func (c *DeepSeekClient) FetchBalance(ctx context.Context, apiKey string) (DeepS
 	if err != nil {
 		return DeepSeekBalance{}, fmt.Errorf("请求 DeepSeek 余额失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, deepSeekMaxResponseBytes))
 	if err != nil {
 		return DeepSeekBalance{}, fmt.Errorf("读取 DeepSeek 余额失败: %w", err)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 )
 
@@ -37,7 +38,7 @@ func TestRestoreDisabledKeysAndActivate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new config manager: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	metricsManager := metrics.NewMetricsManager()
 	defer metricsManager.Stop()

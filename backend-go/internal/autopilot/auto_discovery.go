@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/utils"
 )
 
@@ -378,7 +379,7 @@ func (r *AutoDiscoveryRunner) probeEndpoint(ctx context.Context, client *http.Cl
 		result.ErrorMessage = fmt.Sprintf("请求失败: %v", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		if hasManifest && resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {

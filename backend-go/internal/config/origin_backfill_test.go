@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +22,7 @@ func TestOriginBackfill_FillsUnknownOnMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if len(cfg.Upstream) != 1 {
@@ -49,7 +50,7 @@ func TestOriginBackfill_PreservesExistingValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.Upstream[0].OriginType != "official_api" {
@@ -75,7 +76,7 @@ func TestOriginBackfill_PartialFieldsOnlyFillsMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.Upstream[0].OriginType != "relay" {
@@ -107,7 +108,7 @@ func TestOriginBackfill_AllChannelKinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 
@@ -151,7 +152,7 @@ func TestOriginBackfill_PersistedAfterBackfill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	cm.Close()
+	_ = cm.Close()
 
 	// 重新解析持久化后的配置文件，避免依赖 JSON 缩进/空格等格式细节
 	data, err := os.ReadFile(cfgFile)
@@ -192,7 +193,7 @@ func TestOriginBackfill_DoesNotChangeChannelSelection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if len(cfg.Upstream) != 2 {

@@ -22,12 +22,6 @@ const (
 )
 
 // allBaseProtocols 全部基础协议，用于 4×4 矩阵遍历
-var allBaseProtocols = []CapabilityBaseProtocol{
-	CapabilityProtocolMessages,
-	CapabilityProtocolChat,
-	CapabilityProtocolResponses,
-	CapabilityProtocolGemini,
-}
 
 // normalizeServiceTypeToProtocol 将渠道 ServiceType 归一化为 CapabilityBaseProtocol。
 // 返回 (protocol, ok)；ok=false 表示 serviceType 无法映射（如 images）。
@@ -67,9 +61,6 @@ func parseCompositeProtocol(protocol string) (CapabilityBaseProtocol, Capability
 }
 
 // isCompositeProtocol 判断 protocol 是否为复合协议（含 "->" 分隔符）。
-func isCompositeProtocol(protocol string) bool {
-	return strings.Contains(protocol, compositeProtocolSep)
-}
 
 // hasModelMapping 判断渠道是否配置了 ModelMapping。
 func hasModelMapping(channel *config.UpstreamConfig) bool {

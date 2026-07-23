@@ -72,7 +72,7 @@ func streamPassthrough(
 			progress.AddBytes(len(chunk))
 			progress.Tick()
 			if loggingEnabled {
-				logBuffer.Write(chunk)
+				_, _ = logBuffer.Write(chunk)
 			}
 			// 使用行缓冲机制避免跨 chunk 截断
 			data := remainder + string(chunk)
@@ -101,8 +101,7 @@ func streamPassthrough(
 					}
 				}
 			}
-
-			c.Writer.Write(chunk)
+			_, _ = c.Writer.Write(chunk)
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -110,7 +109,6 @@ func streamPassthrough(
 		if readErr != nil {
 			if remainder != "" {
 				flushCompletePassthroughRemainder(c, flusher, remainder)
-				remainder = ""
 			}
 			break
 		}
@@ -129,7 +127,7 @@ func flushCompletePassthroughRemainder(c *gin.Context, flusher http.Flusher, rem
 	if jsonData != "[DONE]" && !json.Valid([]byte(jsonData)) {
 		return
 	}
-	fmt.Fprintf(c.Writer, "%s\n\n", trimmed)
+	_, _ = fmt.Fprintf(c.Writer, "%s\n\n", trimmed)
 	if flusher != nil {
 		flusher.Flush()
 	}
@@ -195,7 +193,7 @@ func streamClaudeToChat(
 			progress.AddBytes(len(chunk))
 			progress.Tick()
 			if loggingEnabled {
-				logBuffer.Write(chunk)
+				_, _ = logBuffer.Write(chunk)
 			}
 			data := remainder + string(chunk)
 			lines := strings.Split(data, "\n")
@@ -209,14 +207,13 @@ func streamClaudeToChat(
 		if readErr != nil {
 			if remainder != "" {
 				processClaudeChatStreamLine(c, flusher, model, remainder, &totalUsage, &doneSent)
-				remainder = ""
 			}
 			break
 		}
 	}
 
 	if !doneSent {
-		fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -227,170 +224,6 @@ func streamClaudeToChat(
 }
 
 // flushResponsesSSEEvent 处理缓存的 Responses SSE data 行，生成对应的 Chat chunk。
-func flushResponsesSSEEvent(
-	c *gin.Context,
-	flusher http.Flusher,
-	model string,
-	chunkID string,
-	dataLines []string,
-	roleSent *bool,
-	currentToolIndex *int,
-	currentToolCallID *string,
-	currentToolName *string,
-	totalUsage **types.Usage,
-	doneSent *bool,
-	currentToolSeq *int,
-) {
-	jsonData := strings.Join(dataLines, "\n")
-	if jsonData == "[DONE]" {
-		return
-	}
-
-	var event map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonData), &event); err != nil {
-		return
-	}
-
-	evtType, _ := event["type"].(string)
-
-	switch evtType {
-	case "response.output_text.delta":
-		if !*roleSent {
-			roleChunk := map[string]interface{}{
-				"id":      chunkID,
-				"object":  "chat.completion.chunk",
-				"created": time.Now().Unix(),
-				"model":   model,
-				"choices": []map[string]interface{}{{
-					"index":         0,
-					"delta":         map[string]interface{}{"role": "assistant"},
-					"finish_reason": nil,
-				}},
-			}
-			writeChatSSEChunk(c, flusher, roleChunk)
-			*roleSent = true
-		}
-		text, _ := event["delta"].(string)
-		if text == "" {
-			return
-		}
-		chatChunk := map[string]interface{}{
-			"id":      chunkID,
-			"object":  "chat.completion.chunk",
-			"created": time.Now().Unix(),
-			"model":   model,
-			"choices": []map[string]interface{}{{
-				"index":         0,
-				"delta":         map[string]interface{}{"content": text},
-				"finish_reason": nil,
-			}},
-		}
-		writeChatSSEChunk(c, flusher, chatChunk)
-
-	case "response.output_item.added":
-		item, _ := event["item"].(map[string]interface{})
-		if item == nil {
-			return
-		}
-		if item["type"] == "function_call" {
-			*currentToolCallID, _ = item["call_id"].(string)
-			*currentToolName, _ = item["name"].(string)
-			*currentToolIndex = *currentToolSeq
-			*currentToolSeq++
-			toolChunk := map[string]interface{}{
-				"id":      chunkID,
-				"object":  "chat.completion.chunk",
-				"created": time.Now().Unix(),
-				"model":   model,
-				"choices": []map[string]interface{}{{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"tool_calls": []map[string]interface{}{{
-							"index": *currentToolIndex,
-							"id":    *currentToolCallID,
-							"type":  "function",
-							"function": map[string]interface{}{
-								"name":      *currentToolName,
-								"arguments": "",
-							},
-						}},
-					},
-					"finish_reason": nil,
-				}},
-			}
-			writeChatSSEChunk(c, flusher, toolChunk)
-		}
-
-	case "response.function_call_arguments.delta":
-		argsDelta, _ := event["delta"].(string)
-		if argsDelta == "" {
-			return
-		}
-		var arguments interface{} = argsDelta
-		if json.Valid([]byte(argsDelta)) {
-			var parsed interface{}
-			if err := json.Unmarshal([]byte(argsDelta), &parsed); err == nil {
-				arguments = parsed
-			}
-		}
-		toolChunk := map[string]interface{}{
-			"id":      chunkID,
-			"object":  "chat.completion.chunk",
-			"created": time.Now().Unix(),
-			"model":   model,
-			"choices": []map[string]interface{}{{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"tool_calls": []map[string]interface{}{{
-						"index": *currentToolIndex,
-						"id":    *currentToolCallID,
-						"function": map[string]interface{}{
-							"arguments": arguments,
-						},
-					}},
-				},
-				"finish_reason": nil,
-			}},
-		}
-		writeChatSSEChunk(c, flusher, toolChunk)
-
-	case "response.completed":
-		if usage, ok := event["usage"].(map[string]interface{}); ok {
-			inputTokens, _ := usage["input_tokens"].(float64)
-			outputTokens, _ := usage["output_tokens"].(float64)
-			*totalUsage = &types.Usage{
-				InputTokens:  int(inputTokens),
-				OutputTokens: int(outputTokens),
-			}
-		}
-		finishReason := "stop"
-		if *currentToolCallID != "" {
-			finishReason = "tool_calls"
-		}
-		if respObj, ok := event["response"].(map[string]interface{}); ok {
-			if status, _ := respObj["status"].(string); status == "incomplete" {
-				finishReason = "length"
-			}
-		}
-		finalChunk := map[string]interface{}{
-			"id":      chunkID,
-			"object":  "chat.completion.chunk",
-			"created": time.Now().Unix(),
-			"model":   model,
-			"choices": []map[string]interface{}{{
-				"index":         0,
-				"delta":         map[string]interface{}{},
-				"finish_reason": finishReason,
-			}},
-		}
-		writeChatSSEChunk(c, flusher, finalChunk)
-		fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
-		if flusher != nil {
-			flusher.Flush()
-		}
-		*doneSent = true
-	}
-}
 
 // streamResponsesToChat 将 Responses SSE 流转换为 OpenAI Chat SSE 格式。
 // 处理的 Responses 事件: response.output_text.delta, response.output_item.added,
@@ -450,7 +283,7 @@ func streamResponsesToChat(
 			progress.AddBytes(len(chunk))
 			progress.Tick()
 			if loggingEnabled {
-				logBuffer.Write(chunk)
+				_, _ = logBuffer.Write(chunk)
 			}
 			data := remainder + string(chunk)
 			lines := strings.Split(data, "\n")
@@ -613,7 +446,7 @@ func streamResponsesToChat(
 					}
 					writeChatSSEChunk(c, flusher, finalChunk)
 					// 发送 [DONE]
-					fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
+					_, _ = fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
 					if flusher != nil {
 						flusher.Flush()
 					}
@@ -623,15 +456,12 @@ func streamResponsesToChat(
 		}
 
 		if readErr != nil {
-			if remainder != "" {
-				// 处理剩余数据（忽略不完整的行）
-			}
 			break
 		}
 	}
 
 	if !doneSent {
-		fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -644,7 +474,7 @@ func streamResponsesToChat(
 // writeChatSSEChunk 将 Chat chunk 写为 SSE 格式并 flush。
 func writeChatSSEChunk(c *gin.Context, flusher http.Flusher, chunk map[string]interface{}) {
 	chunkBytes, _ := json.Marshal(chunk)
-	fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+	_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 	if flusher != nil {
 		flusher.Flush()
 	}
@@ -656,7 +486,7 @@ func processClaudeChatStreamLine(c *gin.Context, flusher http.Flusher, model str
 	}
 	jsonData := strings.TrimPrefix(line, "data: ")
 	if jsonData == "[DONE]" {
-		fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -697,7 +527,7 @@ func processClaudeChatStreamLine(c *gin.Context, flusher http.Flusher, model str
 				}},
 			}
 			chunkBytes, _ := json.Marshal(chatChunk)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+			_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -717,7 +547,7 @@ func processClaudeChatStreamLine(c *gin.Context, flusher http.Flusher, model str
 				}},
 			}
 			chunkBytes, _ := json.Marshal(chatChunk)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+			_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -745,7 +575,7 @@ func processClaudeChatStreamLine(c *gin.Context, flusher http.Flusher, model str
 			}
 		}
 		chunkBytes, _ := json.Marshal(stopChunk)
-		fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+		_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 		if flusher != nil {
 			flusher.Flush()
 		}

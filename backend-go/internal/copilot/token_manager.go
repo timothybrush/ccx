@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 )
 
@@ -189,7 +190,7 @@ func (m *TokenManager) exchange(ctx context.Context, githubToken string, client 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -257,18 +257,6 @@ func (m *MetricsManager) isSingleModelFailureLocked(metrics *KeyMetrics) bool {
 }
 
 // calculateKeyFailureRateInternal 计算 Key 综合失败率（内部方法，调用前需持有锁）
-func (m *MetricsManager) calculateKeyFailureRateInternal(metrics *KeyMetrics) float64 {
-	if len(metrics.recentResults) == 0 {
-		return 0
-	}
-	failures := 0
-	for _, success := range metrics.recentResults {
-		if !success {
-			failures++
-		}
-	}
-	return float64(failures) / float64(len(metrics.recentResults))
-}
 
 // cleanupCircuitBreakers 后台任务：推进到期的熔断状态并清理过期指标
 func (m *MetricsManager) cleanupCircuitBreakers() {

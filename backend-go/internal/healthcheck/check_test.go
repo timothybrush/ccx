@@ -77,7 +77,7 @@ func testWrappedFetcher() L1Fetcher {
 			return L1Response{StatusCode: http.StatusBadGateway, Body: []byte(`{"error":"Failed to fetch models"}`)}, nil
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusUnauthorized {
 			wrapped, _ := json.Marshal(map[string]interface{}{
 				"error":      "上游 API Key 无效",

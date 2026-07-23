@@ -941,11 +941,7 @@ func isTruthyEnv(val string) bool {
 func (c CostPreferenceConfig) GetEffectiveCostPreferenceMode(taskClass string) string {
 	if taskClass != "" {
 		if mode, ok := c.PerTaskClass[taskClass]; ok {
-			normalized := normalizeCostPreferenceMode(mode)
-			if normalized != mode {
-				// 归一化后的值不一致，使用归一化值
-			}
-			return normalized
+			return normalizeCostPreferenceMode(mode)
 		}
 	}
 	return c.Mode

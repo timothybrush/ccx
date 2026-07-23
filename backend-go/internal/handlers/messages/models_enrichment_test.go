@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
-	"github.com/BenedictKing/ccx/internal/scheduler"
 )
 
 // TestModelsHandler_FillsMaxOutputTokensFromBuiltinRegistry 验证 /v1/models 响应中
@@ -341,6 +340,3 @@ func TestModelsHandler_ConfiguredModelsFallbackIncludesMaxOutputTokens(t *testin
 }
 
 // verify 模型列表排序使用独立的 scheduler 初始化
-func newModelsTestSchedulerForEnrichment(cfgManager *config.ConfigManager) *scheduler.ChannelScheduler {
-	return newModelsTestScheduler(cfgManager)
-}

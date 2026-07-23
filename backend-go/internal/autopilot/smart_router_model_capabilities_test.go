@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 )
 
@@ -196,7 +197,7 @@ func TestBuildChannelEntryMergesRegistryAndEndpointCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	profiles := []*KeyEndpointProfile{
 		{

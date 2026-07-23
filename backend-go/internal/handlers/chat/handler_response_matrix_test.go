@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -31,7 +32,7 @@ func setupChatTestConfigManager(t *testing.T, upstream []config.UpstreamConfig) 
 	if err != nil {
 		t.Fatalf("NewConfigManager() err = %v", err)
 	}
-	t.Cleanup(func() { cm.Close() })
+	t.Cleanup(func() { _ = cm.Close() })
 	return cm
 }
 
@@ -271,7 +272,7 @@ func TestChatHandler_PassthroughPreservesMultimodalRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var captured map[string]interface{}
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				defer r.Body.Close()
+				defer errutil.IgnoreDeferred(r.Body.Close)
 				if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 					t.Fatalf("decode upstream request: %v", err)
 				}
@@ -324,7 +325,7 @@ func TestChatHandler_PassthroughPreservesMultimodalRequest(t *testing.T) {
 
 func TestChatHandler_ImageEditPassthroughSucceeds(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer errutil.IgnoreDeferred(r.Body.Close)
 
 		var captured map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {

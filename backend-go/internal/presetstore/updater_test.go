@@ -263,7 +263,8 @@ func TestPresetUpdaterStopIsIdempotent(t *testing.T) {
 func TestPresetUpdaterCheckOnceSerializesConcurrentRuns(t *testing.T) {
 	cacheDir := t.TempDir()
 	bundle := validBundle()
-	bundle.DataVersion = "v2.10.0"
+	embeddedVersion := parseDataVersion(EmbeddedBundle().DataVersion)
+	bundle.DataVersion = fmt.Sprintf("v%d.0.0", embeddedVersion.parts[0]+1)
 	bundle.ModelRegistry = validModelRegistryPreset()
 	bundle.ChannelPresets = validChannelPresetsPreset()
 	bundle.BuiltinModelsManifests = validBuiltinManifestPreset()

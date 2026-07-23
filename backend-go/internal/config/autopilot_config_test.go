@@ -161,11 +161,13 @@ func TestAutopilotRoutingConfig_EnvKillSwitch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 清理环境变量
-			os.Unsetenv(autopilotKillSwitchEnv)
-			defer os.Unsetenv(autopilotKillSwitchEnv)
+			_ = os.Unsetenv(autopilotKillSwitchEnv)
+			defer func() {
+				_ = os.Unsetenv(autopilotKillSwitchEnv)
+			}()
 
 			if tt.envVal != "" {
-				os.Setenv(autopilotKillSwitchEnv, tt.envVal)
+				_ = os.Setenv(autopilotKillSwitchEnv, tt.envVal)
 			}
 
 			cfg := AutopilotRoutingConfig{

@@ -193,9 +193,6 @@ func calculateTotalTokensWithCache(inputTokens, outputTokens, cacheRead, cacheCr
 
 // injectResponsesUsageToCompletedEvent 向 response.completed 事件注入 usage
 // 返回: 修改后的事件字符串, 估算的 inputTokens, 估算的 outputTokens
-func injectResponsesUsageToCompletedEvent(event string, requestBody []byte, outputText string, envCfg *config.EnvConfig) (string, int, int) {
-	return injectResponsesUsageToCompletedEventWithLogTag(event, requestBody, outputText, envCfg, "")
-}
 
 func injectResponsesUsageToCompletedEventWithLogTag(event string, requestBody []byte, outputText string, envCfg *config.EnvConfig, logTag string) (string, int, int) {
 	inputTokens := utils.EstimateResponsesRequestTokens(requestBody)
@@ -376,9 +373,6 @@ func injectResponsesUsageToCompletedEventWithLogTag(event string, requestBody []
 }
 
 // patchResponsesCompletedEventUsage 修补 response.completed 事件中的 usage
-func patchResponsesCompletedEventUsage(event string, requestBody []byte, outputText string, collected *responsesStreamUsage, envCfg *config.EnvConfig) string {
-	return patchResponsesCompletedEventUsageWithLogTag(event, requestBody, outputText, collected, envCfg, "")
-}
 
 func patchResponsesCompletedEventUsageWithLogTag(event string, requestBody []byte, outputText string, collected *responsesStreamUsage, envCfg *config.EnvConfig, logTag string) string {
 	var result strings.Builder

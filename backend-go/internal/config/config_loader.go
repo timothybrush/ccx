@@ -227,9 +227,6 @@ func (cm *ConfigManager) applyConfigDefaults(rawJSON []byte) bool {
 			needSave = true
 			log.Printf("[Config-Migration] FuzzyModeEnabled 字段不存在，设为默认值 true")
 		}
-		if _, exists := rawMap["stripBillingHeader"]; !exists {
-			// 字段不存在，保留零值 false；新语义默认关闭，仅旧配置显式存在时才迁移
-		}
 		if _, exists := rawMap["thinkingCache"]; !exists {
 			cm.config.ThinkingCache.TTLHours = ThinkingCacheDefaultTTLHours
 			needSave = true
@@ -792,12 +789,9 @@ func (cm *ConfigManager) applyServiceTypeDefaults() bool {
 
 // migrateOldFormat 迁移旧格式配置，返回是否有迁移
 func (cm *ConfigManager) migrateOldFormat() bool {
-	needMigration := false
+	needMigration := cm.migrateUpstreams(cm.config.Upstream, cm.config.CurrentUpstream, "Messages")
 
 	// 迁移 Messages 渠道
-	if cm.migrateUpstreams(cm.config.Upstream, cm.config.CurrentUpstream, "Messages") {
-		needMigration = true
-	}
 
 	// 迁移 Responses 渠道
 	if cm.migrateUpstreams(cm.config.ResponsesUpstream, cm.config.CurrentResponsesUpstream, "Responses") {
@@ -1025,7 +1019,7 @@ func (cm *ConfigManager) cleanupOldBackups(backupDir string) {
 
 	// 删除最旧的备份
 	for i := 0; i < len(entries)-maxBackups; i++ {
-		os.Remove(filepath.Join(backupDir, entries[i].Name()))
+		_ = os.Remove(filepath.Join(backupDir, entries[i].Name()))
 	}
 }
 

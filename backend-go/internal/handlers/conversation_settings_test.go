@@ -12,6 +12,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/conversation"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +43,7 @@ func TestConversationSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化 ConfigManager 失败: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	// 初始化依赖
 	tracker := conversation.NewConversationTracker(1*time.Hour, 24*time.Hour, "")

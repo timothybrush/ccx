@@ -14,6 +14,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
 	"github.com/BenedictKing/ccx/internal/copilot"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/session"
 	"github.com/BenedictKing/ccx/internal/types"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -150,9 +151,10 @@ func (p *ResponsesProvider) buildProviderRequestBody(c *gin.Context, requestPath
 				config.ApplyReasoningParamStyle(reqMap, upstream.ReasoningParamStyle, effort)
 			} else if reasoning, hasReasoning := reqMap["reasoning"]; hasReasoning {
 				// 无 ReasoningMapping 配置时，按 ReasoningParamStyle 转换客户端原始 reasoning
-				if upstream.ReasoningParamStyle == "thinking" {
+				switch upstream.ReasoningParamStyle {
+				case "thinking":
 					config.ApplyReasoningParamStyle(reqMap, upstream.ReasoningParamStyle, extractEffortFromReasoning(reasoning))
-				} else if upstream.ReasoningParamStyle == "reasoning_effort" {
+				case "reasoning_effort":
 					config.ApplyReasoningParamStyle(reqMap, upstream.ReasoningParamStyle, extractEffortFromReasoning(reasoning))
 				}
 				// 默认样式保持原样透传（原始 reasoning 对象直接转发）
@@ -217,11 +219,12 @@ func (p *ResponsesProvider) buildProviderRequestBody(c *gin.Context, requestPath
 				var rawReq map[string]interface{}
 				if json.Unmarshal(bodyBytes, &rawReq) == nil {
 					if reasoning, hasReasoning := rawReq["reasoning"]; hasReasoning {
-						if upstream.ReasoningParamStyle == "thinking" {
+						switch upstream.ReasoningParamStyle {
+						case "thinking":
 							config.ApplyReasoningParamStyle(reqMap, upstream.ReasoningParamStyle, extractEffortFromReasoning(reasoning))
-						} else if upstream.ReasoningParamStyle == "reasoning_effort" {
+						case "reasoning_effort":
 							config.ApplyReasoningParamStyle(reqMap, upstream.ReasoningParamStyle, extractEffortFromReasoning(reasoning))
-						} else {
+						default:
 							reqMap["reasoning"] = reasoning
 						}
 					}
@@ -652,7 +655,7 @@ func (p *ResponsesProvider) HandleStreamResponse(body io.ReadCloser) (<-chan str
 
 	go func() {
 		defer close(eventChan)
-		defer body.Close()
+		defer errutil.IgnoreDeferred(body.Close)
 
 		scanner := bufio.NewScanner(body)
 		scanner.Buffer(make([]byte, 0, 64*1024), utils.ResponsesSSEScannerMaxBufferSize)

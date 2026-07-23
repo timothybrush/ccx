@@ -123,7 +123,7 @@ func (cm *ConfigManager) BindManagedAccountKimiConsole(accountUID, credentialUID
 			}
 			console.AccessToken = strings.TrimSpace(console.AccessToken)
 			if console.AccessToken == "" {
-				return fmt.Errorf("Kimi 控制台令牌不能为空")
+				return fmt.Errorf("kimi 控制台令牌不能为空")
 			}
 			account.Credentials[j].KimiConsole = cloneKimiConsoleCredential(&console)
 			return cm.saveConfigLocked(cm.config)
@@ -191,7 +191,7 @@ func (cm *ConfigManager) BindManagedAccountMiMoConsole(accountUID, credentialUID
 			}
 			for _, existing := range account.Credentials {
 				if existing.CredentialUID != credentialUID && existing.APIKey == replacementKey {
-					return fmt.Errorf("Cookie 所属 Key 已存在于当前账号")
+					return fmt.Errorf("cookie 所属 Key 已存在于当前账号")
 				}
 			}
 		}
@@ -366,7 +366,7 @@ func (cm *ConfigManager) SetManagedAccountVolcengineAccessKey(accountUID, creden
 	accessKeyID = strings.TrimSpace(accessKeyID)
 	secretAccessKey = strings.TrimSpace(secretAccessKey)
 	if accessKeyID == "" || secretAccessKey == "" {
-		return fmt.Errorf("Access Key ID 和 Secret Access Key 均不能为空")
+		return fmt.Errorf("access Key ID 和 Secret Access Key 均不能为空")
 	}
 	for i := range cm.config.ManagedAccounts {
 		account := &cm.config.ManagedAccounts[i]
@@ -775,9 +775,10 @@ func appendAccountChannelAddition(cfg *Config, accountUID string, addition Accou
 	}
 
 	upstream.ServiceType = normalizeUpstreamServiceType(upstream.ServiceType, fallback)
-	if addition.Kind == "images" {
+	switch addition.Kind {
+	case "images":
 		upstream.ServiceType, err = normalizeImagesServiceType(upstream.ServiceType)
-	} else if addition.Kind == "vectors" {
+	case "vectors":
 		upstream.ServiceType, err = normalizeVectorsServiceType(upstream.ServiceType)
 	}
 	if err != nil {

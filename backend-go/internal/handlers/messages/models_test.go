@@ -518,7 +518,6 @@ func TestModelsHandler_IncludesImagesModels(t *testing.T) {
 func TestModelsHandler_CollectsTwoSuccessfulChannelsPerProtocol(t *testing.T) {
 	var calls atomic.Int32
 	upstreams := make([]config.UpstreamConfig, 0, 6)
-	servers := make([]*httptest.Server, 0, 6)
 	for i := 0; i < 6; i++ {
 		idx := i
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -528,9 +527,8 @@ func TestModelsHandler_CollectsTwoSuccessfulChannelsPerProtocol(t *testing.T) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"object":"list","data":[{"id":"model-%d","object":"model"}]}`, idx)))
+			_, _ = fmt.Fprintf(w, `{"object":"list","data":[{"id":"model-%d","object":"model"}]}`, idx)
 		}))
-		servers = append(servers, server)
 		defer server.Close()
 		upstreams = append(upstreams, config.UpstreamConfig{
 			Name:        fmt.Sprintf("chat-%d", idx),

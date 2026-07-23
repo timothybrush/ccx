@@ -99,7 +99,7 @@ func TestAutopilotSimulation_EndToEnd(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var resp DryRunResponse
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		require.NotEmpty(t, resp.Plan.Candidates, "候选列表不应为空")
 		for i, c := range resp.Plan.Candidates {
@@ -218,7 +218,7 @@ func TestAutopilotSimulation_EndToEnd(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code, "创建 intent 应返回 201")
 
 		var created ManualRoutingIntent
-		json.Unmarshal(w.Body.Bytes(), &created)
+		_ = json.Unmarshal(w.Body.Bytes(), &created)
 		assert.NotEmpty(t, created.IntentUID, "应返回 intentUid")
 		assert.Equal(t, IntentStatusActive, created.Status, "状态应为 active")
 		t.Logf("Intent 已创建: uid=%s status=%s", created.IntentUID, created.Status)
@@ -257,7 +257,7 @@ func TestAutopilotSimulation_EndToEnd(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var stats TraceStats
-		json.Unmarshal(w.Body.Bytes(), &stats)
+		_ = json.Unmarshal(w.Body.Bytes(), &stats)
 
 		assert.GreaterOrEqual(t, stats.TotalCount, 5, "总 trace 数应 ≥ 5")
 		t.Logf("Trace 统计: 总数=%d, 不一致数=%d", stats.TotalCount, stats.MismatchCount)
@@ -294,7 +294,7 @@ func TestAutopilotSimulation_EndToEnd(t *testing.T) {
 		assert.Equal(t, http.StatusOK, getW.Code)
 
 		var cfg map[string]interface{}
-		json.Unmarshal(getW.Body.Bytes(), &cfg)
+		_ = json.Unmarshal(getW.Body.Bytes(), &cfg)
 		assert.Equal(t, "assist", cfg["mode"], "模式应已切换到 assist")
 	})
 }
@@ -317,7 +317,7 @@ func seedTestProfiles(t *testing.T, store *ProfileStore) {
 		HealthState:     HealthStateHealthy,
 		AvailableModels: []string{"claude-opus-4", "claude-sonnet-4"},
 	}
-	store.Upsert(p1)
+	_ = store.Upsert(p1)
 
 	// 中质量中转渠道
 	p2 := &KeyEndpointProfile{
@@ -335,7 +335,7 @@ func seedTestProfiles(t *testing.T, store *ProfileStore) {
 		HealthState:     HealthStateHealthy,
 		AvailableModels: []string{"claude-opus-4", "claude-sonnet-4"},
 	}
-	store.Upsert(p2)
+	_ = store.Upsert(p2)
 
 	// 低成本公益渠道
 	p3 := &KeyEndpointProfile{
@@ -353,7 +353,7 @@ func seedTestProfiles(t *testing.T, store *ProfileStore) {
 		HealthState:     HealthStateHealthy,
 		AvailableModels: []string{"claude-opus-4", "claude-sonnet-4"},
 	}
-	store.Upsert(p3)
+	_ = store.Upsert(p3)
 
 	t.Logf("已预填充 3 个测试渠道画像")
 }

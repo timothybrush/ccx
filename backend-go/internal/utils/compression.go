@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -38,7 +39,7 @@ func DecompressBytesByEncoding(bodyBytes []byte, encoding string) ([]byte, error
 	if err != nil {
 		return bodyBytes, err
 	}
-	defer reader.Close()
+	defer errutil.IgnoreDeferred(reader.Close)
 	return io.ReadAll(reader)
 }
 
@@ -75,7 +76,7 @@ func NewDecompressedReaderByEncoding(encoding string, body io.ReadCloser) (io.Re
 	case "gzip":
 		reader, err := gzip.NewReader(body)
 		if err != nil {
-			body.Close()
+			_ = body.Close()
 			return nil, err
 		}
 		return &wrappedReadCloser{Reader: reader, close: func() error {
@@ -89,7 +90,7 @@ func NewDecompressedReaderByEncoding(encoding string, body io.ReadCloser) (io.Re
 	case "deflate":
 		reader, err := zlib.NewReader(body)
 		if err != nil {
-			body.Close()
+			_ = body.Close()
 			return nil, err
 		}
 		return &wrappedReadCloser{Reader: reader, close: func() error {
@@ -103,7 +104,7 @@ func NewDecompressedReaderByEncoding(encoding string, body io.ReadCloser) (io.Re
 	case "zstd":
 		reader, err := zstd.NewReader(body)
 		if err != nil {
-			body.Close()
+			_ = body.Close()
 			return nil, err
 		}
 		return &wrappedReadCloser{Reader: reader, close: func() error {
@@ -111,7 +112,7 @@ func NewDecompressedReaderByEncoding(encoding string, body io.ReadCloser) (io.Re
 			return body.Close()
 		}}, nil
 	default:
-		body.Close()
+		_ = body.Close()
 		return nil, fmt.Errorf("unsupported content-encoding: %s", encoding)
 	}
 }

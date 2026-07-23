@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/google/uuid"
 )
 
@@ -76,8 +77,7 @@ func GenerateTemplateID() string {
 // LocalTaskTemplateStore 管理 LocalTaskTemplate 的内存缓存与 SQLite 持久化。
 // 复用 ProfileStore 的 SQLite 连接模式。
 type LocalTaskTemplateStore struct {
-	db     *sql.DB
-	dbPath string
+	db *sql.DB
 
 	cache map[string]*LocalTaskTemplate // key = templateID
 	mu    sync.RWMutex
@@ -123,7 +123,7 @@ func (s *LocalTaskTemplateStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

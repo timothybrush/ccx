@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/middleware"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -309,7 +310,7 @@ func prepareVectorsUpstreamHeaders(c *gin.Context, targetHost string) http.Heade
 }
 
 func handleSuccess(c *gin.Context, resp *http.Response, envCfg *config.EnvConfig, startTime time.Time) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		vectorsErrorResponse(c, http.StatusInternalServerError, "Failed to read response", "server_error", "server_error")

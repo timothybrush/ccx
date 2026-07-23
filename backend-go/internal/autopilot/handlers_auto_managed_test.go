@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -812,7 +813,7 @@ func TestListManagedAccountsDoesNotExposeVolcengineSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	router := setupAutoManagedRouter(&AutoManagedDeps{CfgManager: manager})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
@@ -968,7 +969,7 @@ func TestSetVolcengineAccessKeyDetectsPlanBeforePersisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	runner := NewAutoDiscoveryRunner(nil, nil)
 	runner.client = controlPlane.Client()
 	runner.volcengineControlPlaneEndpoint = controlPlane.URL
@@ -1022,7 +1023,7 @@ func TestSetMiMoConsoleCookieRequiresConfirmationBeforeAdoptingKey(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	deps := &AutoManagedDeps{CfgManager: manager, MiMoConsoleClient: &MiMoConsoleClient{HTTPClient: console.Client(), BaseURL: console.URL}}
 	router := setupAutoManagedRouter(deps)
 	body := `{"cookie":"api-platform_serviceToken=session; userId=42"}`
@@ -1090,7 +1091,7 @@ func TestCompshareConsoleCookieBindingDoesNotExposeSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	router := setupAutoManagedRouter(&AutoManagedDeps{
 		CfgManager:             manager,
 		CompshareConsoleClient: &CompshareConsoleClient{HTTPClient: console.Client(), BaseURL: console.URL},

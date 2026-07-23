@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/gin-gonic/gin"
@@ -134,14 +133,3 @@ func handleABTestEmergencyStop(deps *ABTestDeps) gin.HandlerFunc {
 }
 
 // parsePositiveInt 从查询参数解析正整数，默认值 fallback。
-func parsePositiveInt(c *gin.Context, key string, fallback int) int {
-	val := c.Query(key)
-	if val == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(val)
-	if err != nil || n <= 0 {
-		return fallback
-	}
-	return n
-}

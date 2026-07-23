@@ -457,7 +457,7 @@ func streamGeminiToGemini(
 		progress.AddBytes(len(line))
 		progress.Tick()
 		if loggingEnabled {
-			logBuffer.WriteString(line + "\n")
+			_, _ = logBuffer.WriteString(line + "\n")
 		}
 
 		// 直接转发 SSE 数据
@@ -474,12 +474,11 @@ func streamGeminiToGemini(
 					}
 				}
 			}
-
-			fmt.Fprintf(c.Writer, "%s\n", line)
+			_, _ = fmt.Fprintf(c.Writer, "%s\n", line)
 		} else if line != "" {
-			fmt.Fprintf(c.Writer, "%s\n", line)
+			_, _ = fmt.Fprintf(c.Writer, "%s\n", line)
 		} else {
-			fmt.Fprintf(c.Writer, "\n")
+			_, _ = fmt.Fprintf(c.Writer, "\n")
 		}
 
 		if flusher != nil {
@@ -520,7 +519,7 @@ func streamClaudeToGemini(
 		progress.AddBytes(len(line))
 		progress.Tick()
 		if loggingEnabled {
-			logBuffer.WriteString(line + "\n")
+			_, _ = logBuffer.WriteString(line + "\n")
 		}
 
 		if !strings.HasPrefix(line, "data: ") {
@@ -566,7 +565,7 @@ func streamClaudeToGemini(
 					},
 				}
 				chunkBytes, _ := json.Marshal(geminiChunk)
-				fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+				_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -589,7 +588,7 @@ func streamClaudeToGemini(
 				}
 
 				chunkBytes, _ := json.Marshal(geminiChunk)
-				fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+				_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -625,7 +624,7 @@ func streamClaudeToGemini(
 					},
 				}
 				chunkBytes, _ := json.Marshal(geminiChunk)
-				fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+				_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -668,7 +667,7 @@ func streamOpenAIToGemini(
 		progress.AddBytes(len(line))
 		progress.Tick()
 		if loggingEnabled {
-			logBuffer.WriteString(line + "\n")
+			_, _ = logBuffer.WriteString(line + "\n")
 		}
 
 		if !strings.HasPrefix(line, "data: ") {
@@ -711,7 +710,7 @@ func streamOpenAIToGemini(
 					},
 				}
 				chunkBytes, _ := json.Marshal(geminiChunk)
-				fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+				_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -741,7 +740,7 @@ func streamOpenAIToGemini(
 					},
 				}
 				chunkBytes, _ := json.Marshal(geminiChunk)
-				fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+				_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -769,7 +768,7 @@ func streamOpenAIToGemini(
 			}
 
 			chunkBytes, _ := json.Marshal(geminiChunk)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+			_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -793,7 +792,7 @@ func streamOpenAIToGemini(
 			}
 
 			chunkBytes, _ := json.Marshal(geminiChunk)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+			_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -810,7 +809,7 @@ func streamOpenAIToGemini(
 				},
 			}
 			chunkBytes, _ := json.Marshal(geminiChunk)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
+			_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", string(chunkBytes))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -868,7 +867,7 @@ func streamResponsesToGemini(
 		progress.AddBytes(len(line))
 		progress.Tick()
 		if loggingEnabled {
-			logBuffer.WriteString(line + "\n")
+			_, _ = logBuffer.WriteString(line + "\n")
 		}
 		if line == "" {
 			continue
@@ -897,8 +896,7 @@ func streamResponsesToGemini(
 					}
 				}
 			}
-
-			fmt.Fprint(c.Writer, event)
+			_, _ = fmt.Fprint(c.Writer, event)
 			if flusher != nil {
 				flusher.Flush()
 			}

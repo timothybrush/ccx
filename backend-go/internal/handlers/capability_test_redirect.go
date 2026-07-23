@@ -345,26 +345,16 @@ func executeRedirectModelTest(ctx context.Context, channel *config.UpstreamConfi
 }
 
 // testProtocolCompatibility 并发测试多个协议的兼容性（已废弃，保留用于兼容）
-func testProtocolCompatibility(ctx context.Context, channel *config.UpstreamConfig, protocols []string, timeout time.Duration, jobID string) []ProtocolTestResult {
-	// 已废弃，直接调用新实现
-	return runRoundRobinTests(ctx, channel, protocols, timeout, 10, jobID, nil, nil, nil, 0, "", "", "", nil)
-}
+
+// 已废弃，直接调用新实现
 
 // testSingleProtocol 已废弃，保留用于兼容
-func testSingleProtocol(ctx context.Context, channel *config.UpstreamConfig, protocol string, timeout time.Duration, jobID string) ProtocolTestResult {
-	// 已废弃，直接调用新实现
-	results := runRoundRobinTests(ctx, channel, []string{protocol}, timeout, 10, jobID, nil, nil, nil, 0, "", "", "", nil)
-	if len(results) > 0 {
-		return results[0]
-	}
-	return ProtocolTestResult{Protocol: protocol, TestedAt: time.Now().Format(time.RFC3339)}
-}
+
+// 已废弃，直接调用新实现
 
 // testSingleModel 已废弃，保留用于兼容
-func testSingleModel(ctx context.Context, channel *config.UpstreamConfig, protocol, model string, timeout time.Duration, jobID string) ModelTestResult {
-	// 已废弃，直接调用 executeModelTest
-	return executeModelTest(ctx, channel, protocol, model, timeout, jobID, nil, 0, "", "", nil)
-}
+
+// 已废弃，直接调用 executeModelTest
 
 func updateCapabilityJobModelResultsByActualModel(job *CapabilityTestJob, protocol, actualModel string, status CapabilityModelStatus, result ModelTestResult) int {
 	if actualModel == "" {

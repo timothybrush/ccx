@@ -141,8 +141,7 @@ func shouldRetryWithNextKeyNormal(statusCode int, bodyBytes []byte, apiType stri
 		// 这样 403 + "预扣费额度" 消息 → isQuotaRelated=true
 		LogWithTag(logTag, "[%s-Failover-Debug] 调用 classifyByErrorMessage, body=%s", apiType, errorBodySummaryForLog(apiType, statusCode, bodyBytes))
 		if !bodyClassified {
-			bodyFailover, bodyQuota = classifyByErrorMessageWithLogTag(bodyBytes, apiType, logTag)
-			bodyClassified = true
+			_, bodyQuota = classifyByErrorMessageWithLogTag(bodyBytes, apiType, logTag)
 		}
 		LogWithTag(logTag, "[%s-Failover-Debug] classifyByErrorMessage 返回: msgQuota=%v", apiType, bodyQuota)
 		if bodyQuota {

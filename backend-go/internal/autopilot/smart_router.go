@@ -57,8 +57,6 @@ type SmartRouter struct {
 	// onCandidatesRanked Phase 4 Item 8: 候选排名回调（A/B 测试用）。
 	// executeFilter 完成评分排序后调用，传入 ranked candidates。
 	onCandidatesRanked func(model, channelKind string, candidates []RoutingCandidate)
-
-	mu sync.RWMutex
 }
 
 // NewSmartRouter 创建 SmartRouter 实例。
@@ -732,11 +730,9 @@ func (r *SmartRouter) executeFilter(
 		// 匹配回 ChannelInfo：优先用上游配置的 ChannelUID，回退到 ch_%d 格式
 		for _, ch := range channels {
 			upstream := upstreamFor(ch)
-			matchUID := e.ChannelUID
+			matchUID := fmt.Sprintf("ch_%d", ch.Index)
 			if upstream != nil && upstream.ChannelUID != "" {
 				matchUID = upstream.ChannelUID
-			} else {
-				matchUID = fmt.Sprintf("ch_%d", ch.Index)
 			}
 			if matchUID == e.ChannelUID {
 				result = append(result, ch)
@@ -791,11 +787,9 @@ func (r *SmartRouter) executeFilter(
 				// 保留未被过滤的渠道：匹配回 ChannelInfo
 				for _, ch := range channels {
 					upstream := upstreamFor(ch)
-					matchUID := se.entry.ChannelUID
+					matchUID := fmt.Sprintf("ch_%d", ch.Index)
 					if upstream != nil && upstream.ChannelUID != "" {
 						matchUID = upstream.ChannelUID
-					} else {
-						matchUID = fmt.Sprintf("ch_%d", ch.Index)
 					}
 					if matchUID == se.entry.ChannelUID {
 						filteredResult = append(filteredResult, ch)
@@ -843,12 +837,12 @@ func (r *SmartRouter) executeFilter(
 				}
 				matchedIntent.FallbackUsed = true
 				if mode == RoutingModeAuto && r.intentStore != nil {
-					r.intentStore.RecordFallback(matchedIntent.Intent.IntentUID)
+					_ = r.intentStore.RecordFallback(matchedIntent.Intent.IntentUID)
 				}
 				log.Printf("[SmartRouter-IntentFallback] uid=%s target=%s filtered by hard constraints",
 					matchedIntent.Intent.IntentUID, intentTargetUID)
 			} else if mode == RoutingModeAuto && r.intentStore != nil {
-				r.intentStore.RecordHit(matchedIntent.Intent.IntentUID, true, 0)
+				_ = r.intentStore.RecordHit(matchedIntent.Intent.IntentUID, true, 0)
 			}
 		}
 	}
@@ -865,19 +859,20 @@ func (r *SmartRouter) executeFilter(
 			trace.SortReasons = append(trace.SortReasons, "intent_fallback")
 		}
 	}
-	if mode == RoutingModeAssist {
+	switch mode {
+	case RoutingModeAssist:
 		trace.SortReasons = append(trace.SortReasons, "assist_reorder")
 		// assist 模式下意图命中即生效（无硬约束过滤），记录 RecordHit
 		if matchedIntent != nil && !matchedIntent.FallbackUsed && r.intentStore != nil {
-			r.intentStore.RecordHit(matchedIntent.Intent.IntentUID, true, 0)
+			_ = r.intentStore.RecordHit(matchedIntent.Intent.IntentUID, true, 0)
 		}
-	} else if mode == RoutingModeAuto {
+	case RoutingModeAuto:
 		if fallbackUsed {
 			trace.SortReasons = append(trace.SortReasons, "auto_failopen_reorder")
 		} else {
 			trace.SortReasons = append(trace.SortReasons, "auto_filter_and_reorder")
 		}
-	} else if mode == RoutingModeShadow || mode == RoutingModeDryRun {
+	case RoutingModeShadow, RoutingModeDryRun:
 		if fallbackUsed {
 			trace.SortReasons = append(trace.SortReasons, "shadow_auto_failopen_simulation")
 		} else {

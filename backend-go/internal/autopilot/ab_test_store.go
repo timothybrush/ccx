@@ -3,6 +3,7 @@ package autopilot
 import (
 	"database/sql"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"sync"
 	"time"
@@ -126,7 +127,7 @@ FROM ab_test_records ORDER BY created_at DESC LIMIT ?`, s.maxRecords)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	for rows.Next() {
 		r := &ABTestRecord{}

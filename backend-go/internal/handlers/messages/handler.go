@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/middleware"
 	"github.com/BenedictKing/ccx/internal/providers"
@@ -402,7 +403,7 @@ func handleNormalResponse(
 	apiKey string,
 	fuzzyMode bool,
 ) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

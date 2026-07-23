@@ -16,20 +16,6 @@ import (
 // ============== 复合协议请求构造（复用现有 provider 转换链路） ==============
 
 // entryPathForProtocol 返回各基础协议的入口路径，用于构造 gin test context 的请求路径。
-func entryPathForProtocol(protocol CapabilityBaseProtocol) string {
-	switch protocol {
-	case CapabilityProtocolMessages:
-		return "/v1/messages"
-	case CapabilityProtocolChat:
-		return "/v1/chat/completions"
-	case CapabilityProtocolResponses:
-		return "/v1/responses"
-	case CapabilityProtocolGemini:
-		return "/v1beta/models/probe:streamGenerateContent?alt=sse"
-	default:
-		return "/v1/messages"
-	}
-}
 
 // providerServiceTypeForProtocol 返回各基础协议对应的 provider serviceType，用于 GetProvider。
 func providerServiceTypeForProtocol(protocol CapabilityBaseProtocol) string {
@@ -188,7 +174,7 @@ func buildCompositeRequestViaProvider(
 	var reqBody []byte
 	if req.Body != nil {
 		reqBody, err = io.ReadAll(req.Body)
-		req.Body.Close()
+		_ = req.Body.Close()
 		if err != nil {
 			return "", nil, "", fmt.Errorf("read converted request body: %w", err)
 		}

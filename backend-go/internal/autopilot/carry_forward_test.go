@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"path/filepath"
 	"testing"
 	"time"
@@ -202,7 +203,7 @@ func TestCarryForwardFirstByteStats_SurvivesProfileStoreRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("重启后打开画像存储失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 	current := newTestProfile("ep-restart", "ch-1", "messages", "https://example.com")
 	carryForwardFirstByteStats(store2.Get("ep-restart"), current, now)
 

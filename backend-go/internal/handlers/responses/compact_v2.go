@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/providers"
@@ -125,7 +126,7 @@ func tryLocalCompactV2WithKey(
 	if err != nil {
 		return false, &compactError{status: 502, body: []byte(`{"error":"本地 compact v2 上游请求失败"}`), shouldFailover: true, err: err}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)

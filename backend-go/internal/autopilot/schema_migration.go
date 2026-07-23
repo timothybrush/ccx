@@ -3,6 +3,7 @@ package autopilot
 import (
 	"database/sql"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 )
 
@@ -274,7 +275,7 @@ func columnExists(db *sql.DB, table, column string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	for rows.Next() {
 		var (

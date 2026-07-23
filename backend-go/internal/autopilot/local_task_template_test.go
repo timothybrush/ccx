@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -14,7 +15,7 @@ func newTestTemplateStore(t *testing.T) *LocalTaskTemplateStore {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	store, err := NewLocalTaskTemplateStoreWithDB(db)
 	if err != nil {
 		t.Fatalf("创建 LocalTaskTemplateStore 失败: %v", err)
@@ -346,7 +347,7 @@ func TestLocalTaskTemplateStore_Persistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	defer db.Close()
+	defer errutil.IgnoreDeferred(db.Close)
 
 	// 创建并写入
 	store1, err := NewLocalTaskTemplateStoreWithDB(db)

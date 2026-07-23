@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -84,7 +85,7 @@ func TestHandleStreamSuccess_PostCommitActivityResetsIdleWatchdog(t *testing.T) 
 		}
 	}
 	go func() {
-		defer writer.Close()
+		defer errutil.IgnoreDeferred(writer.Close)
 		writeStream("event: response.output_text.delta\n")
 		writeStream("data: {\"type\":\"response.output_text.delta\",\"delta\":\"a\"}\n\n")
 		writeStream("event: response.output_text.delta\n")

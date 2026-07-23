@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/google/uuid"
 )
 
@@ -98,8 +99,8 @@ type LocalRuntimeStore struct {
 	cache map[string]*LocalModelRuntimeProfile // key = runtimeUID
 	mu    sync.RWMutex
 
-	flushMu   sync.Mutex
-	closed    bool
+	flushMu sync.Mutex
+
 	dirtyKeys map[string]struct{}
 }
 
@@ -121,7 +122,7 @@ func NewLocalRuntimeStore(dbPath string) (*LocalRuntimeStore, error) {
 
 	store, err := newLocalRuntimeStoreFromDB(db, dbPath)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -174,7 +175,7 @@ func (s *LocalRuntimeStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -301,7 +302,7 @@ func (s *LocalRuntimeStore) Flush() error {
 	if err != nil {
 		return fmt.Errorf("[LocalRuntimeStore-Flush] 开启事务失败: %w", err)
 	}
-	defer tx.Rollback()
+	defer errutil.IgnoreDeferred(tx.Rollback)
 
 	stmt, err := tx.Prepare(`
 INSERT INTO autopilot_local_runtimes (runtime_uid, runtime_type, base_url, profile_json, updated_at)
@@ -315,7 +316,7 @@ ON CONFLICT(runtime_uid) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("[LocalRuntimeStore-Flush] 准备语句失败: %w", err)
 	}
-	defer stmt.Close()
+	defer errutil.IgnoreDeferred(stmt.Close)
 
 	for _, p := range profiles {
 		profileJSON, err := json.Marshal(p)
@@ -406,7 +407,7 @@ func ProbeRuntime(ctx context.Context, profile *LocalModelRuntimeProfile) error 
 		profile.DiscoveredModels = nil
 		return fmt.Errorf("[LocalRuntime-Probe] 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		profile.Status = LocalRuntimeUnavailable

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func (s *ManualIntentStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,7 +130,7 @@ func (s *ManualIntentStore) Create(intent *ManualRoutingIntent) error {
 	if intent.TrafficPercent == 0 {
 		intent.TrafficPercent = 100
 	}
-	if intent.RequireHardConstraints == false && intent.Status == "" {
+	if !intent.RequireHardConstraints && intent.Status == "" {
 		// 默认 true；只有显式设置 false 才关闭
 		intent.RequireHardConstraints = true
 	}

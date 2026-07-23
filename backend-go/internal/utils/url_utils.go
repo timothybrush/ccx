@@ -193,46 +193,23 @@ func EquivalentBaseURLVariants(rawURL, serviceType string) []string {
 }
 
 // isPrivateIP 判断 IP 是否为私有地址（保留用于其他场景）
-func isPrivateIP(ip net.IP) bool {
-	// IPv4 私有地址段
-	privateIPv4Blocks := []string{
-		"10.0.0.0/8",     // Class A 私有网络
-		"172.16.0.0/12",  // Class B 私有网络
-		"192.168.0.0/16", // Class C 私有网络
-		"127.0.0.0/8",    // Loopback
-		"169.254.0.0/16", // Link-local
-		"0.0.0.0/8",      // 当前网络
-		"224.0.0.0/4",    // 组播
-		"240.0.0.0/4",    // 保留
-	}
 
-	// IPv6 私有地址段
-	privateIPv6Blocks := []string{
-		"::1/128",   // Loopback
-		"fc00::/7",  // Unique local
-		"fe80::/10", // Link-local
-		"ff00::/8",  // 组播
-	}
+// IPv4 私有地址段
 
-	blocks := privateIPv4Blocks
-	if ip.To4() == nil {
-		blocks = append(blocks, privateIPv6Blocks...)
-	}
+// Class A 私有网络
+// Class B 私有网络
+// Class C 私有网络
+// Loopback
+// Link-local
+// 当前网络
+// 组播
+// 保留
 
-	for _, block := range blocks {
-		_, subnet, err := net.ParseCIDR(block)
-		if err != nil {
-			continue
-		}
-		if subnet.Contains(ip) {
-			return true
-		}
-	}
+// IPv6 私有地址段
 
-	// 检查 localhost 域名
-	if strings.EqualFold(ip.String(), "localhost") {
-		return true
-	}
+// Loopback
+// Unique local
+// Link-local
+// 组播
 
-	return false
-}
+// 检查 localhost 域名

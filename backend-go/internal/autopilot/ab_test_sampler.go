@@ -17,6 +17,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/providers"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -334,9 +335,10 @@ func (s *ABTestSampler) executeShadowHTTPRequest(
 		record.ShadowError = err.Error()
 		return record
 	}
-	defer resp.Body.Close()
-	// 消费并丢弃 body（避免连接泄漏）
-	io.Copy(io.Discard, resp.Body)
+	defer errutil.IgnoreDeferred(resp.Body.Close)
+	_, _ =
+		// 消费并丢弃 body（避免连接泄漏）
+		io.Copy(io.Discard, resp.Body)
 
 	record.ShadowStatusCode = resp.StatusCode
 	record.ShadowSuccess = resp.StatusCode >= 200 && resp.StatusCode < 400

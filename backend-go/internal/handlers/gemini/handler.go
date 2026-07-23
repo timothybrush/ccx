@@ -13,6 +13,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
 	"github.com/BenedictKing/ccx/internal/copilot"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/middleware"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -497,7 +498,7 @@ func buildProviderRequest(
 		if upstream.ServiceType == "copilot" {
 			copilotToken, copilotBaseURL, err := copilot.ResolveTokenWithProxy(c.Request.Context(), apiKey, upstream.ProxyURL)
 			if err != nil {
-				return nil, fmt.Errorf("Copilot token 交换失败: %w", err)
+				return nil, fmt.Errorf("copilot token 交换失败: %w", err)
 			}
 			if copilotBaseURL != "" {
 				url = strings.TrimRight(copilotBaseURL, "/") + "/responses"
@@ -582,7 +583,7 @@ func handleSuccess(
 	fuzzyMode bool,
 	timeouts common.StreamPreflightTimeouts,
 ) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	// copilot 上游使用 Responses 协议，响应转换复用 responses 分支
 	if upstreamType == "copilot" {

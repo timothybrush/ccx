@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/tidwall/gjson"
 )
 
@@ -61,11 +62,6 @@ func extractReasoningEffortForLog(bodyBytes []byte) string {
 	return ""
 }
 
-func extractActualReasoningEffortForLog(req *http.Request) string {
-	_, effort := extractActualRequestLogDetails(req)
-	return effort
-}
-
 // extractActualRequestLogDetails 从最终构建的上游请求读取模型和思考等级。
 // 请求体会被恢复，调用方可继续正常发送该请求。
 func extractActualRequestLogDetails(req *http.Request) (model, reasoningEffort string) {
@@ -90,7 +86,7 @@ func snapshotRequestBodyForLog(req *http.Request) []byte {
 		if err != nil {
 			return nil
 		}
-		defer body.Close()
+		defer errutil.IgnoreDeferred(body.Close)
 		bodyBytes, err := io.ReadAll(body)
 		if err != nil {
 			return nil

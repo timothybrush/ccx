@@ -77,10 +77,6 @@ type SelectionOptions struct {
 	SmartFilter func(ctx context.Context, channels []ChannelInfo) []ChannelInfo
 }
 
-func (s *ChannelScheduler) selectionResult(kind ChannelKind, upstream *config.UpstreamConfig, channelIndex int, reason string) *SelectionResult {
-	return s.selectionResultWithRecord(kind, upstream, channelIndex, reason, true)
-}
-
 func (s *ChannelScheduler) selectionResultWithRecord(kind ChannelKind, upstream *config.UpstreamConfig, channelIndex int, reason string, record bool) *SelectionResult {
 	if record {
 		s.recordLastSelectedChannel(kind, channelIndex)

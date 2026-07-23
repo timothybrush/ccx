@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,8 +30,8 @@ type ProfileStore struct {
 	activeEndpointUIDs   map[string]struct{}
 	activeInventoryReady bool
 
-	flushMu   sync.Mutex
-	closed    bool
+	flushMu sync.Mutex
+
 	dirtyKeys map[string]struct{} // 待落盘的 endpointUID 集合
 }
 
@@ -56,7 +57,7 @@ func NewProfileStore(dbPath string) (*ProfileStore, error) {
 
 	store, err := newProfileStoreFromDB(db, dbPath)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -119,7 +120,7 @@ func (s *ProfileStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -389,7 +390,7 @@ func (s *ProfileStore) Flush() error {
 	if err != nil {
 		return fmt.Errorf("[ProfileStore-Flush] 开启事务失败: %w", err)
 	}
-	defer tx.Rollback()
+	defer errutil.IgnoreDeferred(tx.Rollback)
 
 	stmt, err := tx.Prepare(`
 INSERT INTO autopilot_endpoint_profiles (endpoint_uid, account_uid, credential_uid, channel_uid, service_type, base_url, key_hash, profile_json, updated_at)
@@ -407,7 +408,7 @@ ON CONFLICT(endpoint_uid) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("[ProfileStore-Flush] 准备语句失败: %w", err)
 	}
-	defer stmt.Close()
+	defer errutil.IgnoreDeferred(stmt.Close)
 
 	for _, p := range profiles {
 		profileJSON, err := json.Marshal(p)

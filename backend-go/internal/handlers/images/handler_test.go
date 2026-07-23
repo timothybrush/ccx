@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -116,7 +117,7 @@ func TestAddUpstream_RejectsUnsupportedServiceType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config manager: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	r := gin.New()
 	r.POST("/api/images/channels", AddUpstream(cfgManager))
@@ -145,7 +146,7 @@ func TestHandler_MissingModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config manager: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	envCfg := config.NewEnvConfig()
 	envCfg.ProxyAccessKey = "test-key"
@@ -164,7 +165,7 @@ func TestHandler_MissingModel(t *testing.T) {
 func TestHandler_MissingPrompt(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newImagesTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	envCfg := newImagesTestEnvConfig()
 
@@ -182,7 +183,7 @@ func TestHandler_MissingPrompt(t *testing.T) {
 func TestHandler_InvalidMultipartEditsReturnsBadRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newImagesTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	envCfg := newImagesTestEnvConfig()
 	logBuf := captureImagesLogs(t)

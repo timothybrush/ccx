@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +29,7 @@ func TestUpdateUpstream_NoChangeSkipsSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 等待初始化完成
 	time.Sleep(100 * time.Millisecond)

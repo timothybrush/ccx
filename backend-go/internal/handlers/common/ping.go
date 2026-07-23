@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 	"github.com/gin-gonic/gin"
 )
@@ -126,7 +127,7 @@ func pingBaseURL(upstream config.UpstreamConfig, baseURL string, timeout time.Du
 	if err != nil {
 		return gin.H{"success": false, "error": err.Error(), "latency": latency, "status": "error"}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	status := "error"
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {

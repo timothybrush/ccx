@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +26,7 @@ func TestBindManagedAccountMiMoConsoleReplacesKeyAcrossRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	snapshot := MiMoConsoleCredential{Cookie: "api-platform_serviceToken=session", PlanCode: "max", ValidatedAt: time.Now()}
 	if err := manager.BindManagedAccountMiMoConsole("acct_mimo", "cred_mimo", "tp-cookie-key", snapshot); err != nil {
 		t.Fatal(err)
@@ -49,12 +50,12 @@ func TestBindManagedAccountMiMoConsoleReplacesKeyAcrossRoutes(t *testing.T) {
 	if !ok || credential.APIKey != "tp-cookie-key" || credential.MiMoConsole == nil || credential.MiMoConsole.Cookie != snapshot.Cookie {
 		t.Fatalf("credential=%+v", credential)
 	}
-	manager.Close()
+	_ = manager.Close()
 	reloaded, err := NewConfigManager(path, filepath.Join(dir, "backups-reloaded"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reloaded.Close()
+	defer errutil.IgnoreDeferred(reloaded.Close)
 	reloadedCredential, ok := reloaded.GetManagedAccountCredential("acct_mimo", "cred_mimo")
 	if !ok || reloadedCredential.APIKey != "tp-cookie-key" || reloadedCredential.MiMoConsole == nil || reloadedCredential.MiMoConsole.Cookie != snapshot.Cookie {
 		t.Fatalf("持久化回读失败: %+v", reloadedCredential)

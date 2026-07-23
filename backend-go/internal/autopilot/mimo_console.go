@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 const mimoConsoleBaseURL = "https://platform.xiaomimimo.com"
@@ -56,7 +57,7 @@ func (c *MiMoConsoleClient) Verify(ctx context.Context, cookie string) (*mimoCon
 		return nil, fmt.Errorf("查询 MiMo Token Plan 详情失败: %w", err)
 	}
 	if strings.TrimSpace(detail.PlanCode) == "" {
-		return nil, fmt.Errorf("Cookie 所属账号未查询到 MiMo Token Plan")
+		return nil, fmt.Errorf("cookie 所属账号未查询到 MiMo Token Plan")
 	}
 	var usage struct {
 		MonthUsage mimoConsoleUsageGroup `json:"monthUsage"`
@@ -71,7 +72,7 @@ func (c *MiMoConsoleClient) Verify(ctx context.Context, cookie string) (*mimoCon
 	}
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, fmt.Errorf("Cookie 所属 Token Plan Key 为空")
+		return nil, fmt.Errorf("cookie 所属 Token Plan Key 为空")
 	}
 	now := time.Now()
 	if c != nil && c.Now != nil {
@@ -137,7 +138,7 @@ func (c *MiMoConsoleClient) get(ctx context.Context, cookie, path string, target
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return err
@@ -167,13 +168,13 @@ func normalizeMiMoConsoleCookie(cookie string) (string, error) {
 		cookie = strings.TrimSpace(cookie[len("cookie:"):])
 	}
 	if cookie == "" {
-		return "", fmt.Errorf("Cookie 不能为空")
+		return "", fmt.Errorf("cookie 不能为空")
 	}
 	if len(cookie) > maxMiMoConsoleCookieBytes {
-		return "", fmt.Errorf("Cookie 长度超过限制")
+		return "", fmt.Errorf("cookie 长度超过限制")
 	}
 	if strings.ContainsAny(cookie, "\r\n") {
-		return "", fmt.Errorf("Cookie 不能包含换行符")
+		return "", fmt.Errorf("cookie 不能包含换行符")
 	}
 	hasServiceToken := false
 	for part := range strings.SplitSeq(cookie, ";") {
@@ -184,7 +185,7 @@ func normalizeMiMoConsoleCookie(cookie string) (string, error) {
 		}
 	}
 	if !hasServiceToken {
-		return "", fmt.Errorf("Cookie 缺少 api-platform_serviceToken")
+		return "", fmt.Errorf("cookie 缺少 api-platform_serviceToken")
 	}
 	return cookie, nil
 }

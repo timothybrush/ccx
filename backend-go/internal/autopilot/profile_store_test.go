@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -18,7 +19,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
@@ -407,7 +408,7 @@ func TestProfileStore_RestoreFromDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProfileStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	got := store2.Get("ep-persist")
 	if got == nil {
@@ -445,13 +446,13 @@ func TestProfileStore_RestoreMultiple(t *testing.T) {
 	if err := store1.Flush(); err != nil {
 		t.Fatalf("Flush 失败: %v", err)
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	store2, err := NewProfileStore(dbPath)
 	if err != nil {
 		t.Fatalf("NewProfileStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	all := store2.ListAll()
 	if len(all) != 10 {
@@ -483,14 +484,14 @@ func TestProfileStore_DeleteThenRestart(t *testing.T) {
 	if err := store1.Delete("ep-gone"); err != nil {
 		t.Fatalf("Delete ep-gone 失败: %v", err)
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	// 重启验证
 	store2, err := NewProfileStore(dbPath)
 	if err != nil {
 		t.Fatalf("NewProfileStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	if got := store2.Get("ep-keep"); got == nil {
 		t.Error("重启后 ep-keep 应存在")
@@ -544,14 +545,14 @@ func TestProfileStore_ExistingTableNoError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("首次 NewProfileStoreWithDB 失败: %v", err)
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	// 再次打开同一 db
 	store2, err := NewProfileStoreWithDB(db)
 	if err != nil {
 		t.Fatalf("重复 NewProfileStoreWithDB 失败: %v", err)
 	}
-	store2.Close()
+	_ = store2.Close()
 }
 
 func TestProfileStore_FileDBCreation(t *testing.T) {
@@ -563,7 +564,7 @@ func TestProfileStore_FileDBCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProfileStore 自动创建目录失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	// 文件应该存在
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/types"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -35,7 +36,7 @@ func handleSuccess(
 	fuzzyMode bool,
 	timeouts common.StreamPreflightTimeouts,
 ) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	// copilot 上游使用 Responses 协议，响应转换复用 responses 分支
 	upstreamType = normalizeResponseUpstreamType(upstreamType)

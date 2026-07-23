@@ -378,7 +378,7 @@ func handleStreamSuccess(
 	processLine := func(line string) []string {
 
 		if streamLoggingEnabled {
-			logBuffer.WriteString(line + "\n")
+			_, _ = logBuffer.WriteString(line + "\n")
 			if synthesizer != nil {
 				synthesizer.ProcessLine(line)
 			}
@@ -829,9 +829,10 @@ func extractResponsesTextFromEvent(event string, buf *bytes.Buffer) {
 		case "response.output_item.done":
 			if item, ok := data["item"].(map[string]interface{}); ok {
 				itemType, _ := item["type"].(string)
-				if itemType == "message" || itemType == "text" {
+				switch itemType {
+				case "message", "text":
 					writeResponsesContentText(buf, item["content"])
-				} else if itemType == "reasoning" {
+				case "reasoning":
 					writeResponsesContentText(buf, item["summary"])
 				}
 			}
@@ -856,9 +857,9 @@ func buildResponsesPreflightRawLog(lines []string) string {
 	}
 	logBuffer := common.NewLimitedLogBuffer(common.MaxUpstreamResponseLogBytes)
 	for _, line := range lines {
-		logBuffer.WriteString(line)
+		_, _ = logBuffer.WriteString(line)
 		if !strings.HasSuffix(line, "\n") {
-			logBuffer.WriteString("\n")
+			_, _ = logBuffer.WriteString("\n")
 		}
 	}
 	return logBuffer.String()
@@ -885,9 +886,10 @@ func writeResponsesOutputText(buf *bytes.Buffer, output interface{}) {
 			continue
 		}
 		itemType, _ := item["type"].(string)
-		if itemType == "message" || itemType == "text" {
+		switch itemType {
+		case "message", "text":
 			writeResponsesContentText(buf, item["content"])
-		} else if itemType == "reasoning" {
+		case "reasoning":
 			writeResponsesContentText(buf, item["summary"])
 		}
 	}

@@ -364,7 +364,7 @@ func TestProbeWorker_CooldownSkip(t *testing.T) {
 		LastProbeAt:  &lastProbe,
 		ProbeSuccess: false,
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -395,7 +395,7 @@ func TestProbeWorker_CooldownExpired(t *testing.T) {
 		LastProbeAt:  &lastProbe,
 		ProbeSuccess: false,
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -417,7 +417,7 @@ func TestProbeWorker_BudgetExhausted(t *testing.T) {
 
 	// 创建 10 个待探测 endpoint
 	for i := 0; i < 10; i++ {
-		store.Upsert(&KeyEndpointProfile{
+		_ = store.Upsert(&KeyEndpointProfile{
 			EndpointUID: fmt.Sprintf("ep-%d", i),
 			ChannelUID:  "ch-1",
 			BaseURL:     "https://example.com",
@@ -456,7 +456,7 @@ func TestProbeWorker_ProbeSuccess(t *testing.T) {
 	// 模拟上游：返回 200
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"test","stop_reason":"end_turn"}`))
+		_, _ = w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"test","stop_reason":"end_turn"}`))
 	}))
 	defer server.Close()
 
@@ -469,7 +469,7 @@ func TestProbeWorker_ProbeSuccess(t *testing.T) {
 		HealthState: HealthStateUnknown,
 		KeyMask:     "sk-***test",
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -514,7 +514,7 @@ func TestProbeWorker_ProbeAuthFailure(t *testing.T) {
 	// 模拟上游：返回 401
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":{"type":"authentication_error","message":"invalid key"}}`))
+		_, _ = w.Write([]byte(`{"error":{"type":"authentication_error","message":"invalid key"}}`))
 	}))
 	defer server.Close()
 
@@ -527,7 +527,7 @@ func TestProbeWorker_ProbeAuthFailure(t *testing.T) {
 		HealthState: HealthStateUnknown,
 		KeyMask:     "sk-***badkey",
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -575,7 +575,7 @@ func TestProbeWorker_ProbeServerDown(t *testing.T) {
 		HealthState: HealthStateDead,
 		KeyMask:     "sk-***test",
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -612,7 +612,7 @@ func TestProbeWorker_DeadToDegraded(t *testing.T) {
 	// 模拟上游：返回 200
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
@@ -625,7 +625,7 @@ func TestProbeWorker_DeadToDegraded(t *testing.T) {
 		HealthState: HealthStateDead,
 		KeyMask:     "sk-***test",
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -655,8 +655,7 @@ func TestProbeWorker_DeadToDegraded(t *testing.T) {
 func TestProbeWorker_NoProbeWhenHealthy(t *testing.T) {
 	now := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
 	store := newTestProfileStore(t)
-
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-healthy",
 		ChannelUID:  "ch-1",
 		BaseURL:     "https://example.com",
@@ -681,8 +680,7 @@ func TestProbeWorker_NoProbeWhenHealthy(t *testing.T) {
 func TestProbeWorker_NoProbeWhenMisconfigured(t *testing.T) {
 	now := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
 	store := newTestProfileStore(t)
-
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-misconf",
 		ChannelUID:  "ch-1",
 		BaseURL:     "https://example.com",
@@ -727,7 +725,7 @@ func TestProbeWorker_BudgetLog(t *testing.T) {
 	store := newTestProfileStore(t)
 
 	for i := 0; i < 5; i++ {
-		store.Upsert(&KeyEndpointProfile{
+		_ = store.Upsert(&KeyEndpointProfile{
 			EndpointUID: fmt.Sprintf("ep-%d", i),
 			ChannelUID:  "ch-1",
 			BaseURL:     "https://example.com",
@@ -837,7 +835,7 @@ func TestBuildProbeRequest_WithModelMapping(t *testing.T) {
 
 	// 应使用 ModelMapping 中的模型
 	var body map[string]interface{}
-	json.Unmarshal(req.Body, &body)
+	_ = json.Unmarshal(req.Body, &body)
 	if model, ok := body["model"].(string); !ok || model != "gpt-4o" {
 		t.Errorf("探测模型: got %v, want gpt-4o", body["model"])
 	}
@@ -848,7 +846,7 @@ func TestProbeWorker_ProbeConfidence(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
@@ -861,7 +859,7 @@ func TestProbeWorker_ProbeConfidence(t *testing.T) {
 		HealthState: HealthStateUnknown,
 		KeyMask:     "sk-***test",
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	worker := NewProbeWorker(store, ProbeWorkerConfig{
 		Cooldown:    6 * time.Hour,
@@ -902,7 +900,7 @@ func TestProbeWorker_NoResolverSkipsProbeWithoutConsumingBudget(t *testing.T) {
 	defer server.Close()
 
 	store := newTestProfileStore(t)
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-no-resolver",
 		ChannelUID:  "ch-1",
 		BaseURL:     server.URL,
@@ -949,7 +947,7 @@ func TestProbeWorker_ResolverMissReturnsFalseSkipsProbe(t *testing.T) {
 	defer server.Close()
 
 	store := newTestProfileStore(t)
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-resolver-miss",
 		ChannelUID:  "ch-deleted",
 		BaseURL:     server.URL,
@@ -990,12 +988,12 @@ func TestProbeWorker_DegradedToHealthyRequiresConsecutiveSuccesses(t *testing.T)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
 	store := newTestProfileStore(t)
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-recover",
 		ChannelUID:  "ch-1",
 		BaseURL:     server.URL,
@@ -1044,12 +1042,12 @@ func TestProbeWorker_LimitedToHealthyRequiresConsecutiveSuccesses(t *testing.T) 
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer server.Close()
 
 	store := newTestProfileStore(t)
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-limited-recover",
 		ChannelUID:  "ch-1",
 		BaseURL:     server.URL,
@@ -1092,7 +1090,7 @@ func TestProbeWorker_FailureResetsConsecutiveSuccessCounter(t *testing.T) {
 	defer server.Close()
 
 	store := newTestProfileStore(t)
-	store.Upsert(&KeyEndpointProfile{
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep-flap",
 		ChannelUID:  "ch-1",
 		BaseURL:     server.URL,

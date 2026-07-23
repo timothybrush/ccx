@@ -12,6 +12,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -407,7 +408,7 @@ func tryLocalCompactWithKey(
 	if err != nil {
 		return false, &compactError{status: 502, body: []byte(`{"error":"本地 compact 上游请求失败"}`), shouldFailover: true, err: err}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	// 错误处理
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

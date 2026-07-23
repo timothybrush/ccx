@@ -84,12 +84,12 @@ func handleFoldedResponsesStreamSuccess(
 		}
 		if roundResp.StatusCode < 200 || roundResp.StatusCode >= 300 {
 			respBody, _ := io.ReadAll(roundResp.Body)
-			roundResp.Body.Close()
+			_ = roundResp.Body.Close()
 			respBody = utils.DecompressGzipIfNeeded(roundResp, respBody)
 			return nil, nil, fmt.Errorf("continuation upstream HTTP %d: %s", roundResp.StatusCode, strings.TrimSpace(string(respBody)))
 		}
 		if err := utils.DecompressResponseBodyIfNeeded(roundResp); err != nil {
-			roundResp.Body.Close()
+			_ = roundResp.Body.Close()
 			return nil, nil, err
 		}
 		return roundResp, bodyBytes, nil

@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 const (
@@ -127,7 +128,7 @@ func (c *CompshareConsoleClient) Verify(ctx context.Context, cookie, currentAPIK
 	if err != nil {
 		return nil, fmt.Errorf("查询优云智算套餐失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCompshareConsoleBodyLen+1))
 	if err != nil {
 		return nil, fmt.Errorf("读取优云智算套餐响应失败: %w", err)
@@ -210,13 +211,13 @@ func parseCompshareConsoleSession(rawCookie string) (compshareConsoleSession, er
 		cookie = strings.TrimSpace(cookie[len("cookie:"):])
 	}
 	if cookie == "" {
-		return compshareConsoleSession{}, fmt.Errorf("Cookie 不能为空")
+		return compshareConsoleSession{}, fmt.Errorf("cookie 不能为空")
 	}
 	if len(cookie) > maxCompshareConsoleCookieLen {
-		return compshareConsoleSession{}, fmt.Errorf("Cookie 长度超过限制")
+		return compshareConsoleSession{}, fmt.Errorf("cookie 长度超过限制")
 	}
 	if strings.ContainsAny(cookie, "\r\n") {
-		return compshareConsoleSession{}, fmt.Errorf("Cookie 不能包含换行符")
+		return compshareConsoleSession{}, fmt.Errorf("cookie 不能包含换行符")
 	}
 
 	values := make(map[string]string)
@@ -228,11 +229,11 @@ func parseCompshareConsoleSession(rawCookie string) (compshareConsoleSession, er
 	}
 	userEmail, err := decodeCompshareCookieValue(values["U_USER_EMAIL"])
 	if err != nil || strings.TrimSpace(userEmail) == "" {
-		return compshareConsoleSession{}, fmt.Errorf("Cookie 缺少有效的 U_USER_EMAIL")
+		return compshareConsoleSession{}, fmt.Errorf("cookie 缺少有效的 U_USER_EMAIL")
 	}
 	csrfToken, err := decodeCompshareCookieValue(values["U_CSRF_TOKEN"])
 	if err != nil || strings.TrimSpace(csrfToken) == "" {
-		return compshareConsoleSession{}, fmt.Errorf("Cookie 缺少有效的 U_CSRF_TOKEN")
+		return compshareConsoleSession{}, fmt.Errorf("cookie 缺少有效的 U_CSRF_TOKEN")
 	}
 	projectID, err := findCompshareProjectID(values, userEmail)
 	if err != nil {
@@ -248,7 +249,7 @@ func findCompshareProjectID(values map[string]string, userEmail string) (string,
 	if value, ok := values[preferredName]; ok {
 		projectID, err := parseCompshareProjectID(value)
 		if err != nil {
-			return "", fmt.Errorf("Cookie 中的当前项目无效: %w", err)
+			return "", fmt.Errorf("cookie 中的当前项目无效: %w", err)
 		}
 		return projectID, nil
 	}
@@ -264,15 +265,15 @@ func findCompshareProjectID(values map[string]string, userEmail string) (string,
 		}
 	}
 	if len(projectIDs) == 0 {
-		return "", fmt.Errorf("Cookie 缺少当前项目 c_project_* 信息")
+		return "", fmt.Errorf("cookie 缺少当前项目 c_project_* 信息")
 	}
 	if len(projectIDs) > 1 {
-		return "", fmt.Errorf("Cookie 包含多个账号的项目上下文，请仅复制当前优云智算会话的 Cookie")
+		return "", fmt.Errorf("cookie 包含多个账号的项目上下文，请仅复制当前优云智算会话的 Cookie")
 	}
 	for projectID := range projectIDs {
 		return projectID, nil
 	}
-	return "", fmt.Errorf("Cookie 缺少当前项目 c_project_* 信息")
+	return "", fmt.Errorf("cookie 缺少当前项目 c_project_* 信息")
 }
 
 func parseCompshareProjectID(rawValue string) (string, error) {

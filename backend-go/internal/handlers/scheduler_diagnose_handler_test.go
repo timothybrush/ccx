@@ -305,7 +305,7 @@ func newSchedulerDiagnoseTestScheduler(t *testing.T, cfg config.Config) (*schedu
 	)
 
 	cleanup := func() {
-		cfgManager.Close()
+		_ = cfgManager.Close()
 		messagesMetrics.Stop()
 		responsesMetrics.Stop()
 		geminiMetrics.Stop()

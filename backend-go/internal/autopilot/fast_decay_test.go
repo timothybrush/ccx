@@ -39,9 +39,9 @@ func TestFastDecay_ConsecutiveFailure(t *testing.T) {
 		wantDecayFactor  float64 // 期望 DecayFactor = pow(0.85, failCount)
 		wantConsecutiveN int
 	}{
-		{"1 fail", 1, math.Pow(0.85, 1), 1},
-		{"2 fails", 2, math.Pow(0.85, 2), 2},
-		{"3 fails", 3, math.Pow(0.85, 3), 3},
+		{"1 fail", 1, 0.85, 1},
+		{"2 fails", 2, 0.85 * 0.85, 2},
+		{"3 fails", 3, 0.85 * 0.85 * 0.85, 3},
 		{"5 fails", 5, math.Pow(0.85, 5), 5},
 		{"10 fails", 10, math.Pow(0.85, 10), 10},
 	}
@@ -84,7 +84,7 @@ func TestFastDecay_SuccessRecovery(t *testing.T) {
 	}
 
 	factor, _ := scorer.RawState(uid)
-	expectedAfterFail := math.Pow(0.85, 3)
+	expectedAfterFail := 0.85 * 0.85 * 0.85
 	if math.Abs(factor-expectedAfterFail) > 1e-6 {
 		t.Fatalf("after 3 fails: DecayFactor = %.6f, want %.6f", factor, expectedAfterFail)
 	}
@@ -137,7 +137,7 @@ func TestFastDecay_FailSuccessFail(t *testing.T) {
 	if consFail != 1 {
 		t.Errorf("after 1 more fail: ConsecutiveFail = %d, want 1", consFail)
 	}
-	expectedFactor := math.Pow(0.85, 1) // 全新计数，不是从之前累计
+	expectedFactor := 0.85 // 全新计数，不是从之前累计
 	if math.Abs(factor-expectedFactor) > 1e-6 {
 		t.Errorf("after 1 more fail: DecayFactor = %.6f, want %.6f", factor, expectedFactor)
 	}
@@ -166,7 +166,7 @@ func TestFastDecay_StreamBreak(t *testing.T) {
 	if consFail != 2 {
 		t.Errorf("ConsecutiveFail = %d, want 2", consFail)
 	}
-	expectedFactor = math.Pow(0.70, 2)
+	expectedFactor = 0.70 * 0.70
 	if math.Abs(factor-expectedFactor) > 1e-6 {
 		t.Errorf("DecayFactor = %.6f, want %.6f", factor, expectedFactor)
 	}
@@ -233,8 +233,8 @@ func TestFastDecay_MultipleEndpoints(t *testing.T) {
 	scoreB := scorer.Score("ep-b")
 	scoreC := scorer.Score("ep-c")
 
-	if math.Abs(scoreA-math.Pow(0.85, 3)) > 1e-6 {
-		t.Errorf("ep-a Score = %.6f, want %.6f", scoreA, math.Pow(0.85, 3))
+	if math.Abs(scoreA-0.85*0.85*0.85) > 1e-6 {
+		t.Errorf("ep-a Score = %.6f, want %.6f", scoreA, 0.85*0.85*0.85)
 	}
 	if scoreB != 1.0 {
 		t.Errorf("ep-b Score = %.6f, want 1.0 (untracked)", scoreB)
@@ -320,7 +320,7 @@ func TestFastDecay_Scores_Batch(t *testing.T) {
 	}
 
 	// ep-a: 3 fails → pow(0.85, 3)
-	expectedA := math.Pow(0.85, 3)
+	expectedA := 0.85 * 0.85 * 0.85
 	if math.Abs(scores["ep-a"]-expectedA) > 1e-6 {
 		t.Errorf("ep-a Score = %.6f, want %.6f", scores["ep-a"], expectedA)
 	}

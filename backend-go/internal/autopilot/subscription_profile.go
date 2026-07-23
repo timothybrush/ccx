@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"sync"
 	"time"
@@ -164,7 +165,7 @@ func NewSubscriptionStore(dbPath string) (*SubscriptionStore, error) {
 
 	store, err := newSubscriptionStoreFromDB(db, dbPath)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -215,7 +216,7 @@ func (s *SubscriptionStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

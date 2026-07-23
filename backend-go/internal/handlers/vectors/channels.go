@@ -392,7 +392,7 @@ func GetChannelModels(cfgManager *config.ConfigManager) gin.HandlerFunc {
 			return
 		}
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to read response: %v", err)})
 			return

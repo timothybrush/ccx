@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 	"github.com/BenedictKing/ccx/internal/utils"
 )
@@ -51,7 +52,7 @@ func (p *ProviderQualityProbe) runSample(
 		}
 		return sample
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	sample.StatusCode = resp.StatusCode
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, p.config.MaxResponseBody+1))

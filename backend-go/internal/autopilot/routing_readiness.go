@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"math"
 	"strings"
 	"time"
@@ -605,7 +606,7 @@ ORDER BY window_start`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 	windows := make([]RoutingWindowSummary, 0, autoRollbackWindows)
 	for rows.Next() {
 		var summary RoutingWindowSummary

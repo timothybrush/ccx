@@ -642,7 +642,7 @@ func TryUpstreamWithAllKeys(
 
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				respBodyBytes, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				respBodyBytes = utils.DecompressGzipIfNeeded(resp, respBodyBytes)
 
 				// 记录错误响应头（用于诊断限流 header）

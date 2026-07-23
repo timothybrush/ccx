@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"net/url"
@@ -98,7 +99,7 @@ func fetchMiniMaxTokenPlanUsageEndpoint(ctx context.Context, client *http.Client
 	if err != nil {
 		return nil, fmt.Errorf("请求 MiniMax Token Plan 用量失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return nil, fmt.Errorf("读取 MiniMax Token Plan 用量失败: %w", err)
@@ -168,13 +169,13 @@ func miniMaxTokenPlanUsageEndpoints(baseURL string) []string {
 		return nil
 	}
 	host := strings.ToLower(parsed.Hostname())
-	switch {
-	case host == "api.minimaxi.com" || host == "www.minimaxi.com" || host == "api.minimax.chat":
+	switch host {
+	case "api.minimaxi.com", "www.minimaxi.com", "api.minimax.chat":
 		return []string{
 			"https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains",
 			"https://www.minimaxi.com/v1/token_plan/remains",
 		}
-	case host == "api.minimax.io" || host == "www.minimax.io":
+	case "api.minimax.io", "www.minimax.io":
 		return []string{
 			"https://api.minimax.io/v1/api/openplatform/coding_plan/remains",
 			"https://www.minimax.io/v1/token_plan/remains",

@@ -136,11 +136,11 @@ func extractMultipartField(bodyBytes []byte, contentType string, fieldName strin
 			return "", false
 		}
 		if part.FormName() != fieldName || part.FileName() != "" {
-			part.Close()
+			_ = part.Close()
 			continue
 		}
 		valueBytes, err := io.ReadAll(part)
-		part.Close()
+		_ = part.Close()
 		if err != nil {
 			return "", false
 		}
@@ -166,7 +166,7 @@ func validateMultipartBody(bodyBytes []byte, contentType string) error {
 			return newMultipartDiagnosticError("next_part", reason, err)
 		}
 		_, readErr := io.Copy(io.Discard, part)
-		part.Close()
+		_ = part.Close()
 		if readErr != nil {
 			reason := "part_read_failed"
 			if errors.Is(readErr, io.ErrUnexpectedEOF) || strings.Contains(strings.ToLower(readErr.Error()), "unexpected eof") {
@@ -205,24 +205,24 @@ func rewriteMultipartFormField(bodyBytes []byte, contentType string, fieldName s
 		if formName == fieldName && fileName == "" {
 			if !fieldWritten {
 				if err := writer.WriteField(fieldName, fieldValue); err != nil {
-					part.Close()
+					_ = part.Close()
 					return nil, "", newMultipartDiagnosticError("rewrite_field", "part_read_failed", err)
 				}
 				fieldWritten = true
 			}
-			part.Close()
+			_ = part.Close()
 			continue
 		}
 
 		if err := copyMultipartPart(writer, part); err != nil {
-			part.Close()
+			_ = part.Close()
 			reason := "part_read_failed"
 			if errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(strings.ToLower(err.Error()), "unexpected eof") {
 				reason = "unexpected_eof"
 			}
 			return nil, "", newMultipartDiagnosticError("rewrite_field", reason, err)
 		}
-		part.Close()
+		_ = part.Close()
 	}
 
 	if !fieldWritten {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,13 +10,13 @@ import (
 func TestUpdateUpstream_RateLimitFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.json")
-	os.WriteFile(cfgPath, []byte(`{"upstream":[],"chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[]}`), 0644)
+	_ = os.WriteFile(cfgPath, []byte(`{"upstream":[],"chatUpstream":[],"responsesUpstream":[],"geminiUpstream":[],"imagesUpstream":[]}`), 0644)
 
 	cm, err := NewConfigManager(cfgPath, tmpDir)
 	if err != nil {
 		t.Fatalf("NewConfigManager: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	rpm := 60
 	window := 120

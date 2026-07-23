@@ -14,9 +14,10 @@ func TestWriteCompactedSession_DefaultCollapsesToTwoMessages(t *testing.T) {
 
 	sess, _ := sm.GetOrCreateSession("")
 	sm.RecordResponseMapping("resp_prev_default", sess.ID)
-	// 写入带 encrypted_content 的 reasoning items 到原 session
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: "BLOB_1"}, 0)
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old answer"}, 0)
+	_ =
+		// 写入带 encrypted_content 的 reasoning items 到原 session
+		sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: "BLOB_1"}, 0)
+	_ = sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old answer"}, 0)
 
 	resp := &types.ResponsesResponse{
 		ID:     "resp_new_default",
@@ -54,11 +55,13 @@ func TestWriteCompactedSession_LayeredPreservesReasoningEncryptedContent(t *test
 
 	sess, _ := sm.GetOrCreateSession("")
 	sm.RecordResponseMapping("resp_prev_layered", sess.ID)
-	// 写入 3 条 reasoning（其中 2 条带 encrypted_content）+ 1 条 message
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: "BLOB_1"}, 0)
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_2", EncryptedContent: ""}, 0) // 无 enc，应被跳过
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_3", EncryptedContent: "BLOB_3"}, 0)
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old answer"}, 0)
+	_ =
+		// 写入 3 条 reasoning（其中 2 条带 encrypted_content）+ 1 条 message
+		sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: "BLOB_1"}, 0)
+	_ = sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_2", EncryptedContent: ""}, 0)
+	_ = // 无 enc，应被跳过
+		sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_3", EncryptedContent: "BLOB_3"}, 0)
+	_ = sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old answer"}, 0)
 
 	resp := &types.ResponsesResponse{
 		ID:     "resp_new_layered",
@@ -116,7 +119,7 @@ func TestWriteCompactedSession_LayeredKeepsOnlyRecentK(t *testing.T) {
 	sm.RecordResponseMapping("resp_prev_k", sess.ID)
 	// 写入 8 条带 encrypted_content 的 reasoning（超过 K=5）
 	for i := 1; i <= 8; i++ {
-		sm.AppendMessage(sess.ID, types.ResponsesItem{
+		_ = sm.AppendMessage(sess.ID, types.ResponsesItem{
 			Type:             "reasoning",
 			ID:               "rs_" + string(rune('0'+i)),
 			EncryptedContent: "BLOB_" + string(rune('0'+i)),
@@ -166,8 +169,9 @@ func TestWriteCompactedSession_LayeredNoReasoningFallsBack(t *testing.T) {
 
 	sess, _ := sm.GetOrCreateSession("")
 	sm.RecordResponseMapping("resp_prev_noreason", sess.ID)
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: ""}, 0) // 无 enc
-	sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old"}, 0)
+	_ = sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "reasoning", ID: "rs_1", EncryptedContent: ""}, 0)
+	_ = // 无 enc
+		sm.AppendMessage(sess.ID, types.ResponsesItem{Type: "message", Role: "assistant", Content: "old"}, 0)
 
 	resp := &types.ResponsesResponse{
 		ID:     "resp_new_noreason",

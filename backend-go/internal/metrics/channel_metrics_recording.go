@@ -382,7 +382,7 @@ func (m *MetricsManager) cleanupHistoryLocked(metrics *KeyMetrics) {
 	if newStart > 0 {
 		metrics.requestHistory = metrics.requestHistory[newStart:]
 		// 索引平移：老数据被切走后，pending 索引需要整体减去 newStart
-		if metrics.pendingHistoryIdx != nil && len(metrics.pendingHistoryIdx) > 0 {
+		if len(metrics.pendingHistoryIdx) > 0 {
 			for id, idx := range metrics.pendingHistoryIdx {
 				if idx < newStart {
 					delete(metrics.pendingHistoryIdx, id)

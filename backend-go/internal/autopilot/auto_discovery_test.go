@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/presetstore"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -557,7 +558,7 @@ func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 	modelStore, err := NewModelProfileStoreWithDB(store.DB())
 	if err != nil {
 		t.Fatalf("创建 ModelProfileStore 失败: %v", err)
@@ -577,7 +578,7 @@ func TestWriteProfilesSetsEndpointIdentity(t *testing.T) {
 		AutoManaged: true,
 	}
 	cfgManager := setupTestConfigManagerForDiscovery(t, channelUID, nil, nil)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 	runner.writeProfiles(channelUID, channel, []EndpointDiscoveryResult{{
 		KeyMask:     utils.MaskAPIKey(apiKey),
 		BaseURL:     baseURL,
@@ -634,7 +635,7 @@ func TestWriteProfilesBackfillsLegacyChannelKindForRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	const (
 		channelUID = "ch_legacy_profile"
@@ -652,7 +653,7 @@ func TestWriteProfilesBackfillsLegacyChannelKindForRouting(t *testing.T) {
 	}
 
 	cfgManager := setupTestConfigManagerForDiscovery(t, channelUID, nil, nil)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 	channel := &config.UpstreamConfig{
 		ChannelUID: channelUID, ServiceType: "claude", BaseURL: baseURL, APIKeys: []string{apiKey},
 	}
@@ -684,7 +685,7 @@ func TestWriteProfilesCanonicalBaseURLMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 ProfileStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	const (
 		channelUID = "ch_localhost_8990"

@@ -117,8 +117,8 @@ func TestSanitizeAdvisorInput(t *testing.T) {
 	saniData, _ := json.Marshal(sanitized)
 
 	var origMap, saniMap map[string]json.RawMessage
-	json.Unmarshal(origData, &origMap)
-	json.Unmarshal(saniData, &saniMap)
+	_ = json.Unmarshal(origData, &origMap)
+	_ = json.Unmarshal(saniData, &saniMap)
 
 	if len(origMap) != len(saniMap) {
 		t.Errorf("脱敏后字段数变化: 原始=%d, 脱敏=%d", len(origMap), len(saniMap))

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +43,7 @@ func TestVolcengineAccessKeySurvivesAccountSyncAndReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reloaded.Close()
+	defer errutil.IgnoreDeferred(reloaded.Close)
 	credential, ok := reloaded.GetManagedAccountCredential("acct_volc", "cred_volc")
 	if !ok || credential.VolcengineAccessKey == nil {
 		t.Fatalf("AK/SK 未持久化: %+v", credential)

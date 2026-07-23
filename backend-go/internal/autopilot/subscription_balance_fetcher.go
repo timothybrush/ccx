@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/presetstore"
 )
 
@@ -104,7 +105,7 @@ func (f *OpenAIBalanceFetcher) FetchBalance(ctx context.Context, billingAPIKey s
 	if err != nil {
 		return 0, "USD", fmt.Errorf("[OpenAIBalanceFetcher] HTTP 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
@@ -162,7 +163,7 @@ func (f *AnthropicBalanceFetcher) FetchBalance(ctx context.Context, billingAPIKe
 	if err != nil {
 		return 0, "USD", fmt.Errorf("[AnthropicBalanceFetcher] HTTP 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
@@ -207,7 +208,7 @@ func (f *GoogleBalanceFetcher) FetchBalance(ctx context.Context, billingAPIKey s
 	if err != nil {
 		return 0, "USD", fmt.Errorf("[GoogleBalanceFetcher] HTTP 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))

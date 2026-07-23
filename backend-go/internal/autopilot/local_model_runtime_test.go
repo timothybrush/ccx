@@ -24,7 +24,7 @@ func newTestLocalRuntimeStore(t *testing.T) *LocalRuntimeStore {
 	if err != nil {
 		t.Fatalf("创建 LocalRuntimeStore 失败: %v", err)
 	}
-	t.Cleanup(func() { store.Close(); db.Close() })
+	t.Cleanup(func() { _ = store.Close(); _ = db.Close() })
 	return store
 }
 
@@ -203,7 +203,7 @@ func TestProbeRuntime_Ollama(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
 
@@ -249,7 +249,7 @@ func TestProbeRuntime_OpenAICompatible(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
 
@@ -317,7 +317,7 @@ func TestProbeRuntime_SlowResponse(t *testing.T) {
 			Data: []openAIModel{{ID: "slow-model"}},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
 

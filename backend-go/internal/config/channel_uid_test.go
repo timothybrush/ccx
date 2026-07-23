@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +22,7 @@ func TestChannelUID_GenerateOnMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 
@@ -55,7 +56,7 @@ func TestChannelUID_PreserveExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.Upstream[0].ChannelUID != "ch_custom_abc123" {
@@ -78,7 +79,7 @@ func TestChannelUID_StableOnReorder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	uidA := cfg.Upstream[0].ChannelUID
@@ -92,7 +93,7 @@ func TestChannelUID_StableOnReorder(t *testing.T) {
 
 	// 关闭后写入重排的配置（second 在前）
 	reordered := `{"upstream":[{"channelUid":"` + uidB + `","baseUrl":"https://b.example.com","apiKeys":["k2"],"name":"second"},{"channelUid":"` + uidA + `","baseUrl":"https://a.example.com","apiKeys":["k1"],"name":"first"}],"responsesUpstream":[],"geminiUpstream":[],"chatUpstream":[],"imagesUpstream":[],"vectorsUpstream":[]}`
-	cm.Close()
+	_ = cm.Close()
 	if err := os.WriteFile(cfgFile, []byte(reordered), 0600); err != nil {
 		t.Fatalf("写入重排配置失败: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestChannelUID_StableOnReorder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("重新加载配置失败: %v", err)
 	}
-	defer cm2.Close()
+	defer errutil.IgnoreDeferred(cm2.Close)
 
 	cfg2 := cm2.GetConfig()
 	// second 现在在索引 0，first 在索引 1
@@ -128,7 +129,7 @@ func TestChannelUID_NewChannelGetsNewUID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 在配置中追加一个新渠道（没有 channelUid）
 	cfg := cm.GetConfig()
@@ -139,9 +140,10 @@ func TestChannelUID_NewChannelGetsNewUID(t *testing.T) {
 		APIKeys: []string{"k2"},
 		Name:    "newcomer",
 	})
+	_ =
 
-	// 保存后重新加载
-	cm.Close()
+		// 保存后重新加载
+		cm.Close()
 	// 序列化 + 写入
 	cfgJSON, _ := os.ReadFile(cfgFile)
 	_ = cfgJSON // 通过 SaveConfig 或手动写
@@ -154,7 +156,7 @@ func TestChannelUID_NewChannelGetsNewUID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("重新加载配置失败: %v", err)
 	}
-	defer cm2.Close()
+	defer errutil.IgnoreDeferred(cm2.Close)
 
 	cfg2 := cm2.GetConfig()
 	if len(cfg2.Upstream) != 2 {
@@ -198,7 +200,7 @@ func TestChannelUID_AllChannelKinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 
@@ -244,7 +246,7 @@ func TestChannelUID_PersistedAfterBackfill(t *testing.T) {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
 	uid := cm.GetConfig().Upstream[0].ChannelUID
-	cm.Close()
+	_ = cm.Close()
 
 	// 重新从文件读取，验证 UID 已持久化
 	data, err := os.ReadFile(cfgFile)

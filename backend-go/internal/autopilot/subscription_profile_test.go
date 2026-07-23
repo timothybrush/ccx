@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,7 +23,7 @@ func newSubTestDB(t *testing.T) *sql.DB {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
@@ -306,10 +307,11 @@ func TestSubscriptionStore_UnlinkChannel(t *testing.T) {
 	if err := store.Create(sub); err != nil {
 		t.Fatalf("Create 失败: %v", err)
 	}
+	_ =
 
-	// 先链接两个
-	store.LinkChannel("sub-unlink", "ch-001")
-	store.LinkChannel("sub-unlink", "ch-002")
+		// 先链接两个
+		store.LinkChannel("sub-unlink", "ch-001")
+	_ = store.LinkChannel("sub-unlink", "ch-002")
 
 	// 解绑一个
 	if err := store.UnlinkChannel("sub-unlink", "ch-001"); err != nil {
@@ -358,8 +360,8 @@ func TestSubscriptionStore_RestoreFromDisk(t *testing.T) {
 	if err := store1.Create(sub); err != nil {
 		t.Fatalf("Create 失败: %v", err)
 	}
-	store1.LinkChannel("sub-persist", "ch-aaa")
-	store1.LinkChannel("sub-persist", "ch-bbb")
+	_ = store1.LinkChannel("sub-persist", "ch-aaa")
+	_ = store1.LinkChannel("sub-persist", "ch-bbb")
 
 	if err := store1.Close(); err != nil {
 		t.Fatalf("Close 失败: %v", err)
@@ -370,7 +372,7 @@ func TestSubscriptionStore_RestoreFromDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSubscriptionStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	got := store2.Get("sub-persist")
 	if got == nil {
@@ -405,13 +407,13 @@ func TestSubscriptionStore_RestoreMultiple(t *testing.T) {
 			t.Fatalf("Create %d 失败: %v", i, err)
 		}
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	store2, err := NewSubscriptionStore(dbPath)
 	if err != nil {
 		t.Fatalf("NewSubscriptionStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	all := store2.ListAll()
 	if len(all) != 5 {
@@ -438,13 +440,13 @@ func TestSubscriptionStore_DeleteThenRestart(t *testing.T) {
 	if err := store1.Delete("sub-gone"); err != nil {
 		t.Fatalf("Delete sub-gone 失败: %v", err)
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	store2, err := NewSubscriptionStore(dbPath)
 	if err != nil {
 		t.Fatalf("NewSubscriptionStore 重新打开失败: %v", err)
 	}
-	defer store2.Close()
+	defer errutil.IgnoreDeferred(store2.Close)
 
 	if got := store2.Get("sub-keep"); got == nil {
 		t.Error("重启后 sub-keep 应存在")
@@ -502,8 +504,7 @@ func TestSubscriptionStore_LinkPersistsOnUpdate(t *testing.T) {
 	if err := store.Create(sub); err != nil {
 		t.Fatalf("Create 失败: %v", err)
 	}
-
-	store.LinkChannel("sub-lp", "ch-xxx")
+	_ = store.LinkChannel("sub-lp", "ch-xxx")
 
 	// 直接查 SQLite 验证 linkedChannelUids 已落盘
 	var profileJSON string
@@ -527,14 +528,14 @@ func TestSubscriptionStore_IdempotentSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("首次 NewSubscriptionStoreWithDB 失败: %v", err)
 	}
-	store1.Close()
+	_ = store1.Close()
 
 	// 重复打开同一 db
 	store2, err := NewSubscriptionStoreWithDB(db)
 	if err != nil {
 		t.Fatalf("重复 NewSubscriptionStoreWithDB 失败: %v", err)
 	}
-	store2.Close()
+	_ = store2.Close()
 }
 
 func TestSubscriptionStore_UpdatePreservesCreatedAt(t *testing.T) {

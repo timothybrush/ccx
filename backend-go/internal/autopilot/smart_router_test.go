@@ -20,7 +20,7 @@ func createTestIntentStore(t *testing.T) *ManualIntentStore {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	store, err := NewManualIntentStoreWithDB(db)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestIntentExec_ShadowMode_NoOutputChange(t *testing.T) {
 		TrafficPercent: 100,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	sr := &SmartRouter{
 		configManager: cfgManager,
@@ -151,7 +151,7 @@ func TestIntentExec_AssistMode_TargetPromoted(t *testing.T) {
 		TrafficPercent: 100,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	sr := &SmartRouter{
 		configManager: cfgManager,
@@ -246,7 +246,7 @@ func TestIntentExec_AutoMode_HardConstraintFallback(t *testing.T) {
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		FallbackOnFailure: true,
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	sr := &SmartRouter{
 		configManager: cfgManager,
@@ -327,7 +327,7 @@ func TestIntentExec_AutoMode_TargetSurvivesConstraints(t *testing.T) {
 		TrafficPercent: 100,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	sr := &SmartRouter{
 		configManager: cfgManager,
@@ -416,12 +416,12 @@ func TestIntentExec_SupervisorProtection_ThirdPartyBlocked(t *testing.T) {
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 		// TaskClasses 不包含 supervisor
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	// 创建 ProfileStore 并设置 ch-economy 的 OriginTier=third
 	profileStore := newTestProfileStore(t)
 	if profileStore != nil {
-		profileStore.Upsert(&KeyEndpointProfile{
+		_ = profileStore.Upsert(&KeyEndpointProfile{
 			EndpointUID:    "ep-economy-0",
 			ChannelUID:     ch2UID,
 			ChannelKind:    "messages",
@@ -522,7 +522,7 @@ func TestIntentExec_ShadowMode_PreservesOriginalOrder(t *testing.T) {
 		TrafficPercent: 100,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
-	intentStore.Create(intent)
+	_ = intentStore.Create(intent)
 
 	// 有意图的 SmartRouter
 	srWithIntent := &SmartRouter{

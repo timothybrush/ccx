@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"log"
 	"net/http"
@@ -547,9 +548,10 @@ func (w *ProbeWorker) executeProbe(profile *KeyEndpointProfile, apiKey string) P
 		}
 		return result
 	}
-	defer resp.Body.Close()
-	// 读取并丢弃响应体（释放连接）
-	io.Copy(io.Discard, resp.Body)
+	defer errutil.IgnoreDeferred(resp.Body.Close)
+	_, _ =
+		// 读取并丢弃响应体（释放连接）
+		io.Copy(io.Discard, resp.Body)
 
 	result.StatusCode = resp.StatusCode
 	// 判定探测成功：2xx 或 4xx 中的认证/模型错误（说明端点存活）

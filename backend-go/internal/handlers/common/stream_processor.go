@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/thinkingcache"
 	"github.com/BenedictKing/ccx/internal/types"
@@ -20,9 +21,6 @@ import (
 )
 
 // isEmptyContent 判断流式响应的累积文本是否为空内容
-func isEmptyContent(text string) bool {
-	return IsEffectivelyEmptyStreamText(text)
-}
 
 func isEmptyStreamContent(text string, thinking string) bool {
 	return IsEffectivelyEmptyStreamText(text)
@@ -731,7 +729,7 @@ func ProcessStreamEvents(
 				// 向客户端发送错误事件（如果连接仍然有效）
 				if !ctx.ClientGone {
 					errorEvent := BuildStreamErrorEvent(err)
-					w.Write([]byte(errorEvent))
+					_, _ = w.Write([]byte(errorEvent))
 					flusher.Flush()
 				}
 
@@ -739,7 +737,7 @@ func ProcessStreamEvents(
 				return nil, err
 			}
 		case <-postCommitChan:
-			lastEventAgeMs := int64(-1)
+			var lastEventAgeMs int64
 			lastEventSummary := "none"
 			if ctx.LastEventAt.IsZero() {
 				lastEventAgeMs = time.Since(startTime).Milliseconds()
@@ -811,12 +809,6 @@ func ProcessStreamEvent(
 		ctx.ThinkingCollector.ProcessEvent(event)
 	}
 
-	// 如果已截断（注入了 end_turn），后续事件只消费不转发
-	if ctx.ToolUseTruncated {
-		// 仍需收集 usage 数据（下方正常路径会处理），但不转发给客户端
-		// 这里不 return 以便 usage 收集逻辑执行，但在转发处拦截
-	}
-
 	// 畸形工具调用检测
 	var malformedDetected bool
 	var malformedToolName string
@@ -869,7 +861,7 @@ func ProcessStreamEvent(
 		if envCfg.EnableResponseLogs && envCfg.ShouldLog("debug") {
 			RequestLogf(c, "[Messages-Stream-Token] message_delta 缺少 usage, 在 message_stop 前注入兜底 usage 事件")
 		}
-		w.Write([]byte(usageEvent))
+		_, _ = w.Write([]byte(usageEvent))
 		flusher.Flush()
 		ctx.HasUsage = true
 		ctx.HasMessageDeltaUsage = true
@@ -998,7 +990,7 @@ func recordRawStreamEvent(ctx *StreamContext, event string) {
 	if ctx == nil || !ctx.LoggingEnabled {
 		return
 	}
-	ctx.LogBuffer.WriteString(event)
+	_, _ = ctx.LogBuffer.WriteString(event)
 	if ctx.Synthesizer == nil {
 		return
 	}
@@ -1240,7 +1232,7 @@ func HandleStreamResponse(
 	requestModel string,
 	timeouts StreamPreflightTimeouts,
 ) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	eventChan, errChan, err := provider.HandleStreamResponse(resp.Body)
 	if err != nil {

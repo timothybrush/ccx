@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 func TestEndpointForEnv(t *testing.T) {
@@ -280,7 +281,7 @@ func assertGETStatus(t *testing.T, client *http.Client, url string, want int) {
 	if err != nil {
 		t.Fatalf("GET %s error = %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	if resp.StatusCode != want {
 		t.Fatalf("GET %s status = %d, want %d", url, resp.StatusCode, want)
 	}

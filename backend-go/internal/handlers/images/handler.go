@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 	"github.com/BenedictKing/ccx/internal/middleware"
@@ -546,7 +547,7 @@ func preflightImagesStream(resp *http.Response, timeouts common.StreamPreflightT
 }
 
 func handleSuccess(c *gin.Context, resp *http.Response, envCfg *config.EnvConfig, startTime time.Time, isStream bool, timeouts common.StreamPreflightTimeouts, upstream *config.UpstreamConfig, requestBody []byte, requestContentType string) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	if isStream {
 		return nil, passthroughStreamingResponseWithLog(c, resp, envCfg, startTime, timeouts)
 	}
@@ -673,7 +674,7 @@ func downloadImageAsBase64(ctx context.Context, rawURL string, upstream *config.
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("image download failed with status %d", resp.StatusCode)
@@ -716,9 +717,10 @@ func passthroughStreamingResponseWithLog(c *gin.Context, resp *http.Response, en
 
 	bufferedBytes, chunkChan, bodyErrChan, err := preflightImagesStream(resp, timeouts, common.GetStreamTimeoutObserver(c))
 	if err != nil {
-		if err == common.ErrStreamFirstContentTimeout {
+		switch err {
+		case common.ErrStreamFirstContentTimeout:
 			common.RequestLogf(c, "[Images-FirstContentTimeout] 流式首块超时: %dms，触发重试", timeouts.FirstContentTimeoutMs)
-		} else if err == common.ErrStreamStalled {
+		case common.ErrStreamStalled:
 			common.RequestLogf(c, "[Images-StreamStalled] 流式断流: 首块后 %dms 无活动，触发重试", timeouts.InactivityTimeoutMs)
 		}
 		return err
@@ -780,7 +782,7 @@ func passthroughStreamingResponseWithLog(c *gin.Context, resp *http.Response, en
 				progress.AddBytes(len(chunk))
 				progress.Tick()
 				if streamLoggingEnabled {
-					logBuffer.Write(chunk)
+					_, _ = logBuffer.Write(chunk)
 				}
 				if _, writeErr := c.Writer.Write(chunk); writeErr != nil {
 					if common.IsClientDisconnectError(writeErr) || writeErr == io.ErrClosedPipe || strings.Contains(strings.ToLower(writeErr.Error()), "closed pipe") {

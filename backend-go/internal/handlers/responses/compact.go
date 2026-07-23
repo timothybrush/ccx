@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/middleware"
@@ -68,7 +69,7 @@ func CompactHandler(
 		}
 
 		// 提取对话标识用于 Trace 亲和性
-		userID := common.ExtractConversationID(c, bodyBytes)
+		userID := utils.ExtractUnifiedSessionID(c, bodyBytes)
 		var compactReq types.ResponsesRequest
 		if len(bodyBytes) > 0 {
 			_ = json.Unmarshal(bodyBytes, &compactReq)
@@ -363,7 +364,7 @@ func tryCompactWithKey(
 		common.RequestLogf(c, "[Compact-Local] 原生 compact 请求失败，回退本地 compact: %v", err)
 		return tryLocalCompactWithKey(c, upstream, apiKey, bodyBytes, envCfg, cfgManager, sessionManager)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	respBody, _ := io.ReadAll(resp.Body)
 	respBody = utils.DecompressGzipIfNeeded(resp, respBody)

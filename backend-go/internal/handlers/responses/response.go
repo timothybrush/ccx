@@ -9,6 +9,7 @@ import (
 
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/converters"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -33,7 +34,7 @@ func handleSuccess(
 	fuzzyMode bool,
 	timeouts common.StreamPreflightTimeouts,
 ) (*types.Usage, error) {
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	isStream := originalReq != nil && originalReq.Stream
 
@@ -108,7 +109,7 @@ func handleSuccess(
 		if codexEnabled {
 			codexCtx, ok := c.Get("codex_tool_context")
 			if !ok {
-				codexCtx, ok = originalReq.TransformerMetadata["codex_tool_context"]
+				codexCtx = originalReq.TransformerMetadata["codex_tool_context"]
 			}
 			typedCtx, ok := codexCtx.(converters.CodexToolContext)
 			if !ok {
@@ -133,15 +134,15 @@ func handleSuccess(
 		if err == nil {
 			inputItems, _ := parseInputToItems(originalReq.Input)
 			for _, item := range inputItems {
-				sessionManager.AppendMessage(sess.ID, item, 0)
+				_ = sessionManager.AppendMessage(sess.ID, item, 0)
 			}
 
 			for _, item := range responsesResp.Output {
-				sessionManager.AppendMessage(sess.ID, item, responsesResp.Usage.TotalTokens)
+				_ = sessionManager.AppendMessage(sess.ID, item, responsesResp.Usage.TotalTokens)
 			}
 
 			previousResponseID := sess.LastResponseID
-			sessionManager.UpdateLastResponseID(sess.ID, responsesResp.ID)
+			_ = sessionManager.UpdateLastResponseID(sess.ID, responsesResp.ID)
 			sessionManager.RecordResponseMapping(responsesResp.ID, sess.ID)
 
 			if previousResponseID != "" {

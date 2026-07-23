@@ -182,7 +182,7 @@ func (l *protocolDetectingListener) acceptLoop() {
 		conn, err := l.Listener.Accept()
 		if err != nil {
 			l.sendResult(acceptResult{err: err})
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				continue
 			}
 			return
@@ -215,7 +215,9 @@ func detectProtocol(conn net.Conn, tlsConfig *tls.Config, timeout time.Duration)
 		if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 			return nil, err
 		}
-		defer conn.SetReadDeadline(time.Time{})
+		defer func() {
+			_ = conn.SetReadDeadline(time.Time{})
+		}()
 	}
 	firstByte := make([]byte, 1)
 	n, err := conn.Read(firstByte)

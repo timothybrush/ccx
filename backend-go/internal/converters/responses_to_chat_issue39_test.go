@@ -105,7 +105,7 @@ func TestConvertResponsesToChat_Issue39_ContentTypeText(t *testing.T) {
 
 			// 打印结果以便调试
 			var prettyResult map[string]interface{}
-			json.Unmarshal(result, &prettyResult)
+			_ = json.Unmarshal(result, &prettyResult)
 			prettyJSON, _ := json.MarshalIndent(prettyResult, "", "  ")
 			t.Logf("Converted result:\n%s", string(prettyJSON))
 		})

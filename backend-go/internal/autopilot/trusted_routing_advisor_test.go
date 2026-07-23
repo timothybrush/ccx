@@ -8,7 +8,7 @@ import (
 
 func TestEvaluateShadow_DisabledState(t *testing.T) {
 	advisor := NewTrustedRoutingAdvisor()
-	advisor.SetState(AdvisorStateDisabled)
+	_ = advisor.SetState(AdvisorStateDisabled)
 
 	input := AdvisorInput{
 		RequestKind:      "messages",
@@ -428,9 +428,10 @@ func TestCheckAndApplySLORollback_RollbackClearsAllStreaks(t *testing.T) {
 	if advisor.State() != AdvisorStateRolledBack {
 		t.Fatalf("应已回滚, got %s", advisor.State())
 	}
+	_ =
 
-	// 手动重新激活
-	advisor.SetState(AdvisorStateActive)
+		// 手动重新激活
+		advisor.SetState(AdvisorStateActive)
 
 	// ch-2 从零开始计数（回滚时清零了所有 streaks）
 	rolledBack := advisor.CheckAndApplySLORollback("ch-2", true, 3)

@@ -473,8 +473,8 @@ func TestActiveFilterURLs_FailOpen(t *testing.T) {
 	deadProfile2 := &KeyEndpointProfile{
 		EndpointUID: "ep2", ChannelUID: "ch2", BaseURL: "https://b.com", HealthState: HealthStateDead,
 	}
-	store.Upsert(deadProfile1)
-	store.Upsert(deadProfile2)
+	_ = store.Upsert(deadProfile1)
+	_ = store.Upsert(deadProfile2)
 
 	deps := EndpointPolicyDeps{ProfileStore: store}
 	req := &RequestProfile{Model: "m1", ChannelKind: "messages"}
@@ -660,12 +660,13 @@ func TestAssistMode_Keys_IsPermutation(t *testing.T) {
 
 func TestAutoMode_FilterURLs_AllDead_FailOpen(t *testing.T) {
 	store := newTestProfileStore(t)
+	_ =
 
-	// 所有 URL 都是 dead
-	store.Upsert(&KeyEndpointProfile{
-		EndpointUID: "ep1", ChannelUID: "ch1", BaseURL: "https://a.com", HealthState: HealthStateDead,
-	})
-	store.Upsert(&KeyEndpointProfile{
+		// 所有 URL 都是 dead
+		store.Upsert(&KeyEndpointProfile{
+			EndpointUID: "ep1", ChannelUID: "ch1", BaseURL: "https://a.com", HealthState: HealthStateDead,
+		})
+	_ = store.Upsert(&KeyEndpointProfile{
 		EndpointUID: "ep2", ChannelUID: "ch2", BaseURL: "https://b.com", HealthState: HealthStateDead,
 	})
 
@@ -911,7 +912,7 @@ func TestGetEndpointCandidates_WithProfiles(t *testing.T) {
 		P95LatencyMs:   200,
 		CostTier:       CostTierCheap,
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	candidates := GetEndpointCandidates(store, fastDecay, "m1", []string{"https://a.com", "https://b.com"})
 
@@ -969,7 +970,7 @@ func TestScoreEndpointForKey_EndpointUIDMatchesHandlerComputation(t *testing.T) 
 		BaseURL:     baseURL,
 		HealthState: HealthStateHealthy,
 	}
-	store.Upsert(profile)
+	_ = store.Upsert(profile)
 
 	candidates := GetKeyCandidates(store, fastDecay, "m1", baseURL, []string{apiKey})
 	if len(candidates) != 1 {
@@ -1244,7 +1245,7 @@ func newTestProfileStore(t *testing.T) *ProfileStore {
 		t.Logf("警告: 创建测试 ProfileStore 失败: %v", err)
 		return nil
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
 

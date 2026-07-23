@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 func TestApplyVolcengineSignature(t *testing.T) {
@@ -221,7 +222,7 @@ func TestVolcengineAutoDiscoveryUsesControlPlaneModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer manager.Close()
+	defer errutil.IgnoreDeferred(manager.Close)
 	channels := manager.GetAccountChannels("acct_volc")
 	if len(channels) != 1 {
 		t.Fatalf("channels=%d", len(channels))

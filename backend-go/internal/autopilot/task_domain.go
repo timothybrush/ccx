@@ -1,7 +1,6 @@
 package autopilot
 
 import (
-	"path/filepath"
 	"strings"
 
 	"github.com/BenedictKing/ccx/internal/config"
@@ -535,13 +534,5 @@ func SeedDomainKeys() []seedDomainKey {
 }
 
 // resolveFileExtension 从文件路径中提取扩展名，兼容 "path/to/file.go" 和 ".go"。
-func resolveFileExtension(path string) string {
-	ext := filepath.Ext(path)
-	if ext == "" {
-		// filepath.Ext 对无扩展名路径返回空，尝试直接匹配
-		if strings.HasPrefix(path, ".") {
-			return strings.ToLower(path)
-		}
-	}
-	return strings.ToLower(ext)
-}
+
+// filepath.Ext 对无扩展名路径返回空，尝试直接匹配

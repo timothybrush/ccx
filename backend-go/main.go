@@ -21,6 +21,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/conversation"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/BenedictKing/ccx/internal/handlers/chat"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
@@ -210,7 +211,7 @@ func parseCLIArgs(args []string) (cliOptions, error) {
 }
 
 func writeCLIHelp(out io.Writer) {
-	fmt.Fprint(out, `用法:
+	_, _ = fmt.Fprint(out, `用法:
   ccx [options]
   ccx version
 
@@ -237,12 +238,12 @@ func writeCLIHelp(out io.Writer) {
 }
 
 func printVersion(out io.Writer) {
-	fmt.Fprintf(out, "ccx %s\n", Version)
+	_, _ = fmt.Fprintf(out, "ccx %s\n", Version)
 	if BuildTime != "unknown" {
-		fmt.Fprintf(out, "build time: %s\n", BuildTime)
+		_, _ = fmt.Fprintf(out, "build time: %s\n", BuildTime)
 	}
 	if GitCommit != "unknown" {
-		fmt.Fprintf(out, "git commit: %s\n", GitCommit)
+		_, _ = fmt.Fprintf(out, "git commit: %s\n", GitCommit)
 	}
 }
 
@@ -376,7 +377,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	// 远程预置更新：启动时先尝试恢复已校验磁盘缓存，再由后台 worker 异步检查文档站。
 	// 网络/缓存失败不阻断服务，始终保留编译期 embedded fallback。
@@ -401,7 +402,7 @@ func main() {
 	}
 	applyThinkingCacheConfig(cfgManager.GetConfig())
 	cfgManager.RegisterOnConfigChange(applyThinkingCacheConfig)
-	defer thinkingcache.Close()
+	defer errutil.IgnoreDeferred(thinkingcache.Close)
 
 	// 初始化会话管理器（Responses API 专用）
 	sessionManager := session.NewSessionManager(

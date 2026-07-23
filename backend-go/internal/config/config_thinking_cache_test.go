@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,7 @@ func TestThinkingCacheDefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.ThinkingCache.EffectiveTTLHours(); got != ThinkingCacheDefaultTTLHours {
@@ -43,7 +44,7 @@ func TestThinkingCacheTTLClampOnLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.ThinkingCache.TTLHours; got != ThinkingCacheMaxTTLHours {

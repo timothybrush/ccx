@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -269,7 +270,7 @@ func diagnoseBaseURLHashWithModel(channel *config.UpstreamConfig, channelKind, a
 		return nil
 	}
 
-	reason := "当前 BaseURL 的 # 版本前缀语义导致探测失败，反向形态探测成功，建议覆盖 BaseURL"
+	var reason string
 	if strings.HasSuffix(trimmed, "#") {
 		reason = "当前 BaseURL 末尾 # 会禁止自动追加版本前缀，探测失败；移除 # 后探测成功"
 	} else {
@@ -285,10 +286,6 @@ const (
 	compatBaseURLProbeSucceeded
 	compatBaseURLProbeInconclusive
 )
-
-func probeBaseURLCandidate(channel *config.UpstreamConfig, channelKind, apiKey, baseURL string) compatBaseURLProbeStatus {
-	return probeBaseURLCandidateWithModel(channel, channelKind, apiKey, baseURL, "")
-}
 
 func probeBaseURLCandidateWithModel(channel *config.UpstreamConfig, channelKind, apiKey, baseURL, probeModel string) compatBaseURLProbeStatus {
 	candidate := *channel
@@ -374,10 +371,6 @@ func shouldProbeImageGenerationTool(channel *config.UpstreamConfig, channelKind 
 	return ""
 }
 
-func diagnoseImageGenerationTool(channel *config.UpstreamConfig, channelKind, apiKey, baseURL string, recs map[string]bool, evid map[string]string) {
-	diagnoseImageGenerationToolWithModel(channel, channelKind, apiKey, baseURL, "", recs, evid)
-}
-
 func diagnoseImageGenerationToolWithModel(channel *config.UpstreamConfig, channelKind, apiKey, baseURL, probeModel string, recs map[string]bool, evid map[string]string) {
 	protocol := shouldProbeImageGenerationTool(channel, channelKind)
 	if protocol == "" {
@@ -408,9 +401,6 @@ func diagnoseImageGenerationToolWithModel(channel *config.UpstreamConfig, channe
 
 // diagnoseClaudeChannel 探测 Claude 兼容渠道
 // 检测：passbackReasoningContent、passbackThinkingBlocks、stripEmptyTextBlocks、normalizeSystemRoleToTopLevel
-func diagnoseClaudeChannel(channel *config.UpstreamConfig, apiKey, baseURL string, recs map[string]bool, evid map[string]string) {
-	diagnoseClaudeChannelWithModel(channel, apiKey, baseURL, "", recs, evid)
-}
 
 func diagnoseClaudeChannelWithModel(channel *config.UpstreamConfig, apiKey, baseURL, probeModel string, recs map[string]bool, evid map[string]string) {
 	probeModel = compatProbeModel(capabilityProbeModelClaudeFable5, probeModel)
@@ -542,9 +532,6 @@ func diagnoseClaudeThinkingBlockPassback(channel *config.UpstreamConfig, apiKey,
 
 // diagnoseGeminiChannel 探测 Gemini 兼容渠道
 // 检测：stripThoughtSignature
-func diagnoseGeminiChannel(channel *config.UpstreamConfig, apiKey, baseURL string, recs map[string]bool, evid map[string]string) {
-	diagnoseGeminiChannelWithModel(channel, apiKey, baseURL, "", recs, evid)
-}
 
 func diagnoseGeminiChannelWithModel(channel *config.UpstreamConfig, apiKey, baseURL, probeModel string, recs map[string]bool, evid map[string]string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -791,7 +778,7 @@ func sendCompatProbe(ctx context.Context, req *http.Request, channel *config.Ups
 	if err != nil {
 		return nil, 0, "", err
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, compatDiagnoseResponseBodyLimit))

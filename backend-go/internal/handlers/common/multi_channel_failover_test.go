@@ -92,17 +92,17 @@ func newAffinityTestEnv(t *testing.T, cfg config.Config) affinityTestEnv {
 	configFile := filepath.Join(tmpDir, "config.json")
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("序列化测试配置失败: %v", err)
 	}
 	if err := os.WriteFile(configFile, cfgData, 0644); err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("写入临时配置失败: %v", err)
 	}
 
 	cfgManager, err := config.NewConfigManager(configFile, "")
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
 
@@ -125,8 +125,8 @@ func newAffinityTestEnv(t *testing.T, cfg config.Config) affinityTestEnv {
 			geminiMetrics.Stop()
 			chatMetrics.Stop()
 			imagesMetrics.Stop()
-			cfgManager.Close()
-			os.RemoveAll(tmpDir)
+			_ = cfgManager.Close()
+			_ = os.RemoveAll(tmpDir)
 		},
 	}
 }

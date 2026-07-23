@@ -210,7 +210,7 @@ func TestGetCapabilitySnapshot_PreservesSameSourceRedirectProtocol(t *testing.T)
 	if err != nil {
 		t.Fatalf("create config manager failed: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	r := gin.New()
 	r.GET("/messages/channels/:id/capability-snapshot", GetCapabilitySnapshot(cfgManager, "messages"))
@@ -310,7 +310,7 @@ func TestGetCapabilitySnapshot_IsolatedByModelMapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create config manager failed: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	r := gin.New()
 	r.GET("/messages/channels/:id/capability-snapshot", GetCapabilitySnapshot(cfgManager, "messages"))
@@ -374,7 +374,7 @@ func TestGetCapabilitySnapshot_IncludesCrossProtocolWithoutModelMapping(t *testi
 	if err != nil {
 		t.Fatalf("create config manager failed: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	r := gin.New()
 	r.GET("/responses/channels/:id/capability-snapshot", GetCapabilitySnapshot(cfgManager, "responses"))
@@ -433,7 +433,7 @@ func TestGetCapabilitySnapshot_SkipsSameProtocolWithoutModelMapping(t *testing.T
 	if err != nil {
 		t.Fatalf("create config manager failed: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	r := gin.New()
 	r.GET("/responses/channels/:id/capability-snapshot", GetCapabilitySnapshot(cfgManager, "responses"))

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/httpclient"
 	"github.com/BenedictKing/ccx/internal/utils"
 )
@@ -90,7 +91,7 @@ func VerifyKimiCodeModelsEndpoint(ctx context.Context, baseURL, apiKey, authHead
 	if err != nil {
 		return EndpointVerifyResult{Err: err, Message: "请求失败: " + err.Error()}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 
 	sc := resp.StatusCode
@@ -127,7 +128,7 @@ func verifyJSONPostEndpointWithPolicy(ctx context.Context, url, apiKey, authHead
 	if err != nil {
 		return EndpointVerifyResult{Err: err, Message: "请求失败: " + err.Error()}
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 
 	sc := resp.StatusCode
@@ -243,9 +244,9 @@ func verifyProviderRouteKeys(ctx context.Context, tmpl *config.ProviderTemplate,
 			mask := utils.MaskAPIKey(apiKey)
 			summary := strings.Join(diagnostics, "；")
 			if authFailedCount == len(candidates) {
-				return nil, nil, fmt.Errorf("Key %s 鉴权失败：所有候选端点均返回 401/403（%s）", mask, summary)
+				return nil, nil, fmt.Errorf("key %s 鉴权失败：所有候选端点均返回 401/403（%s）", mask, summary)
 			}
-			return nil, nil, fmt.Errorf("Key %s 无可用候选端点（%s）", mask, summary)
+			return nil, nil, fmt.Errorf("key %s 无可用候选端点（%s）", mask, summary)
 		}
 
 		keyConfigs = append(keyConfigs, config.APIKeyConfig{

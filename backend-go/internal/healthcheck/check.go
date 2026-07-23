@@ -261,10 +261,10 @@ func extractModelIDs(body []byte) []string {
 // normalizeWrappedResponse 将各渠道 GetChannelModels 包装 handler 的响应归一化为 (上游状态码, 上游响应体)。
 // 包装约定：200=成功（模型列表 JSON）；400+statusCode=上游 401 包装；502/504=网络/超时；其他=上游状态透传。
 func normalizeWrappedResponse(code int, body []byte) (int, []byte) {
-	switch {
-	case code == http.StatusOK:
+	switch code {
+	case http.StatusOK:
 		return http.StatusOK, body
-	case code == http.StatusBadRequest:
+	case http.StatusBadRequest:
 		var wrapped struct {
 			StatusCode int    `json:"statusCode"`
 			Details    string `json:"details"`
@@ -273,7 +273,7 @@ func normalizeWrappedResponse(code int, body []byte) (int, []byte) {
 			return wrapped.StatusCode, []byte(wrapped.Details)
 		}
 		return code, body
-	case code == http.StatusBadGateway || code == http.StatusGatewayTimeout:
+	case http.StatusBadGateway, http.StatusGatewayTimeout:
 		return 0, body
 	default:
 		return code, body

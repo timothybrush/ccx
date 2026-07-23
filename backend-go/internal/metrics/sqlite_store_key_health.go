@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"time"
 )
 
@@ -87,7 +88,7 @@ func (s *SQLiteStore) queryKeyHealth(query string, args ...interface{}) ([]KeyHe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	var records []KeyHealthRecord
 	for rows.Next() {

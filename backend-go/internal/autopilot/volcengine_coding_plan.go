@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 const (
@@ -111,7 +112,7 @@ func (c *volcenginePlanClient) DetectPlan(ctx context.Context, pair *config.Volc
 		found = append(found, candidate{plan: plan, info: info})
 	}
 	if len(found) == 0 {
-		return volcenginePlanInfo{}, fmt.Errorf("Access Key 所属账号未查询到 Agent Plan 或 Coding Plan，请确认 AK/SK 与推理 Key 属于同一账号")
+		return volcenginePlanInfo{}, fmt.Errorf("access Key 所属账号未查询到 Agent Plan 或 Coding Plan，请确认 AK/SK 与推理 Key 属于同一账号")
 	}
 	hint = normalizeVolcenginePlan(hint)
 	for _, item := range found {
@@ -280,7 +281,7 @@ func (c *volcenginePlanClient) doAction(ctx context.Context, pair *config.Volcen
 	if err != nil {
 		return fmt.Errorf("请求火山管控面失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
 	if err != nil {
 		return fmt.Errorf("读取火山管控面响应失败: %w", err)

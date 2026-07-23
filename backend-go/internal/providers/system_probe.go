@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 // ProbeSystemHeaderLevel 探测最优过滤层级
@@ -119,7 +120,7 @@ func sendTestRequest(ctx context.Context, baseURL string, apiKey string, req int
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	// 检查响应状态
 	if resp.StatusCode == http.StatusOK {

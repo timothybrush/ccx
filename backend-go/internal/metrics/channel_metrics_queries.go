@@ -214,7 +214,7 @@ func (m *MetricsManager) isChannelBreakerHealthyLocked(snapshot channelBreakerSn
 		return false
 	}
 	if len(snapshot.results) == 0 {
-		return !(snapshot.hasOpenState && !snapshot.hasAvailableCandidate)
+		return !snapshot.hasOpenState || snapshot.hasAvailableCandidate
 	}
 	minRequests := max(3, m.windowSize/2)
 	if len(snapshot.results) < minRequests {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/ratelimit"
 	"github.com/BenedictKing/ccx/internal/scheduler"
@@ -194,7 +195,7 @@ func TestExtractEmbeddingsUsage(t *testing.T) {
 func TestHandlerFailoverAndUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var attempts int32
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +286,7 @@ func TestHandlerInvalidSuccessResponseFailsOver(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgManager := newVectorsTestConfigManager(t)
-			defer cfgManager.Close()
+			defer errutil.IgnoreDeferred(cfgManager.Close)
 
 			var primaryAttempts int32
 			primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -344,7 +345,7 @@ func TestHandlerInvalidSuccessResponseFailsOver(t *testing.T) {
 func TestHandlerAppliesVectorsModelMappingToUpstreamBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var upstreamModel string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +389,7 @@ func TestHandlerAppliesVectorsModelMappingToUpstreamBody(t *testing.T) {
 func TestHandlerPassesThroughVectorsModelWhenMappingMisses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var upstreamModel string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -432,7 +433,7 @@ func TestHandlerPassesThroughVectorsModelWhenMappingMisses(t *testing.T) {
 func TestHandlerDoesNotFallbackAcrossEmbeddingSpaces(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -499,7 +500,7 @@ func TestHandlerDoesNotFallbackAcrossEmbeddingSpaces(t *testing.T) {
 func TestHandlerAllowsFallbackWithinSameEmbeddingSpace(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -565,7 +566,7 @@ func TestHandlerAllowsFallbackWithinSameEmbeddingSpace(t *testing.T) {
 func TestHandlerIgnoresSuspendedChannelAsEmbeddingCompatibilityAnchor(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var suspendedAttempts int32
 	suspendedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -628,7 +629,7 @@ func TestHandlerIgnoresSuspendedChannelAsEmbeddingCompatibilityAnchor(t *testing
 func TestHandlerIgnoresChannelWithoutKeysAsEmbeddingCompatibilityAnchor(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var noKeyAttempts int32
 	noKeyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -690,7 +691,7 @@ func TestHandlerIgnoresChannelWithoutKeysAsEmbeddingCompatibilityAnchor(t *testi
 func TestHandlerIgnoresCooldownChannelAsEmbeddingCompatibilityAnchor(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var cooldownAttempts int32
 	cooldownServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -754,7 +755,7 @@ func TestHandlerIgnoresCooldownChannelAsEmbeddingCompatibilityAnchor(t *testing.
 func TestHandlerFiltersEmbeddingChannelsByRequestedDimensions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var unsupportedAttempts int32
 	unsupportedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -826,7 +827,7 @@ func TestHandlerFiltersEmbeddingChannelsByRequestedDimensions(t *testing.T) {
 func TestHandlerRejectsInvalidEmbeddingDimensions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	sch := newVectorsTestScheduler(cfgManager, metrics.NewMetricsManager())
 	for _, body := range []string{
@@ -893,7 +894,7 @@ func TestHandlerEmbeddingCompatibilityCannotBeBypassedByPinPromotionOrTraceAffin
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgManager := newVectorsTestConfigManager(t)
-			defer cfgManager.Close()
+			defer errutil.IgnoreDeferred(cfgManager.Close)
 
 			var badAttempts int32
 			badServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -960,7 +961,7 @@ func TestHandlerEmbeddingCompatibilityCannotBeBypassedByPinPromotionOrTraceAffin
 func TestHandlerVectors422DoesNotFailoverOrAffectBreaker(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1033,7 +1034,7 @@ func TestHandlerVectors422DoesNotFailoverOrAffectBreaker(t *testing.T) {
 func TestHandlerVectorsNonRetryableErrorDoesNotLogEmbeddingInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	const sensitiveInput = "secret customer embedding text"
 	errorBody := `{"error":{"message":"embedding input ` + sensitiveInput + ` was rejected","type":"invalid_request_error","code":"invalid_request","param":"input"},"input":"` + sensitiveInput + `"}`
@@ -1089,7 +1090,7 @@ func TestHandlerVectorsNonRetryableErrorDoesNotLogEmbeddingInput(t *testing.T) {
 func TestAddUpstreamRejectsUnsupportedServiceType(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	r := gin.New()
 	r.POST("/api/vectors/channels", AddUpstream(cfgManager))
@@ -1110,7 +1111,7 @@ func TestAddUpstreamRejectsUnsupportedServiceType(t *testing.T) {
 func TestAddUpstreamReturnsConflictForDuplicateName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	if err := cfgManager.AddVectorsUpstream(config.UpstreamConfig{
 		Name:        "dup-vectors",
@@ -1139,7 +1140,7 @@ func TestAddUpstreamReturnsConflictForDuplicateName(t *testing.T) {
 
 func TestVectorsConfigErrorsAreTyped(t *testing.T) {
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	if _, err := config.NormalizeVectorsServiceTypeForProxy("gemini"); !errors.Is(err, config.ErrUnsupportedServiceType) {
 		t.Fatalf("NormalizeVectorsServiceTypeForProxy() error = %v, want ErrUnsupportedServiceType", err)
@@ -1161,7 +1162,7 @@ func TestVectorsConfigErrorsAreTyped(t *testing.T) {
 
 func TestVectorsConfigRejectsInvalidEmbeddingCapabilities(t *testing.T) {
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	invalid := map[string]config.EmbeddingCapability{
 		"text-embedding-3-small": {Dimensions: -1},
@@ -1194,7 +1195,7 @@ func TestVectorsConfigRejectsInvalidEmbeddingCapabilities(t *testing.T) {
 func TestUpdateUpstreamReturnsConflictForDuplicateName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 	sch := newVectorsTestScheduler(cfgManager, nil)
 
 	for _, name := range []string{"first-vectors", "second-vectors"} {
@@ -1227,7 +1228,7 @@ func TestUpdateUpstreamReturnsConflictForDuplicateName(t *testing.T) {
 func TestGetChannelModelsSSRFLogDoesNotLeakRequestSecrets(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var logs bytes.Buffer
 	origWriter := log.Writer()
@@ -1281,7 +1282,7 @@ func TestGetChannelModelsSSRFLogDoesNotLeakRequestSecrets(t *testing.T) {
 func TestGetChannelModelsFailureLogDoesNotLeakTemporaryBaseURL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	closedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	sensitiveBaseURL := strings.Replace(closedServer.URL, "http://", "http://user:sk-secret-in-url@", 1) + "?api_key=sk-secret-in-query"
@@ -1368,7 +1369,7 @@ func TestBuildEmbeddingsRequestBodyStripsClientStreamField(t *testing.T) {
 func TestHandlerStripsStreamFieldBeforeForwardingToUpstream(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var upstreamBody []byte
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1507,7 +1508,7 @@ func TestEmbeddingCompatibilityKeyForRejectsInvalidSupportedDimensions(t *testin
 func TestHandlerNormalizedInconsistencyBlocksFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1571,7 +1572,7 @@ func TestHandlerNormalizedInconsistencyBlocksFallback(t *testing.T) {
 func TestHandlerModelNotFoundTriggersFailover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1641,7 +1642,7 @@ func TestHandlerModelNotFoundTriggersFailover(t *testing.T) {
 func TestHandlerEmptyResponseBodyTriggersFailover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfgManager := newVectorsTestConfigManager(t)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	var primaryAttempts int32
 	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1813,7 +1814,7 @@ func benchmarkHandlerVectorsEmbeddingPipeline(b *testing.B, withFallback bool) {
 	gin.SetMode(gin.TestMode)
 
 	cfgManager := newVectorsTestConfigManagerFromBench(b)
-	defer cfgManager.Close()
+	defer errutil.IgnoreDeferred(cfgManager.Close)
 
 	activeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

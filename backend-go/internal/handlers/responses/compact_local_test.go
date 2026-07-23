@@ -222,7 +222,7 @@ func TestLocalCompact_OpenAIUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req map[string]interface{}
-		json.Unmarshal(body, &req)
+		_ = json.Unmarshal(body, &req)
 
 		// 验证请求被转换为 chat completions 格式
 		if _, ok := req["messages"]; !ok {
@@ -238,7 +238,7 @@ func TestLocalCompact_OpenAIUpstream(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		io.WriteString(w, `{"id":"chatcmpl-123","choices":[{"message":{"role":"assistant","content":"## Summary\nCompacted context"}}],"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}`)
+		_, _ = io.WriteString(w, `{"id":"chatcmpl-123","choices":[{"message":{"role":"assistant","content":"## Summary\nCompacted context"}}],"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}`)
 	}))
 	defer upstream.Close()
 

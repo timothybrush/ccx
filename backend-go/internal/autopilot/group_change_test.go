@@ -13,7 +13,7 @@ func newTestGroupChangeDetector(t *testing.T) *GroupChangeDetector {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	store, err := NewProfileStoreWithDB(db)
 	if err != nil {
 		t.Fatalf("NewProfileStoreWithDB 失败: %v", err)

@@ -43,7 +43,7 @@ func TestGetChannelLogs_AfterChannelDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	messagesMetrics := metrics.NewMetricsManager()
 	responsesMetrics := metrics.NewMetricsManager()
@@ -154,7 +154,7 @@ func TestGetChannelLogs_FiltersSharedMetricsKeyByChannelIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	logStore := metrics.NewChannelLogStore()
 	metricsKey := metrics.GenerateMetricsIdentityKey("http://127.0.0.1:3699", "sk-local", "responses")
@@ -245,7 +245,7 @@ func TestGetChannelLogs_FiltersSharedMetricsKeyByChannelNameAfterDeletion(t *tes
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	logStore := metrics.NewChannelLogStore()
 	metricsKey := metrics.GenerateMetricsIdentityKey("http://127.0.0.1:3699", "sk-local", "responses")
@@ -309,7 +309,7 @@ func TestGetChannelLogs_ExcludesDeletedChannelResidualAfterBecomingExclusive(t *
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	logStore := metrics.NewChannelLogStore()
 	metricsKey := metrics.GenerateMetricsIdentityKey("http://127.0.0.1:3699", "sk-local", "responses")
@@ -367,7 +367,7 @@ func TestGetChannelDashboard_AfterChannelDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	messagesMetrics := metrics.NewMetricsManager()
 	responsesMetrics := metrics.NewMetricsManager()

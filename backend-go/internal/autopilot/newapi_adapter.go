@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"strconv"
@@ -149,7 +150,7 @@ func (a *NewApiAdapter) doRequest(ctx context.Context, method, baseURL, path, ac
 	if err != nil {
 		return fmt.Errorf("[NewApiAdapter] HTTP 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20)) // 最多读 4MB，防御异常大响应
 	if err != nil {

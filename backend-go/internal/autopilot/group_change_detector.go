@@ -157,7 +157,7 @@ func hashModelList(models []string) string {
 	sorted := sortedCopy(models)
 	h := sha256.New()
 	for _, m := range sorted {
-		fmt.Fprintf(h, "%s\n", m)
+		_, _ = fmt.Fprintf(h, "%s\n", m)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

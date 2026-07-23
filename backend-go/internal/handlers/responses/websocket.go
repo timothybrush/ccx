@@ -3,29 +3,23 @@ package responses
 import (
 	"bufio"
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
-	"github.com/BenedictKing/ccx/internal/handlers/common"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/middleware"
-	"github.com/BenedictKing/ccx/internal/providers"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
 	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"golang.org/x/net/proxy"
 )
 
 const (
@@ -66,7 +60,7 @@ func WebSocketHandler(
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer errutil.IgnoreDeferred(conn.Close)
 		conn.SetReadLimit(responsesWebSocketReadLimit)
 
 		for {
@@ -82,7 +76,7 @@ func WebSocketHandler(
 				return
 			}
 			if _, err := parseWebSocketResponseCreatePayload(payload); err != nil {
-				writeWebSocketError(conn, http.StatusBadRequest, "invalid_request", err.Error())
+				_ = writeWebSocketError(conn, http.StatusBadRequest, "invalid_request", err.Error())
 				continue
 			}
 
@@ -156,46 +150,6 @@ func normalizeNativeWebSocketResponseCreatePayload(payload []byte) ([]byte, erro
 	return body, nil
 }
 
-func selectResponsesWebSocketChannel(
-	c *gin.Context,
-	cfgManager *config.ConfigManager,
-	channelScheduler *scheduler.ChannelScheduler,
-	payload []byte,
-) (*scheduler.SelectionResult, error) {
-	if cfgManager == nil || channelScheduler == nil {
-		return nil, errors.New("Responses WebSocket 渠道调度器未初始化")
-	}
-
-	req, err := parseWebSocketResponseCreatePayload(payload)
-	if err != nil {
-		return nil, err
-	}
-	model, _ := req["model"].(string)
-	affinityBody := common.NormalizeMetadataUserID(payload)
-	userID := utils.ExtractUnifiedSessionID(c, affinityBody)
-	agentCtx := utils.ExtractAgentContext(c, payload)
-	agentRole := ""
-	if agentCtx != nil {
-		agentRole = agentCtx.AgentRole
-		c.Set("agentContext", agentCtx)
-	}
-
-	cfg := cfgManager.GetConfig()
-	contextRequirement := common.BuildResponsesContextRequirement(payload, cfg.ContextRouting)
-	common.ApplyAgentModelProfile(contextRequirement, model, cfg)
-	common.AttachAutopilotRequestProfile(c, scheduler.ChannelKindResponses, model, "completion", userID, payload, 0)
-
-	return channelScheduler.SelectChannelWithOptions(c.Request.Context(), scheduler.SelectionOptions{
-		UserID:             userID,
-		Kind:               scheduler.ChannelKindResponses,
-		Model:              model,
-		RoutePrefix:        c.Param("routePrefix"),
-		ChannelName:        c.GetHeader("X-Channel"),
-		ContextRequirement: contextRequirement,
-		AgentRole:          agentRole,
-	})
-}
-
 func serveResponsesWebSocketBridgeLoop(
 	c *gin.Context,
 	conn *websocket.Conn,
@@ -222,7 +176,7 @@ func serveResponsesWebSocketBridgeLoop(
 		requestBody, warmup, err := normalizeWebSocketResponseCreatePayload(payload)
 		payload = nil
 		if err != nil {
-			writeWebSocketError(conn, http.StatusBadRequest, "invalid_request", err.Error())
+			_ = writeWebSocketError(conn, http.StatusBadRequest, "invalid_request", err.Error())
 			continue
 		}
 		if warmup {
@@ -236,304 +190,9 @@ func serveResponsesWebSocketBridgeLoop(
 			if isWebSocketClosed(err) {
 				return
 			}
-			writeWebSocketError(conn, http.StatusInternalServerError, "stream_error", err.Error())
+			_ = writeWebSocketError(conn, http.StatusInternalServerError, "stream_error", err.Error())
 		}
 	}
-}
-
-type nativeResponsesWebSocketRequest struct {
-	URL    string
-	Header http.Header
-	Body   []byte
-}
-
-func serveNativeResponsesWebSocket(
-	c *gin.Context,
-	clientConn *websocket.Conn,
-	cfgManager *config.ConfigManager,
-	sessionManager *session.SessionManager,
-	channelScheduler *scheduler.ChannelScheduler,
-	selection *scheduler.SelectionResult,
-	firstPayload []byte,
-) error {
-	upstream := selection.Upstream
-	if upstream == nil {
-		return errors.New("Responses WebSocket 未选择到上游渠道")
-	}
-	if len(upstream.APIKeys) == 0 {
-		return fmt.Errorf("Responses 渠道 %q 未配置 API 密钥", upstream.Name)
-	}
-
-	upstreamCopy := upstream.Clone()
-	baseURL := selectResponsesWebSocketBaseURL(channelScheduler, selection.ChannelIndex, upstreamCopy)
-	if baseURL != "" {
-		upstreamCopy.BaseURL = baseURL
-	}
-	apiKey, err := cfgManager.GetNextResponsesAPIKey(upstreamCopy, nil)
-	if err != nil {
-		return err
-	}
-
-	firstRequest, err := buildNativeResponsesWebSocketRequest(c, upstreamCopy, apiKey, firstPayload, sessionManager)
-	if err != nil {
-		return err
-	}
-	dialer, err := newResponsesWebSocketDialer(upstreamCopy)
-	if err != nil {
-		return err
-	}
-
-	upstreamConn, resp, err := dialer.DialContext(c.Request.Context(), firstRequest.URL, firstRequest.Header)
-	if err != nil {
-		if resp != nil {
-			return fmt.Errorf("上游 WebSocket 握手失败: HTTP %d", resp.StatusCode)
-		}
-		return err
-	}
-	defer upstreamConn.Close()
-	upstreamConn.SetReadLimit(responsesWebSocketReadLimit)
-	if baseURL != "" {
-		channelScheduler.MarkURLSuccess(scheduler.ChannelKindResponses, selection.ChannelIndex, baseURL)
-	}
-
-	if err := writeWebSocketText(upstreamConn, firstRequest.Body); err != nil {
-		return err
-	}
-
-	errCh := make(chan error, 2)
-	go func() {
-		errCh <- copyNativeResponsesClientToUpstream(c, clientConn, upstreamConn, upstreamCopy, apiKey, sessionManager)
-	}()
-	go func() {
-		errCh <- copyNativeResponsesUpstreamToClient(upstreamConn, clientConn)
-	}()
-
-	select {
-	case <-c.Request.Context().Done():
-	case <-errCh:
-	}
-
-	_ = upstreamConn.Close()
-	_ = clientConn.Close()
-	select {
-	case <-errCh:
-	case <-time.After(time.Second):
-	}
-	return nil
-}
-
-func selectResponsesWebSocketBaseURL(
-	channelScheduler *scheduler.ChannelScheduler,
-	channelIndex int,
-	upstream *config.UpstreamConfig,
-) string {
-	if upstream == nil || channelScheduler == nil {
-		return ""
-	}
-	baseURLs := upstream.GetAllBaseURLs()
-	if len(baseURLs) == 0 {
-		return ""
-	}
-	urls := channelScheduler.GetSortedURLsForChannel(scheduler.ChannelKindResponses, channelIndex, baseURLs)
-	if len(urls) == 0 {
-		return baseURLs[0]
-	}
-	return urls[0].URL
-}
-
-func buildNativeResponsesWebSocketRequest(
-	c *gin.Context,
-	upstream *config.UpstreamConfig,
-	apiKey string,
-	payload []byte,
-	sessionManager *session.SessionManager,
-) (*nativeResponsesWebSocketRequest, error) {
-	providerReq, body, err := buildNativeResponsesProviderRequest(c, upstream, apiKey, payload, sessionManager)
-	if err != nil {
-		return nil, err
-	}
-	targetURL, err := httpURLToWebSocketURL(providerReq.URL.String())
-	if err != nil {
-		return nil, err
-	}
-	header := providerReq.Header.Clone()
-	stripWebSocketRequestHeaders(header)
-	header.Set(responsesWebSocketV2BetaHeader, responsesWebSocketV2BetaHeaderValue)
-	header.Set("Content-Type", "application/json")
-
-	return &nativeResponsesWebSocketRequest{
-		URL:    targetURL,
-		Header: header,
-		Body:   body,
-	}, nil
-}
-
-func buildNativeResponsesWebSocketBody(
-	c *gin.Context,
-	upstream *config.UpstreamConfig,
-	apiKey string,
-	payload []byte,
-	sessionManager *session.SessionManager,
-) ([]byte, error) {
-	_, body, err := buildNativeResponsesProviderRequest(c, upstream, apiKey, payload, sessionManager)
-	return body, err
-}
-
-func buildNativeResponsesProviderRequest(
-	c *gin.Context,
-	upstream *config.UpstreamConfig,
-	apiKey string,
-	payload []byte,
-	sessionManager *session.SessionManager,
-) (*http.Request, []byte, error) {
-	body, err := normalizeNativeWebSocketResponseCreatePayload(payload)
-	if err != nil {
-		return nil, nil, err
-	}
-	providerReq, _, err := (&providers.ResponsesProvider{SessionManager: sessionManager}).ConvertBodyToProviderRequest(
-		c,
-		upstream,
-		apiKey,
-		body,
-		c.Request.URL.Path,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	if providerReq.Body == nil {
-		return providerReq, body, nil
-	}
-	converted, err := io.ReadAll(providerReq.Body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("读取 Responses WebSocket 上游请求体失败: %w", err)
-	}
-	return providerReq, converted, nil
-}
-
-func copyNativeResponsesClientToUpstream(
-	c *gin.Context,
-	clientConn *websocket.Conn,
-	upstreamConn *websocket.Conn,
-	upstream *config.UpstreamConfig,
-	apiKey string,
-	sessionManager *session.SessionManager,
-) error {
-	for {
-		messageType, payload, err := clientConn.ReadMessage()
-		if err != nil {
-			return err
-		}
-		if messageType != websocket.TextMessage {
-			return errors.New("only text messages are supported")
-		}
-		body, err := buildNativeResponsesWebSocketBody(c, upstream, apiKey, payload, sessionManager)
-		if err != nil {
-			return err
-		}
-		if err := writeWebSocketText(upstreamConn, body); err != nil {
-			return err
-		}
-	}
-}
-
-func copyNativeResponsesUpstreamToClient(upstreamConn *websocket.Conn, clientConn *websocket.Conn) error {
-	for {
-		messageType, payload, err := upstreamConn.ReadMessage()
-		if err != nil {
-			return err
-		}
-		if messageType != websocket.TextMessage {
-			continue
-		}
-		if err := writeWebSocketText(clientConn, payload); err != nil {
-			return err
-		}
-	}
-}
-
-func writeWebSocketText(conn *websocket.Conn, payload []byte) error {
-	_ = conn.SetWriteDeadline(time.Now().Add(responsesWebSocketWriteTimeout))
-	return conn.WriteMessage(websocket.TextMessage, payload)
-}
-
-func stripWebSocketRequestHeaders(header http.Header) {
-	for _, key := range []string{
-		"Connection",
-		"Upgrade",
-		"Sec-WebSocket-Accept",
-		"Sec-WebSocket-Extensions",
-		"Sec-WebSocket-Key",
-		"Sec-WebSocket-Protocol",
-		"Sec-WebSocket-Version",
-		"Host",
-	} {
-		header.Del(key)
-	}
-}
-
-func httpURLToWebSocketURL(rawURL string) (string, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("无效的 Responses WebSocket URL: %s", rawURL)
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "http":
-		u.Scheme = "ws"
-	case "https":
-		u.Scheme = "wss"
-	case "ws", "wss":
-	default:
-		return "", fmt.Errorf("不支持的 Responses WebSocket URL 协议: %s", u.Scheme)
-	}
-	return u.String(), nil
-}
-
-func newResponsesWebSocketDialer(upstream *config.UpstreamConfig) (*websocket.Dialer, error) {
-	dialer := *websocket.DefaultDialer
-	if upstream != nil && upstream.InsecureSkipVerify {
-		dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-	if upstream == nil || strings.TrimSpace(upstream.ProxyURL) == "" {
-		return &dialer, nil
-	}
-	if err := applyResponsesWebSocketProxy(&dialer, upstream.ProxyURL); err != nil {
-		return nil, err
-	}
-	return &dialer, nil
-}
-
-func applyResponsesWebSocketProxy(dialer *websocket.Dialer, proxyAddr string) error {
-	u, err := url.Parse(proxyAddr)
-	if err != nil {
-		return fmt.Errorf("解析 WebSocket 代理地址失败: %w", err)
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "http", "https":
-		dialer.Proxy = http.ProxyURL(u)
-	case "socks5", "socks5h":
-		var auth *proxy.Auth
-		if u.User != nil {
-			password, _ := u.User.Password()
-			auth = &proxy.Auth{User: u.User.Username(), Password: password}
-		}
-		socksDialer, err := proxy.SOCKS5("tcp", u.Host, auth, proxy.Direct)
-		if err != nil {
-			return fmt.Errorf("创建 WebSocket SOCKS5 代理失败: %w", err)
-		}
-		if contextDialer, ok := socksDialer.(proxy.ContextDialer); ok {
-			dialer.NetDialContext = contextDialer.DialContext
-			return nil
-		}
-		dialer.NetDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return socksDialer.Dial(network, addr)
-		}
-	default:
-		return fmt.Errorf("不支持的 WebSocket 代理协议: %s", u.Scheme)
-	}
-	return nil
 }
 
 func serveResponseCreateOverWebSocket(

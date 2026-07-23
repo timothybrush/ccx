@@ -171,11 +171,8 @@ func AggregateChannelProfile(channelUID string, channelID int, channelKind strin
 	cp.TotalEndpoints = len(endpoints)
 
 	// 收集各维度值
-	healthStates := make([]HealthState, 0, len(endpoints))
-	qualityTiers := make([]int, 0, len(endpoints))
 	stabilityTiers := make([]int, 0, len(endpoints))
 	speedTiers := make([]int, 0, len(endpoints))
-	costTiers := make([]int, 0, len(endpoints))
 	seenModels := make(map[string]struct{})
 	var totalSuccessRate float64
 	var p95Values []int64
@@ -187,7 +184,6 @@ func AggregateChannelProfile(channelUID string, channelID int, channelKind strin
 
 	for _, ep := range endpoints {
 		// 健康统计
-		healthStates = append(healthStates, ep.HealthState)
 		if ep.HealthState == HealthStateHealthy || ep.HealthState == HealthStateUnknown {
 			cp.HealthyEndpoints++
 		}
@@ -199,7 +195,6 @@ func AggregateChannelProfile(channelUID string, channelID int, channelKind strin
 
 		// QualityTier: 取最佳
 		qr := qualityTierRank(ep.QualityTier)
-		qualityTiers = append(qualityTiers, qr)
 		if qr > bestQuality {
 			bestQuality = qr
 		}
@@ -216,7 +211,6 @@ func AggregateChannelProfile(channelUID string, channelID int, channelKind strin
 
 		// CostTier: 取最佳（最便宜）
 		cr := costTierRank(ep.CostTier)
-		costTiers = append(costTiers, cr)
 		if cr < bestCost {
 			bestCost = cr
 		}

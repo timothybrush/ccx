@@ -28,7 +28,7 @@ func setupTestConfigManager(t *testing.T) *ConfigManager {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	t.Cleanup(func() { cm.Close() })
+	t.Cleanup(func() { _ = cm.Close() })
 	time.Sleep(100 * time.Millisecond)
 	return cm
 }

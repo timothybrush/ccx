@@ -1267,24 +1267,6 @@ func summarizeHistoryDataPoints(duration string, points []metrics.HistoryDataPoi
 	return s
 }
 
-func summarizeKeyHistoryDataPoints(duration string, points []metrics.KeyHistoryDataPoint) metrics.GlobalStatsSummary {
-	var s metrics.GlobalStatsSummary
-	s.Duration = duration
-	for _, p := range points {
-		s.TotalRequests += p.RequestCount
-		s.TotalSuccess += p.SuccessCount
-		s.TotalFailure += p.FailureCount
-		s.TotalInputTokens += p.InputTokens
-		s.TotalOutputTokens += p.OutputTokens
-		s.TotalCacheCreationTokens += p.CacheCreationInputTokens
-		s.TotalCacheReadTokens += p.CacheReadInputTokens
-	}
-	if s.TotalRequests > 0 {
-		s.AvgSuccessRate = float64(s.TotalSuccess) / float64(s.TotalRequests) * 100
-	}
-	return s
-}
-
 func summarizeAggregatedBuckets(duration string, buckets []metrics.AggregatedBucket) metrics.GlobalStatsSummary {
 	var s metrics.GlobalStatsSummary
 	s.Duration = duration

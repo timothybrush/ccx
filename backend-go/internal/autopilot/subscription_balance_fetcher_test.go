@@ -107,7 +107,7 @@ func TestOpenAIBalanceFetcher_FetchBalance_Success(t *testing.T) {
 			t.Errorf("期望 Authorization=Bearer test-key, got %s", auth)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]string{{"id": "org-123"}},
 		})
 	}))
@@ -129,7 +129,7 @@ func TestOpenAIBalanceFetcher_FetchBalance_Success(t *testing.T) {
 func TestOpenAIBalanceFetcher_FetchBalance_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error": "invalid key"}`)
+		_, _ = fmt.Fprint(w, `{"error": "invalid key"}`)
 	}))
 	defer server.Close()
 
@@ -152,7 +152,7 @@ func TestAnthropicBalanceFetcher_FetchBalance_Success(t *testing.T) {
 			t.Errorf("期望 x-api-key=sk-ant-test, got %s", xKey)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []interface{}{},
 		})
 	}))
@@ -171,7 +171,7 @@ func TestAnthropicBalanceFetcher_FetchBalance_Success(t *testing.T) {
 func TestAnthropicBalanceFetcher_FetchBalance_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, `{"error": "forbidden"}`)
+		_, _ = fmt.Fprint(w, `{"error": "forbidden"}`)
 	}))
 	defer server.Close()
 
@@ -187,7 +187,7 @@ func TestAnthropicBalanceFetcher_FetchBalance_Error(t *testing.T) {
 func TestGoogleBalanceFetcher_FetchBalance_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"models": []interface{}{},
 		})
 	}))
@@ -206,7 +206,7 @@ func TestGoogleBalanceFetcher_FetchBalance_Success(t *testing.T) {
 func TestGoogleBalanceFetcher_FetchBalance_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, `{"error": "API key not valid"}`)
+		_, _ = fmt.Fprint(w, `{"error": "API key not valid"}`)
 	}))
 	defer server.Close()
 
@@ -317,15 +317,16 @@ func TestSubscriptionRefreshWorker_RefreshAll_DoubleGateControl(t *testing.T) {
 		},
 		func() bool { return false }, // 全局开关关闭
 	)
+	_ =
 
-	// 创建订阅（BillingAPIKey 非空 + AutoRefreshEnabled=true）
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:    "sub-1",
-		DisplayName:        "Test",
-		Provider:           "openai",
-		BillingAPIKey:      "sk-admin-test",
-		AutoRefreshEnabled: true,
-	})
+		// 创建订阅（BillingAPIKey 非空 + AutoRefreshEnabled=true）
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:    "sub-1",
+			DisplayName:        "Test",
+			Provider:           "openai",
+			BillingAPIKey:      "sk-admin-test",
+			AutoRefreshEnabled: true,
+		})
 
 	worker.refreshAll()
 
@@ -359,15 +360,16 @@ func TestSubscriptionRefreshWorker_RefreshAll_BillingAPIKeyRequired(t *testing.T
 		},
 		func() bool { return true }, // 全局开关开启
 	)
+	_ =
 
-	// BillingAPIKey 为空 → 跳过
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:    "sub-no-key",
-		DisplayName:        "No Key",
-		Provider:           "openai",
-		BillingAPIKey:      "",
-		AutoRefreshEnabled: true,
-	})
+		// BillingAPIKey 为空 → 跳过
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:    "sub-no-key",
+			DisplayName:        "No Key",
+			Provider:           "openai",
+			BillingAPIKey:      "",
+			AutoRefreshEnabled: true,
+		})
 
 	worker.refreshAll()
 
@@ -401,15 +403,16 @@ func TestSubscriptionRefreshWorker_RefreshAll_AutoRefreshEnabledRequired(t *test
 		},
 		func() bool { return true },
 	)
+	_ =
 
-	// AutoRefreshEnabled=false → 跳过
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:    "sub-disabled",
-		DisplayName:        "Disabled",
-		Provider:           "openai",
-		BillingAPIKey:      "sk-test",
-		AutoRefreshEnabled: false,
-	})
+		// AutoRefreshEnabled=false → 跳过
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:    "sub-disabled",
+			DisplayName:        "Disabled",
+			Provider:           "openai",
+			BillingAPIKey:      "sk-test",
+			AutoRefreshEnabled: false,
+		})
 
 	worker.refreshAll()
 
@@ -443,15 +446,16 @@ func TestSubscriptionRefreshWorker_RefreshAll_UnsupportedProvider(t *testing.T) 
 		},
 		func() bool { return true },
 	)
+	_ =
 
-	// relay_x 不在白名单 → 跳过
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:    "sub-relay",
-		DisplayName:        "Relay",
-		Provider:           "relay_x",
-		BillingAPIKey:      "test",
-		AutoRefreshEnabled: true,
-	})
+		// relay_x 不在白名单 → 跳过
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:    "sub-relay",
+			DisplayName:        "Relay",
+			Provider:           "relay_x",
+			BillingAPIKey:      "test",
+			AutoRefreshEnabled: true,
+		})
 
 	worker.refreshAll()
 
@@ -485,16 +489,17 @@ func TestSubscriptionRefreshWorker_RefreshAll_SuccessfulRefresh(t *testing.T) {
 		},
 		func() bool { return true },
 	)
+	_ =
 
-	// 满足所有条件的订阅
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:    "sub-valid",
-		DisplayName:        "Valid",
-		Provider:           "openai",
-		BillingAPIKey:      "sk-admin-test",
-		AutoRefreshEnabled: true,
-		Balance:            0,
-	})
+		// 满足所有条件的订阅
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:    "sub-valid",
+			DisplayName:        "Valid",
+			Provider:           "openai",
+			BillingAPIKey:      "sk-admin-test",
+			AutoRefreshEnabled: true,
+			Balance:            0,
+		})
 
 	worker.refreshAll()
 
@@ -545,8 +550,7 @@ func TestSubscriptionRefreshWorker_RefreshAll_FetchError(t *testing.T) {
 		},
 		func() bool { return true },
 	)
-
-	store.Create(&SubscriptionProfile{
+	_ = store.Create(&SubscriptionProfile{
 		SubscriptionUID:    "sub-fail",
 		DisplayName:        "Fail",
 		Provider:           "anthropic",
@@ -605,15 +609,16 @@ func TestSubscriptionRefreshWorker_RefreshAll_CooldownRespected(t *testing.T) {
 		func() bool { return true },
 	)
 
-	lastRefresh := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC) // 2小时前
-	store.Create(&SubscriptionProfile{
-		SubscriptionUID:      "sub-cooldown",
-		DisplayName:          "Cooldown",
-		Provider:             "openai",
-		BillingAPIKey:        "sk-test",
-		AutoRefreshEnabled:   true,
-		LastBalanceRefreshAt: &lastRefresh,
-	})
+	lastRefresh := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	_ = // 2小时前
+		store.Create(&SubscriptionProfile{
+			SubscriptionUID:      "sub-cooldown",
+			DisplayName:          "Cooldown",
+			Provider:             "openai",
+			BillingAPIKey:        "sk-test",
+			AutoRefreshEnabled:   true,
+			LastBalanceRefreshAt: &lastRefresh,
+		})
 
 	// 2小时前刷新过，24h 冷却期内应跳过
 	worker.refreshAll()
@@ -660,7 +665,7 @@ func TestSubscriptionRefreshWorker_RefreshAll_DailyBudget(t *testing.T) {
 
 	// 创建 4 个符合条件的订阅
 	for i := 0; i < 4; i++ {
-		store.Create(&SubscriptionProfile{
+		_ = store.Create(&SubscriptionProfile{
 			SubscriptionUID:    fmt.Sprintf("sub-%d", i),
 			DisplayName:        fmt.Sprintf("Sub %d", i),
 			Provider:           "openai",

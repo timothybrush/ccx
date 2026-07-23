@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -45,7 +46,7 @@ func TestUpdateUpstream_BaseURLConsistency(t *testing.T) {
 	}
 	// 关闭配置监听，避免 watcher 并发与测试 log 重定向竞态。
 	cm.CloseWatcher()
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	tests := []struct {
 		name            string
@@ -132,7 +133,7 @@ func TestAddImagesUpstream_RejectsUnsupportedServiceType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	err = cm.AddImagesUpstream(UpstreamConfig{
 		Name:        "images-gemini",
@@ -170,7 +171,7 @@ func TestUpdateResponsesUpstream_BaseURLConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 测试：只更新 baseUrl 时 baseUrls 应被清空
 	t.Run("只更新 baseUrl 时 baseUrls 应被清空", func(t *testing.T) {
@@ -213,7 +214,7 @@ func TestUpdateResponsesUpstream_ReasoningParamStyle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	style := "reasoning_effort"
 	_, err = cm.UpdateResponsesUpstream(0, UpstreamUpdate{
@@ -251,7 +252,7 @@ func TestUpdateGeminiUpstream_BaseURLConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 测试：只更新 baseUrl 时 baseUrls 应被清空
 	t.Run("只更新 baseUrl 时 baseUrls 应被清空", func(t *testing.T) {
@@ -475,7 +476,7 @@ func TestAddUpstream_BaseURLDeduplication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 添加包含重复 URL 的渠道
 	err = cm.AddUpstream(UpstreamConfig{
@@ -541,7 +542,7 @@ func TestLoadConfig_BackfillsLegacyServiceTypeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.Upstream[0].ServiceType; got != "claude" {
@@ -582,7 +583,7 @@ func TestUpdateChatUpstreamCanSetNormalizeNonstandardChatRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.ChatUpstream[0].NormalizeNonstandardChatRoles {
@@ -636,7 +637,7 @@ func TestRequestTimeoutMsEffectiveAndUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	timeout := 15000
 	tests := []struct {
@@ -709,7 +710,7 @@ func TestResponseHeaderTimeoutMsEffectiveAndUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	timeout := 150000
 	tests := []struct {
@@ -767,7 +768,7 @@ func TestHistoricalImageTurnLimitUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	tests := []struct {
 		name   string
@@ -830,7 +831,7 @@ func TestAddUpstreamRejectsNegativeRequestTimeoutMs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("初始化配置管理器失败: %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	err = cm.AddUpstream(UpstreamConfig{
 		Name:             "invalid-timeout",
@@ -874,7 +875,7 @@ func TestUpdateGeminiUpstream_AdvancedOptions(t *testing.T) {
 	}
 	// 关闭配置监听，避免 watcher 并发与测试 log 重定向竞态。
 	cm.CloseWatcher()
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	_, err = cm.UpdateGeminiUpstream(0, UpstreamUpdate{
 		ReasoningMapping: map[string]string{"gemini-2.5-pro": "high"},

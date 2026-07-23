@@ -132,11 +132,7 @@ func handleOverview(mgr *Manager) gin.HandlerFunc {
 		for _, p := range allProfiles {
 			channelSet[p.ChannelUID] = struct{}{}
 			state := string(p.HealthState)
-			if _, ok := stateCounts[state]; ok {
-				stateCounts[state]++
-			} else {
-				stateCounts[state] = 1
-			}
+			stateCounts[state]++
 		}
 
 		c.JSON(http.StatusOK, OverviewResponse{

@@ -113,11 +113,7 @@ func populateHealthSummary(mgr *Manager, out *CockpitHealthSummary) {
 	for _, p := range profiles {
 		channelSet[p.ChannelUID] = struct{}{}
 		state := string(p.HealthState)
-		if _, ok := stateCounts[state]; ok {
-			stateCounts[state]++
-		} else {
-			stateCounts[state] = 1
-		}
+		stateCounts[state]++
 	}
 
 	out.TotalChannels = len(channelSet)

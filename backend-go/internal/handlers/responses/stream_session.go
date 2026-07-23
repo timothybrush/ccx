@@ -106,19 +106,18 @@ func writeStreamSession(
 
 	inputItems, _ := parseInputToItems(originalReq.Input)
 	for _, item := range inputItems {
-		sessionManager.AppendMessage(sess.ID, item, 0)
+		_ = sessionManager.AppendMessage(sess.ID, item, 0)
 	}
 
 	for _, item := range collector.items {
-		sessionManager.AppendMessage(sess.ID, item, 0)
+		_ = sessionManager.AppendMessage(sess.ID, item, 0)
 	}
 
 	responseID := collector.responseID
 	if responseID == "" {
 		responseID = fmt.Sprintf("resp_%d", time.Now().UnixNano())
 	}
-
-	sessionManager.UpdateLastResponseID(sess.ID, responseID)
+	_ = sessionManager.UpdateLastResponseID(sess.ID, responseID)
 	sessionManager.RecordResponseMapping(responseID, sess.ID)
 	return sess.ID
 }

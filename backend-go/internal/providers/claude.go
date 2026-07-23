@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/thinkingcache"
 	"github.com/BenedictKing/ccx/internal/types"
 	"github.com/BenedictKing/ccx/internal/utils"
@@ -904,7 +905,7 @@ func (p *ClaudeProvider) HandleStreamResponse(body io.ReadCloser) (<-chan string
 	go func() {
 		defer close(eventChan)
 		defer close(errChan)
-		defer body.Close()
+		defer errutil.IgnoreDeferred(body.Close)
 
 		scanner := bufio.NewScanner(body)
 		// 设置更大的 buffer (1MB) 以处理大 JSON chunk，避免默认 64KB 限制

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 func TestScoreProviderQualityOutput(t *testing.T) {
@@ -162,7 +163,7 @@ func TestBuildProviderQualityRequestReasoningControl(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer req.Body.Close()
+			defer errutil.IgnoreDeferred(req.Body.Close)
 			data, err := io.ReadAll(req.Body)
 			if err != nil {
 				t.Fatal(err)

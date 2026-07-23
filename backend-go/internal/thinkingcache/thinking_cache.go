@@ -18,6 +18,7 @@ import (
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/utils"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -81,7 +82,7 @@ func Configure(cfg Config) error {
 		return err
 	}
 	if err := initSQLiteSchema(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 
@@ -98,7 +99,7 @@ func Configure(cfg Config) error {
 		globalStore.dbPath = oldDBPath
 		globalStore.entries = oldEntries
 		globalStore.mu.Unlock()
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 	if err := globalStore.loadValidEntriesLocked(time.Now()); err != nil {
@@ -106,7 +107,7 @@ func Configure(cfg Config) error {
 		globalStore.dbPath = oldDBPath
 		globalStore.entries = oldEntries
 		globalStore.mu.Unlock()
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 	globalStore.mu.Unlock()
@@ -773,7 +774,7 @@ func (s *cacheStore) loadValidEntriesLocked(now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("加载 thinking cache 失败: %w", err)
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	for rows.Next() {
 		var key string

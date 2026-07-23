@@ -17,7 +17,7 @@ func testConfigManager(t *testing.T) (*ConfigManager, func()) {
 	if err != nil {
 		t.Fatalf("NewConfigManager 失败: %v", err)
 	}
-	return cm, func() { cm.Close() }
+	return cm, func() { _ = cm.Close() }
 }
 
 func seedManagedProvider(cm *ConfigManager, accountUID, credentialUID, providerID, apiKey string) {

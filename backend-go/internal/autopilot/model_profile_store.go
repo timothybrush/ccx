@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
-	"strings"
 	"sync"
 	"time"
 )
@@ -27,8 +27,8 @@ type ModelProfileStore struct {
 	activeBindings       map[string]struct{}
 	activeInventoryReady bool
 
-	flushMu   sync.Mutex
-	closed    bool
+	flushMu sync.Mutex
+
 	dirtyKeys map[string]struct{} // 待落盘的 composite key 集合
 }
 
@@ -50,7 +50,7 @@ func NewModelProfileStore(dbPath string) (*ModelProfileStore, error) {
 
 	store, err := newModelProfileStoreFromDB(db, dbPath)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -114,13 +114,6 @@ func modelProfileBindingKey(channelUID, channelKind, metricsKey string) string {
 }
 
 // parseModelProfileKey 解析复合键为四元组。
-func parseModelProfileKey(key string) (channelUID, channelKind, metricsKey, modelID string) {
-	parts := strings.SplitN(key, "|", 4)
-	if len(parts) == 4 {
-		return parts[0], parts[1], parts[2], parts[3]
-	}
-	return key, "", "", ""
-}
 
 // loadAll 从 SQLite 加载全部画像到内存缓存。
 func (s *ModelProfileStore) loadAll() error {
@@ -128,7 +121,7 @@ func (s *ModelProfileStore) loadAll() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -296,7 +289,7 @@ func (s *ModelProfileStore) Flush() error {
 	if err != nil {
 		return fmt.Errorf("[ModelProfileStore-Flush] 开启事务失败: %w", err)
 	}
-	defer tx.Rollback()
+	defer errutil.IgnoreDeferred(tx.Rollback)
 
 	stmt, err := tx.Prepare(`
 INSERT INTO autopilot_model_profiles (channel_uid, channel_id, channel_kind, service_type, metrics_key, model_id, profile_json, updated_at)
@@ -310,7 +303,7 @@ ON CONFLICT(channel_uid, channel_kind, metrics_key, model_id) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("[ModelProfileStore-Flush] 准备语句失败: %w", err)
 	}
-	defer stmt.Close()
+	defer errutil.IgnoreDeferred(stmt.Close)
 
 	for _, p := range profiles {
 		profileJSON, err := json.Marshal(p)

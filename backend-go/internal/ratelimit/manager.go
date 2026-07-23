@@ -199,7 +199,7 @@ func parseKey(key string) (apiType string, channelIndex int) {
 	for i := 0; i < len(key); i++ {
 		if key[i] == ':' {
 			idx := 0
-			fmt.Sscanf(key[i+1:], "%d", &idx)
+			_, _ = fmt.Sscanf(key[i+1:], "%d", &idx)
 			return key[:i], idx
 		}
 	}

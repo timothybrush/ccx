@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers"
 	"github.com/gin-gonic/gin"
 )
@@ -45,7 +46,7 @@ func setupTestRouter(t *testing.T) (*config.ConfigManager, *gin.Engine) {
 	if err != nil {
 		t.Fatalf("NewConfigManager: %v", err)
 	}
-	t.Cleanup(func() { cfgManager.Close() })
+	t.Cleanup(func() { _ = cfgManager.Close() })
 
 	// 添加测试渠道
 	err = cfgManager.AddUpstream(config.UpstreamConfig{
@@ -158,7 +159,7 @@ func TestExportChannels_IncludeKeys(t *testing.T) {
 	}
 
 	ch := pack.Channels[0]
-	if ch.Channel.APIKeys == nil || len(ch.Channel.APIKeys) == 0 {
+	if len(ch.Channel.APIKeys) == 0 {
 		t.Errorf("APIKeys should be included when includeKeys=true")
 	}
 	// ChannelUID 即使 includeKeys=true 也必须被剥离（防止碰撞）
@@ -175,9 +176,8 @@ func TestExportChannels_IncludeKeysNoAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager: %v", err)
 	}
-	defer cfgManager.Close()
-
-	cfgManager.AddUpstream(config.UpstreamConfig{
+	defer errutil.IgnoreDeferred(cfgManager.Close)
+	_ = cfgManager.AddUpstream(config.UpstreamConfig{
 		Name:    "Test",
 		BaseURL: "https://example.com",
 		APIKeys: []string{"sk-secret"},
@@ -383,7 +383,7 @@ func TestImportChannelsConfirm_RegeneratesUID(t *testing.T) {
 	r.ServeHTTP(readW, readReq)
 
 	var exportPack handlers.ChannelPack
-	json.Unmarshal(readW.Body.Bytes(), &exportPack)
+	_ = json.Unmarshal(readW.Body.Bytes(), &exportPack)
 
 	for _, ch := range exportPack.Channels {
 		if ch.Channel.Name == "Imported Claude" {

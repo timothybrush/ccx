@@ -36,7 +36,7 @@ func TestOverrideManager_Remove(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 0)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 0)
 
 	removed := om.RemoveOverride("conv_abc")
 	if !removed {
@@ -54,7 +54,7 @@ func TestOverrideManager_TTLExpiry(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 0)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 0)
 
 	time.Sleep(5 * time.Millisecond)
 
@@ -77,9 +77,8 @@ func TestOverrideManager_EmptySequence(t *testing.T) {
 func TestOverrideManager_GetAllOverrides(t *testing.T) {
 	om := NewOverrideManager(30 * time.Minute)
 	defer om.Stop()
-
-	om.SetOverride("conv_1", "chat", "user1", []ChannelEntry{{ChannelIndex: 0, ChannelName: "a"}}, 0)
-	om.SetOverride("conv_2", "messages", "user2", []ChannelEntry{{ChannelIndex: 1, ChannelName: "b"}}, 0)
+	_ = om.SetOverride("conv_1", "chat", "user1", []ChannelEntry{{ChannelIndex: 0, ChannelName: "a"}}, 0)
+	_ = om.SetOverride("conv_2", "messages", "user2", []ChannelEntry{{ChannelIndex: 1, ChannelName: "b"}}, 0)
 
 	all := om.GetAllOverrides()
 	if len(all) != 2 {
@@ -92,7 +91,7 @@ func TestOverrideManager_RefreshTTL(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 0)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 0)
 
 	time.Sleep(50 * time.Millisecond)
 	om.RefreshTTL("conv_abc")
@@ -153,7 +152,7 @@ func TestOverrideManager_PerpetualNeverExpires(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, -1)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, -1)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -171,10 +170,11 @@ func TestOverrideManager_PerpetualNeverExpires(t *testing.T) {
 func TestOverrideManager_CleanupSkipsPerpetual(t *testing.T) {
 	om := NewOverrideManager(1 * time.Millisecond)
 	defer om.Stop()
+	_ =
 
-	// 普通 override 和永久 override
-	om.SetOverride("conv_normal", "chat", "user1", []ChannelEntry{{ChannelIndex: 0}}, 0)
-	om.SetOverride("conv_perpetual", "chat", "user2", []ChannelEntry{{ChannelIndex: 1}}, -1)
+		// 普通 override 和永久 override
+		om.SetOverride("conv_normal", "chat", "user1", []ChannelEntry{{ChannelIndex: 0}}, 0)
+	_ = om.SetOverride("conv_perpetual", "chat", "user2", []ChannelEntry{{ChannelIndex: 1}}, -1)
 
 	time.Sleep(10 * time.Millisecond)
 	om.cleanup()
@@ -197,7 +197,7 @@ func TestOverrideManager_RefreshTTL_PerpetualNoOp(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, -1)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, -1)
 
 	// RefreshTTL 对永久 override 应返回 false
 	ok := om.RefreshTTL("conv_abc")
@@ -211,7 +211,7 @@ func TestOverrideManager_RefreshOverrideForUser(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 0)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 0)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -235,7 +235,7 @@ func TestOverrideManager_RefreshOverrideForUser_PerpetualNoOp(t *testing.T) {
 	defer om.Stop()
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, -1)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, -1)
 
 	ok := om.RefreshOverrideForUser("chat", "user1")
 	if ok {
@@ -249,7 +249,7 @@ func TestOverrideManager_RefreshPreservesCustomDuration(t *testing.T) {
 
 	// 用户选择 1 小时有效期
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 1*time.Hour)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 1*time.Hour)
 
 	// 续期应使用 1 小时，而非系统默认 30 分钟
 	ok := om.RefreshOverrideForUser("chat", "user1")
@@ -277,7 +277,7 @@ func TestOverrideManager_SetDefaultTTL(t *testing.T) {
 	om.SetDefaultTTL(1 * time.Hour)
 
 	seq := []ChannelEntry{{ChannelIndex: 0, ChannelName: "primary"}}
-	om.SetOverride("conv_abc", "chat", "user1", seq, 0)
+	_ = om.SetOverride("conv_abc", "chat", "user1", seq, 0)
 
 	override, ok := om.GetOverride("conv_abc")
 	if !ok {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -103,7 +104,7 @@ func TestGetNextAPIKeySkipsDisabledManagedCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	upstream := &cfg.Upstream[0]
@@ -141,7 +142,7 @@ func TestBlacklistKeyRefreshesExistingRecordWithoutDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	if err := cm.BlacklistKey("Messages", 0, "sk-active", "insufficient_balance", "new message"); err != nil {
 		t.Fatalf("BlacklistKey() error = %v", err)
@@ -178,7 +179,7 @@ func TestBlacklistKeyWithRecoverAtPrefersFutureUpstreamReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	wantRecoverAt := time.Now().Add(6 * time.Hour).Truncate(time.Second).Format(time.RFC3339)
 	if err := cm.BlacklistKeyWithRecoverAt("Messages", 0, "sk-active", "insufficient_quota", "monthly quota exhausted", wantRecoverAt); err != nil {
@@ -245,7 +246,7 @@ func TestAddAPIKeyRemovesDisabledEntryAndRestoreAvoidsDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	if err := cm.AddAPIKey(0, "sk-disabled"); err != nil {
 		t.Fatalf("AddAPIKey() error = %v", err)
@@ -352,7 +353,7 @@ func TestBlacklistAndRestoreLogsIncludeTransitionFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	var buf bytes.Buffer
 	origWriter := log.Writer()
@@ -399,7 +400,7 @@ func TestBlacklistRestorePreservesKeyMetadata(t *testing.T) {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
 	cm.CloseWatcher()
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 拉黑 sk-a
 	if err := cm.BlacklistKey("Messages", 0, "sk-a", "authentication_error", "auth failed"); err != nil {
@@ -490,7 +491,7 @@ func TestValidateChannelKeysSuspendsChatChannelWithoutKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if len(cfg.ChatUpstream) != 1 {
@@ -520,7 +521,7 @@ func TestUpdateUpstreamCanSetAutoBlacklistBalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	disabled := false
 	if _, err := cm.UpdateUpstream(0, UpstreamUpdate{AutoBlacklistBalance: &disabled}); err != nil {
@@ -552,7 +553,7 @@ func TestNormalizeMetadataUserIDDefaultsAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.Upstream[0].IsNormalizeMetadataUserIDEnabled(); got != true {
@@ -600,7 +601,7 @@ func TestCodexToolCompatDefaultsAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.ResponsesUpstream[0].IsCodexToolCompatEnabled(); got != false {
@@ -648,7 +649,7 @@ func TestStripImageGenerationToolDefaultsAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if got := cfg.ResponsesUpstream[0].IsStripImageGenerationToolEnabled(); got != false {
@@ -699,7 +700,7 @@ func TestConvertImageURLToB64JSONDefaultsAndImagesUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.ImagesUpstream[0].ConvertImageURLToB64JSON {
@@ -751,7 +752,7 @@ func TestStripBillingHeaderDefaultsUpdateAndMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	cfg := cm.GetConfig()
 	if cfg.Upstream[0].StripBillingHeader == nil || *cfg.Upstream[0].StripBillingHeader != true {
@@ -811,7 +812,7 @@ func TestBlacklistKeyConfigSnapshotDeepCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	if err := cm.BlacklistKey("Messages", 0, "sk-1", "authentication_error", "test"); err != nil {
 		t.Fatalf("BlacklistKey() error = %v", err)
@@ -880,7 +881,7 @@ func TestRestoreDisabledKeysRestoresConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	defer cm.Close()
+	defer errutil.IgnoreDeferred(cm.Close)
 
 	// 拉黑（带自动恢复时间）
 	if err := cm.BlacklistKey("Messages", 0, "sk-1", "authentication_error", "test"); err != nil {
@@ -962,7 +963,7 @@ func newKeyModelTestConfigManager(t *testing.T) *ConfigManager {
 	if err != nil {
 		t.Fatalf("NewConfigManager() error = %v", err)
 	}
-	t.Cleanup(func() { cm.Close() })
+	t.Cleanup(func() { _ = cm.Close() })
 	return cm
 }
 

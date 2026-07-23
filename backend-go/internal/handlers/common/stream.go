@@ -534,9 +534,9 @@ func buildStreamPreflightRawLog(events []string) string {
 	}
 	logBuffer := NewLimitedLogBuffer(MaxUpstreamResponseLogBytes)
 	for _, event := range events {
-		logBuffer.WriteString(event)
+		_, _ = logBuffer.WriteString(event)
 		if !strings.HasSuffix(event, "\n") {
-			logBuffer.WriteString("\n")
+			_, _ = logBuffer.WriteString("\n")
 		}
 	}
 	return logBuffer.String()

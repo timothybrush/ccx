@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"os"
@@ -123,7 +124,7 @@ func verifyStream(name, baseURL, apiKey, model, prompt string, verbose bool) *Ve
 		result.Errors = append(result.Errors, fmt.Sprintf("请求失败: %v", err))
 		return result
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -427,7 +428,7 @@ func TestBuildClaudeCompatRequestUsesClaudeCodeClientFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildClaudeCompatRequest() error = %v", err)
 	}
-	defer req.Body.Close()
+	defer errutil.IgnoreDeferred(req.Body.Close)
 
 	var body struct {
 		System []struct {

@@ -2,6 +2,7 @@ package autopilot
 
 import (
 	"database/sql"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -89,7 +90,7 @@ func (s *ProfileChangelogStore) loadRecent() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	var loaded []*ProfileChangeEvent
 	for rows.Next() {

@@ -2,6 +2,7 @@ package autopilot
 
 import (
 	"encoding/json"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"strings"
 	"testing"
 	"time"
@@ -165,7 +166,7 @@ func TestTraceStore_RingBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 TraceStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	// 写入超过 traceMaxRecords 条记录
 	total := traceMaxRecords + 100
@@ -202,7 +203,7 @@ func TestTraceStore_MismatchFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 TraceStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	// 写入 10 条：5 条 match，5 条 mismatch
 	for i := 0; i < 5; i++ {
@@ -253,7 +254,7 @@ func TestTraceStore_Stats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 TraceStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	// supervisor: 3 match + 1 mismatch = 4
 	// worker: 2 match + 2 mismatch = 4
@@ -439,7 +440,7 @@ func TestTraceStore_ListRecent_Sanitized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 TraceStore 失败: %v", err)
 	}
-	defer store.Close()
+	defer errutil.IgnoreDeferred(store.Close)
 
 	store.Record(&RoutingDecisionTrace{
 		RequestKind:        "messages",

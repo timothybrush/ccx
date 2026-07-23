@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/klauspost/compress/zstd"
@@ -144,7 +145,7 @@ func TestNormalizeMetadataUserID(t *testing.T) {
 				userID, _ := metadata["user_id"].(string)
 				if userID != "" {
 					var origData map[string]interface{}
-					json.Unmarshal([]byte(tt.input), &origData)
+					_ = json.Unmarshal([]byte(tt.input), &origData)
 					origMeta, _ := origData["metadata"].(map[string]interface{})
 					origUID, _ := origMeta["user_id"].(string)
 					if userID != origUID {
@@ -172,7 +173,7 @@ func TestNormalizeMetadataUserID(t *testing.T) {
 
 			// Verify other fields are preserved
 			var origData map[string]interface{}
-			json.Unmarshal([]byte(tt.input), &origData)
+			_ = json.Unmarshal([]byte(tt.input), &origData)
 			if origModel, ok := origData["model"].(string); ok {
 				if resultModel, ok := data["model"].(string); ok {
 					if origModel != resultModel {
@@ -708,7 +709,7 @@ func TestSendRequestWithLifecycleTraceFallsBackToGlobalRequestTimeout(t *testing
 	if err != nil {
 		t.Fatalf("SendRequestWithLifecycleTrace() err = %v", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}

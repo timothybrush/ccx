@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -323,7 +324,7 @@ func (s *TraceStore) loadRecent() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer errutil.IgnoreDeferred(rows.Close)
 
 	var loaded []*RoutingDecisionTrace
 	for rows.Next() {

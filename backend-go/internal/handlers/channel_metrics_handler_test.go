@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/metrics"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/session"
@@ -306,7 +307,7 @@ func TestChannelMetricsHandlers_FallbackServiceTypeForLegacyConfig(t *testing.T)
 			if err != nil {
 				t.Fatalf("new config manager: %v", err)
 			}
-			defer cfgManager.Close()
+			defer errutil.IgnoreDeferred(cfgManager.Close)
 
 			metricsManager := metrics.NewMetricsManager()
 			defer metricsManager.Stop()
@@ -536,7 +537,7 @@ func TestResumeChannel_RestoresBlacklistedKeys(t *testing.T) {
 			if err != nil {
 				t.Fatalf("new config manager: %v", err)
 			}
-			defer cfgManager.Close()
+			defer errutil.IgnoreDeferred(cfgManager.Close)
 
 			messagesMetrics := metrics.NewMetricsManager()
 			responsesMetrics := metrics.NewMetricsManager()

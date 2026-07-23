@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"io"
 	"net/http"
 	"strings"
@@ -109,7 +110,7 @@ func (c *OAuthClient) VerifyUser(ctx context.Context, token string) (*User, erro
 	if err != nil {
 		return nil, fmt.Errorf("GitHub 用户验证请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -141,7 +142,7 @@ func (c *OAuthClient) postJSON(ctx context.Context, url string, payload interfac
 	if err != nil {
 		return fmt.Errorf("GitHub OAuth 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer errutil.IgnoreDeferred(resp.Body.Close)
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

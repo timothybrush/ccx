@@ -228,7 +228,7 @@ func buildProviderRequest(
 		if upstream.ServiceType == "copilot" {
 			copilotToken, copilotBaseURL, err := copilot.ResolveTokenWithProxy(c.Request.Context(), apiKey, upstream.ProxyURL)
 			if err != nil {
-				return nil, fmt.Errorf("Copilot token 交换失败: %w", err)
+				return nil, fmt.Errorf("copilot token 交换失败: %w", err)
 			}
 			if copilotBaseURL != "" {
 				url = strings.TrimRight(copilotBaseURL, "/") + "/responses"
@@ -364,7 +364,7 @@ func convertChatToClaudeRequest(bodyBytes []byte, model string, isStream bool) (
 				continue
 			}
 			role, _ := m["role"].(string)
-			content, _ := m["content"]
+			content := m["content"]
 
 			switch role {
 			case "system":

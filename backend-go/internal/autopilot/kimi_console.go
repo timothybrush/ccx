@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 )
 
 const (
@@ -137,7 +138,7 @@ func buildKimiCodeUsageSnapshot(usages kimiUsagesResponse, stats kimiSubscriptio
 		}
 	}
 	if codingUsage == nil {
-		return config.KimiCodeUsageSnapshot{}, fmt.Errorf("Kimi 用量接口未返回 FEATURE_CODING")
+		return config.KimiCodeUsageSnapshot{}, fmt.Errorf("kimi 用量接口未返回 FEATURE_CODING")
 	}
 
 	weekly, err := kimiQuotaSnapshot(codingUsage.Detail)
@@ -240,7 +241,7 @@ func kimiQuotaSnapshot(source kimiQuotaResponse) (config.KimiCodeQuotaWindow, er
 
 func kimiWindowSeconds(duration *kimiJSONInt64, unit string) (int64, error) {
 	if duration == nil || *duration <= 0 {
-		return 0, fmt.Errorf("Kimi 频限窗口时长无效")
+		return 0, fmt.Errorf("kimi 频限窗口时长无效")
 	}
 	multiplier := int64(0)
 	switch strings.ToUpper(strings.TrimSpace(unit)) {
@@ -253,11 +254,11 @@ func kimiWindowSeconds(duration *kimiJSONInt64, unit string) (int64, error) {
 	case "TIME_UNIT_DAY":
 		multiplier = 24 * 60 * 60
 	default:
-		return 0, fmt.Errorf("Kimi 频限窗口单位不受支持: %s", unit)
+		return 0, fmt.Errorf("kimi 频限窗口单位不受支持: %s", unit)
 	}
 	value := int64(*duration)
 	if value > math.MaxInt64/multiplier {
-		return 0, fmt.Errorf("Kimi 频限窗口时长溢出")
+		return 0, fmt.Errorf("kimi 频限窗口时长溢出")
 	}
 	return value * multiplier, nil
 }
@@ -321,10 +322,10 @@ func normalizeKimiTimestamp(value string) (string, error) {
 func normalizeKimiConsoleToken(raw string) (string, error) {
 	token := strings.TrimSpace(raw)
 	if len(token) > maxKimiConsoleTokenBytes {
-		return "", fmt.Errorf("Kimi 控制台令牌长度超过限制")
+		return "", fmt.Errorf("kimi 控制台令牌长度超过限制")
 	}
 	if strings.ContainsAny(token, "\r\n") {
-		return "", fmt.Errorf("Kimi 控制台令牌不能包含换行符")
+		return "", fmt.Errorf("kimi 控制台令牌不能包含换行符")
 	}
 	if len(token) >= len("authorization:") && strings.EqualFold(token[:len("authorization:")], "authorization:") {
 		token = strings.TrimSpace(token[len("authorization:"):])
@@ -333,10 +334,10 @@ func normalizeKimiConsoleToken(raw string) (string, error) {
 		token = strings.TrimSpace(token[len("bearer "):])
 	}
 	if token == "" {
-		return "", fmt.Errorf("Kimi 控制台令牌不能为空")
+		return "", fmt.Errorf("kimi 控制台令牌不能为空")
 	}
 	if strings.ContainsAny(token, " \t") {
-		return "", fmt.Errorf("Kimi 控制台令牌格式无效")
+		return "", fmt.Errorf("kimi 控制台令牌格式无效")
 	}
 	return token, nil
 }
@@ -375,7 +376,7 @@ func (client *KimiConsoleClient) post(ctx context.Context, path, accessToken str
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer errutil.IgnoreDeferred(response.Body.Close)
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxKimiConsoleResponseBytes+1))
 	if err != nil {
 		return err

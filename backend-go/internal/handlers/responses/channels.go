@@ -299,11 +299,11 @@ func buildPingRequest(upstream config.UpstreamConfig, baseURL string) (*http.Req
 		}
 	case "copilot":
 		if len(upstream.APIKeys) == 0 {
-			return nil, fmt.Errorf("Copilot 渠道缺少 GitHub OAuth token")
+			return nil, fmt.Errorf("copilot 渠道缺少 GitHub OAuth token")
 		}
 		copilotToken, copilotBaseURL, err := copilot.ResolveTokenWithProxy(context.Background(), upstream.APIKeys[0], upstream.ProxyURL)
 		if err != nil {
-			return nil, fmt.Errorf("Copilot token 交换失败: %w", err)
+			return nil, fmt.Errorf("copilot token 交换失败: %w", err)
 		}
 		targetBase := copilotBaseURL
 		if targetBase == "" {
@@ -537,7 +537,7 @@ func GetChannelModels(cfgManager *config.ConfigManager) gin.HandlerFunc {
 		}
 
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			log.Printf("[Responses-Models] 读取响应失败: channel=%s, error=%v", channelName, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to read response: %v", err)})

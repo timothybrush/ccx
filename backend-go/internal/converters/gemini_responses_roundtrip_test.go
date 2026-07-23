@@ -923,7 +923,7 @@ func TestResponsesToGeminiRequest_CustomToolCallEmptyInputYieldsEmptyOrNilArgs(t
 	if callPart == nil {
 		t.Fatal("expected FunctionCall")
 	}
-	if callPart.Args != nil && len(callPart.Args) != 0 {
+	if len(callPart.Args) != 0 {
 		t.Fatalf("expected empty args map (or nil), got %#v", callPart.Args)
 	}
 }

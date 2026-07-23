@@ -20,7 +20,7 @@ func newTestManualIntentStore(t *testing.T) *ManualIntentStore {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	store, err := NewManualIntentStoreWithDB(db)
 	if err != nil {
@@ -254,7 +254,7 @@ func TestManualIntentStore_Get(t *testing.T) {
 
 	intent := sampleIntent(1 * time.Hour)
 	intent.Name = "test get"
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	got := store.Get(intent.IntentUID)
 	if got == nil {
@@ -277,7 +277,7 @@ func TestManualIntentStore_Delete(t *testing.T) {
 	store := newTestManualIntentStore(t)
 
 	intent := sampleIntent(1 * time.Hour)
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	if err := store.Delete(intent.IntentUID); err != nil {
 		t.Fatalf("Delete() 失败: %v", err)
@@ -344,7 +344,7 @@ func TestManualIntentStore_BudgetExhaustion(t *testing.T) {
 
 	intent := sampleIntent(1 * time.Hour)
 	intent.MaxRequests = 3
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	// 记录 3 次命中
 	for i := 0; i < 3; i++ {
@@ -379,7 +379,7 @@ func TestManualIntentStore_CostBudgetExhaustion(t *testing.T) {
 
 	intent := sampleIntent(1 * time.Hour)
 	intent.MaxEstimatedCost = 1.0
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	// 模拟估算成本达到 1.0
 	intent.TrialResult.EstimatedCost = 1.0
@@ -404,7 +404,7 @@ func TestManualIntentStore_RecordHit(t *testing.T) {
 	store := newTestManualIntentStore(t)
 
 	intent := sampleIntent(24 * time.Hour)
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	// 记录多次命中
 	testCases := []struct {
@@ -460,10 +460,9 @@ func TestManualIntentStore_RecordFallback(t *testing.T) {
 	store := newTestManualIntentStore(t)
 
 	intent := sampleIntent(24 * time.Hour)
-	store.Create(intent)
-
-	store.RecordFallback(intent.IntentUID)
-	store.RecordFallback(intent.IntentUID)
+	_ = store.Create(intent)
+	_ = store.RecordFallback(intent.IntentUID)
+	_ = store.RecordFallback(intent.IntentUID)
 
 	got := store.Get(intent.IntentUID)
 	if got == nil {
@@ -490,10 +489,11 @@ func TestManualIntentStore_Persistence(t *testing.T) {
 
 	intent := sampleIntent(1 * time.Hour)
 	intent.Name = "持久化测试"
-	store1.Create(intent)
+	_ = store1.Create(intent)
+	_ =
 
-	// 记录一次命中
-	store1.RecordHit(intent.IntentUID, true, 200)
+		// 记录一次命中
+		store1.RecordHit(intent.IntentUID, true, 200)
 
 	// 重新加载（模拟重启）
 	store2, err := NewManualIntentStoreWithDB(db)
@@ -565,9 +565,10 @@ func TestHandler_CreateIntent_ValidationError(t *testing.T) {
 func TestHandler_ListIntents(t *testing.T) {
 	store := newTestManualIntentStore(t)
 	r := newTestRouter(store)
+	_ =
 
-	// 创建一个活跃意图
-	store.Create(sampleIntent(1 * time.Hour))
+		// 创建一个活跃意图
+		store.Create(sampleIntent(1 * time.Hour))
 
 	// 创建一个已过期意图
 	expired := &ManualRoutingIntent{
@@ -575,7 +576,7 @@ func TestHandler_ListIntents(t *testing.T) {
 		ChannelKind: "chat",
 		ExpiresAt:   time.Now().UTC().Add(-1 * time.Hour),
 	}
-	store.Create(expired)
+	_ = store.Create(expired)
 
 	// 默认只返回 active
 	w := httptest.NewRecorder()
@@ -601,7 +602,7 @@ func TestHandler_GetIntent(t *testing.T) {
 	r := newTestRouter(store)
 
 	intent := sampleIntent(1 * time.Hour)
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	// 正常获取
 	w := httptest.NewRecorder()
@@ -627,7 +628,7 @@ func TestHandler_DeleteIntent(t *testing.T) {
 	r := newTestRouter(store)
 
 	intent := sampleIntent(1 * time.Hour)
-	store.Create(intent)
+	_ = store.Create(intent)
 
 	// 删除
 	w := httptest.NewRecorder()

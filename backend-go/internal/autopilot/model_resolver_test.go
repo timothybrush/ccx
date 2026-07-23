@@ -75,21 +75,21 @@ func createTestConfigManagerForResolver(t *testing.T, cfg config.Config) (*confi
 	configFile := filepath.Join(tmpDir, "config.json")
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("序列化配置失败: %v", err)
 	}
 	if err := os.WriteFile(configFile, data, 0644); err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("写入配置文件失败: %v", err)
 	}
 	cfgManager, err := config.NewConfigManager(configFile, "")
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("创建配置管理器失败: %v", err)
 	}
 	cleanup := func() {
-		cfgManager.Close()
-		os.RemoveAll(tmpDir)
+		_ = cfgManager.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 	return cfgManager, cleanup
 }

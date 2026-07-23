@@ -235,7 +235,7 @@ func TestGetCostReport_DefaultGroupBy(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["groupBy"] != "user" {
 		t.Errorf("expected default groupBy=user, got %v", resp["groupBy"])
 	}

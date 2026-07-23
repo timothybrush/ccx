@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BenedictKing/ccx/internal/config"
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/BenedictKing/ccx/internal/handlers/common"
 	"github.com/BenedictKing/ccx/internal/session"
 	"github.com/BenedictKing/ccx/internal/thinkingcache"
@@ -33,8 +34,8 @@ func TestHandleStreamSuccess_SessionWritebackPreservesReasoningEncryptedContent(
 	}
 
 	go func() {
-		defer writer.Close()
-		writeSSE := func(s string) { io.WriteString(writer, s) }
+		defer errutil.IgnoreDeferred(writer.Close)
+		writeSSE := func(s string) { _, _ = io.WriteString(writer, s) }
 
 		// reasoning output_item (passthrough Responses 流格式)
 		writeSSE("event: response.output_item.added\n")
@@ -124,8 +125,8 @@ func TestHandleStreamSuccess_PostCommitStallSynthesizesIncompleteEvent(t *testin
 	}
 
 	go func() {
-		defer writer.Close()
-		writeSSE := func(s string) { io.WriteString(writer, s) }
+		defer errutil.IgnoreDeferred(writer.Close)
+		writeSSE := func(s string) { _, _ = io.WriteString(writer, s) }
 
 		// 发送一段内容以通过预检
 		writeSSE("event: response.output_item.added\n")
@@ -190,8 +191,8 @@ func TestHandleStreamSuccess_StoresReasoningEncryptedContentToThinkingCache(t *t
 	}
 
 	go func() {
-		defer writer.Close()
-		writeSSE := func(s string) { io.WriteString(writer, s) }
+		defer errutil.IgnoreDeferred(writer.Close)
+		writeSSE := func(s string) { _, _ = io.WriteString(writer, s) }
 
 		writeSSE("event: response.output_item.added\n")
 		writeSSE("data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"reasoning\"}}\n\n")

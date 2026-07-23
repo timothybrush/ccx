@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/errutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -120,7 +121,7 @@ func TestHandleChangelogEvents_ConnectReceiveDisconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WebSocket 连接失败: %v", err)
 	}
-	defer conn.Close()
+	defer errutil.IgnoreDeferred(conn.Close)
 
 	// 等一小段时间确保 handler 内部已完成 hub.Subscribe()，再发布事件
 	time.Sleep(50 * time.Millisecond)
@@ -163,7 +164,7 @@ func TestHandleChangelogEvents_EchoesSecWebSocketProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WebSocket 连接失败: %v", err)
 	}
-	defer conn.Close()
+	defer errutil.IgnoreDeferred(conn.Close)
 
 	if got := resp.Header.Get("Sec-WebSocket-Protocol"); got != "my-secret-key" {
 		t.Errorf("响应应回显子协议 my-secret-key, got %q", got)
@@ -192,8 +193,7 @@ func TestHandleChangelogEvents_UnsubscribesOnDisconnect(t *testing.T) {
 	if mgr.EventHub().SubscriberCount() != 1 {
 		t.Fatalf("连接后应有 1 个订阅者，got %d", mgr.EventHub().SubscriberCount())
 	}
-
-	conn.Close()
+	_ = conn.Close()
 
 	// 服务端检测到断开需要一点时间
 	deadline := time.Now().Add(2 * time.Second)

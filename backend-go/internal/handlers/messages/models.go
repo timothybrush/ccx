@@ -568,13 +568,6 @@ func fetchModelsFromDisabledKeyFallback(ctx context.Context, req modelsCollectio
 }
 
 // fetchModelsFromChannels 从指定类型的渠道获取模型列表
-func fetchModelsFromChannels(c *gin.Context, cfgManager *config.ConfigManager, channelScheduler *scheduler.ChannelScheduler, kind scheduler.ChannelKind) []ModelEntry {
-	body, upstream, ok := tryModelsRequest(c, cfgManager, channelScheduler, "GET", "", kind)
-	if !ok {
-		return nil
-	}
-	return parseModelsResponseForKind(body, upstream, cfgManager.GetConfig().UpstreamModelCapabilities, kind)
-}
 
 func parseModelsResponseForKind(body []byte, upstream *config.UpstreamConfig, globalCapabilities map[string]config.UpstreamModelCapability, kind scheduler.ChannelKind) []ModelEntry {
 	// Gemini 渠道或 serviceType=gemini 的渠道返回 {"models": [...]} 格式
@@ -1199,7 +1192,7 @@ func requestModelsWithKey(ctx context.Context, client *http.Client, candidateURL
 
 		if resp.StatusCode == http.StatusOK {
 			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if err != nil {
 				log.Printf("[%s-Models] 读取响应失败: channel=%s, error=%v", channelType, upstream.Name, err)
 				continue
@@ -1212,13 +1205,13 @@ func requestModelsWithKey(ctx context.Context, client *http.Client, candidateURL
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			log.Printf("[%s-Models] 上游认证失败: channel=%s, key=%s, status=%d, url=%s",
 				channelType, upstream.Name, utils.MaskAPIKey(apiKey), resp.StatusCode, candidateURL)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			break
 		}
 
 		log.Printf("[%s-Models] 上游返回非 200: channel=%s, key=%s, status=%d, url=%s",
 			channelType, upstream.Name, utils.MaskAPIKey(apiKey), resp.StatusCode, candidateURL)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	return nil, false
