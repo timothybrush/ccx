@@ -1005,7 +1005,7 @@
       ],
       "provider": "moonshot",
       "displayName": "Kimi K2.7 Code HighSpeed",
-      "description": "Kimi Code high-speed K2.7 Code variant. It uses the same model capability with approximately 5-6x output speed and higher quota consumption; availability depends on the membership tier.",
+      "description": "Kimi Code high-speed K2.7 Code variant. It uses the same model capability with approximately 5-6x output speed at about 3x quota consumption; availability depends on the membership tier.",
       "contextWindowTokens": 262144,
       "maxOutputTokens": 32768,
       "defaultOutputTokens": 32768,
