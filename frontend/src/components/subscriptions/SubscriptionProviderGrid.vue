@@ -47,8 +47,23 @@
         variant="outlined"
       >
         <div class="d-flex align-center ga-3 mb-2">
-          <v-icon size="32" color="secondary">mdi-domain</v-icon>
+          <img
+            v-if="sponsorLogos[provider.providerId]"
+            :src="sponsorLogos[provider.providerId]"
+            :alt="provider.displayName"
+            class="sponsor-logo flex-shrink-0"
+          />
+          <v-icon v-else size="32" color="secondary">mdi-domain</v-icon>
           <div class="text-subtitle-1 font-weight-bold">{{ provider.displayName }}</div>
+          <v-chip
+            v-if="isSponsor(provider.providerId)"
+            size="x-small"
+            color="deep-purple"
+            variant="tonal"
+            class="ml-auto"
+          >
+            {{ t('subscription.sponsorBadge') }}
+          </v-chip>
         </div>
         <div class="text-caption text-medium-emphasis mb-3 provider-card__desc">
           {{ provider.description }}
@@ -150,6 +165,8 @@ import {
   openProviderPromotion,
 } from '@/utils/provider-links'
 import runapiLogo from '@/assets/runapi.svg'
+import compshareLogo from '@/assets/compshare.png'
+import volcengineLogo from '@/assets/volc-ark.png'
 
 const { t } = useI18n()
 const emit = defineEmits<{
@@ -162,7 +179,18 @@ const selectedProvider = ref('')
 const builtinProviders = ref<ProviderTemplate[]>([])
 const builtinLoading = ref(false)
 
-// 赞助商渠道：无内置模板，仅展示 + 推广外链
+// 赞助商 logo（真实品牌图）：内置 provider 与独立赞助卡共用
+const sponsorLogos: Record<string, string> = {
+  compshare: compshareLogo,
+  volcengine: volcengineLogo,
+  runapi: runapiLogo,
+}
+
+function isSponsor(providerId: string): boolean {
+  return providerId in sponsorLogos
+}
+
+// 独立赞助商渠道：无内置模板，仅展示 + 推广外链（优云智算/火山已是内置 provider 卡）
 const sponsors = [{ providerId: 'runapi', displayName: 'RunAPI', logo: runapiLogo }]
 
 function selectProvider(provider: string) {
