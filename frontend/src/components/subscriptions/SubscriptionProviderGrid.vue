@@ -32,20 +32,6 @@
         </div>
       </v-card>
 
-      <v-card
-        class="provider-card pa-4 cursor-pointer"
-        variant="outlined"
-        :class="{ 'provider-card--active': selectedProvider === 'manual' }"
-        @click="selectProvider('manual')"
-      >
-        <div class="d-flex align-center ga-3">
-          <v-icon size="32" color="secondary">mdi-plus-circle</v-icon>
-          <div>
-            <div class="text-subtitle-1 font-weight-bold">{{ t('subscription.manualAdd') }}</div>
-            <div class="text-caption text-medium-emphasis">{{ t('subscription.manualDescription') }}</div>
-          </div>
-        </div>
-      </v-card>
     </div>
   </div>
 </template>

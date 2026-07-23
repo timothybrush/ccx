@@ -134,87 +134,6 @@
             </v-btn>
           </v-card-actions>
         </v-card>
-
-        <!-- 手动添加详情 -->
-        <v-card v-if="selectedProvider === 'manual'" variant="outlined" class="pa-4">
-          <v-card-title class="text-h6 d-flex align-center">
-            <v-icon color="secondary" class="mr-2">mdi-plus-circle</v-icon>
-            {{ t('subscription.manualAdd') }}
-          </v-card-title>
-          <v-card-text>
-            <v-form @submit.prevent="handleManualSubmit">
-              <v-text-field
-                v-model="manualForm.subscriptionUid"
-                :label="t('subscription.field.uid')"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-                required
-              />
-              <v-text-field
-                v-model="manualForm.displayName"
-                :label="t('subscription.field.name')"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-                required
-              />
-              <v-text-field
-                v-model="manualForm.provider"
-                :label="t('subscription.field.provider')"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-              />
-              <v-select
-                v-model="manualForm.originType"
-                :label="t('subscription.field.originType')"
-                :items="originTypeOptions"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-              />
-              <v-select
-                v-model="manualForm.billingMode"
-                :label="t('subscription.field.billingMode')"
-                :items="billingModeOptions"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-              />
-              <v-text-field
-                v-model="manualForm.currency"
-                :label="t('subscription.field.currency')"
-                variant="outlined"
-                density="compact"
-                class="mb-2"
-                placeholder="CNY / USD"
-              />
-              <v-text-field
-                v-model.number="manualForm.balance"
-                :label="t('subscription.field.balance')"
-                variant="outlined"
-                density="compact"
-                type="number"
-                class="mb-2"
-              />
-              <v-textarea
-                v-model="manualForm.notes"
-                :label="t('subscription.field.notes')"
-                variant="outlined"
-                density="compact"
-                rows="2"
-              />
-            </v-form>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="selectedProvider = ''">{{ t('app.actions.cancel') }}</v-btn>
-            <v-btn color="primary" :loading="manualSaving" @click="handleManualSubmit">
-              {{ t('app.actions.save') }}
-            </v-btn>
-          </v-card-actions>
-        </v-card>
       </div>
     </v-expand-transition>
 
@@ -232,15 +151,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
-import { useRuntimePresets } from '@/composables/useRuntimePresets'
 import SubscriptionProviderGrid from '@/components/subscriptions/SubscriptionProviderGrid.vue'
 import type { NewApiVerifyResponse, NewApiProvisionResponse } from '@/services/api-types'
 
 const { t } = useI18n()
-const { subscriptionPreset: preset, ensureLoaded: ensureRuntimePresetsLoaded } = useRuntimePresets()
 
 const selectedProvider = ref('')
 const snackbar = ref({ show: false, message: '', color: 'success' })
@@ -267,40 +184,12 @@ const canNewApiVerify = computed(() => {
   return !!newApiForm.value.baseUrl.trim() && !!newApiForm.value.accessToken.trim()
 })
 
-// 手动添加表单
-const manualForm = ref({
-  subscriptionUid: '',
-  displayName: '',
-  provider: '',
-  originType: '',
-  billingMode: '',
-  currency: '',
-  balance: 0,
-  notes: '',
-})
-const manualSaving = ref(false)
-
-const originTypeOptions = computed(() =>
-  preset.value.originTypes.map((o) => ({
-    title: o.value,
-    value: o.value,
-  })),
-)
-
-const billingModeOptions = computed(() =>
-  preset.value.billingModes.map((m) => ({
-    title: m,
-    value: m,
-  })),
-)
-
 function handleProviderSelect(provider: string) {
   selectedProvider.value = provider
   // 重置表单
   newApiForm.value = { baseUrl: '', accessToken: '', userId: '', authTokenMode: 'bearer', displayName: '' }
   newApiVerifyResult.value = null
   newApiError.value = ''
-  manualForm.value = { subscriptionUid: '', displayName: '', provider: '', originType: '', billingMode: '', currency: '', balance: 0, notes: '' }
 }
 
 async function handleNewApiSubmit() {
@@ -358,38 +247,9 @@ async function handleNewApiProvision() {
   }
 }
 
-async function handleManualSubmit() {
-  if (!manualForm.value.subscriptionUid.trim() || !manualForm.value.displayName.trim()) return
-  manualSaving.value = true
-  try {
-    await api.createSubscription({
-      subscriptionUid: manualForm.value.subscriptionUid.trim(),
-      displayName: manualForm.value.displayName.trim(),
-      provider: manualForm.value.provider || undefined,
-      originType: manualForm.value.originType || undefined,
-      billingMode: manualForm.value.billingMode || undefined,
-      currency: manualForm.value.currency || undefined,
-      balance: manualForm.value.balance,
-      notes: manualForm.value.notes || undefined,
-      source: 'manual',
-      rechargeMultiplier: 1,
-    })
-    showSnackbar(t('subscription.add') + ' - OK', 'success')
-    selectedProvider.value = ''
-  } catch (e) {
-    showSnackbar(e instanceof Error ? e.message : 'Unknown error', 'error')
-  } finally {
-    manualSaving.value = false
-  }
-}
-
 function showSnackbar(message: string, color: string) {
   snackbar.value = { show: true, message, color }
 }
-
-onMounted(() => {
-  ensureRuntimePresetsLoaded()
-})
 </script>
 
 <style scoped>
