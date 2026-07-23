@@ -775,7 +775,7 @@ func TestResolveModelBenchmarkProfile_DistinguishesGPT56Variants(t *testing.T) {
 		codingScore  float64
 		reasoningRaw float64
 	}{
-		{model: "claude-opus-4-8-20260713", canonical: "claude-opus-4-8", codingScore: 76.4, reasoningRaw: 53.9},
+		{model: "claude-opus-4-8-20260713", canonical: "claude-opus-4-8", codingScore: 81.1, reasoningRaw: 53.9},
 		{model: "gpt-5.6-terra", canonical: "gpt-5.6-terra", codingScore: 63.4, reasoningRaw: 80.8},
 		{model: "gpt-5.6-sol", canonical: "gpt-5.6-sol", codingScore: 64.6, reasoningRaw: 87.5},
 	}
@@ -795,7 +795,7 @@ func TestResolveModelBenchmarkProfile_DistinguishesGPT56Variants(t *testing.T) {
 			if got := resolved.Profile.CategoryScores["math"]; got != tt.reasoningRaw {
 				t.Fatalf("math score = %v, want %v", got, tt.reasoningRaw)
 			}
-			if resolved.Profile.Lane != "provisional" || resolved.Profile.VerifiedAt != "2026-07-13" {
+			if resolved.Profile.Lane != "provisional" || resolved.Profile.VerifiedAt != "2026-07-22" {
 				t.Fatalf("evidence metadata = lane %q date %q", resolved.Profile.Lane, resolved.Profile.VerifiedAt)
 			}
 		})
@@ -805,7 +805,11 @@ func TestResolveModelBenchmarkProfile_DistinguishesGPT56Variants(t *testing.T) {
 	if !luna.Known || luna.Profile.CanonicalModel != "gpt-5.6-luna" {
 		t.Fatalf("Luna 应有独立基准证据: %+v", luna)
 	}
-	if len(luna.Profile.BenchmarkEvidence) != 1 || luna.Profile.BenchmarkEvidence[0].RawValue != 0.67 {
+	if len(luna.Profile.BenchmarkEvidence) != 2 ||
+		luna.Profile.BenchmarkEvidence[0].Benchmark != "deepswe" ||
+		luna.Profile.BenchmarkEvidence[0].RawValue != 0.671875 ||
+		luna.Profile.BenchmarkEvidence[1].Benchmark != "codexradar" ||
+		luna.Profile.BenchmarkEvidence[1].RawValue != 0.5982142857142857 {
 		t.Fatalf("Luna benchmark evidence = %+v", luna.Profile.BenchmarkEvidence)
 	}
 }

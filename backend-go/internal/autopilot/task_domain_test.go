@@ -3,6 +3,8 @@ package autopilot
 import (
 	"math"
 	"testing"
+
+	"github.com/BenedictKing/ccx/internal/presetstore"
 )
 
 // ── DomainStrength 测试（种子矩阵回退链）──
@@ -42,10 +44,10 @@ func TestDomainStrength_SeedMatrixFallback(t *testing.T) {
 		{"claude opus code_review", ModelFamilyClaude, "claude-opus-4", TaskDomainCodeReview, 0.85},
 		{"claude opus reasoning", ModelFamilyClaude, "claude-opus-4", TaskDomainReasoning, 0.85},
 
-		{"openai gpt-5 code_review", ModelFamilyOpenAI, "gpt-5.4", TaskDomainCodeReview, 0.90},
-		{"openai gpt-5 reasoning", ModelFamilyOpenAI, "gpt-5.4", TaskDomainReasoning, 0.85},
-		{"openai gpt-5 aesthetics", ModelFamilyOpenAI, "gpt-5.4", TaskDomainAestheticsUI, 0.60},
-		{"openai gpt-5 coding", ModelFamilyOpenAI, "gpt-5.3-codex", TaskDomainCoding, 0.80},
+		{"openai gpt-5 seed code_review", ModelFamilyOpenAI, "gpt-5-seed-fallback", TaskDomainCodeReview, 0.90},
+		{"openai gpt-5 seed reasoning", ModelFamilyOpenAI, "gpt-5-seed-fallback", TaskDomainReasoning, 0.85},
+		{"openai gpt-5 seed aesthetics", ModelFamilyOpenAI, "gpt-5-seed-fallback", TaskDomainAestheticsUI, 0.60},
+		{"openai gpt-5 seed coding", ModelFamilyOpenAI, "gpt-5-seed-fallback", TaskDomainCoding, 0.80},
 
 		{"gemini aesthetics", ModelFamilyGemini, "gemini-2.5-pro", TaskDomainAestheticsUI, 0.85},
 		{"gemini reasoning", ModelFamilyGemini, "gemini-2.5-pro", TaskDomainReasoning, 0.80},
@@ -66,10 +68,14 @@ func TestDomainStrength_SeedMatrixFallback(t *testing.T) {
 				ModelFamily: tt.family,
 				ModelID:     tt.modelID,
 			}
-			got := DomainStrength(profile, tt.domain)
-			if got != tt.expected {
+			evidence := ResolveDomainStrength(profile, tt.domain)
+			if evidence.Source != "family_seed" {
+				t.Errorf("ResolveDomainStrength(%s, %s, %s) source = %q, want family_seed",
+					tt.family, tt.modelID, tt.domain, evidence.Source)
+			}
+			if evidence.Score != tt.expected {
 				t.Errorf("DomainStrength(%s, %s, %s) = %v, want %v",
-					tt.family, tt.modelID, tt.domain, got, tt.expected)
+					tt.family, tt.modelID, tt.domain, evidence.Score, tt.expected)
 			}
 		})
 	}
@@ -131,7 +137,7 @@ func TestResolveDomainStrength_CanonicalBenchmarkByVariant(t *testing.T) {
 		domain TaskDomain
 		want   float64
 	}{
-		{model: "claude-opus-4-8", domain: TaskDomainCoding, want: 0.764},
+		{model: "claude-opus-4-8", domain: TaskDomainCoding, want: 0.811},
 		{model: "gpt-5.6-terra", domain: TaskDomainReasoning, want: 0.808},
 		{model: "gpt-5.6-sol", domain: TaskDomainReasoning, want: 0.875},
 		{model: "gpt-5.6-sol", domain: TaskDomainAgentic, want: 0.92},
@@ -150,7 +156,7 @@ func TestResolveDomainStrength_CanonicalBenchmarkByVariant(t *testing.T) {
 			if evidence.ProviderQualityFactor != 1 {
 				t.Fatalf("ProviderQualityFactor = %v, want 1 without endpoint evidence", evidence.ProviderQualityFactor)
 			}
-			if evidence.BenchmarkLane != "provisional" || evidence.BenchmarkVerifiedAt != "2026-07-13" {
+			if evidence.BenchmarkLane != "provisional" || evidence.BenchmarkVerifiedAt != "2026-07-22" {
 				t.Fatalf("benchmark metadata = lane %q date %q", evidence.BenchmarkLane, evidence.BenchmarkVerifiedAt)
 			}
 			if evidence.EvidenceConfidence != 0.625 {
@@ -184,7 +190,52 @@ func TestResolveDomainStrength_AppliesProviderQualityAsDownwardFactor(t *testing
 }
 
 func TestResolveDomainStrength_DeepSWEUsesBoundedRelativeCodingSignal(t *testing.T) {
-	gpt55 := &ModelProfile{ModelID: "gpt-5.5", ModelFamily: ModelFamilyOpenAI}
+	store := presetstore.Default()
+	original := store.Get()
+	t.Cleanup(func() {
+		store.Swap(original)
+	})
+	relativeProfile := func(model, pattern string, rawValue, percentile float64) presetstore.ModelBenchmarkProfilePreset {
+		return presetstore.ModelBenchmarkProfilePreset{
+			Patterns:       []string{pattern},
+			CanonicalModel: model,
+			BenchmarkEvidence: []presetstore.ModelBenchmarkEvidencePreset{{
+				Benchmark:        "deepswe",
+				BenchmarkVersion: "v1.1",
+				SourceModel:      model,
+				Domain:           "coding",
+				Metric:           "pass_at_1",
+				RawValue:         rawValue,
+				CohortPercentile: percentile,
+				TaskCount:        100,
+				CohortSize:       10,
+				Effort:           "xhigh",
+				SelectionBasis:   "best_available_effort",
+				SourceURL:        "https://example.test/deepswe",
+				CapturedAt:       "2026-07-22",
+			}},
+			Sources:              []string{"https://example.test/deepswe"},
+			VerifiedAt:           "2026-07-22",
+			Lane:                 "provisional",
+			SharedResults:        1,
+			ComparableCategories: 1,
+			TotalCategories:      1,
+		}
+	}
+	store.Swap(&presetstore.PresetBundle{
+		SchemaVersion: original.SchemaVersion,
+		DataVersion:   "task-domain-relative-benchmark-test",
+		Subscription:  original.Subscription,
+		ModelRegistry: &presetstore.ModelRegistryPreset{
+			SchemaVersion: 1,
+			BenchmarkProfiles: []presetstore.ModelBenchmarkProfilePreset{
+				relativeProfile("gpt-5.5-relative", `(?:^|[-/])gpt-5\.5-relative(?=$|@)`, 0.67, 0.75),
+				relativeProfile("gpt-5.4-relative", `(?:^|[-/])gpt-5\.4-relative(?=$|@)`, 0.51, 0.25),
+			},
+		},
+	})
+
+	gpt55 := &ModelProfile{ModelID: "gpt-5.5-relative", ModelFamily: ModelFamilyOpenAI}
 	evidence := ResolveDomainStrength(gpt55, TaskDomainCoding)
 	if evidence.Source != "relative_benchmark" {
 		t.Fatalf("Source = %q, want relative_benchmark", evidence.Source)
@@ -195,17 +246,17 @@ func TestResolveDomainStrength_DeepSWEUsesBoundedRelativeCodingSignal(t *testing
 	if evidence.BenchmarkMetric != "pass_at_1" || evidence.BenchmarkEffort != "xhigh" {
 		t.Fatalf("benchmark effort metadata = %+v", evidence)
 	}
-	if evidence.BenchmarkRawValue != 0.67 || evidence.BenchmarkPercentile <= 0.5 {
+	if evidence.BenchmarkRawValue != 0.67 || evidence.BenchmarkPercentile != 0.75 {
 		t.Fatalf("benchmark values = %+v", evidence)
 	}
-	if evidence.Score <= 0.8 || evidence.Score >= 0.9 {
-		t.Fatalf("bounded score = %v, want small upward adjustment from 0.8", evidence.Score)
+	if math.Abs(evidence.Score-0.85) > 1e-9 {
+		t.Fatalf("bounded score = %v, want 0.85", evidence.Score)
 	}
 
-	gpt54 := &ModelProfile{ModelID: "gpt-5.4", ModelFamily: ModelFamilyOpenAI}
+	gpt54 := &ModelProfile{ModelID: "gpt-5.4-relative", ModelFamily: ModelFamilyOpenAI}
 	lower := ResolveDomainStrength(gpt54, TaskDomainCoding)
-	if lower.Source != "relative_benchmark" || lower.Score >= 0.8 || lower.Score <= 0.7 {
-		t.Fatalf("gpt-5.4 evidence = %+v, want bounded downward adjustment", lower)
+	if lower.Source != "relative_benchmark" || math.Abs(lower.Score-0.75) > 1e-9 {
+		t.Fatalf("gpt-5.4 evidence = %+v, want bounded score 0.75", lower)
 	}
 
 	review := ResolveDomainStrength(gpt55, TaskDomainCodeReview)
