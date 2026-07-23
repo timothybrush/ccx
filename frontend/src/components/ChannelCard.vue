@@ -246,6 +246,49 @@
               >
                 <code class="text-caption flex-1-1 text-truncate mr-2">{{ maskApiKey(key) }}</code>
                 <div class="d-flex align-center ga-1">
+                  <!-- 暂停/恢复按钮 -->
+                  <v-tooltip
+                    v-if="isKeyPaused(key)"
+                    :text="t('channelCard.resumeKey')"
+                    location="top"
+                    :open-delay="150"
+                    content-class="ccx-tooltip"
+                  >
+                    <template #activator="{ props: tooltipProps }">
+                      <v-btn
+                        v-bind="tooltipProps"
+                        size="x-small"
+                        color="success"
+                        icon
+                        variant="text"
+                        rounded="md"
+                        @click="$emit('resumeKey', channel.index, key)"
+                      >
+                        <v-icon size="small">mdi-play</v-icon>
+                      </v-btn>
+                    </template>
+                  </v-tooltip>
+                  <v-tooltip
+                    v-else
+                    :text="t('channelCard.suspendKey')"
+                    location="top"
+                    :open-delay="150"
+                    content-class="ccx-tooltip"
+                  >
+                    <template #activator="{ props: tooltipProps }">
+                      <v-btn
+                        v-bind="tooltipProps"
+                        size="x-small"
+                        color="warning"
+                        icon
+                        variant="text"
+                        rounded="md"
+                        @click="$emit('suspendKey', channel.index, key)"
+                      >
+                        <v-icon size="small">mdi-pause</v-icon>
+                      </v-btn>
+                    </template>
+                  </v-tooltip>
                   <!-- 置顶按钮：仅最后一个 key 显示 -->
                   <v-tooltip v-if="index === channel.apiKeys.length - 1 && channel.apiKeys.length > 1" :text="t('channelCard.moveTop')" location="top" :open-delay="150" content-class="ccx-tooltip">
                     <template #activator="{ props: tooltipProps }">
@@ -445,6 +488,8 @@ defineEmits<{
   addKey: [channelId: number]
   removeKey: [channelId: number, apiKey: string]
   restoreKey: [channelId: number, apiKey: string]
+  suspendKey: [channelId: number, apiKey: string]
+  resumeKey: [channelId: number, apiKey: string]
   moveKeyToTop: [channelId: number, apiKey: string]
   moveKeyToBottom: [channelId: number, apiKey: string]
   ping: [channelId: number]
@@ -453,6 +498,11 @@ defineEmits<{
   testCapability: [channelId: number]
   trial: [channelId: number]
 }>()
+
+const isKeyPaused = (apiKey: string) => {
+  const config = props.channel.apiKeyConfigs?.find(cfg => cfg.key === apiKey)
+  return config?.enabled === false
+}
 
 // 获取服务类型对应的芯片颜色
 const getServiceChipColor = () => {

@@ -19,6 +19,9 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
   const localRestoredKeys = ref(new Set<string>())
   const restoringKeyModel = ref('')
   const localRestoredKeyModels = ref(new Set<string>())
+  const suspendingKey = ref('')
+  const localSuspendedKeys = ref(new Set<string>())
+  const localResumedKeys = ref(new Set<string>())
 
   const keyModelKey = (apiKey: string, model: string) => `${apiKey}|${model}`
 
@@ -39,6 +42,9 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
     restoringKey.value = ''
     localRestoredKeyModels.value = new Set<string>()
     restoringKeyModel.value = ''
+    localSuspendedKeys.value = new Set<string>()
+    localResumedKeys.value = new Set<string>()
+    suspendingKey.value = ''
   }
 
   const restoreDisabledKey = async (apiKey: string) => {
@@ -111,6 +117,74 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
     }
   }
 
+  const suspendKey = async (apiKey: string) => {
+    const channel = options.channel.value
+    if (!channel || suspendingKey.value) return
+    suspendingKey.value = apiKey
+    try {
+      const channelId = channel.index
+      switch (options.channelType.value) {
+        case 'chat':
+          await options.apiService.suspendChatApiKey(channelId, apiKey)
+          break
+        case 'images':
+          await options.apiService.suspendImagesApiKey(channelId, apiKey)
+          break
+        case 'vectors':
+          await options.apiService.suspendVectorsApiKey(channelId, apiKey)
+          break
+        case 'gemini':
+          await options.apiService.suspendGeminiApiKey(channelId, apiKey)
+          break
+        case 'responses':
+          await options.apiService.suspendResponsesApiKey(channelId, apiKey)
+          break
+        default:
+          await options.apiService.suspendApiKey(channelId, apiKey)
+      }
+      localSuspendedKeys.value = new Set([...localSuspendedKeys.value, apiKey])
+      localResumedKeys.value.delete(apiKey)
+    } catch (error) {
+      options.emitError(error instanceof Error ? error.message : 'Suspend failed')
+    } finally {
+      suspendingKey.value = ''
+    }
+  }
+
+  const resumeKey = async (apiKey: string) => {
+    const channel = options.channel.value
+    if (!channel || suspendingKey.value) return
+    suspendingKey.value = apiKey
+    try {
+      const channelId = channel.index
+      switch (options.channelType.value) {
+        case 'chat':
+          await options.apiService.resumeChatApiKey(channelId, apiKey)
+          break
+        case 'images':
+          await options.apiService.resumeImagesApiKey(channelId, apiKey)
+          break
+        case 'vectors':
+          await options.apiService.resumeVectorsApiKey(channelId, apiKey)
+          break
+        case 'gemini':
+          await options.apiService.resumeGeminiApiKey(channelId, apiKey)
+          break
+        case 'responses':
+          await options.apiService.resumeResponsesApiKey(channelId, apiKey)
+          break
+        default:
+          await options.apiService.resumeApiKey(channelId, apiKey)
+      }
+      localResumedKeys.value = new Set([...localResumedKeys.value, apiKey])
+      localSuspendedKeys.value.delete(apiKey)
+    } catch (error) {
+      options.emitError(error instanceof Error ? error.message : 'Resume failed')
+    } finally {
+      suspendingKey.value = ''
+    }
+  }
+
   return {
     restoringKey,
     localRestoredKeys,
@@ -122,5 +196,10 @@ export function useDisabledApiKeys(options: DisabledApiKeyOptions) {
     disabledKeyModels,
     visibleDisabledKeyModels,
     restoreDisabledKeyModel,
+    suspendingKey,
+    suspendKey,
+    resumeKey,
+    localSuspendedKeys,
+    localResumedKeys,
   }
 }

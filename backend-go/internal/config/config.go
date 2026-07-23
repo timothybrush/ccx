@@ -1530,6 +1530,83 @@ func (cm *ConfigManager) RestoreKey(apiType string, channelIndex int, apiKey str
 	return cm.saveConfigLocked(cm.config)
 }
 
+// SuspendKey 手动暂停指定 API Key（设置 Enabled=false，不移出 APIKeys 列表）
+// apiType: Messages/Responses/Gemini/Chat/Images/Vectors
+// channelIndex: 渠道在 upstream slice 中的索引
+func (cm *ConfigManager) SuspendKey(apiType string, channelIndex int, apiKey string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	upstreams := cm.getUpstreamSliceLocked(apiType)
+	if upstreams == nil || channelIndex < 0 || channelIndex >= len(*upstreams) {
+		return fmt.Errorf("无效的渠道索引: %s[%d]", apiType, channelIndex)
+	}
+
+	upstream := &(*upstreams)[channelIndex]
+
+	// Key 必须在活跃列表中
+	if !slices.Contains(upstream.APIKeys, apiKey) {
+		return fmt.Errorf("key %s 不在活跃列表中", utils.MaskAPIKey(apiKey))
+	}
+
+	disabled := false
+	upstream.APIKeyConfigs = normalizeAPIKeyConfigs(upstream.APIKeys, upstream.APIKeyConfigs)
+	for i, cfg := range upstream.APIKeyConfigs {
+		if cfg.Key == apiKey {
+			upstream.APIKeyConfigs[i].Enabled = &disabled
+			break
+		}
+	}
+
+	log.Printf("[%s-Suspend] Key %s 已手动暂停 (渠道: %s)", apiType, utils.MaskAPIKey(apiKey), upstream.Name)
+	statelog.LogStateTransition(apiType+"-Suspend", "key", utils.MaskAPIKey(apiKey), "active", "suspended", "manual_suspend", "channel="+upstream.Name)
+
+	return cm.saveConfigLocked(cm.config)
+}
+
+// ResumeKey 手动恢复指定 API Key（移除 Enabled 限制，恢复为活跃状态）
+// apiType: Messages/Responses/Gemini/Chat/Images/Vectors
+// channelIndex: 渠道在 upstream slice 中的索引
+func (cm *ConfigManager) ResumeKey(apiType string, channelIndex int, apiKey string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	upstreams := cm.getUpstreamSliceLocked(apiType)
+	if upstreams == nil || channelIndex < 0 || channelIndex >= len(*upstreams) {
+		return fmt.Errorf("无效的渠道索引: %s[%d]", apiType, channelIndex)
+	}
+
+	upstream := &(*upstreams)[channelIndex]
+
+	// Key 必须在活跃列表中
+	if !slices.Contains(upstream.APIKeys, apiKey) {
+		return fmt.Errorf("key %s 不在活跃列表中", utils.MaskAPIKey(apiKey))
+	}
+
+	upstream.APIKeyConfigs = normalizeAPIKeyConfigs(upstream.APIKeys, upstream.APIKeyConfigs)
+	found := false
+	for i, cfg := range upstream.APIKeyConfigs {
+		if cfg.Key == apiKey {
+			// 移除 Enabled 限制，恢复默认（活跃）行为
+			upstream.APIKeyConfigs[i].Enabled = nil
+			// 如果移除 Enabled 后配置无其他有效字段，清除整个配置项
+			if !IsAPIKeyConfigEffective(upstream.APIKeyConfigs[i]) {
+				upstream.APIKeyConfigs = append(upstream.APIKeyConfigs[:i], upstream.APIKeyConfigs[i+1:]...)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		// Key 没有配置项，也无需恢复——已经是活跃状态
+	}
+
+	log.Printf("[%s-Suspend] Key %s 已手动恢复 (渠道: %s)", apiType, utils.MaskAPIKey(apiKey), upstream.Name)
+	statelog.LogStateTransition(apiType+"-Suspend", "key", utils.MaskAPIKey(apiKey), "suspended", "active", "manual_resume", "channel="+upstream.Name)
+
+	return cm.saveConfigLocked(cm.config)
+}
+
 // RestoreAllKeys 恢复指定渠道所有被拉黑的 Key（持久化）
 // 返回恢复的 Key 数量
 func (cm *ConfigManager) RestoreAllKeys(apiType string, channelIndex int) (int, error) {

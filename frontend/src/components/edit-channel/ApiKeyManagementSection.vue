@@ -223,6 +223,14 @@
                     >
                       {{ t(getDisabledKeyLabel(row.disabled.reason)) }}
                     </v-chip>
+                    <v-chip
+                      v-else-if="row.enabled === false"
+                      size="x-small"
+                      color="warning"
+                      variant="tonal"
+                    >
+                      {{ t('channelCard.keyPaused') }}
+                    </v-chip>
                     <span v-if="row.disabled?.recoverAt" class="text-caption text-medium-emphasis">
                       {{ t('channelCard.recoverAt') }}: {{ formatDisabledTime(row.disabled.recoverAt) }}
                     </span>
@@ -306,6 +314,52 @@
                       <v-icon start size="small">mdi-restore</v-icon>
                       {{ t('channelCard.restoreKey') }}
                     </v-btn>
+                    <v-tooltip
+                      v-else-if="row.enabled === false"
+                      :text="t('channelCard.resumeKey')"
+                      location="top"
+                      :open-delay="150"
+                      content-class="key-tooltip"
+                    >
+                      <template #activator="{ props: tooltipProps }">
+                        <v-btn
+                          v-bind="tooltipProps"
+                          size="small"
+                          color="success"
+                          variant="tonal"
+                          rounded="lg"
+                          :loading="suspendingKey === row.key"
+                          :disabled="!!suspendingKey"
+                          @click="$emit('resume-key', row.key)"
+                        >
+                          <v-icon start size="small">mdi-play</v-icon>
+                          {{ t('channelCard.resumeKey') }}
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
+                    <v-tooltip
+                      v-else
+                      :text="t('channelCard.suspendKey')"
+                      location="top"
+                      :open-delay="150"
+                      content-class="key-tooltip"
+                    >
+                      <template #activator="{ props: tooltipProps }">
+                        <v-btn
+                          v-bind="tooltipProps"
+                          size="small"
+                          color="warning"
+                          variant="tonal"
+                          rounded="lg"
+                          :loading="suspendingKey === row.key"
+                          :disabled="!!suspendingKey"
+                          @click="$emit('suspend-key', row.key)"
+                        >
+                          <v-icon start size="small">mdi-pause</v-icon>
+                          {{ t('channelCard.suspendKey') }}
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
                     <v-btn
                       v-if="row.planCredential || row.minimaxEndpoint"
                       size="small"
@@ -1204,6 +1258,7 @@ import type {
   MiMoTokenPlanQuota,
   VolcenginePlanUsage,
   VolcenginePlanUsageWindow,
+  APIKeyConfig,
 } from '../../services/api-types'
 import { maskApiKey } from '../../utils/apiKeyMask'
 import { buildChannelApiKeyRows } from '../../utils/channelApiKeys'
@@ -1230,10 +1285,12 @@ interface Props {
   apiKeys: string[]
   disabledKeys: DisabledKeyInfo[]
   disabledKeyModels?: DisabledKeyModel[]
+  apiKeyConfigs?: APIKeyConfig[]
   keyModelsStatus: Map<string, KeyModelsStatus>
   isEditing: boolean
   restoringKey: string
   restoringKeyModel?: string
+  suspendingKey?: string
   serviceType?: string
   isAutoManaged?: boolean
   channelId?: number
@@ -1251,6 +1308,8 @@ const emit = defineEmits<{
   'update:proxyUrl': [string]
   'restore-key': [string]
   'restore-key-model': [string, string]
+  'suspend-key': [string]
+  'resume-key': [string]
 }>()
 
 const { t } = useI18n()
@@ -1348,7 +1407,7 @@ const copilotDiagnoseResult = ref<CopilotDiagnoseResponse | null>(null)
 const copilotDiagnoseError = ref('')
 let copilotPollTimer: number | null = null
 
-const keyRows = computed(() => buildChannelApiKeyRows(props.apiKeys, props.disabledKeys).map(row => {
+const keyRows = computed(() => buildChannelApiKeyRows(props.apiKeys, props.disabledKeys, props.apiKeyConfigs).map(row => {
   const matchCredential = (credentials: ManagedAccountCredential[]) =>
     credentials.find(credential => credential.keyMask === maskApiKey(row.key))
   const volcengineCredential = props.providerId === 'volcengine' ? matchCredential(volcengineCredentials.value) : undefined

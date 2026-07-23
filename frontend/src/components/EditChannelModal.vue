@@ -71,10 +71,12 @@
                 :api-keys="form.apiKeys"
                 :disabled-keys="visibleDisabledKeys"
                 :disabled-key-models="visibleDisabledKeyModels"
+                :api-key-configs="form.apiKeyConfigs"
                 :key-models-status="keyModelsStatus"
                 :is-editing="isEditing"
                 :restoring-key="restoringKey"
                 :restoring-key-model="restoringKeyModel"
+                :suspending-key="suspendingKey"
                 :service-type="form.serviceType"
                 :is-auto-managed="isAutoManagedChannel"
                 :channel-id="props.channel?.index"
@@ -87,6 +89,8 @@
                 @update:proxy-url="form.proxyUrl = $event"
                 @restore-key="restoreDisabledKey"
                 @restore-key-model="restoreDisabledKeyModel"
+                @suspend-key="suspendKey"
+                @resume-key="resumeKey"
               />
             </section>
 
@@ -582,6 +586,9 @@ const {
   restoringKeyModel,
   visibleDisabledKeyModels,
   restoreDisabledKeyModel,
+  suspendingKey,
+  suspendKey,
+  resumeKey,
   appendSupportedModelFilter,
   ensureTargetModelsLoaded,
   updateForm,

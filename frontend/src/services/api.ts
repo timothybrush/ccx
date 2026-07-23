@@ -229,6 +229,20 @@ export class ApiService {
     })
   }
 
+  async suspendApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/messages/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/messages/channels/${channelId}/keys/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
   async restoreKeyModel(channelId: number, apiKey: string, model: string): Promise<void> {
     await this.request(`/messages/channels/${channelId}/keys/restore-model`, {
       method: 'POST',
@@ -384,6 +398,20 @@ export class ApiService {
 
   async restoreResponsesApiKey(channelId: number, apiKey: string): Promise<void> {
     await this.request(`/responses/channels/${channelId}/keys/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async suspendResponsesApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/responses/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeResponsesApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/responses/channels/${channelId}/keys/resume`, {
       method: 'POST',
       body: JSON.stringify({ apiKey })
     })
@@ -660,6 +688,20 @@ export class ApiService {
     })
   }
 
+  async suspendChatApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/chat/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeChatApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/chat/channels/${channelId}/keys/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
   async restoreChatKeyModel(channelId: number, apiKey: string, model: string): Promise<void> {
     await this.request(`/chat/channels/${channelId}/keys/restore-model`, {
       method: 'POST',
@@ -795,6 +837,20 @@ export class ApiService {
 
   async restoreImagesApiKey(channelId: number, apiKey: string): Promise<void> {
     await this.request(`/images/channels/${channelId}/keys/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async suspendImagesApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/images/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeImagesApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/images/channels/${channelId}/keys/resume`, {
       method: 'POST',
       body: JSON.stringify({ apiKey })
     })
@@ -936,6 +992,20 @@ export class ApiService {
     })
   }
 
+  async suspendVectorsApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/vectors/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeVectorsApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/vectors/channels/${channelId}/keys/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
   async restoreVectorsKeyModel(channelId: number, apiKey: string, model: string): Promise<void> {
     await this.request(`/vectors/channels/${channelId}/keys/restore-model`, {
       method: 'POST',
@@ -1067,6 +1137,20 @@ export class ApiService {
 
   async restoreGeminiApiKey(channelId: number, apiKey: string): Promise<void> {
     await this.request(`/gemini/channels/${channelId}/keys/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async suspendGeminiApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/gemini/channels/${channelId}/keys/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    })
+  }
+
+  async resumeGeminiApiKey(channelId: number, apiKey: string): Promise<void> {
+    await this.request(`/gemini/channels/${channelId}/keys/resume`, {
       method: 'POST',
       body: JSON.stringify({ apiKey })
     })
