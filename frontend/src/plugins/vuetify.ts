@@ -84,6 +84,7 @@ import {
   mdiSpeedometerSlow,
   mdiRocketLaunch,
   mdiPauseCircle,
+  mdiPause,
   mdiStopCircle,
   mdiStopCircleOutline,
   mdiDelete,
@@ -334,6 +335,7 @@ const iconMap: Record<string, string> = {
   // 状态图标
   'play-circle': mdiPlayCircle,
   'pause-circle': mdiPauseCircle,
+  'pause': mdiPause,
   'stop-circle': mdiStopCircle,
   'stop-circle-outline': mdiStopCircleOutline,
   'check-circle': mdiCheckCircle,
