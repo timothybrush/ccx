@@ -261,7 +261,8 @@ func ModelProfileQualityTierFromFamily(family ModelFamily, modelID string) Quali
 		return QualityTierNormal
 
 	case ModelFamilyKimi:
-		if lowerID == "k3" || strings.HasPrefix(lowerID, "k3[") {
+		if lowerID == "k3" || lowerID == "kimi-k3" ||
+			strings.HasPrefix(lowerID, "k3[") || strings.HasPrefix(lowerID, "kimi-k3[") {
 			return QualityTierPremium
 		}
 		if strings.Contains(lowerID, "kimi-for-coding") {

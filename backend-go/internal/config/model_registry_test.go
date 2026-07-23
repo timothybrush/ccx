@@ -244,6 +244,7 @@ func TestResolveUpstreamCapability_KimiCodeModels(t *testing.T) {
 	}{
 		{model: "k3", context: 262144, reasoning: []string{"low", "high", "max"}, displayName: "Kimi K3", wantThinking: "thinking"},
 		{model: "k3[1m]", context: 262144, reasoning: []string{"low", "high", "max"}, displayName: "Kimi K3", wantThinking: "thinking"},
+		{model: "kimi-k3", context: 262144, reasoning: []string{"low", "high", "max"}, displayName: "Kimi K3", wantThinking: "thinking"},
 		{model: "kimi-for-coding", context: 262144, maxOutput: 32768, reasoning: []string{"high"}, displayName: "Kimi K2.7 Code", wantThinking: "thinking"},
 		{model: "kimi-for-coding-highspeed", context: 262144, maxOutput: 32768, reasoning: []string{"high"}, displayName: "Kimi K2.7 Code HighSpeed", wantThinking: "thinking"},
 	}

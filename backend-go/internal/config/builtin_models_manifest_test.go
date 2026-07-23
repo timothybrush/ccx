@@ -201,6 +201,31 @@ func TestLookupBuiltinManifest_MiMoAnthropicTokenPlan(t *testing.T) {
 	}
 }
 
+func TestLookupBuiltinManifest_VolcengineAgentPlanIncludesKimiK3(t *testing.T) {
+	for _, tt := range []struct {
+		baseURL     string
+		serviceType string
+	}{
+		{baseURL: "https://ark.cn-beijing.volces.com/api/plan", serviceType: "messages"},
+		{baseURL: "https://ark.cn-beijing.volces.com/api/plan/v3", serviceType: "openai"},
+	} {
+		manifest, found := LookupBuiltinManifest(tt.baseURL, tt.serviceType)
+		if !found {
+			t.Fatalf("Agent Plan 清单应存在: baseURL=%q serviceType=%q", tt.baseURL, tt.serviceType)
+		}
+		foundK3 := false
+		for _, modelID := range manifest.ModelIDs {
+			if modelID == "kimi-k3" {
+				foundK3 = true
+				break
+			}
+		}
+		if !foundK3 {
+			t.Fatalf("Agent Plan 清单应包含 kimi-k3: %+v", manifest.ModelIDs)
+		}
+	}
+}
+
 func TestResolveBuiltinModelsURL_DeepSeekUsesOfficialEndpoint(t *testing.T) {
 	tests := []struct {
 		baseURL     string

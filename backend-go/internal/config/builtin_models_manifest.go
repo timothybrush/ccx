@@ -239,6 +239,7 @@ func volcengineAgentPlanModelIDs() []string {
 		"glm-latest",
 		"deepseek-v4-flash",
 		"deepseek-v4-pro",
+		"kimi-k3",
 		"kimi-k2.6",
 		"kimi-k2.7-code",
 	}

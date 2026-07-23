@@ -23,8 +23,8 @@
     {
       "kind": "builtinManifest",
       "url": "./builtin-manifest.json",
-      "sha256": "4740ddb91245d3f38ea9f84a8f6a9a712781157f9ad75b4b36c40f35c51558c7",
-      "sizeBytes": 6415
+      "sha256": "c4467aabe093c615732f2ec48396ddb5086a99c27a0ff08abf19d78400dd0b2f",
+      "sizeBytes": 6453
     }
   ]
 }

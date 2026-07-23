@@ -385,6 +385,50 @@ func TestRankEligibleModels_PrefersMeasuredProviderQuality(t *testing.T) {
 	}
 }
 
+func TestRankEligibleModels_PrefersPremiumDomesticModelsOverDeepSeekV4Pro(t *testing.T) {
+	tests := []struct {
+		name      string
+		modelID   string
+		family    ModelFamily
+		context   int
+		vision    bool
+		toolCalls bool
+	}{
+		{
+			name:      "Kimi K3 alias",
+			modelID:   "kimi-k3",
+			family:    ModelFamilyKimi,
+			context:   262_144,
+			vision:    true,
+			toolCalls: true,
+		},
+		{
+			name:      "GLM-5.2",
+			modelID:   "glm-5.2",
+			family:    ModelFamilyGLM,
+			context:   1_048_576,
+			toolCalls: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eligible := []ModelProfile{
+				makeModelProfile("deepseek-v4-pro", ModelFamilyDeepSeek, QualityTierHigh, 1_000_000,
+					true, false, true, true, 0),
+				makeModelProfile(tt.modelID, tt.family,
+					ModelProfileQualityTierFromFamily(tt.family, tt.modelID), tt.context,
+					tt.vision, false, tt.toolCalls, true, 0),
+			}
+
+			best := rankTestModels(eligible, "claude-opus-4-8", CapabilityFloor{MinQualityTier: QualityTierHigh})
+			if best.ModelID != tt.modelID {
+				t.Fatalf("expected premium %s to precede high deepseek-v4-pro, got %s", tt.modelID, best.ModelID)
+			}
+		})
+	}
+}
+
 func TestRankEligibleModels_PrefersLowerLatency(t *testing.T) {
 	eligible := []ModelProfile{
 		makeModelProfile("fast", ModelFamilyClaude, QualityTierNormal, 100000,
