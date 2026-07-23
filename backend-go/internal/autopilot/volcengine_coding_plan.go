@@ -21,7 +21,6 @@ import (
 
 const (
 	volcengineManagementHost = "ark.cn-beijing.volcengineapi.com"
-	volcenginePlanModelsHost = "ark.cn-beijing.volces.com"
 	volcengineOpenAPIHost    = "open.volcengineapi.com"
 	volcengineRegion         = "cn-beijing"
 	volcengineAPIVersion     = "2024-01-01"
@@ -311,11 +310,7 @@ func (c *volcenginePlanClient) endpointFor(action, service string) string {
 	if action == "GetAFPUsage" || action == "GetCodingPlanUsage" {
 		return "https://" + volcengineOpenAPIHost + "/"
 	}
-	host := volcengineManagementHost
-	if service == "ark_stg" {
-		host = volcenginePlanModelsHost
-	}
-	return "https://" + host + "/"
+	return "https://" + volcengineManagementHost + "/"
 }
 
 func applyVolcengineSignature(req *http.Request, body []byte, accessKeyID, secretAccessKey, service string, now time.Time) {
