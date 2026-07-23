@@ -7,7 +7,46 @@
     </div>
 
     <!-- Provider 卡片网格 -->
-    <SubscriptionProviderGrid @select="handleProviderSelect" />
+    <SubscriptionProviderGrid @select="handleProviderSelect" @add="handleProviderAdd" />
+
+    <!-- 内置服务商添加面板（key 前缀探测 + 自动建渠道，与「快速添加」同一后端流程） -->
+    <v-expand-transition>
+      <v-card v-if="addProvider" variant="outlined" class="pa-4 mt-6">
+        <v-card-title class="text-h6 d-flex align-center">
+          <v-icon color="secondary" class="mr-2">mdi-domain</v-icon>
+          {{ addProvider.displayName }}
+        </v-card-title>
+        <v-card-text>
+          <div class="text-body-2 text-medium-emphasis mb-4">{{ addProvider.description }}</div>
+          <v-form @submit.prevent="handleProviderAddSubmit">
+            <v-text-field
+              v-model="addApiKey"
+              :label="t('subscription.apiKeyLabel')"
+              variant="outlined"
+              density="compact"
+              type="password"
+              :placeholder="t('subscription.apiKeyPlaceholder')"
+              autofocus
+            />
+          </v-form>
+          <v-alert v-if="addError" color="error" variant="tonal" density="compact" class="mt-3">
+            {{ addError }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelProviderAdd">{{ t('app.actions.cancel') }}</v-btn>
+          <v-btn
+            color="primary"
+            :loading="addSubmitting"
+            :disabled="!addApiKey.trim()"
+            @click="handleProviderAddSubmit"
+          >
+            {{ t('app.actions.add') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-expand-transition>
 
     <!-- 右侧详情面板（根据选中 Provider 展示不同表单） -->
     <v-expand-transition>
@@ -155,12 +194,24 @@ import { ref, computed } from 'vue'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api'
 import SubscriptionProviderGrid from '@/components/subscriptions/SubscriptionProviderGrid.vue'
+import {
+  autoAddChannel,
+  extractAutoAddErrorMessage,
+  getProviderTemplates,
+  type ProviderTemplate,
+} from '@/services/autopilot-api'
 import type { NewApiVerifyResponse, NewApiProvisionResponse } from '@/services/api-types'
 
 const { t } = useI18n()
 
 const selectedProvider = ref('')
 const snackbar = ref({ show: false, message: '', color: 'success' })
+
+// 内置服务商添加（key 前缀探测 + 自动建渠道，与「快速添加」同一后端流程）
+const addProvider = ref<ProviderTemplate | null>(null)
+const addApiKey = ref('')
+const addSubmitting = ref(false)
+const addError = ref('')
 
 // new-api 表单
 const newApiForm = ref({
@@ -186,10 +237,51 @@ const canNewApiVerify = computed(() => {
 
 function handleProviderSelect(provider: string) {
   selectedProvider.value = provider
+  // 与内置服务商添加面板互斥：选中快捷接入时收起添加面板
+  cancelProviderAdd()
   // 重置表单
   newApiForm.value = { baseUrl: '', accessToken: '', userId: '', authTokenMode: 'bearer', displayName: '' }
   newApiVerifyResult.value = null
   newApiError.value = ''
+}
+
+// 打开某内置服务商的添加面板（模板从 quickAdd 同源的模板表取）
+async function handleProviderAdd(providerId: string) {
+  addError.value = ''
+  addApiKey.value = ''
+  selectedProvider.value = ''
+  try {
+    const templates = await getProviderTemplates()
+    addProvider.value = templates.find(p => p.providerId === providerId) ?? null
+  } catch (err) {
+    addError.value = extractAutoAddErrorMessage(err)
+  }
+}
+
+function cancelProviderAdd() {
+  addProvider.value = null
+  addApiKey.value = ''
+  addError.value = ''
+}
+
+async function handleProviderAddSubmit() {
+  const provider = addProvider.value
+  const apiKey = addApiKey.value.trim()
+  if (!provider || !apiKey) return
+  addSubmitting.value = true
+  addError.value = ''
+  try {
+    // provider 模式：channelKind 取模板默认 route（通常 messages），baseURL/协议由后端按 key 前缀探测判定
+    const kind = provider.channelKind || provider.routes?.[0]?.channelKind || 'messages'
+    const result = await autoAddChannel(kind, { providerId: provider.providerId, apiKeys: [apiKey] })
+    const created = result.channels?.find(c => c.channelKind === kind) ?? result.channels?.[0]
+    showSnackbar(t('subscription.addProviderSuccess', { name: created?.name || provider.displayName }), 'success')
+    cancelProviderAdd()
+  } catch (err) {
+    addError.value = extractAutoAddErrorMessage(err)
+  } finally {
+    addSubmitting.value = false
+  }
 }
 
 async function handleNewApiSubmit() {
