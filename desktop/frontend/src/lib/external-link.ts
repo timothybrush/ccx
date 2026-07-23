@@ -26,7 +26,6 @@ export const providerConsoleLinks: Record<string, string> = {
 export const providerPromotionLinks: Record<string, string> = {
   compshare: 'https://www.compshare.cn/?ytag=GPU_YY_git_ccx',
   runapi: 'https://runapi.co/register?aff=CqQO',
-  unity2: 'https://unity2.ai/register?source=ccx',
   'volc-ark': 'https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=ccx',
 }
 

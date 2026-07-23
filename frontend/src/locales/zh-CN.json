@@ -1182,7 +1182,6 @@
   "subscription.visitSite": "官网",
   "subscription.sponsorBadge": "赞助商",
   "subscription.sponsors.runapi.description": "RunAPI 是高效稳定的 API OpenRouter 聚合平台，一个 Key 调用多家主流模型。",
-  "subscription.sponsors.unity2.description": "Unity2.ai 面向个人开发者与团队的 AI 模型聚合服务，注册即用。",
   "subscription.addProviderSuccess": "已添加渠道「{name}」",
   "subscription.addProviderFailed": "添加失败：{message}",
   "subscription.apiKeyLabel": "API Key",

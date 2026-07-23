@@ -104,7 +104,7 @@
         variant="outlined"
       >
         <div class="d-flex align-center ga-3 mb-2">
-          <v-icon size="32" color="deep-purple">mdi-star</v-icon>
+          <img :src="sponsor.logo" :alt="sponsor.displayName" class="sponsor-logo flex-shrink-0" />
           <div class="text-subtitle-1 font-weight-bold">{{ sponsor.displayName }}</div>
           <v-chip size="x-small" color="deep-purple" variant="tonal" class="ml-auto">
             {{ t('subscription.sponsorBadge') }}
@@ -149,6 +149,7 @@ import {
   openProviderConsole,
   openProviderPromotion,
 } from '@/utils/provider-links'
+import runapiLogo from '@/assets/runapi.svg'
 
 const { t } = useI18n()
 const emit = defineEmits<{
@@ -162,10 +163,7 @@ const builtinProviders = ref<ProviderTemplate[]>([])
 const builtinLoading = ref(false)
 
 // 赞助商渠道：无内置模板，仅展示 + 推广外链
-const sponsors = [
-  { providerId: 'runapi', displayName: 'RunAPI' },
-  { providerId: 'unity2', displayName: 'Unity2.ai' },
-]
+const sponsors = [{ providerId: 'runapi', displayName: 'RunAPI', logo: runapiLogo }]
 
 function selectProvider(provider: string) {
   selectedProvider.value = provider
@@ -227,5 +225,12 @@ onMounted(async () => {
 }
 .cursor-pointer {
   cursor: pointer;
+}
+.sponsor-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
 }
 </style>

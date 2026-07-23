@@ -1182,7 +1182,6 @@
   "subscription.visitSite": "Website",
   "subscription.sponsorBadge": "Sponsor",
   "subscription.sponsors.runapi.description": "RunAPI is a fast, stable API OpenRouter aggregator — one key for many mainstream models.",
-  "subscription.sponsors.unity2.description": "Unity2.ai is an AI model aggregation service for individual developers and teams.",
   "subscription.addProviderSuccess": "Channel \"{name}\" added",
   "subscription.addProviderFailed": "Add failed: {message}",
   "subscription.apiKeyLabel": "API Key",
