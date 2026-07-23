@@ -143,6 +143,7 @@ import {
   mdiDiamondStone,
   mdiApi,
   mdiConsole,
+  mdiGithub,
   mdiGoogle,
   mdiLightningBolt,
   mdiFormTextbox,
@@ -227,6 +228,7 @@ import {
   mdiCached,
   mdiAutoFix,
   mdiRadar,
+  mdiPlusCircle,
   mdiPlusCircleOutline,
   mdiFastForward,
   mdiImageMultiple,
@@ -288,6 +290,7 @@ const iconMap: Record<string, string> = {
   'unfold': mdiUnfoldMoreHorizontal,
   'file': mdiPaperclip,
   'plus': mdiPlus,
+  'plus-circle': mdiPlusCircle,
   'plus-circle-outline': mdiPlusCircleOutline,
   'minus': mdiMinusBox,
   'calendar': mdiCalendar,
@@ -403,6 +406,7 @@ const iconMap: Record<string, string> = {
   'diamond-stone': mdiDiamondStone,
   'api': mdiApi,
   'console': mdiConsole,
+  'github': mdiGithub,
   'google': mdiGoogle,
 
   // 复选框和单选框
