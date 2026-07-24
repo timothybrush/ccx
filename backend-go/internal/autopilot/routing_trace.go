@@ -900,21 +900,7 @@ func (s *TraceStore) GetTraceDetail(traceUID string) (*TraceDetailV2, error) {
 		return nil, fmt.Errorf("trace store 未初始化")
 	}
 
-	// 先检查内存缓存
-	s.mu.RLock()
-	for i := len(s.records) - 1; i >= 0; i-- {
-		trace := s.records[i]
-		if trace.TraceUID == traceUID {
-			// 从内存副本生成安全详情
-			detail := trace.ToTraceDetailV2(nil, trace.TraceRevision, PersistenceSampled)
-			SanitizeForResponse(detail)
-			s.mu.RUnlock()
-			return detail, nil
-		}
-	}
-	s.mu.RUnlock()
-
-	// 回退到 SQLite
+	// 优先从 SQLite 读取 details_json（权威源，含 v2 字段）
 	ctx, cancel := context.WithTimeout(context.Background(), traceQueryDeadline)
 	defer cancel()
 
