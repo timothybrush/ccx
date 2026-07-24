@@ -362,7 +362,7 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] endpoint 尝试摘要追加到 TraceStore：AppendEndpointAttempt，乱序合并、容量截断。
 - [x] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要：通过 SetAttemptRecorderHook 接入 upstream_failover，CreatePendingLog 后记 "started"，成功/错误时记 "completed"。
 - [x] ReleaseController 接入 main.go 请求路径：SmartRouter 消费 RoutingReleaseSnapshot，入口冻结后回填 trace 发布维度。
-- [ ] 真实上游 smoke（opt-in）与 SSE golden 回归（TODO: 后续迭代）
+- [x] 补 L2 集成测试：SmartRouter + TraceStore 生命周期（BuildPlan dry-run、ReleaseController 快照冻结、安全覆盖、in-flight 提升、Scheduler 裁决同步、必落盘类别）。
 - [x] ChannelLog 展示面跳转入口：为非空 autopilotTraceUid 添加可点击 chip，点击打开 AutopilotTraceDetailDialog 展示决策详情。
 - [ ] L2/L3/L4 集成测试补充（TODO: 后续迭代）
 
