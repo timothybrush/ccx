@@ -50,7 +50,9 @@
 |---|---|
 | 计费正确性 | 给定模型、输入长度、输出 token、套餐类型与请求时刻，能确定性算出 AFP；边界时刻自动恢复基础系数。 |
 | 路由正确性 | 同一 Agent Plan 配额池内以 AFP 比较成本；不会把 AFP 数值直接与其他供应商 USD 数值混算。 |
-| 模型区分 | `kimi-k3` 与 `glm-5.2` 具有独立模型画像、质量证据与成本记录；不存在“同一进阶档即等价”的捷径。 |
+| 模型区分 | `kimi-k3` 与 `glm-5.2` 具有独立模型画像、质量证据与成本记录；不存在“同一进阶档即等价”的捷径。固定 `QualityTier` 只承担兼容性能力下界，不再直接代表最终选模等级。 |
+| 边界分层 | 在同一质量证据口径与成本可比作用域内构造模型能力—成本 Pareto 边界；边界微簇数量由数据决定、不设全局档数上限，再为 `quality_first`、`balanced`、`cost_first` 三种倾向分别物化 3–5 个首选/回退阶段。 |
+| 体验兜底 | 当前目标档没有健康且满足硬能力的候选时，按候选阶梯自动选择相邻可用档；不得仅因目标档空缺而拒绝本可完成的请求。 |
 | 可解释性 | dry-run、Routing Trace 和诊断输出能说明基础系数、活动规则、有效系数、估算 AFP 与未采用原因。 |
 | 安全性 | 显式模型映射、手动渠道、协议/能力/上下文约束和 failover 语义保持优先，AFP 数据缺失时 fail-open 到既有策略。 |
 
@@ -70,11 +72,15 @@
 2. 现有 `CostTier` 过粗，不能表示 `deepseek-v4-flash`、活动期 GLM、`deepseek-v4-pro` 和 `kimi-k3` 的真实相对消耗。
 3. 公共 USD 价格、AFP 订阅配额和其他供应商套餐的单位不同；直接把数值放入一个排序公式会制造伪精度。
 4. 计费分类“进阶”不是质量排序。价格可证明成本不同，不能单独证明 K3 的能力恰为 GLM 的两倍；质量排序必须由能力声明、探测与可审计的人工证据共同决定。
+5. 固定四档 `QualityTier` 无法表达同一模型在不同 effort、任务域、成本口径下形成的多个能力—成本点，也无法为三种成本倾向提供足够细的 fallback 梯度。
 
 ### 2.3 设计不变量
 
 - AFP 只在确认同一火山 Agent Plan 配额作用域的候选之间作为可比成本；跨 provider 或跨未知套餐仅记录，不用裸 AFP 覆盖既有排序。
 - `deepseek-v4-flash` 的 AFP 更低并不自动输给 GLM；`kimi-k3` 更贵也不自动被禁止。质量目标、上下文、工具、推理和用户显式意图先完成硬约束过滤。
+- 能力—成本分层只能在质量证据可比较且成本单位、配额 scope 一致的候选内进行；不同 benchmark 来源或不同成本 scope 不计算共同 Pareto 边界。
+- 每个倾向生成的是请求级 `CandidateLadder`，不是给模型永久贴一个全局等级。相同模型可因任务域、effort、输入长度和活动价格进入不同边界微簇与回退阶段。
+- 自动降级只放宽软质量目标和成本偏好，不放宽上下文、协议、视觉、工具调用、推理、模型授权与健康等硬约束；必要时允许升级成本以优先保证请求完成。
 - 价格活动是数据，不是手工调整渠道 `Priority` 的替代品；活动开始/结束必须由时钟自动生效和回退。
 - 活动数据失效、未知模型、未知输入 token 或无套餐身份时不报零成本，不阻断请求，回退到现有公共定价/排序并在 trace 中标记原因。
 - Coding Plan 的活动对象虽与 Agent Plan 同属官方活动，但本计划不假设其使用 AFP；未取得其独立计费公式前，只保留通用活动元数据，不将 Agent Plan AFP 套入 Coding Plan。
@@ -139,28 +145,108 @@ type AFPPromotionRule struct {
 
 ## 4. 模型能力、质量与路由决策
 
-### 4.1 独立的模型级画像
+### 4.1 `QualityTier` 降级为兼容性能力带
 
-在现有模型注册表能力字段之外，为火山已验证模型建立显式路由画像：`QualityTier`、同档 `QualityPriority`、上下文窗口、工具调用、推理模式、视觉能力、来源证据与复核日期。`kimi-k3`、`glm-5.2`、`deepseek-v4-pro` 和 `deepseek-v4-flash` 必须分别建档；不得从“文本生成（进阶）”或 AFP 系数直接继承同一个质量档。
+保留现有 `low / normal / high / premium` 仅用于配置兼容、最低质量下界和无 benchmark 时的保守 fallback；不再增加 `frontier / ultra / super` 等静态枚举来模拟连续能力差异。动态等级由请求级 `FrontierCluster` 表达。上下文、工具调用、推理、视觉和模型授权仍是独立硬能力，不能塞入 `QualityTier`。
 
-`ProviderTemplate.ModelQualityPriorities` 可以作为同质量候选的稳定 tie-breaker，但火山条目只有在能力探测、官方规格和人工评审均齐备后才填入。AFP 成本只进入成本维度，不能凭“10 对 4.5”自动断言 K3 的质量是 GLM 的两倍。
+真正选模使用模型级、任务域级的连续证据：总体能力分、coding/agentic/reasoning 等域分、置信度、证据 lane（`verified / provisional / heuristic`）、版本和复核时间。优先复用现有 `ModelBenchmarkProfile`、`DomainStrengthEvidence` 与 endpoint 实测，避免再造一套互相冲突的质量源。
 
-### 4.2 选模顺序
+原始 benchmark 记录只是 `BenchmarkObservation`，不能直接成为 Frontier 候选点。同一个模型在不同数据源、运行批次、上下文长度或采样设置下出现多个 pass@1 点时，必须先按 `benchmark + datasetVersion + metric + effort + taskDomain` 划分可比 cohort，在 cohort 内计算带置信区间的标准化结果，再按 canonical model + model version + effort + task domain 汇总为一个 `QualityEstimate`。禁止直接平均不同 benchmark 的原始 pass@1，也禁止让重复观测数量较多的模型获得额外权重。
 
-对一个可自动解析的火山 Agent Plan 候选，按以下顺序决定实际模型：
+不同 cohort 的 percentile/z-score 仍不天然可比，不能仅因都归一化到 `0..1` 就合并。首版为每个任务域选择一个版本化 primary cohort 构建正常 frontier，其他来源只用于置信度、冲突提示和 shadow 对照；只有存在足够共享锚点模型、完成单调校准且交叉验证误差低于阈值时，才允许生成跨来源的 latent quality score。
 
-1. 保留用户显式 `modelMapping`、`X-Channel`、会话 override、promotion、协议、上下文、视觉、工具、推理与健康约束。
-2. 使用模型画像过滤不满足能力下界的模型；复杂度、长上下文和工具需求必须提高质量/能力下界，即使请求来自 `subagent`。
-3. 在满足下界的最小质量收益带内，比较同一 AFP 作用域的有效 AFP；低置信度成本不改变顺序。
-4. 若 AFP 相近，再比较模型级质量优先级、实测成功率、延迟、渠道健康和稳定的用户偏好。
-5. 无合格火山模型或选择失败时走现有 Scheduler/failover；不得因为 AFP 计算失败而拒绝请求。
+同一 cohort 内的重复运行使用带不确定性的稳健中位数/收缩估计；只有任务集、metric、effort 和采样设置一致时才允许加权均值。来源间结论冲突时降低置信度并保留分歧范围，不用一个看似精确的平均分掩盖冲突。
 
-### 4.3 策略含义
+`kimi-k3`、`glm-5.2`、`deepseek-v4-pro` 和 `deepseek-v4-flash` 必须分别建档。AFP 成本只进入成本维度；`10` 对 `4.5` 或活动期 `1.125` 能证明成本不同，不能单独证明质量倍率。缺少可比 K3 证据时，将其标记为 provisional：不得因高价格获得更高质量位置，也不进入正常首选边界；但仍保留在 overflow/emergency fallback 中，避免它恰好是唯一满足硬能力的模型时阻断请求。
 
-- `deepseek-v4-flash` 适合作为能力满足时的低成本 worker/lightweight 候选；它不是所有子代理的强制默认值。
-- 活动期 `glm-5.2` 是中高质量、长上下文任务的有效 AFP 候选，不能被过期的 Pro/Kimi 活动倍率压低。
-- `kimi-k3` 是独立的高成本模型画像。它仅在明确质量目标、模型能力证据或用户策略满足时参与升级，而不是被粗粒度“进阶”标签合并。
-- 主代理与子代理可拥有不同质量预算，但不能用“子代理”这一标签无条件降低复杂任务的质量下界；角色专用序列/ManualRoutingIntent 仍是用户可见、可撤销的优先控制面。
+### 4.2 请求级能力—成本点
+
+边界计算的最小单位不是模型名，而是请求级路由点：
+
+```go
+type FrontierPoint struct {
+    CandidateID, CanonicalModel, ModelVersion, Effort string
+    Domain                                           TaskDomain
+    QualityScore, QualityConfidence                  float64
+    QualityLow, QualityHigh                          float64
+    Cost                                             CostEvidence
+    EndpointCandidates                               []EndpointCandidateRef
+    EvidenceVersion                                  string
+}
+```
+
+同一模型的不同 model version、effort、活动价格、任务域和输入长度可以产生不同点；同一模型的多个 endpoint 不重复生成质量点，而是挂到 `EndpointCandidates` 供健康、容量、延迟和 failover 排序。只有 endpoint 存在持续、可复现的供应商质量差异时，才以带置信度的 provider adjustment 修正模型质量，不能把单次探测波动当作新等级。
+
+图表中的平均成本、中位成本和成本范围用于离线分析与异常识别，不能替代运行时请求成本。Frontier 的横轴必须使用当前请求的输入估算、输出预算、cache 语义、effort、活动时刻和具体 quota scope 计算的 `expectedCostPerRequest`；历史平均/中位成本只能作为 token 预算未知时的低置信度先验，并必须在 trace 中标注。
+
+先执行硬能力、授权、健康和证据新鲜度过滤，再按 `cost.unit + cost.scopeID + benchmarkCohort` 分组；只有同组点可以互相判断支配关系。公开按量渠道可在统一为 USD/task 且 benchmark cohort 相同后组成 USD 比较域；AFP 只能在同一套餐 quota scope 内组成 AFP 比较域，二者绝不合并。
+
+质量更低且成本不低的点属于后续 Pareto rank，默认不进入首选边界，但只要满足硬能力就必须保留在完整候选图和 overflow fallback 中。Pareto 负责确定优先级，不负责删除最后可用的完成路径；endpoint/容量独立性可以把后续 rank 候选提前到相邻回退档。
+
+支配关系必须考虑不确定性：只有候选 A 的质量置信下界不低于 B 的质量上界、成本不高于 B，且至少一个维度严格更优时，才允许以高置信度支配 B。区间重叠时不得删除 B，只能标记为 `uncertain_frontier` 并在档内通过成本、稳定性和延迟排序。
+
+多个可比成本域组成 `FrontierForest`，而不是一条伪全局曲线。每个 AFP quota scope、统一 USD/task 域和未知成本域分别生成 frontier；只有用户提供显式兑换/预算策略时才能跨树比较成本。没有跨域价值配置时，先在各树内生成候选阶梯，再沿用既有用户优先级、质量证据和健康策略合并树间顺序，trace 必须标记 `costIncomparableAcrossScopes=true`。
+
+三种倾向只在每棵可比树内部改变能力—成本取舍，不得借 `cost_first` 名义跨树猜测 AFP 与 USD 的相对价值。树间顺序固定遵循显式用户控制、现有 provider/channel 优先级、满足任务质量目标的证据和健康状态；若用户希望跨树按成本优化，必须先配置可审计的预算或兑换策略。
+
+### 4.3 完整 Pareto 边界与三倾向候选阶梯
+
+首版不采用随机初始化的运行时 K-Means，避免同一输入产生漂移等级。使用确定性的“非支配排序 + ε 近似去重 + 相邻差距微簇”：先按成本升序排列边界点，再根据归一化能力差、对数成本倍率差和质量置信区间重叠合并相邻近似点；任一差距超过当前 cohort 的稳健阈值（中位数 + MAD）即形成自然断点。样本过少时使用版本化的保守最小阈值，不从单次请求临时拟合。能力分和成本是聚类轴；稳定性、延迟、endpoint 独立性只用于簇内排序和可用性判断，不改变能力—成本边界。
+
+`FrontierCluster` 数量由有效数据决定，不设 5 档上限；按能力由低到高赋予请求级序号 `F0...Fn`，序号仅在相同 `frontierVersion + requestDomain + costScope` 内有意义。完整候选图保留全部 Pareto rank；证据、价格或请求域变化时重新生成，不把动态簇写回模型的永久等级。
+
+若某棵树内没有任何 verified/provisional 可比质量点，使用现有 `QualityTier`、硬能力满足度、用户顺序和健康状态构造 `cold_start` 保守阶梯；此时成本只在同 scope 且已知的候选间作末级 tie-break，不生成伪 Pareto 质量结论。随着证据补齐切换到正常 frontier，trace 记录模式变化。
+
+质量证据归一化、cohort 汇总和自然断点阈值按 `evidenceVersion` 离线预计算；请求路径只做硬过滤、请求成本重算、支配关系更新和阶梯物化。结果按 `frontierVersion + requestDomain + costScope + inputBucket + outputBudgetBucket + promotionEpoch + capabilityMask` 缓存，活动切换、模型/能力证据变更、套餐 scope 变更时失效。缓存仅是性能优化，命中与否不得改变排序结果。
+
+Autopilot 三种倾向分别生成自己的候选阶梯，而不是共用一条静态质量序列：
+
+| 倾向 | 首选区域 | 目标档与 2–4 个相邻回退档 | 无首选候选时 |
+|---|---|---|---|
+| `quality_first` | 边界高能力端 | 能力收益、证据置信度优先，成本用于限制无意义升级 | 向相邻较低能力档逐级降级，同时保留硬能力。 |
+| `balanced` | Pareto 膝点附近 | 优先单位成本带来的能力增益，再考虑稳定性与延迟 | 从最近效用档向两侧展开，先保质量再增加成本。 |
+| `cost_first` | 满足最低能力的低成本端 | AFP/成本优先，但不得低于请求能力下界 | 允许向更高成本档升级以保证完成，不因便宜档不可用而失败。 |
+
+每种倾向基于完整候选图物化一个 3–5 阶段的活动窗口：1 个目标档加 2–4 个有序回退档。窗口之外的微簇不丢弃，而是作为可继续展开的 `overflow fallback tail`；前 3–5 阶段全部不可用时继续沿当前倾向的效用顺序搜索，直到找到满足硬能力的候选或真正耗尽。
+
+```go
+type CandidateLadder struct {
+    FrontierVersion string
+    Lane            CostPreferenceMode
+    Preferred       []LadderStage // 3–5 个活动阶段
+    Overflow        []LadderStage // 完整候选图剩余的有序兜底尾部
+}
+```
+
+每一档可以包含多个近似等价候选，档内先按健康、成功率、endpoint 独立性和延迟排序。模型数量不足时允许重复使用不同 endpoint 的同一模型，但不能为了凑满档数虚构质量差异；有效模型少于 3 个时阶梯自然缩短。`ProviderTemplate.ModelQualityPriorities` 只保留为证据完整时的最终确定性 tie-breaker，不再承担主要分层职责。
+
+活动阶段优先保证 canonical model 多样性：同一模型的多个 benchmark observation 不占多个位置，同一 model/version/effort 的多个 endpoint 收拢到同一 `LadderStage`。只有 model version 或 effort 形成经证据确认的显著能力—成本差异，或没有其他满足硬能力的模型时，才允许同一 canonical model 出现在多个阶段；该重复必须在 trace 中解释。
+
+### 4.4 质量收益与成本升级门槛
+
+候选质量差异小于最小显著阈值、置信区间重叠或任一方证据不足时，视为同一能力收益带并选择 AFP 更低者。只有质量收益经过可比 benchmark 或稳定实测确认，且未超过当前倾向允许的 `maxCostUpgradeRatio`，才允许在正常选优阶段自动升级到显著更贵的点。
+
+`maxCostUpgradeRatio` 是正常选优的软安全闸门，不是质量推断：例如活动期 K3 相对 GLM 约 `8.89×` AFP 时，除非任务域证据和当前倾向明确允许，否则不得只因同为 `premium` 或整数优先级更高而自动选择 K3。具体阈值由 shadow 数据校准并允许用户配置，首版不硬编码未经验证的业务数字。
+
+体验优先的 emergency fallback 在所有倍率内候选都不可用时可以越过该软闸门，选择仍满足硬能力的最小额外成本候选，并记录 `cost_guardrail_overridden_for_availability`。只有用户显式配置的绝对预算、禁止模型/供应商或合规边界才是不可越过的硬成本约束。
+
+为避免动态价格、测量噪声或分段边界造成模型抖动，已有会话在当前模型仍健康且仍处于同一活动阶段时保持粘性。只有新候选效用提升超过版本化 `switchMargin`、当前候选失效，或用户显式改变倾向/模型时才切换；活动结束不会中断在途请求，但下一请求若跨越成本档也必须满足迟滞规则。
+
+### 4.5 自动降级与体验优先
+
+对一个可自动解析的火山 Agent Plan 请求，先保留用户显式 `modelMapping`、`X-Channel`、会话 override、promotion 以及协议/能力硬约束，再从当前倾向的 `CandidateLadder` 选择目标档。目标档为空、全部 cooldown、配额不可用或 endpoint 失败时，按档位顺序继续尝试；一次逻辑请求内已经失败的候选不得重新进入。
+
+降级顺序必须区分“软目标不足”和“硬能力不足”：
+
+1. 先尝试同档其他 endpoint 或同等效用模型。
+2. 再尝试相邻档，允许质量小幅下降或成本上升。
+3. 只有质量下界导致无候选时，才逐档放宽软质量目标并记录 `quality_fallback`。
+4. 上下文、视觉、工具、推理、协议和授权不足不可放宽；无满足硬能力的模型时走现有 Scheduler/failover 或返回真实能力错误。
+5. AFP、质量证据或分层计算失败时不阻断请求，整个可比组成本维度退化为中性，禁止把未知成本当成免费或昂贵。
+6. 自动跨模型 fallback 只允许发生在下游响应尚未提交时；流式内容、工具调用或其他有副作用的输出一旦已发送，不得透明重放到另一模型，必须保留原错误/中断语义。
+7. 同一会话优先保持当前模型或同档 endpoint；正常切换需超过 `switchMargin`，健康/授权/硬能力失效则立即允许 fallback，不让粘性阻断可用性恢复。
+
+策略含义如下：`deepseek-v4-flash` 可出现在低成本端多个倾向的后备档；活动期 `glm-5.2` 可能位于 balanced 膝点或长上下文高收益档；`kimi-k3` 是高成本候选，只有可审计的任务域收益或用户显式策略才能进入更靠前档位。主代理与子代理可使用不同阶梯，但不能仅凭 `subagent` 标签降低复杂任务的硬能力下界。
 
 ## 5. 实现分层与数据流
 
@@ -169,31 +255,40 @@ type AFPPromotionRule struct {
 | 层 | 计划变更 | 不负责 |
 |---|---|---|
 | `internal/config` | 内置 AFP 政策目录、计划作用域解析、固定精度计算 DTO、模型级质量元数据的校验与深拷贝。 | 发起火山计费请求、保存密钥或修改渠道排序。 |
-| `internal/autopilot` | 从请求画像构造成本证据；在 `ModelResolver` 和 `SmartRouter` 复用同一计算结果；记录可解释摘要。 | 取代 Scheduler 的硬约束与 endpoint failover。 |
+| `internal/autopilot` | 提供与 provider 无关的 Frontier/Ladder 引擎，消费标准化质量证据和 `CostEvidence`；AFP 只是成本适配器之一。在 `ModelResolver`、`SmartRouter` 与 EndpointPolicy 复用同一决策证据。 | 取代 Scheduler 的硬约束与 endpoint failover。 |
 | `internal/metrics` | 接收实际 token 用量并记录实际 AFP/偏差的安全指标。 | 将估算 AFP 当作火山官方账单。 |
 | 管理 API / 前端 | 展示规则来源、活动状态、有效系数、成本置信度和 dry-run 解释。 | 直接编辑内置活动规则或回显凭证。 |
 
 ### 5.2 套餐作用域解析
 
-新增只读 `ResolveVolcenginePlanScope(upstream, apiKeyConfig)`：优先通过 `AccountUID + CredentialUID` 查询自动托管账号中的 `VolcengineAccessKeyPair.Plan`，再用已验证的火山数据面 URL 作受限回退。返回稳定 `scopeID`、计划种类、套餐状态、用量快照时间和可比性；不返回 AK/SK、API Key 或原始 URL。
+新增只读 `ResolveVolcenginePlanScope(upstream, apiKeyConfig)`：优先通过 `AccountUID + CredentialUID` 查询自动托管账号中的 `VolcengineAccessKeyPair.Plan`，并区分 credential 身份与真正共享 AFP 的 quota scope。再用已验证的火山数据面 URL 作受限回退。返回稳定 `scopeID`、计划版本/层级、套餐状态、用量快照时间、活动资格和可比性；不返回 AK/SK、API Key 或原始 URL。
 
 只有 `plan == agent_plan` 且套餐状态可用时返回 AFP 可比作用域。无法解析 credential、使用手工中转地址、用量过期或配额窗口已耗尽时，将 AFP 置信度降为不足并保留现有调度语义。
 
 ### 5.3 请求与结果数据流
 
-`协议入口 -> RequestProfile -> PlanScopeResolver -> AFPCostResolver -> ModelResolver -> SmartRouter -> Scheduler/EndpointPolicy -> 实际 token 统计 -> AFP outcome/Trace`
+`协议入口 -> RequestProfile/PricingSnapshot -> endpoint+model 候选展开 -> PlanScopeResolver/AFPCostResolver -> 硬能力过滤 -> Pareto 分层 -> 三倾向 CandidateLadder -> SmartRouter/EndpointPolicy -> Scheduler/failover -> attempt 级 token 统计 -> AFP outcome/Trace`
 
-同一个请求将 `AFPCostEvidence` 放入 context，避免 `ModelResolver`、`SmartRouter` 与 outcome 分别按不同时间重新计算活动状态。请求开始时固定 `pricingEvaluatedAt` 与政策版本；在途请求跨过活动结束时仍使用入口快照，下一请求自动使用新规则。
+请求入口只冻结 `pricingEvaluatedAt`、政策版本、token 估算及其置信度；AFP 成本在实际 model、endpoint 和 credential 已知后按候选生成，不能把单个请求级成本误用于同渠道的多个 Key。所有候选共享入口时钟快照，避免活动边界前后不一致；在途请求跨过活动结束时仍使用入口快照，下一请求自动使用新规则。
 
 ### 5.4 可解释输出
 
-在既有 dry-run 与 trace 候选字段中追加可选的安全摘要：`costUnit`、`costScope`（匿名稳定 ID）、`baseInputCoefficient`、`baseOutputCoefficient`、`inputSegment`、`promotionID`、`promotionApplied`、`estimatedAFP`、`actualAFP`、`costConfidence` 和 `pricingPolicyVersion`。不输出密钥、完整 BaseURL、账号名、控制台响应或请求正文。
+在既有 dry-run 与 trace 候选字段中追加可选的安全摘要：`costUnit`、`costScope`（匿名稳定 ID）、`baseInputCoefficient`、`baseOutputCoefficient`、`inputSegment`、`promotionID`、`promotionApplied`、`estimatedAFP`、`computedAFP`、`costConfidence`、`pricingPolicyVersion`、`paretoRank`、`frontierBand`、`routingLane`、`fallbackStep` 和 `qualityEvidenceVersion`。不输出密钥、完整 BaseURL、账号名、控制台响应或请求正文。
 
 当 Trace v2 实施计划先落地时，这些字段进入其 DTO 和持久化详情；若未落地，则先作为向后兼容的可选 JSON 字段写入当前 Trace，避免两项工作互相阻塞。
 
 ## 6. 分任务实施步骤
 
 所有后端行为先写失败测试，再补实现；每个任务只提交该任务必要的文件。活动规则以编译期内置目录起步，后续更新必须同时更新来源、有效期和测试，不通过远程网页抓取静默改变运行时成本。
+
+### Task 0：确认当前 DeepSeek 选路根因与优先级边界
+
+**文件：** 只读检查现有 Routing Trace、Scheduler 诊断与脱敏配置；必要时只补诊断测试，不修改用户路由。
+
+1. 对复现请求记录 `selectionReason`、请求/实际模型、渠道、endpoint、任务类和角色，确认是否命中 `manual_override`、`promotion_priority`、session affinity、显式 `modelMapping` 或 Autopilot 成本评分。
+2. 明确 AFP 只影响 SmartRouter/自动模型解析路径；所有被显式控制面短路的请求在 trace 中记录 `afpBypassedReason`，避免把未生效误判为定价计算错误。
+3. 若 DeepSeek 来自过期自动促销元数据而非用户显式意图，应另建配置修复任务；本计划不静默清除用户主动设置的 promotion 或 override。
+4. 用固定夹具覆盖促销/override 优先、普通 SmartRouter 选路和 endpoint 级实际模型回填三条路径，作为后续 AFP 行为基线。
 
 ### Task 1：建立 Agent Plan AFP 政策与纯计算器
 
@@ -208,38 +303,50 @@ type AFPPromotionRule struct {
 
 **文件：** 新建或修改 `backend-go/internal/config/volcengine_plan_scope.go`、对应 `_test.go`；必要时复用 `config_accounts.go` 的只读查询。
 
-1. 通过 `AccountUID`、`CredentialUID` 和已绑定的火山套餐元数据解析 `agent_plan` / `coding_plan`、匿名 scope ID、状态与用量快照。
+1. 通过 `AccountUID`、`CredentialUID` 和已绑定的火山套餐元数据解析 credential、真实 quota scope、`agent_plan` / `coding_plan`、个人版活动资格、`PlanTier`、状态与用量快照。
 2. 仅在凭证关联缺失时，使用已知 `/api/plan`、`/api/coding` URL 作为低置信度 hint；不从渠道名称、API Key 或自由文本猜测套餐。
 3. 建立同 scope、不同 scope、未知 scope、失效套餐、用量耗尽、多个 endpoint/key 的测试矩阵；断言返回值不会带出任何密钥或原始 URL。
 4. Coding Plan 返回可识别但 `AFPComparable=false`，直到其独立计费规则被补充和测试覆盖。
 
-### Task 3：把成本证据接入请求画像
+### Task 3：构造请求快照与候选级成本证据
 
 **文件：** 修改 `backend-go/internal/autopilot/request_profile*.go`、新增 `afp_cost_evidence.go` 及测试。
 
-1. 在统一请求画像中增加输入 token 估算、输出预算、来源和置信度；六类代理入口的缺省值语义必须一致。
-2. 请求入口一次性生成 `PricingSnapshot`（政策版本、评估时间、scope、AFP 结果），并写入 context；任何后续步骤只能读取该快照。
-3. 为显式 `max_tokens`、上下文约束、未知输出预算、流式/非流式、长上下文三个输入段写测试，确保未知不会伪装成免费。
+1. 在统一请求画像中增加输入 token 估算、输出预算、来源和置信度；首版只对文本生成操作生成 AFP 证据，图片、视频与向量保持各自计费边界。
+2. 请求入口一次性生成 `PricingSnapshot`（政策版本、评估时间、token 预算），实际 AFP 结果必须在 model、endpoint 与 credential 已知后按候选生成。
+3. 定义 `FrontierPoint`、`EndpointCandidateRef` 和可比较组键；不同 canonical model/version/effort/task domain、成本 scope 或有效成本必须产生独立 Frontier 点。同模型、同 scope、同成本的多个 endpoint/key 聚合为执行引用，不重复占据质量点或阶梯阶段。
+4. 为显式 `max_tokens`、未知输出预算、分段边界估算不确定、流式/非流式、多个 endpoint/key 写测试，确保未知不会伪装成免费。
 
-### Task 4：统一 ModelResolver 与 SmartRouter 的成本比较
+### Task 4：实现确定性 Pareto 分层与三倾向候选阶梯
 
-**文件：** 修改 `backend-go/internal/autopilot/model_resolver.go`、`smart_router.go`、相关测试；按需收敛 `provider_templates.go` 的静态倍率职责。
+**文件：** 新建 `backend-go/internal/autopilot/model_frontier.go`、`candidate_ladder.go` 及对应测试；修改 `model_resolver.go`、`smart_router.go`；按需收敛 `provider_templates.go` 的静态倍率职责。
 
-1. 让两个选优路径都消费同一 `CostEvidence`，禁止一处用 AFP、另一处继续用公共 USD 后给出冲突答案。
-2. 在同一 AFP scope 内按有效 AFP 排序；跨单位、跨 scope 或低置信度候选不比较裸成本，维持既有质量/健康/优先级顺序。
-3. 保留 `ModelQualityPriorities` 作为独立且有证据的同档 tie-breaker；为 K3、GLM、DeepSeek 建立不依赖价格推断的模型级画像测试夹具。
-4. 写失败测试覆盖：Flash 对 GLM 的成本胜出、活动期 GLM 对 Pro 的成本胜出、K3 仅在更高质量约束下升级、显式 `modelMapping` 不被 AFP 覆盖、未知 AFP fail-open。
+1. 将原始 benchmark observation 按 cohort 归一化并按 canonical model/version/effort/domain 汇总为带置信区间的 `QualityEstimate`；缺少可比证据的点标记为 provisional，不得凭价格或静态档位支配其他模型，但必须进入 overflow/emergency fallback。
+2. 在相同成本 scope 和 benchmark cohort 内实现带不确定性的非支配排序、ε 去重、稳健自然断点和不限量 `FrontierCluster`；输入相同必须得到相同完整候选图，并提供全体证据不足时的 `cold_start` 阶梯。
+3. 为 `quality_first`、`balanced`、`cost_first` 分别从完整候选图物化 3–5 个活动阶段和有序 overflow tail；优先保证 canonical model 多样性，每档保留多个健康/容量 endpoint 后备，并记录 `paretoRank`、cluster、stage 与进入原因。
+4. 实现显著质量收益与 `maxCostUpgradeRatio` 门控；K3/GLM、GLM/Flash、活动前后价格变化必须产生可解释且稳定的阶梯变化。
 
-### Task 5：暴露诊断、实际 AFP 与可控启用
+### Task 5：接入候选阶梯与体验优先自动降级
+
+**文件：** 修改 `backend-go/internal/autopilot/model_resolver.go`、`smart_router.go`、`endpoint_policy.go` 及相关测试。
+
+1. 让 ModelResolver、SmartRouter 和 EndpointPolicy 消费同一 `CandidateLadder`，禁止不同阶段重新计算活动状态、模型档位或成本顺序。
+2. 先在 shadow 中输出推荐阶梯而不改变实际顺序；主动模式只在用户启用后应用目标档及档内排序。
+3. 实现同档 endpoint 替换、相邻档 fallback、软质量逐档降级和成本向上兜底；硬能力、授权与显式用户意图始终不可放宽。
+4. 写失败测试覆盖：目标档全 cooldown、低成本档模型无权访问、同渠道不同 plan Key、跨渠道 failover、已失败候选不重试、所有软质量档为空但仍有硬能力可用模型。
+5. 未知/低置信度成本使整个可比组成本维度中性；不得把“有 AFP 数据”本身作为优先于未知候选的正向信号。
+
+### Task 6：暴露诊断、计算 AFP 与可控启用
 
 **文件：** 修改 `backend-go/internal/autopilot/handlers_dryrun.go`、`routing_trace*.go`、对应 API/前端类型与测试。
 
-1. dry-run 返回每个候选的安全 AFP 摘要、未比较原因和排序影响，便于在不发真实请求时复核规则。
-2. 请求结束后以实际 token 用量计算 AFP，并在 Trace/窗口指标中区分 `estimated` 与 `actual`；计量失败不影响响应。
-3. 增加独立 `afpCostRoutingEnabled` 开关，默认关闭；`shadow` 只记录建议，`assist/auto` 必须经过第 7 节的观察门槛后才能启用。
-4. 管理端只展示只读活动状态和来源；不提供在线编辑官方倍率的入口，活动更新通过版本化代码/预设发布。
+1. dry-run 返回 observation→quality estimate→frontier point→cluster→ladder stage 的安全证据链、AFP 摘要、跨来源/跨 scope 未比较原因和排序影响，便于在不发真实请求时复核规则。
+2. 按上游 attempt 使用已报告 token 计算 `computedAFP`，并在 Trace/窗口指标中区分 `estimated`、`computed` 与 `usageUnavailable`；计量失败不影响响应，也不能记录为零消耗。
+3. 增加两个正交开关并默认关闭：`frontierRoutingEnabled` 控制通用 Frontier/Ladder 是否影响选路，`afpCostRoutingEnabled` 只控制 AFP 成本适配器是否参与可比树。任一关闭都不得让另一方以不完整证据改变路由。
+4. `shadow` 只记录建议；`assist/auto` 必须经过第 7 节的观察门槛后才能启用。切换开关、证据版本或活动 epoch 时使缓存失效，但不改写用户配置和在途请求快照。
+5. 管理端只展示只读活动状态、质量 cohort、Frontier 版本、缓存命中、会话迟滞和来源；不提供在线编辑官方倍率的入口，活动更新通过版本化代码/预设发布。
 
-### Task 6：模型策略与文档更新
+### Task 7：模型策略与文档更新
 
 **文件：** 修改模型注册表/内置预设、`docs/` 中火山渠道说明及相关单测。
 
@@ -255,21 +362,23 @@ type AFPPromotionRule struct {
 |---|---|
 | 纯函数 | AFP 公式、固定精度、输入分段、别名、活动起止、历史回放、未知值和溢出。 |
 | 配置 | 套餐 scope 解析、深拷贝、热重载、密钥脱敏、失效/耗尽套餐降置信度。 |
-| Resolver/Router | 同 scope AFP 排序、跨 scope 不混算、质量约束、K3/GLM 独立画像、手动映射与 fail-open。 |
-| HTTP dry-run | 请求画像到候选解释的完整安全响应；不发送上游请求。 |
-| 请求生命周期 | 实际 token 用量回填 AFP、streaming 终态、trace 写入失败与活动边界中的在途快照。 |
+| Frontier/Ladder | observation 去重、同 cohort 归一化、跨来源不直算 Pareto、置信区间支配、FrontierForest、不限量确定性微簇、三倾向各 3–5 个活动阶段与 overflow tail、canonical model 多样性及成本升级门槛。 |
+| Resolver/Router | 同 scope AFP 排序、跨 scope 不混算、同档 endpoint 替换、相邻档降级、成本向上兜底、手动映射与 fail-open。 |
+| HTTP dry-run | 请求画像到完整候选阶梯、目标档、fallback 路径和未比较原因的安全响应；不发送上游请求。 |
+| 请求生命周期 | 版本化缓存命中/失效等价性、会话 `switchMargin` 迟滞、attempt 级 token 与 computed AFP、重试/failover 聚合、streaming 终态、trace 写入失败与活动边界中的在途快照。 |
 | 手工 smoke | 使用已授权的非生产测试凭证核对一个 GLM 活动期样本与火山控制台 AFP；不把凭证、原始响应或账号数据写入测试夹具。 |
 
 ### 7.2 上线顺序
 
-1. 发布政策目录、计算器和 trace 字段，但保持 `afpCostRoutingEnabled=false`；确认所有现有请求不改变渠道选择。
-2. 在 shadow 模式收集火山 Agent Plan 的建议与实际选择，核查规则 ID、有效系数、scope、输入分段和未知原因。
-3. 只有以下条件同时满足才对用户明确选定的单一作用域启用 assist：计算错误为零、手动映射零回归、跨单位比较零发生、GLM/Pro/Flash/K3 样例与人工 AFP 核验一致。
-4. 自动模式只在 shadow/assist 证据满足既有 Readiness/SLO 门槛后由用户显式启用；不把本轮活动作为全局自动重排的授权。
+1. 发布政策目录、计算器、Pareto/阶梯 dry-run 和 trace 字段，但保持 `frontierRoutingEnabled=false`、`afpCostRoutingEnabled=false`；确认所有现有请求不改变渠道选择。
+2. 在 shadow 模式同时记录完整边界微簇、三倾向的目标档与 3–5 个活动阶段、overflow tail、实际选择和模拟 fallback，核查规则 ID、scope、输入分段、质量证据版本与未知原因。
+3. 先只启用同档 endpoint 排序，再启用相邻档 fallback；质量降级和成本向上兜底分别设置观测门槛，避免一次发布改变全部行为。
+4. 只有以下条件同时满足才对用户明确选定的单一作用域启用 assist：计算错误为零、阶梯确定性成立、硬能力零放宽、手动映射零回归、跨单位比较零发生、GLM/Pro/Flash/K3 样例与人工 AFP 核验一致。
+5. 自动模式只在 shadow/assist 证据满足既有 Readiness/SLO 门槛后由用户显式启用；不把本轮活动作为全局自动重排的授权。
 
 ### 7.3 回滚
 
-- `afpCostRoutingEnabled=false` 必须立即让成本证据退化为“仅观测”，不删除 trace、模型画像或原有策略。
+- `frontierRoutingEnabled=false` 必须立即恢复既有选路；`afpCostRoutingEnabled=false` 必须让 AFP 成本证据退化为“仅观测”。两者都不删除 trace、模型画像或原有策略。
 - 发现来源数据变更、AFP 与控制台偏差超阈值、错误跨 scope 排序或手动路由受影响时，关闭该开关并记录政策版本/活动 ID。
 - 过期活动修正应更新目录并发布新版本；不得通过修改历史 trace 或手工拖动渠道优先级掩盖问题。
 
@@ -295,6 +404,9 @@ cd "frontend" && bun run build
 | 官方活动变更或提前结束 | 政策目录保留来源、核验日期和版本；默认关闭成本路由；活动更新走代码审查与边界测试。 |
 | 把 AFP 当作跨供应商货币 | 以 `unit + scopeID` 强制隔离；缺少用户定义的兑换规则时禁止跨单位比较。 |
 | 价格被误当作质量 | 模型级能力和质量证据独立维护；质量排序变更必须有探测/评审依据。 |
+| 聚类结果随样本漂移 | 使用确定性非支配排序、政策版本和最小档位间距；同一输入的阶梯必须可复现，证据变化通过新版本生效。 |
+| 自动降级损害体验 | 只逐档放宽软质量目标，硬能力永不放宽；trace 记录 fallback 路径，并以成功率、用户重试率和质量反馈作为灰度门槛。 |
+| cost-first 无候选时请求失败 | 允许向更高成本档升级，优先保证请求完成；通过可配置最大升级倍率和预算告警限制意外消耗。 |
 | 输出 token 估算不准 | 将估算与实际 AFP 分开；低置信度不影响排序；用控制台样本校准后再灰度。 |
 | 临近活动边界的在途请求抖动 | 入口固定 `PricingSnapshot`，只让后续请求使用新活动状态。 |
 | 规则泄露账号信息 | scope 仅使用服务器生成的匿名 ID；管理 API、trace、测试夹具都不含 AK/SK、API Key 或完整端点。 |
@@ -304,8 +416,9 @@ cd "frontend" && bun run build
 1. 由套餐所有者确认 Agent Plan AFP 表的官方来源、时区和活动结束时刻是否采用闭区间；如官方页面改动，以最新页面为准。
 2. 获取 Coding Plan 的独立用量公式和基础系数前，不启用其 AFP 成本比较。
 3. 为 `kimi-k3`、`glm-5.2` 等模型确认可复现的质量/能力证据与所需任务类，不以价格倍率代替评测。
-4. 确认将 AFP 仅用于同一套餐 scope 的相对排序，还是未来引入经用户配置的 AFP 货币化预算；两种策略不得混合上线。
-5. 确认 GLM 活动结束后是否需要保留历史 trace 的复算视图；本计划默认保留原政策版本，不重算历史决策。
+4. 确认三种倾向的目标语义、每条阶梯期望档数、最小显著质量差和允许的成本升级倍率；首版默认由 shadow 数据提出建议，不凭主观命名硬编码模型等级。
+5. 确认将 AFP 仅用于同一套餐 scope 的相对排序，还是未来引入经用户配置的 AFP 货币化预算；两种策略不得混合上线。
+6. 确认 GLM 活动结束后是否需要保留历史 trace 的复算视图；本计划默认保留原政策版本，不重算历史决策。
 
 ### 8.3 事实源
 
