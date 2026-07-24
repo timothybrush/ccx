@@ -17,15 +17,19 @@ import (
 type RoutingConfigResponse struct {
 	Mode             string               `json:"mode"`
 	KillSwitchActive bool                 `json:"killSwitchActive"`
+	RolloutPercent   int                  `json:"rolloutPercent"`
+	ControlPercent   int                  `json:"controlPercent"`
+	ReleaseID        string               `json:"releaseId"`
 	CostPreference   string               `json:"costPreference,omitempty"`
 	L2ProbeEnabled   bool                 `json:"l2ProbeEnabled,omitempty"`
 	Readiness        *AutoReadinessReport `json:"readiness,omitempty"`
 }
 
 // RoutingConfigUpdateRequest PUT /smart-routing/config 请求体。
-// 只允许修改 mode 和 costPreference。
+// 只允许修改 mode、rolloutPercent 和 costPreference。
 type RoutingConfigUpdateRequest struct {
 	Mode           string `json:"mode,omitempty"`
+	RolloutPercent *int   `json:"rolloutPercent,omitempty"`
 	CostPreference string `json:"costPreference,omitempty"`
 }
 
@@ -76,9 +80,9 @@ func handleUpdateRoutingConfig(deps *RoutingConfigDeps) gin.HandlerFunc {
 		// 校验 mode
 		if req.Mode != "" {
 			normalizedMode := strings.ToLower(req.Mode)
-			validModes := map[string]bool{"off": true, "shadow": true, "assist": true, "auto": true}
+			validModes := map[string]bool{"off": true, "shadow": true, "assist": true, "auto": true, "active": true}
 			if !validModes[normalizedMode] {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 mode，可选值: off/shadow/assist/auto"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 mode，可选值: off/shadow/assist/auto/active"})
 				return
 			}
 			if normalizedMode == config.AutopilotModeAuto && deps.CfgManager.GetEffectiveRoutingMode() != config.AutopilotModeAuto {
@@ -131,6 +135,9 @@ func routingConfigResponse(cfg config.AutopilotRoutingConfig, killSwitchActive b
 	resp := RoutingConfigResponse{
 		Mode:             cfg.EffectiveRoutingMode(),
 		KillSwitchActive: killSwitchActive,
+		RolloutPercent:   cfg.RolloutPercent,
+		ControlPercent:   cfg.ControlPercent,
+		ReleaseID:        cfg.ReleaseID,
 		CostPreference:   cfg.CostPreference.Mode,
 		L2ProbeEnabled:   cfg.HealthCheck.L2ProbeEnabled,
 	}

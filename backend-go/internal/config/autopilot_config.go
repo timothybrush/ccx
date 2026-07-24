@@ -32,6 +32,21 @@ type AutopilotRoutingConfig struct {
 	// true 时无条件回退到 "off"；AUTOPILOT_KILL_SWITCH 可在运行态强制启用急停。
 	KillSwitch bool `json:"killSwitch,omitempty"`
 
+	// RolloutPercent 灰度放量百分比 0-100。
+	// shadow/off 强制为 0，active 强制为 100，assist/auto 有效范围为 1-100。
+	RolloutPercent int `json:"rolloutPercent,omitempty"`
+
+	// ControlPercent 固定对照组百分比，首版固定为 1。
+	// 仅在 active 作用于未受保护的可路由请求，作为观测对照。
+	ControlPercent int `json:"controlPercent,omitempty"`
+
+	// ReleaseID 是当前发布批次的不可预测标识符（内部管理，不通过 API 暴露写入）。
+	// 每次从 off 开始的新策略发布或语义变更时重新生成。
+	ReleaseID string `json:"releaseId,omitempty"`
+
+	// RolloutSeed 是稳定分桶种子（内部管理，不通过 API 暴露）。
+	RolloutSeed string `json:"-"`
+
 	// disabledTaskClasses 命中的 TaskClass 请求，SmartRouter 完全不介入（等同 off），
 	// 回退到调度器默认行为。用于按任务类型临时下线 autopilot 影响，
 	// 不同于 TrustedRoutingAdvisorConfig.NeverDemoteTaskClasses（那是"禁止降级"保护名单，
@@ -362,7 +377,7 @@ type ABTestConfig struct {
 // ── 模式常量 ──
 
 const (
-	currentAutopilotConfigSchemaVersion = 2
+	currentAutopilotConfigSchemaVersion = 3
 
 	// AutopilotModeOff 完全关闭。
 	AutopilotModeOff = "off"
@@ -372,6 +387,8 @@ const (
 	AutopilotModeAssist = "assist"
 	// AutopilotModeAuto 全自动模式：应用硬约束过滤并按评分重排，支持 fail-open。
 	AutopilotModeAuto = "auto"
+	// AutopilotModeActive 全量自动模式：与 auto 路由语义相同，代表已完成 100% 放量。
+	AutopilotModeActive = "active"
 )
 
 const (
@@ -561,13 +578,39 @@ func DefaultAutopilotRoutingConfig() AutopilotRoutingConfig {
 
 // ── 校验与归一化 ──
 
+// validateRollout 校验灰度比例，非法值回退到安全默认。
+func (c *AutopilotRoutingConfig) validateRollout() {
+	switch c.RoutingMode {
+	case AutopilotModeOff, AutopilotModeShadow:
+		c.RolloutPercent = 0
+	case AutopilotModeActive:
+		c.RolloutPercent = 100
+		if c.ControlPercent <= 0 || c.ControlPercent > 10 {
+			c.ControlPercent = 1
+		}
+	case AutopilotModeAssist, AutopilotModeAuto:
+		if c.RolloutPercent < 1 || c.RolloutPercent > 100 {
+			c.RolloutPercent = 1
+		}
+	}
+	if c.RolloutSeed == "" {
+		c.RolloutSeed = fmt.Sprintf("seed_%d", time.Now().UnixNano())
+	}
+	if c.ReleaseID == "" {
+		c.ReleaseID = fmt.Sprintf("rel_%d", time.Now().Unix())
+	}
+}
+
 // Validate 校验并归一化 AutopilotRoutingConfig。
 // 非法值回退到安全默认，不返回 error（fail-open 策略）。
 func (c *AutopilotRoutingConfig) Validate() {
 	// 1. 模式校验
 	c.RoutingMode = normalizeAutopilotMode(c.RoutingMode)
 
-	// 2. 成本偏好校验
+	// 2. 灰度比例校验
+	c.validateRollout()
+
+	// 3. 成本偏好校验
 	c.CostPreference.validate()
 	c.CostOptimization.validateProviderTimePricing()
 
@@ -652,7 +695,7 @@ func dedupeNonEmptyStrings(items []string) []string {
 // 非法值回退到 AutopilotModeShadow。
 func normalizeAutopilotMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case AutopilotModeOff, AutopilotModeShadow, AutopilotModeAssist, AutopilotModeAuto:
+	case AutopilotModeOff, AutopilotModeShadow, AutopilotModeAssist, AutopilotModeAuto, AutopilotModeActive:
 		return strings.ToLower(strings.TrimSpace(mode))
 	case "":
 		return AutopilotModeShadow
@@ -875,6 +918,23 @@ func (cm *ConfigManager) SetCostPreference(cp CostPreferenceConfig) error {
 	return nil
 }
 
+// SetAutopilotRolloutPercent 更新灰度放量比例并持久化。
+// 仅在 assist/auto 模式下有效，自动校验范围 1-100。
+func (cm *ConfigManager) SetAutopilotRolloutPercent(pct int) error {
+	if pct < 1 || pct > 100 {
+		return fmt.Errorf("rolloutPercent 必须在 1-100 之间")
+	}
+	cm.mu.Lock()
+	cm.config.AutopilotRouting.RolloutPercent = pct
+	if err := cm.saveConfigLocked(cm.config); err != nil {
+		cm.mu.Unlock()
+		return err
+	}
+	log.Printf("[Config-Autopilot] 灰度比例已更新: %d%%", pct)
+	cm.fireConfigChangeCallbacks()
+	return nil
+}
+
 // SetABTestEnabled 更新 A/B 测试开关并持久化。
 // enabled=false 时立即停止所有影子请求采样。
 func (cm *ConfigManager) SetABTestEnabled(enabled bool) error {
@@ -911,7 +971,7 @@ func (c AutopilotRoutingConfig) EffectiveRoutingMode() string {
 // IsAutopilotActive 判断智能路由是否处于影响真实调度的模式。
 func (c AutopilotRoutingConfig) IsAutopilotActive() bool {
 	mode := c.EffectiveRoutingMode()
-	return mode == AutopilotModeAuto || mode == AutopilotModeAssist
+	return mode == AutopilotModeAuto || mode == AutopilotModeAssist || mode == AutopilotModeActive
 }
 
 // applyAutopilotEnvOverrides 将环境变量覆盖应用到 AutopilotRoutingConfig。

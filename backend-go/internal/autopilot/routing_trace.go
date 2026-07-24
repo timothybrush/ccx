@@ -19,6 +19,7 @@ import (
 type RoutingMode string
 
 const (
+	RoutingModeOff    RoutingMode = "off"     // 完全关闭
 	RoutingModeShadow RoutingMode = "shadow"  // shadow：只计算+记录，不影响真实调度
 	RoutingModeDryRun RoutingMode = "dry_run" // dry-run：计算但不生效，与 shadow 等价
 	RoutingModeAssist RoutingMode = "assist"  // assist：重排候选列表（不删除），影响调度顺序
