@@ -46,6 +46,28 @@ func WithChannelSelectionTrace(reason, summary string) ChannelLogOption {
 	}
 }
 
+// WithRequestCorrelationID 写入服务端逻辑请求关联 ID。
+// 由入口 handler 在请求开始时生成，贯穿所有渠道尝试。
+func WithRequestCorrelationID(correlationID string) ChannelLogOption {
+	return func(log *metrics.ChannelLog) {
+		if log == nil || correlationID == "" {
+			return
+		}
+		log.RequestCorrelationID = correlationID
+	}
+}
+
+// WithAutopilotTraceUID 写入 Autopilot 路由决策 trace UID。
+// 由 SmartRouter 生成，关联一次渠道尝试到其决策记录。
+func WithAutopilotTraceUID(traceUID string) ChannelLogOption {
+	return func(log *metrics.ChannelLog) {
+		if log == nil || traceUID == "" {
+			return
+		}
+		log.AutopilotTraceUID = traceUID
+	}
+}
+
 // CreatePendingLog 创建 pending 状态的日志条目（请求开始时调用）
 func CreatePendingLog(
 	channelLogStore *metrics.ChannelLogStore,

@@ -51,6 +51,10 @@ type ChannelLog struct {
 
 	// 代理 Key 掩码（用于成本报表按用户维度分组，由 ProxyAuthMiddleware 写入 gin context）
 	ProxyKeyMask string `json:"proxyKeyMask,omitempty"`
+
+	// Trace 关联（§3.5）
+	RequestCorrelationID string `json:"requestCorrelationId,omitempty"` // 服务端逻辑请求关联 ID
+	AutopilotTraceUID    string `json:"autopilotTraceUid,omitempty"`    // Autopilot trace UID
 }
 
 const (
