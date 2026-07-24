@@ -129,13 +129,55 @@ describe('ProtocolModelAvailability', () => {
     expect(messages.text()).toContain('ark-a***001')
     expect(messages.text()).toContain('ark-b***002')
     expect(messages.text()).toContain('channelEditor.protocolModels.coverage:1/2')
-    // 全量模型列表折叠为一个 details，差异区直接列出缺失关系
+    // 全量模型列表折叠为一个 details，覆盖分组直接列出模型与可用 Key 集合。
     expect(messages.findAll('details')).toHaveLength(1)
     expect(messages.findAll('details')[0].text()).toContain('actual-model')
     expect(messages.findAll('details')[0].text()).toContain('other-model')
   })
 
-  it('多 Key 模型一致时只显示一致提示，不展示差异区', () => {
+  it('按相同可用 Key 集合归并共同与专有模型', () => {
+    const wrapper = mount(ProtocolModelAvailability, {
+      props: {
+        routes: [{
+          kind: 'messages', index: 0, name: 'volcengine-agent-plan', serviceType: 'claude',
+          discoveredModels: ['shared-model', 'coding-exclusive', 'agent-exclusive'],
+          modelBindings: [
+            { credentialUid: 'cred-f5', keyMask: 'ark-f5***2fd', models: ['shared-model', 'coding-exclusive'] },
+            { credentialUid: 'cred-de', keyMask: 'de5371***84e', models: ['shared-model', 'coding-exclusive'] },
+            { credentialUid: 'cred-9b', keyMask: 'ark-9b***8db', models: ['shared-model', 'agent-exclusive'] },
+            { credentialUid: 'cred-ec', keyMask: 'ark-ec***570', models: ['shared-model', 'agent-exclusive'] },
+          ],
+        }],
+      },
+      global: {
+        stubs: {
+          VChip: passthroughStub,
+          VIcon: passthroughStub,
+        },
+      },
+    })
+
+    const messages = wrapper.get('[data-kind="messages"]')
+    const groups = messages.findAll('.protocol-model-coverage-group')
+    const shared = groups.find(group => group.text().includes('shared-model'))
+    const codingOnly = groups.find(group => group.text().includes('coding-exclusive'))
+    const agentOnly = groups.find(group => group.text().includes('agent-exclusive'))
+
+    expect(messages.text()).toContain('channelEditor.protocolModels.diffCount:2')
+    expect(groups).toHaveLength(3)
+    expect(shared?.text()).toContain('channelEditor.protocolModels.coverageGroupShared:4')
+    expect(shared?.text()).toContain('ark-f5***2fd')
+    expect(shared?.text()).toContain('ark-ec***570')
+    expect(codingOnly?.text()).toContain('channelEditor.protocolModels.coverageGroupExclusive:2')
+    expect(codingOnly?.text()).toContain('ark-f5***2fd')
+    expect(codingOnly?.text()).toContain('de5371***84e')
+    expect(codingOnly?.text()).not.toContain('ark-9b***8db')
+    expect(agentOnly?.text()).toContain('ark-9b***8db')
+    expect(agentOnly?.text()).toContain('ark-ec***570')
+    expect(agentOnly?.text()).not.toContain('ark-f5***2fd')
+  })
+
+  it('多 Key 模型一致时展示共同模型分组', () => {
     const wrapper = mount(ProtocolModelAvailability, {
       props: {
         routes: [{
@@ -158,7 +200,10 @@ describe('ProtocolModelAvailability', () => {
     const messages = wrapper.get('[data-kind="messages"]')
     expect(messages.text()).toContain('channelEditor.protocolModels.consistent:2')
     expect(messages.text()).not.toContain('channelEditor.protocolModels.diffCount')
-    expect(messages.find('.protocol-model-route__diffs').exists()).toBe(false)
+    expect(messages.find('.protocol-model-route__coverage-groups').exists()).toBe(true)
+    expect(messages.text()).toContain('channelEditor.protocolModels.coverageGroupShared:2')
+    expect(messages.text()).toContain('model-a')
+    expect(messages.text()).toContain('model-b')
   })
 
   it('展示模型清单的发现时间、来源和说明', () => {

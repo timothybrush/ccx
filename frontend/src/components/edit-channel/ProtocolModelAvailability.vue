@@ -62,34 +62,69 @@
           {{ route.rediscoverError }}
         </div>
 
-        <!-- 多 Key 场景只显示差异：列出未被全部 Key 覆盖的模型及缺失的 Key -->
-        <div v-if="route.diffModels.length" class="protocol-model-route__diffs">
-          <div class="protocol-model-route__diffs-header">
-            <v-icon color="warning" size="16">mdi-key-alert</v-icon>
-            <span class="text-caption font-weight-medium text-warning">
-              {{ t('channelEditor.protocolModels.diffCount', { count: route.diffModels.length }) }}
+        <!-- 多 Key 按可用 Key 集合归组，直接展示共同模型与各子集专有模型。 -->
+        <div v-if="route.coverageGroups.length" class="protocol-model-route__coverage-groups">
+          <div class="protocol-model-route__coverage-groups-header">
+            <v-icon :color="route.hasBindingDifferences ? 'warning' : 'success'" size="16">
+              {{ route.hasBindingDifferences ? 'mdi-key-alert' : 'mdi-check-all' }}
+            </v-icon>
+            <span
+              class="text-caption font-weight-medium"
+              :class="route.hasBindingDifferences ? 'text-warning' : 'text-success'"
+            >
+              {{ route.hasBindingDifferences
+                ? t('channelEditor.protocolModels.diffCount', { count: route.diffModelCount })
+                : t('channelEditor.protocolModels.consistent', { count: route.bindings.length }) }}
             </span>
           </div>
-          <div class="protocol-model-route__diff-list">
-            <div
-              v-for="diff in route.diffModels"
-              :key="diff.model"
-              class="protocol-model-diff"
+          <div class="protocol-model-route__coverage-group-list">
+            <section
+              v-for="group in route.coverageGroups"
+              :key="group.signature"
+              class="protocol-model-coverage-group"
             >
-              <code class="protocol-model-diff__model">{{ diff.model }}</code>
-              <span class="text-caption text-medium-emphasis text-no-wrap">
-                {{ t('channelEditor.protocolModels.missingFor') }}
-              </span>
-              <code
-                v-for="key in diff.missingKeys"
-                :key="key.credentialUid || key.keyMask"
-                class="protocol-model-diff__key"
-              >
-                {{ key.keyMask }}
-              </code>
-            </div>
+              <div class="protocol-model-coverage-group__meta">
+                <span class="text-caption font-weight-medium">
+                  {{ group.isSharedByAll
+                    ? t('channelEditor.protocolModels.coverageGroupShared', { count: route.bindings.length })
+                    : group.availableBindings.length
+                      ? t('channelEditor.protocolModels.coverageGroupExclusive', { count: group.availableBindings.length })
+                      : t('channelEditor.protocolModels.coverageGroupUnavailable') }}
+                </span>
+                <v-chip
+                  size="x-small"
+                  variant="tonal"
+                  :color="coverageGroupColor(group, route.bindings.length)"
+                >
+                  {{ t('channelEditor.protocolModels.coverageGroupModelCount', { count: group.models.length }) }}
+                </v-chip>
+              </div>
+              <div v-if="group.availableBindings.length" class="protocol-model-coverage-group__keys">
+                <v-chip
+                  v-for="binding in group.availableBindings"
+                  :key="binding.credentialUid || binding.keyMask"
+                  size="x-small"
+                  variant="tonal"
+                  :color="coverageGroupColor(group, route.bindings.length)"
+                  class="protocol-model-coverage-group__key"
+                >
+                  {{ binding.keyMask }}
+                </v-chip>
+              </div>
+              <div class="protocol-model-coverage-group__models">
+                <v-chip
+                  v-for="model in group.models"
+                  :key="model"
+                  size="small"
+                  variant="outlined"
+                  class="protocol-model-coverage-group__model"
+                >
+                  {{ model }}
+                </v-chip>
+              </div>
+            </section>
           </div>
-          <div class="protocol-model-route__coverage">
+          <div v-if="route.hasBindingDifferences" class="protocol-model-route__coverage">
             <v-chip
               v-for="binding in route.bindings"
               :key="binding.credentialUid || binding.keyMask"
@@ -101,12 +136,6 @@
               {{ t('channelEditor.protocolModels.coverage', { available: binding.models.length, total: route.models.length }) }}
             </v-chip>
           </div>
-        </div>
-        <div v-else-if="route.bindings.length > 1" class="protocol-model-route__consistent">
-          <v-icon color="success" size="14">mdi-check-all</v-icon>
-          <span class="text-caption text-medium-emphasis">
-            {{ t('channelEditor.protocolModels.consistent', { count: route.bindings.length }) }}
-          </span>
         </div>
 
         <details v-if="route.models.length" class="protocol-model-route__all">
@@ -147,6 +176,19 @@ interface ProtocolDefinition {
   labelKey: string
   path: string
   icon: string
+}
+
+interface NormalizedModelBinding {
+  credentialUid?: string
+  keyMask: string
+  models: string[]
+}
+
+interface ModelCoverageGroup {
+  signature: string
+  models: string[]
+  availableBindings: NormalizedModelBinding[]
+  isSharedByAll: boolean
 }
 
 const protocolDefinitions: Record<ChannelKind, ProtocolDefinition> = {
@@ -280,6 +322,38 @@ const normalizeModels = (models?: string[]) => Array.from(new Set(
   (models ?? []).map(model => model.trim()).filter(Boolean),
 )).sort((left, right) => left.localeCompare(right))
 
+const groupModelsByAvailability = (models: string[], bindings: NormalizedModelBinding[]): ModelCoverageGroup[] => {
+  if (bindings.length < 2) return []
+
+  const groups = new Map<string, ModelCoverageGroup>()
+  for (const model of models) {
+    const availability = bindings.map(binding => binding.models.includes(model))
+    const availableBindings = bindings.filter((_, index) => availability[index])
+    const signature = availability.map(available => (available ? '1' : '0')).join('')
+    const group = groups.get(signature)
+    if (group) {
+      group.models.push(model)
+      continue
+    }
+    groups.set(signature, {
+      signature,
+      models: [model],
+      availableBindings,
+      isSharedByAll: availableBindings.length === bindings.length,
+    })
+  }
+
+  return Array.from(groups.values()).sort((left, right) => {
+    const coverageDifference = right.availableBindings.length - left.availableBindings.length
+    return coverageDifference || left.models[0].localeCompare(right.models[0])
+  })
+}
+
+const coverageGroupColor = (group: ModelCoverageGroup, bindingCount: number) => {
+  if (group.availableBindings.length === bindingCount) return 'success'
+  return group.availableBindings.length > 0 ? 'warning' : 'error'
+}
+
 const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   const upstreamKind = route.upstreamKind ?? route.kind
   const definition = protocolDefinitions[upstreamKind]
@@ -287,25 +361,21 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   const inventoryModels = hasDiscoveredInventory
     ? normalizeModels(route.discoveredModels)
     : normalizeModels(route.supportedModels)
-  const bindings = (route.modelBindings ?? []).map(binding => ({
-    ...binding,
+  const bindings: NormalizedModelBinding[] = (route.modelBindings ?? []).map(binding => ({
+    credentialUid: binding.credentialUid,
+    keyMask: binding.keyMask,
     models: normalizeModels(binding.models),
   }))
   const models = normalizeModels([
     ...inventoryModels,
     ...bindings.flatMap(binding => binding.models),
   ])
-  const bindingSignatures = new Set(bindings.map(binding => binding.models.join('\u0000')))
-  const hasBindingDifferences = bindings.length > 1 && bindingSignatures.size > 1
-  // 只保留未被全部 Key 覆盖的模型，并列出缺失该模型的 Key。
-  const diffModels = hasBindingDifferences
-    ? models
-        .map(model => ({
-          model,
-          missingKeys: bindings.filter(binding => !binding.models.includes(model)),
-        }))
-        .filter(diff => diff.missingKeys.length > 0)
-    : []
+  const coverageGroups = groupModelsByAvailability(models, bindings)
+  const diffModelCount = coverageGroups.reduce(
+    (count, group) => count + (group.isSharedByAll ? 0 : group.models.length),
+    0,
+  )
+  const hasBindingDifferences = diffModelCount > 0
 
   return {
     ...route,
@@ -315,7 +385,9 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
     icon: definition.icon,
     models,
     bindings,
-    diffModels,
+    coverageGroups,
+    diffModelCount,
+    hasBindingDifferences,
     hasInventory: hasDiscoveredInventory || models.length > 0,
     discoveryTime: formatDiscoveryTime(route.modelsDiscoveredAt),
     discoverySourceLabel: discoverySourceLabel(route.modelDiscoverySource),
@@ -387,46 +459,71 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   line-height: 1.35;
 }
 
-.protocol-model-route__diffs {
+.protocol-model-route__coverage-groups {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px dashed rgba(var(--v-theme-warning), 0.4);
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.22);
   border-radius: 6px;
-  background: rgba(var(--v-theme-warning), 0.04);
+  background: rgba(var(--v-theme-on-surface), 0.02);
 }
 
-.protocol-model-route__diffs-header {
+.protocol-model-route__coverage-groups-header {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.protocol-model-route__diff-list {
+.protocol-model-route__coverage-group-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
 }
 
-.protocol-model-diff {
+.protocol-model-coverage-group {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 6px;
 }
 
-.protocol-model-diff__model {
-  font-weight: 600;
+.protocol-model-coverage-group + .protocol-model-coverage-group {
+  padding-top: 10px;
+  border-top: 1px dashed rgba(var(--v-theme-on-surface), 0.16);
+}
+
+.protocol-model-coverage-group__meta,
+.protocol-model-coverage-group__keys,
+.protocol-model-coverage-group__models {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.protocol-model-coverage-group__meta {
+  gap: 8px;
+}
+
+.protocol-model-coverage-group__key {
+  font-family: var(--v-font-family-mono, monospace);
+}
+
+.protocol-model-coverage-group__models {
+  align-items: flex-start;
+}
+
+.protocol-model-coverage-group__model {
+  height: auto;
+  min-height: 24px;
+  max-width: 100%;
+}
+
+.protocol-model-coverage-group__model :deep(.v-chip__content) {
   overflow-wrap: anywhere;
-}
-
-.protocol-model-diff__key {
-  padding: 0 6px;
-  border-radius: 4px;
-  background: rgba(var(--v-theme-warning), 0.12);
-  color: rgb(var(--v-theme-warning));
-  font-size: 0.72rem;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .protocol-model-route__coverage {
@@ -435,12 +532,6 @@ const normalizedRoutes = computed(() => (props.routes ?? []).map((route) => {
   gap: 6px;
   padding-top: 6px;
   border-top: 1px dashed rgba(var(--v-theme-warning), 0.25);
-}
-
-.protocol-model-route__consistent {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .protocol-model-route__all-summary {
