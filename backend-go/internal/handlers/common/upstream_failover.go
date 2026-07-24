@@ -553,6 +553,20 @@ func TryUpstreamWithAllKeys(
 				logOpts = append(logOpts, WithProxyKeyMask(proxyKeyMask))
 			}
 
+			// 提取请求关联 ID（multi_channel_failover 生成，写入 gin context）
+			if correlationID, ok := c.Get("ccx.request_correlation_id"); ok {
+				if cid, ok := correlationID.(string); ok && cid != "" {
+					logOpts = append(logOpts, WithRequestCorrelationID(cid))
+				}
+			}
+
+			// 提取 Autopilot trace UID（SmartRouter 生成，写入 gin context）
+			if traceUID, ok := c.Get("ccx.autopilot_trace_uid"); ok {
+				if uid, ok := traceUID.(string); ok && uid != "" {
+					logOpts = append(logOpts, WithAutopilotTraceUID(uid))
+				}
+			}
+
 			// 创建 pending 状态日志（附带代理上下文与会话标识，用于 subagent 观测）
 			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, actualAttemptModel, actualOriginalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c), logOpts...)
 

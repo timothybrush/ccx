@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/BenedictKing/ccx/internal/autopilot"
 	"github.com/BenedictKing/ccx/internal/config"
 	"github.com/BenedictKing/ccx/internal/scheduler"
 	"github.com/BenedictKing/ccx/internal/types"
@@ -115,6 +116,10 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 	}
 	requestStartedAt := time.Now()
 
+	// 生成服务端逻辑请求关联 ID（贯穿所有渠道尝试和 trace）
+	correlationID := autopilot.GenerateRequestCorrelationID()
+	c.Set("ccx.request_correlation_id", correlationID)
+
 	failedChannels := make(map[int]bool)
 	var lastError error
 	var lastFailoverError *FailoverError
@@ -175,6 +180,11 @@ func HandleMultiChannelFailoverWithSelectionFilter(
 
 		upstream := selection.Upstream
 		channelIndex := selection.ChannelIndex
+
+		// 将 Autopilot trace UID 写入 gin context，供 ChannelLog 关联
+		if selection.AutopilotTraceUID != "" {
+			c.Set("ccx.autopilot_trace_uid", selection.AutopilotTraceUID)
+		}
 
 		if envCfg.ShouldLog("info") && upstream != nil {
 			RequestLogf(c, "[%s-Select] 选择渠道: [%d] %s (原因: %s, 尝试 %d/%d)",
