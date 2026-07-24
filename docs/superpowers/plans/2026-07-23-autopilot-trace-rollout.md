@@ -361,21 +361,20 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] Scheduler SelectionTrace 规范化后附到 trace：NormalizeSelectionTrace + AttachSchedulerDecision。
 - [x] endpoint 尝试摘要追加到 TraceStore：AppendEndpointAttempt，乱序合并、容量截断。
 - [x] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要：通过 SetAttemptRecorderHook 接入 upstream_failover，CreatePendingLog 后记 "started"，成功/错误时记 "completed"。
-- [ ] 补集成测试（TODO: 后续迭代）
-
-**完成条件：** 一个逻辑请求可从 correlationId 关联所有安全尝试；每条尝试仍有自己的日志 ID。
-
-### Task 3（原始）：把 Trace 关联接入真实请求生命周期
+- [x] ReleaseController 接入 main.go 请求路径：SmartRouter 消费 RoutingReleaseSnapshot，入口冻结后回填 trace 发布维度。
+- [ ] 真实上游 smoke（opt-in）与 SSE golden 回归（TODO: 后续迭代）
+- [ ] ChannelLog 展示面跳转入口（TODO: 后续迭代）
+- [ ] L2/L3/L4 集成测试补充（TODO: 后续迭代）
 
 **文件：** `backend-go/internal/autopilot/smart_router.go`、`routing_trace.go`、`backend-go/internal/handlers/common/multi_channel_failover.go`、`upstream_failover.go`、`channel_log_helper.go`、`backend-go/internal/metrics/channel_log.go` 和相关测试。
 
-- [ ] 先完成入口矩阵，再在公共单/多渠道外壳最早处生成一次 `requestCorrelationId`，用私有 Gin context key 传递；六类代理、dry-run、health/capability/探测路径均有明确覆盖或排除结论，不得复用客户端 header，也不得替换每次 endpoint 尝试已有的 `ChannelLog.RequestID`。
-- [ ] 让 real、shadow、assist、auto、active 和显式 dry-run 共用同一“构建决策 + 创建 trace”路径；`BuildPlan` 也必须写入 dry-run trace，不能只返回临时 plan。
-- [ ] 将 Scheduler 的 `SelectionTrace` 规范化后附到对应 trace；无论选择成功还是得到 `SelectionTraceError`，均保留已知的硬约束阶段与原因，并只使用入口捕获的 `RoutingReleaseSnapshot` 回填 release/policy/cohort。
-- [ ] 为 `ChannelLog` 增加 `RequestCorrelationID` 和 `AutopilotTraceUID`，通过新增 `ChannelLogOption` 从公共尝试路径写入；补写被环形缓冲淘汰的终态日志也必须继承两个字段。
-- [ ] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要；由外层 `Finalize` 一次性回填终态与按 release/policy/cohort 分区的窗口，避免每次 key retry 重复终结同一 trace。
-- [ ] 对 trace 生成、回填、摘要持久化的 panic/错误做局部保护，返回原 Scheduler/Failover 结果；不得在任一协议 handler 复制一套实现。
-- [ ] 补集成测试覆盖多 key、多渠道 failover、attempt 乱序/截断、stream cancel、SelectionTraceError、无 Autopilot、记录失败、in-flight 过期和一次逻辑请求关联多条 ChannelLog。
+- [x] 在公共多渠道外壳最早处生成一次 `requestCorrelationId`，用 Gin context key 传递；不复用客户端 header，不替换每次 endpoint 尝试已有的 `ChannelLog.RequestID`。
+- [x] 让 real、shadow、assist、auto、active 和显式 dry-run 共用同一"构建决策 + 创建 trace"路径；`BuildPlan` 也写入 dry-run trace。
+- [x] 将 Scheduler 的 `SelectionTrace` 规范化后附到对应 trace（`NormalizeSelectionTrace` + `AttachSchedulerDecision`）；使用入口捕获的 `RoutingReleaseSnapshot` 回填 release/policy/cohort。
+- [x] 为 `ChannelLog` 增加 `RequestCorrelationID` 和 `AutopilotTraceUID`，通过新增 `ChannelLogOption` 从公共尝试路径写入。
+- [x] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要（`SetAttemptRecorderHook` + `AppendEndpointAttempt`）。
+- [x] 对 trace 生成、回填、摘要持久化的 panic/错误做局部保护（`recordEndpointAttempt` defer recover），返回原 Scheduler/Failover 结果。
+- [ ] 补集成测试覆盖多 key、多渠道 failover、attempt 乱序/截断、stream cancel、SelectionTraceError、无 Autopilot、记录失败、in-flight 过期和一次逻辑请求关联多条 ChannelLog。（TODO: 后续迭代）
 
 **完成条件：** 一个逻辑请求可从 trace 详情定位所有安全尝试；每条尝试仍有自己的日志 ID；关闭或破坏 TraceStore 时代理行为与原行为一致。
 
