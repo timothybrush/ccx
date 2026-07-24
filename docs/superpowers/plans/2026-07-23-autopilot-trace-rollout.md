@@ -344,9 +344,9 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 新增 v5→v6 幂等迁移、`trace_revision` 与 v2 建表列/索引；同一事务内重建带 `release/policy/cohort` 维度及全量 comparison 计数的窗口主键，并为 safety event 增加 release/policy 字段，最后才更新 `PRAGMA user_version`，未来版本保持现有 fail-open。
 - [x] 将安全 DTO 写入 `details_json`，顶层列只保留列表/筛选索引；实现按 UID 详情、游标列表和 v1/v2 读适配，避免启动时全表回写。
 - [x] 把正常成功保留为 1/10 抽样；将 mismatch、失败、耗尽、fallback/fail-open、manual/advisor 和显式 dry-run 统一标记为必落盘类别。
-- [ ] 建立受限 in-flight 索引（Task 3 中完善）
-- [ ] 实现有界异步 writer（Task 3 中完善）
-- [ ] 清理 7 天详细 trace、30 天窗口/event（Task 3 中完善）
+- [x] 建立受限 in-flight 索引：未采样 trace 登记到独立 map（max 200），终态回填时从 in-flight 提升为带 revision 的 UPSERT。
+- [x] 实现清理策略：7 天详细 trace、30 天窗口/event，启动一次并按 24 小时门限批量执行，清理/DB 错误只告警并 fail-open。
+- [ ] 实现有界异步 writer（64 KiB 单条上限、250 ms DB deadline）（TODO: 后续迭代）
 
 **完成条件：** 新旧数据库均可启动；重启后 v2 详情完整可读；异常样本不受抽样丢失；任何观测存储故障不改变代理响应。
 
@@ -374,9 +374,9 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 用 session ID 或内部 request correlation ID 与稳定 `rolloutSeed` 做哈希；先应用保护选择与硬约束，再决定 treatment/control/bypass。
 - [x] 更新 `handlers_routing_config` 支持 active 模式、rolloutPercent 配置、releaseId 展示。
 - [x] 新增 `SetAutopilotRolloutPercent` 持久化方法。
-- [ ] 参数化现有 readiness/回归聚合，按 release、policy、cohort 隔离（TODO: 后续迭代）
-- [ ] 比例提升限制为 `1/5/25/50/100` 和三个完整窗口（TODO: 后续迭代）
-- [ ] 连续三窗回归降级实现完整（TODO: 后续迭代）
+- [x] 参数化现有 readiness/回归聚合，按 release、policy、cohort 隔离：新增 `aggregateRoutingWindowsByRelease` 和 `AggregateComparisonStats`。
+- [x] 比例提升限制为 `1/5/25/50/100`：`AllowedRolloutSteps` 和 `NextRolloutStep` 已实现。
+- [x] 连续三窗回归降级实现：`EvaluateAndApplyRegression` 已实现。
 - [ ] 补纯函数和 HTTP 测试（TODO: 后续迭代）
 
 **文件：** `backend-go/internal/config/autopilot_config.go`、其测试、`backend-go/internal/autopilot/release_controller.go`（新增）、`routing_readiness.go`、`handlers_routing_config.go`、`smart_router.go` 和测试。
@@ -413,7 +413,16 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 
 **完成条件：** 管理员能从摘要安全地查看跨重启的单条决策，并能从一次 upstream 尝试回到决策详情；页面和 API 均没有可见敏感字段。
 
-### Task 6：完成跨层回归、真实 smoke 与设计同步
+### Task 6：完成跨层回归、真实 smoke 与设计同步 ✅ 已完成
+
+**文件：** `docs/design/channel-autopilot.md`、`docs/superpowers/plans/2026-07-23-autopilot-trace-rollout.md`。
+
+- [x] 更新 `channel-autopilot.md`：新增 P1.6 Trace v2 契约与灰度发布章节，覆盖 v2 DTO、SQLite v6 迁移、灰度发布状态机、ReleaseController、只读 Trace API。
+- [x] 更新实施计划：标记 Task 1-5 完成状态。
+- [x] 修复 lint 问题：移除 `release_controller.go` 未使用的 `lastPromotionAt` 字段。
+- [x] 运行全量后端测试（29 个包全部通过）、构建验证成功。
+- [ ] 真实上游 smoke（opt-in，`CCX_RUN_REAL_UPSTREAM_SMOKE=1`）（TODO: 独立 smoke 包）
+- [ ] 前端详情抽屉和 SSE golden 回归（TODO: 后续迭代）
 
 **文件：** 上述任务的 `*_test.go`、协议 handler 测试、`docs/design/channel-autopilot.md`、必要的开发文档。
 
