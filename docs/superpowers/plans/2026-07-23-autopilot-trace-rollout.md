@@ -413,7 +413,12 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 新增按 UID 的只读详情 handler，统一从安全读 DTO 获取数据；仅未找到/过期/未采样返回 `404`，数据库暂不可用返回脱敏 `503`，安全 DTO 损坏返回固定 `500`，列表用 `partial=true` 表示跳过坏行。
 - [x] 新增 `ListTraceSummary`、`GetTraceDetail`、`GetV2Stats` TraceStore 方法。
 - [x] 统计新增 matchedCount/uncomparedCount/failOpenCount 字段。
-- [ ] 前端详情抽屉和 ChannelLog 跳转（TODO: 后续迭代）
+- [x] 前端详情抽屉：新增 AutopilotTraceDetailDialog.vue，展示决策→Scheduler→尝试→终态时间线，支持 loading/404/error 重试。
+- [x] API 类型和客户端方法：新增 TraceDetailV2/TraceSummary 类型，getAutopilotTraceDetail 方法，release/cohort/mode 过滤。
+- [x] AutopilotTraceTable 适配 TraceSummary，发出 select 事件，新增 comparison 三态列。
+- [x] AutopilotView 管理详情对话框状态，连接表格选择事件。
+- [x] 新增 zh-CN/en 双语 30+ 条 trace detail i18n 消息。
+- [x] 前端 type-check 和 build 均通过。
 
 **文件：** `backend-go/internal/autopilot/handlers_trace.go`、`routing_trace.go`、相关 HTTP 测试；`frontend/src/services/api.ts`、`api-types.ts`、`views/AutopilotView.vue`、`components/AutopilotTraceTable.vue`、新增详情组件及相关 locale 文件。
 
