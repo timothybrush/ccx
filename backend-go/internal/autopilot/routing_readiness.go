@@ -95,6 +95,9 @@ func initRoutingSafetySchema(db *sql.DB) error {
 	_, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS autopilot_routing_windows (
     window_start TEXT NOT NULL,
+    release_id TEXT NOT NULL DEFAULT 'legacy',
+    policy_fingerprint TEXT NOT NULL DEFAULT '',
+    cohort TEXT NOT NULL DEFAULT 'treatment',
     mode TEXT NOT NULL,
     request_kind TEXT NOT NULL,
     task_class TEXT NOT NULL,
@@ -106,6 +109,10 @@ CREATE TABLE IF NOT EXISTS autopilot_routing_windows (
     attempt_failure_count INTEGER NOT NULL DEFAULT 0,
     channel_fallback_count INTEGER NOT NULL DEFAULT 0,
     failopen_count INTEGER NOT NULL DEFAULT 0,
+    compared_count INTEGER NOT NULL DEFAULT 0,
+    matched_count INTEGER NOT NULL DEFAULT 0,
+    mismatch_count INTEGER NOT NULL DEFAULT 0,
+    uncompared_count INTEGER NOT NULL DEFAULT 0,
     latency_samples INTEGER NOT NULL DEFAULT 0,
     latency_b0 INTEGER NOT NULL DEFAULT 0,
     latency_b1 INTEGER NOT NULL DEFAULT 0,
@@ -124,14 +131,18 @@ CREATE TABLE IF NOT EXISTS autopilot_routing_windows (
     first_byte_b5 INTEGER NOT NULL DEFAULT 0,
     first_byte_b6 INTEGER NOT NULL DEFAULT 0,
     first_byte_b7 INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (window_start, mode, request_kind, task_class)
+    PRIMARY KEY (window_start, release_id, policy_fingerprint, cohort, mode, request_kind, task_class)
 );
 CREATE INDEX IF NOT EXISTS idx_routing_windows_mode_start
     ON autopilot_routing_windows(mode, window_start);
+CREATE INDEX IF NOT EXISTS idx_routing_windows_release_start
+    ON autopilot_routing_windows(release_id, window_start);
 CREATE TABLE IF NOT EXISTS autopilot_auto_safety_events (
     event_uid TEXT PRIMARY KEY,
     from_mode TEXT NOT NULL,
     to_mode TEXT NOT NULL,
+    release_id TEXT NOT NULL DEFAULT '',
+    policy_fingerprint TEXT NOT NULL DEFAULT '',
     reasons TEXT NOT NULL DEFAULT '[]',
     observed_json TEXT NOT NULL DEFAULT '{}',
     baseline_json TEXT NOT NULL DEFAULT '{}',
@@ -220,6 +231,10 @@ func (s *TraceStore) recordRoutingWindow(trace RoutingDecisionTrace, outcome Rou
 	attemptFailureInc := int64(0)
 	fallbackInc := int64(0)
 	failOpenInc := int64(0)
+	comparedInc := int64(0)
+	matchedInc := int64(0)
+	mismatchInc := int64(0)
+	uncomparedInc := int64(0)
 	latencyInc, latencyBuckets := histogramIncrement(0)
 	firstByteInc, firstByteBuckets := histogramIncrement(0)
 
@@ -244,10 +259,34 @@ func (s *TraceStore) recordRoutingWindow(trace RoutingDecisionTrace, outcome Rou
 		firstByteInc, firstByteBuckets = histogramIncrement(outcome.FirstByteLatencyMs)
 	}
 
+	// v6 comparison 计数
+	comparison := ComputeComparisonStatus(trace.ShadowChannelUID, trace.ActualChannelUID, trace.Match)
+	switch comparison {
+	case ComparisonMatched:
+		comparedInc = 1
+		matchedInc = 1
+	case ComparisonMismatched:
+		comparedInc = 1
+		mismatchInc = 1
+	case ComparisonUncompared:
+		uncomparedInc = 1
+	}
+
+	releaseID := trace.ReleaseID
+	if releaseID == "" {
+		releaseID = "legacy"
+	}
+	cohort := string(trace.Cohort)
+	if cohort == "" {
+		cohort = "treatment"
+	}
+
 	args := []any{
-		windowStart, string(trace.Mode), trace.RequestKind, string(trace.TaskClass),
+		windowStart, releaseID, trace.PolicyFingerprint, cohort,
+		string(trace.Mode), trace.RequestKind, string(trace.TaskClass),
 		int64(1), requestInc, successInc, failureInc, cancelledInc, attemptFailureInc,
-		fallbackInc, failOpenInc, latencyInc,
+		fallbackInc, failOpenInc, comparedInc, matchedInc, mismatchInc, uncomparedInc,
+		latencyInc,
 	}
 	for _, value := range latencyBuckets {
 		args = append(args, value)
@@ -289,13 +328,15 @@ func boolInt(value bool) int {
 
 const routingWindowUpsertSQL = `
 INSERT INTO autopilot_routing_windows (
-    window_start, mode, request_kind, task_class,
+    window_start, release_id, policy_fingerprint, cohort,
+    mode, request_kind, task_class,
     attempt_count, request_count, success_count, failure_count, cancelled_count,
     attempt_failure_count, channel_fallback_count, failopen_count,
+    compared_count, matched_count, mismatch_count, uncompared_count,
     latency_samples, latency_b0, latency_b1, latency_b2, latency_b3, latency_b4, latency_b5, latency_b6, latency_b7,
     first_byte_samples, first_byte_b0, first_byte_b1, first_byte_b2, first_byte_b3, first_byte_b4, first_byte_b5, first_byte_b6, first_byte_b7)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(window_start, mode, request_kind, task_class) DO UPDATE SET
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(window_start, release_id, policy_fingerprint, cohort, mode, request_kind, task_class) DO UPDATE SET
     attempt_count = attempt_count + excluded.attempt_count,
     request_count = request_count + excluded.request_count,
     success_count = success_count + excluded.success_count,
@@ -304,6 +345,10 @@ ON CONFLICT(window_start, mode, request_kind, task_class) DO UPDATE SET
     attempt_failure_count = attempt_failure_count + excluded.attempt_failure_count,
     channel_fallback_count = channel_fallback_count + excluded.channel_fallback_count,
     failopen_count = failopen_count + excluded.failopen_count,
+    compared_count = compared_count + excluded.compared_count,
+    matched_count = matched_count + excluded.matched_count,
+    mismatch_count = mismatch_count + excluded.mismatch_count,
+    uncompared_count = uncompared_count + excluded.uncompared_count,
     latency_samples = latency_samples + excluded.latency_samples,
     latency_b0 = latency_b0 + excluded.latency_b0,
     latency_b1 = latency_b1 + excluded.latency_b1,

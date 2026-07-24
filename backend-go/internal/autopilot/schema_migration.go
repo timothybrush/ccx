@@ -20,7 +20,7 @@ import (
 // v1 = 现有 7 张表的建表语句本身（首次引入版本化时的基线，无需 ALTER）。
 // 后续新增/变更表结构时，在 ensureSchemaVersion 里追加 "if version < N { ... }" 迁移块，
 // 并将本常量递增。
-const autopilotSchemaVersion = 5
+const autopilotSchemaVersion = 6
 
 // ensureSchemaVersion 在任何 CREATE TABLE 之前执行一次版本检查/迁移。
 // 必须在 ProfileStore 打开 DB 后、调用 initProfileStoreSchema 之前调用——
@@ -136,6 +136,18 @@ func ensureSchemaVersion(db *sql.DB) error {
 		version = 5
 	}
 
+	// v5 -> v6: Trace v2 契约、窗口表重建主键与 comparison 计数、safety event 增加发布维度。
+	if version > 0 && version < 6 {
+		if err := migrateV5ToV6(db); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] v5->v6 迁移失败: %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 6"); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 写入 v6 版本失败: %w", err)
+		}
+		log.Printf("[Autopilot-SchemaMigration] schema 升级: v5 -> v6")
+		version = 6
+	}
+
 	// version == 0：全新库，直接写入当前基线版本；version 属于 (0, autopilotSchemaVersion) 但
 	// 未命中任何迁移块的情况理论上不应出现（说明版本常量与迁移块不同步），同样兜底写回当前版本，
 	// 不阻塞启动——迁移块本身的正确性由后续新增迁移时的测试覆盖。
@@ -158,7 +170,293 @@ func ensureCurrentSchemaColumns(db *sql.DB) error {
 	if err := ensureEndpointProfileColumns(db); err != nil {
 		return err
 	}
-	return ensureRoutingTraceOutcomeColumns(db)
+	if err := ensureRoutingTraceOutcomeColumns(db); err != nil {
+		return err
+	}
+	return ensureRoutingTraceV6Columns(db)
+}
+
+// migrateV5ToV6 执行 v5 到 v6 的完整迁移。
+// 在同一事务内补列、重建窗口表主键、更新 safety event 并建索引。
+// 表不存在时跳过对应步骤（幂等：全新库的 CREATE TABLE 已包含 v6 列）。
+func migrateV5ToV6(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("开始事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 1. 补 trace 表 v2 列（表不存在则跳过）
+	if err := ensureRoutingTraceV6ColumnsTx(tx); err != nil {
+		return err
+	}
+
+	// 2. 重建窗口表主键（表不存在则跳过）
+	if err := migrateRoutingWindowsV6Tx(tx); err != nil {
+		return err
+	}
+
+	// 3. 补 safety event 表 release/policy 字段（表不存在则跳过）
+	if err := migrateSafetyEventsV6Tx(tx); err != nil {
+		return err
+	}
+
+	// 4. 创建新索引（表不存在则跳过）
+	if err := createV6IndexesTx(tx); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func ensureRoutingTraceV6Columns(db *sql.DB) error {
+	const table = "autopilot_routing_traces"
+	exists, err := tableExists(db, table)
+	if err != nil || !exists {
+		return err
+	}
+	wantColumns := map[string]string{
+		"schema_version":         "schema_version INTEGER NOT NULL DEFAULT 1",
+		"trace_revision":         "trace_revision INTEGER NOT NULL DEFAULT 0",
+		"request_correlation_id": "request_correlation_id TEXT NOT NULL DEFAULT ''",
+		"release_id":             "release_id TEXT NOT NULL DEFAULT 'legacy'",
+		"policy_fingerprint":     "policy_fingerprint TEXT NOT NULL DEFAULT ''",
+		"persistence_class":      "persistence_class TEXT NOT NULL DEFAULT 'sampled'",
+		"details_json":           "details_json TEXT NOT NULL DEFAULT '{}'",
+	}
+	for column, definition := range wantColumns {
+		has, err := columnExists(db, table, column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, definition)); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 补列 %s.%s 失败: %w", table, column, err)
+		}
+		log.Printf("[Autopilot-SchemaMigration] 自愈补列: %s.%s", table, column)
+	}
+	return nil
+}
+
+func ensureRoutingTraceV6ColumnsTx(tx *sql.Tx) error {
+	const table = "autopilot_routing_traces"
+	exists, err := tableExistsInTx(tx, table)
+	if err != nil || !exists {
+		return err
+	}
+	wantColumns := map[string]string{
+		"schema_version":         "schema_version INTEGER NOT NULL DEFAULT 1",
+		"trace_revision":         "trace_revision INTEGER NOT NULL DEFAULT 0",
+		"request_correlation_id": "request_correlation_id TEXT NOT NULL DEFAULT ''",
+		"release_id":             "release_id TEXT NOT NULL DEFAULT 'legacy'",
+		"policy_fingerprint":     "policy_fingerprint TEXT NOT NULL DEFAULT ''",
+		"persistence_class":      "persistence_class TEXT NOT NULL DEFAULT 'sampled'",
+		"details_json":           "details_json TEXT NOT NULL DEFAULT '{}'",
+	}
+	for column, definition := range wantColumns {
+		has, err := columnExistsInTx(tx, table, column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, definition)); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 补列 %s.%s 失败: %w", table, column, err)
+		}
+	}
+	return nil
+}
+
+func migrateRoutingWindowsV6Tx(tx *sql.Tx) error {
+	exists, err := tableExistsInTx(tx, "autopilot_routing_windows")
+	if err != nil || !exists {
+		return err
+	}
+
+	// 检查旧表是否已有 v6 列
+	hasRelease, err := columnExistsInTx(tx, "autopilot_routing_windows", "release_id")
+	if err != nil {
+		return err
+	}
+	if hasRelease {
+		return nil // 已迁移
+	}
+
+	// 创建新表
+	_, err = tx.Exec(`
+	CREATE TABLE autopilot_routing_windows_v6 (
+	    window_start TEXT NOT NULL,
+	    release_id TEXT NOT NULL DEFAULT 'legacy',
+	    policy_fingerprint TEXT NOT NULL DEFAULT '',
+	    cohort TEXT NOT NULL DEFAULT 'treatment',
+	    mode TEXT NOT NULL,
+	    request_kind TEXT NOT NULL,
+	    task_class TEXT NOT NULL,
+	    attempt_count INTEGER NOT NULL DEFAULT 0,
+	    request_count INTEGER NOT NULL DEFAULT 0,
+	    success_count INTEGER NOT NULL DEFAULT 0,
+	    failure_count INTEGER NOT NULL DEFAULT 0,
+	    cancelled_count INTEGER NOT NULL DEFAULT 0,
+	    attempt_failure_count INTEGER NOT NULL DEFAULT 0,
+	    channel_fallback_count INTEGER NOT NULL DEFAULT 0,
+	    failopen_count INTEGER NOT NULL DEFAULT 0,
+	    compared_count INTEGER NOT NULL DEFAULT 0,
+	    matched_count INTEGER NOT NULL DEFAULT 0,
+	    mismatch_count INTEGER NOT NULL DEFAULT 0,
+	    uncompared_count INTEGER NOT NULL DEFAULT 0,
+	    latency_samples INTEGER NOT NULL DEFAULT 0,
+	    latency_b0 INTEGER NOT NULL DEFAULT 0,
+	    latency_b1 INTEGER NOT NULL DEFAULT 0,
+	    latency_b2 INTEGER NOT NULL DEFAULT 0,
+	    latency_b3 INTEGER NOT NULL DEFAULT 0,
+	    latency_b4 INTEGER NOT NULL DEFAULT 0,
+	    latency_b5 INTEGER NOT NULL DEFAULT 0,
+	    latency_b6 INTEGER NOT NULL DEFAULT 0,
+	    latency_b7 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_samples INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b0 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b1 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b2 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b3 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b4 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b5 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b6 INTEGER NOT NULL DEFAULT 0,
+	    first_byte_b7 INTEGER NOT NULL DEFAULT 0,
+	    PRIMARY KEY (window_start, release_id, policy_fingerprint, cohort, mode, request_kind, task_class)
+	)`)
+	if err != nil {
+		return fmt.Errorf("创建 v6 窗口表失败: %w", err)
+	}
+
+	// 复制历史行（标记为 legacy）
+	_, err = tx.Exec(`
+	INSERT INTO autopilot_routing_windows_v6 (
+	    window_start, release_id, policy_fingerprint, cohort, mode, request_kind, task_class,
+	    attempt_count, request_count, success_count, failure_count, cancelled_count,
+	    attempt_failure_count, channel_fallback_count, failopen_count,
+	    compared_count, matched_count, mismatch_count, uncompared_count,
+	    latency_samples, latency_b0, latency_b1, latency_b2, latency_b3, latency_b4, latency_b5, latency_b6, latency_b7,
+	    first_byte_samples, first_byte_b0, first_byte_b1, first_byte_b2, first_byte_b3, first_byte_b4, first_byte_b5, first_byte_b6, first_byte_b7
+	)
+	SELECT window_start, 'legacy', '', 'treatment', mode, request_kind, task_class,
+	       attempt_count, request_count, success_count, failure_count, cancelled_count,
+	       attempt_failure_count, channel_fallback_count, failopen_count,
+	       0, 0, 0, 0,
+	       latency_samples, latency_b0, latency_b1, latency_b2, latency_b3, latency_b4, latency_b5, latency_b6, latency_b7,
+	       first_byte_samples, first_byte_b0, first_byte_b1, first_byte_b2, first_byte_b3, first_byte_b4, first_byte_b5, first_byte_b6, first_byte_b7
+	FROM autopilot_routing_windows`)
+	if err != nil {
+		return fmt.Errorf("复制窗口数据失败: %w", err)
+	}
+
+	// 原子换表
+	_, err = tx.Exec("DROP TABLE autopilot_routing_windows")
+	if err != nil {
+		return fmt.Errorf("删除旧窗口表失败: %w", err)
+	}
+	_, err = tx.Exec("ALTER TABLE autopilot_routing_windows_v6 RENAME TO autopilot_routing_windows")
+	if err != nil {
+		return fmt.Errorf("重命名窗口表失败: %w", err)
+	}
+
+	// 建新索引
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_routing_windows_release_start
+	    ON autopilot_routing_windows(release_id, window_start)`)
+	if err != nil {
+		return fmt.Errorf("创建窗口表 release 索引失败: %w", err)
+	}
+
+	return nil
+}
+
+func migrateSafetyEventsV6Tx(tx *sql.Tx) error {
+	exists, err := tableExistsInTx(tx, "autopilot_auto_safety_events")
+	if err != nil || !exists {
+		return err
+	}
+	wantColumns := map[string]string{
+		"release_id":         "release_id TEXT NOT NULL DEFAULT ''",
+		"policy_fingerprint": "policy_fingerprint TEXT NOT NULL DEFAULT ''",
+	}
+	for column, definition := range wantColumns {
+		has, err := columnExistsInTx(tx, "autopilot_auto_safety_events", column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE autopilot_auto_safety_events ADD COLUMN %s", definition)); err != nil {
+			return fmt.Errorf("[Autopilot-SchemaMigration] 补列 autopilot_auto_safety_events.%s 失败: %w", column, err)
+		}
+	}
+	return nil
+}
+
+func createV6IndexesTx(tx *sql.Tx) error {
+	// 检查表是否存在再建索引
+	traceExists, err := tableExistsInTx(tx, "autopilot_routing_traces")
+	if err != nil {
+		return err
+	}
+	if traceExists {
+		indexes := []string{
+			`CREATE INDEX IF NOT EXISTS idx_routing_traces_correlation
+			    ON autopilot_routing_traces(request_correlation_id, created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_routing_traces_release_policy
+			    ON autopilot_routing_traces(release_id, policy_fingerprint, created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_routing_traces_mode
+			    ON autopilot_routing_traces(mode, created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_routing_traces_persistence
+			    ON autopilot_routing_traces(persistence_class, created_at)`,
+		}
+		for _, stmt := range indexes {
+			if _, err := tx.Exec(stmt); err != nil {
+				return fmt.Errorf("创建 v6 索引失败: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// tableExistsInTx 在事务中判断表是否存在。
+func tableExistsInTx(tx *sql.Tx, table string) (bool, error) {
+	var name string
+	err := tx.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// columnExistsInTx 在事务中通过 PRAGMA table_info 判断列是否存在。
+func columnExistsInTx(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer errutil.IgnoreDeferred(rows.Close)
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notNull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func ensureRoutingTraceOutcomeColumns(db *sql.DB) error {

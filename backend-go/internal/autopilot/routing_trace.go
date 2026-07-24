@@ -300,12 +300,18 @@ func initTraceSchema(db *sql.DB) error {
 	schema := `
 CREATE TABLE IF NOT EXISTS autopilot_routing_traces (
     trace_uid       TEXT PRIMARY KEY,
+    schema_version  INTEGER NOT NULL DEFAULT 1,
+    trace_revision  INTEGER NOT NULL DEFAULT 0,
+    request_correlation_id TEXT NOT NULL DEFAULT '',
     request_kind    TEXT    NOT NULL,
     task_class      TEXT    NOT NULL,
     task_domain     TEXT    NOT NULL DEFAULT '',
     requested_model TEXT    NOT NULL DEFAULT '',
     agent_role      TEXT    NOT NULL DEFAULT '',
     mode            TEXT    NOT NULL DEFAULT 'shadow',
+    release_id      TEXT    NOT NULL DEFAULT 'legacy',
+    policy_fingerprint TEXT NOT NULL DEFAULT '',
+    persistence_class TEXT NOT NULL DEFAULT 'sampled',
     shadow_uid      TEXT    NOT NULL DEFAULT '',
     actual_uid      TEXT    NOT NULL DEFAULT '',
     match           INTEGER NOT NULL DEFAULT 0,
@@ -314,6 +320,7 @@ CREATE TABLE IF NOT EXISTS autopilot_routing_traces (
     duration_ms     INTEGER NOT NULL DEFAULT 0,
     prompt_hash     TEXT    NOT NULL DEFAULT '',
     candidates_json TEXT    NOT NULL DEFAULT '[]',
+    details_json    TEXT    NOT NULL DEFAULT '{}',
     outcome_recorded INTEGER NOT NULL DEFAULT 0,
     outcome          TEXT    NOT NULL DEFAULT '',
     success          INTEGER NOT NULL DEFAULT 0,
@@ -330,6 +337,14 @@ CREATE INDEX IF NOT EXISTS idx_routing_traces_match
     ON autopilot_routing_traces(match);
 CREATE INDEX IF NOT EXISTS idx_routing_traces_task_class
     ON autopilot_routing_traces(task_class);
+CREATE INDEX IF NOT EXISTS idx_routing_traces_correlation
+    ON autopilot_routing_traces(request_correlation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_routing_traces_release_policy
+    ON autopilot_routing_traces(release_id, policy_fingerprint, created_at);
+CREATE INDEX IF NOT EXISTS idx_routing_traces_mode
+    ON autopilot_routing_traces(mode, created_at);
+CREATE INDEX IF NOT EXISTS idx_routing_traces_persistence
+    ON autopilot_routing_traces(persistence_class, created_at);
 `
 	_, err := db.Exec(schema)
 	return err
@@ -601,11 +616,19 @@ func (s *TraceStore) GetStats() TraceStats {
 
 // ── 持久化辅助 ──
 
-// persistTrace 将追踪记录写入 SQLite。
+// persistTrace 将追踪记录写入 SQLite（v2 列）。
 func (s *TraceStore) persistTrace(t *RoutingDecisionTrace) error {
 	candidatesJSON, err := json.Marshal(t.Candidates)
 	if err != nil {
 		candidatesJSON = []byte("[]")
+	}
+
+	// 构建 v2 details_json
+	detail := t.ToTraceDetailV2(nil, t.TraceRevision, PersistenceSampled)
+	SanitizeForPersistence(detail)
+	detailsJSON, err := json.Marshal(detail)
+	if err != nil {
+		detailsJSON = []byte("{}")
 	}
 
 	matchInt := 0
@@ -635,20 +658,30 @@ func (s *TraceStore) persistTrace(t *RoutingDecisionTrace) error {
 
 	_, err = s.db.Exec(`
 INSERT INTO autopilot_routing_traces
-    (trace_uid, request_kind, task_class, task_domain,
+    (trace_uid, schema_version, trace_revision, request_correlation_id,
+     request_kind, task_class, task_domain,
      requested_model, agent_role, mode,
+     release_id, policy_fingerprint, persistence_class,
      shadow_uid, actual_uid, match,
      selected_uid, fallback_used, duration_ms,
-     prompt_hash, candidates_json,
+     prompt_hash, candidates_json, details_json,
      outcome_recorded, outcome, success, channel_fallback,
      status_code, request_duration_ms, first_byte_latency_ms, completed_at,
      created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(trace_uid) DO UPDATE SET
+    schema_version  = excluded.schema_version,
+    trace_revision  = excluded.trace_revision,
+    request_correlation_id = excluded.request_correlation_id,
+    release_id      = excluded.release_id,
+    policy_fingerprint = excluded.policy_fingerprint,
+    persistence_class = excluded.persistence_class,
     shadow_uid  = excluded.shadow_uid,
     actual_uid  = excluded.actual_uid,
     match       = excluded.match,
     duration_ms = excluded.duration_ms,
+    candidates_json = excluded.candidates_json,
+    details_json = excluded.details_json,
     outcome_recorded = excluded.outcome_recorded,
     outcome = excluded.outcome,
     success = excluded.success,
@@ -659,12 +692,18 @@ ON CONFLICT(trace_uid) DO UPDATE SET
     completed_at = excluded.completed_at
 `,
 		t.TraceUID,
+		t.SchemaVersion,
+		t.TraceRevision,
+		t.RequestCorrelationId,
 		t.RequestKind,
 		string(t.TaskClass),
 		string(t.TaskDomain),
 		t.RequestedModel,
 		t.AgentRole,
 		string(t.Mode),
+		t.ReleaseID,
+		t.PolicyFingerprint,
+		string(persistenceClassForTrace(t)),
 		t.ShadowChannelUID,
 		t.ActualChannelUID,
 		matchInt,
@@ -673,6 +712,7 @@ ON CONFLICT(trace_uid) DO UPDATE SET
 		t.DurationMs,
 		t.PromptHash,
 		string(candidatesJSON),
+		string(detailsJSON),
 		outcomeRecordedInt,
 		t.Outcome,
 		successInt,
@@ -687,6 +727,31 @@ ON CONFLICT(trace_uid) DO UPDATE SET
 		return fmt.Errorf("[TraceStore-Persist] 写入失败 uid=%s: %w", t.TraceUID, err)
 	}
 	return nil
+}
+
+// persistenceClassForTrace 根据 trace 状态确定保留类别。
+func persistenceClassForTrace(t *RoutingDecisionTrace) PersistenceClass {
+	if t.ManualIntentUID != "" {
+		return PersistenceManual
+	}
+	if t.AdvisorDecisionUID != "" {
+		return PersistenceAdvisor
+	}
+	if t.Source == "dry_run" {
+		return PersistenceDryRun
+	}
+	if !t.Match && t.ActualChannelUID != "" && t.ShadowChannelUID != "" {
+		return PersistenceMismatch
+	}
+	if t.OutcomeRecorded {
+		if !t.Success || t.FallbackUsed || t.ChannelFallback {
+			if t.Outcome == "exhausted" || t.Outcome == "cancelled" {
+				return PersistenceFailure
+			}
+			return PersistenceFallback
+		}
+	}
+	return PersistenceSampled
 }
 
 // Close 关闭 TraceStore。当前无需特殊清理。
