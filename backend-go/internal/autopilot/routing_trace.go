@@ -267,6 +267,14 @@ type TraceStore struct {
 
 	// 计数器，用于抽样判断
 	counter atomic.Int64
+
+	// in-flight 索引：未采样但仍在途的 trace，终态回填时可提升为持久化
+	// key=traceUID, value=trace 指针；最大 200 条，超限淘汰最旧
+	inflight   map[string]*RoutingDecisionTrace
+	inflightMu sync.RWMutex
+
+	// 清理门限：至多每 24 小时执行一次清理
+	lastCleanupAt time.Time
 }
 
 // NewTraceStoreWithDB 使用外部 *sql.DB 创建 TraceStore。
@@ -282,8 +290,9 @@ func NewTraceStoreWithDB(db *sql.DB) (*TraceStore, error) {
 	}
 
 	store := &TraceStore{
-		db:      db,
-		records: make([]*RoutingDecisionTrace, 0, traceMaxRecords),
+		db:       db,
+		records:  make([]*RoutingDecisionTrace, 0, traceMaxRecords),
+		inflight: make(map[string]*RoutingDecisionTrace, 200),
 	}
 
 	// 从 SQLite 加载历史（如有）
@@ -291,6 +300,8 @@ func NewTraceStoreWithDB(db *sql.DB) (*TraceStore, error) {
 		if err := store.loadRecent(); err != nil {
 			log.Printf("[TraceStore-Init] 警告: 加载历史记录失败: %v", err)
 		}
+		// 启动时执行一次清理
+		store.cleanupExpired()
 	}
 
 	log.Printf("[TraceStore-Init] 初始化完成，已加载 %d 条追踪记录", len(store.records))
@@ -437,6 +448,7 @@ func scanTraceRow(rows *sql.Rows) (*RoutingDecisionTrace, error) {
 
 // Record 记录一条路由追踪。自动填充 TraceUID / CreatedAt。
 // 超出上限时淘汰最旧记录。SQLite 落盘遵循 1/10 抽样 + 全部 mismatch。
+// 未落盘的 trace 登记到 in-flight 索引，终态回填时可提升。
 func (s *TraceStore) Record(t *RoutingDecisionTrace) {
 	if t.TraceUID == "" {
 		t.TraceUID = GenerateTraceUID(t.RequestKind, t.TaskClass, time.Now())
@@ -460,10 +472,18 @@ func (s *TraceStore) Record(t *RoutingDecisionTrace) {
 	if s.db != nil {
 		count := s.counter.Add(1)
 		isMismatch := !t.Match && t.ActualChannelUID != "" && t.ShadowChannelUID != ""
-		if isMismatch || count%traceSampleRate == 0 {
+		shouldPersist := isMismatch || count%traceSampleRate == 0
+		// 必落盘类别：manual/advisor/dry-run/失败/fail-open
+		if t.ManualIntentUID != "" || t.AdvisorDecisionUID != "" || t.Source == "dry_run" {
+			shouldPersist = true
+		}
+		if shouldPersist {
 			if err := s.persistTrace(t); err != nil {
 				log.Printf("[TraceStore-Record] 警告: 落盘失败 uid=%s: %v", t.TraceUID, err)
 			}
+		} else {
+			// 未落盘 → 登记 in-flight 索引，终态回填时可提升
+			s.registerInflight(t)
 		}
 	}
 }
@@ -1024,4 +1044,146 @@ func (s *TraceStore) GetV2Stats() TraceStatsResponse {
 }
 func (s *TraceStore) Close() error {
 	return nil
+}
+
+// ── in-flight 索引 ──
+
+// registerInflight 将未采样的 trace 登记到 in-flight 索引。
+// 直至请求终结，终态回填时可能提升为异常持久化记录。
+// 最大 200 条，超限淘汰最旧。
+func (s *TraceStore) registerInflight(t *RoutingDecisionTrace) {
+	if s == nil || t == nil || t.TraceUID == "" {
+		return
+	}
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	s.inflight[t.TraceUID] = t
+	// 超限淘汰：最多保留 200 条
+	const maxInflight = 200
+	if len(s.inflight) > maxInflight {
+		// 移除最早的一条（遍历找到 CreatedAt 最早的）
+		var oldestUID string
+		var oldestTime time.Time
+		for uid, trace := range s.inflight {
+			if oldestUID == "" || trace.CreatedAt.Before(oldestTime) {
+				oldestUID = uid
+				oldestTime = trace.CreatedAt
+			}
+		}
+		delete(s.inflight, oldestUID)
+	}
+}
+
+// removeInflight 从 in-flight 索引移除（请求终结后调用）。
+func (s *TraceStore) removeInflight(traceUID string) {
+	if s == nil || traceUID == "" {
+		return
+	}
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	delete(s.inflight, traceUID)
+}
+
+// inflightCount 返回当前 in-flight 索引大小。
+func (s *TraceStore) inflightCount() int {
+	if s == nil {
+		return 0
+	}
+	s.inflightMu.RLock()
+	defer s.inflightMu.RUnlock()
+	return len(s.inflight)
+}
+
+// promoteInflight 从 in-flight 索引中找到未采样 trace 并提升为持久化。
+// 用于"先未采样、后变异常"的场景（终态失败/mismatch/fail-open）。
+func (s *TraceStore) promoteInflight(traceUID string) *RoutingDecisionTrace {
+	if s == nil || traceUID == "" {
+		return nil
+	}
+	s.inflightMu.RLock()
+	trace, ok := s.inflight[traceUID]
+	s.inflightMu.RUnlock()
+	if !ok {
+		return nil
+	}
+	// 提升为持久化
+	if s.db != nil {
+		if err := s.persistTrace(trace); err != nil {
+			log.Printf("[TraceStore-Promote] 提升落盘失败 uid=%s: %v", traceUID, err)
+		}
+	}
+	s.removeInflight(traceUID)
+	return trace
+}
+
+// ── 清理策略 ──
+
+const (
+	// traceRetention 详细 trace 保留期：7 天
+	traceRetention = 7 * 24 * time.Hour
+	// windowRetention 窗口聚合保留期：30 天
+	windowRetention = 30 * 24 * time.Hour
+	// cleanupInterval 清理最小间隔：24 小时
+	cleanupInterval = 24 * time.Hour
+)
+
+// cleanupExpired 清理过期数据。
+// 详细 trace 保留 7 天，窗口聚合和 safety event 保留 30 天。
+// 至多每 24 小时执行一次；启动时强制执行一次。
+// 清理失败只记录告警，不影响代理请求。
+func (s *TraceStore) cleanupExpired() {
+	if s == nil || s.db == nil {
+		return
+	}
+	now := time.Now().UTC()
+
+	s.mu.Lock()
+	if !s.lastCleanupAt.IsZero() && now.Sub(s.lastCleanupAt) < cleanupInterval {
+		s.mu.Unlock()
+		return
+	}
+	s.lastCleanupAt = now
+	s.mu.Unlock()
+
+	// 清理过期详细 trace（7 天）
+	traceCutoff := now.Add(-traceRetention).Format(time.RFC3339)
+	if _, err := s.db.Exec(
+		`DELETE FROM autopilot_routing_traces WHERE created_at < ?`,
+		traceCutoff,
+	); err != nil {
+		log.Printf("[TraceStore-Cleanup] 清理过期 trace 失败: %v", err)
+		return
+	}
+
+	// 清理过期窗口聚合（30 天）
+	windowCutoff := now.Add(-windowRetention).Format(time.RFC3339)
+	if _, err := s.db.Exec(
+		`DELETE FROM autopilot_routing_windows WHERE window_start < ?`,
+		windowCutoff,
+	); err != nil {
+		log.Printf("[TraceStore-Cleanup] 清理过期窗口失败: %v", err)
+	}
+
+	// 清理过期 safety event（30 天）
+	if _, err := s.db.Exec(
+		`DELETE FROM autopilot_auto_safety_events WHERE created_at < ?`,
+		windowCutoff,
+	); err != nil {
+		log.Printf("[TraceStore-Cleanup] 清理过期安全事件失败: %v", err)
+	}
+
+	// 清理 in-flight 索引中超时的条目（1 小时）
+	s.inflightMu.Lock()
+	inflightTimeout := now.Add(-time.Hour)
+	for uid, trace := range s.inflight {
+		if trace.CreatedAt.Before(inflightTimeout) {
+			delete(s.inflight, uid)
+		}
+	}
+	s.inflightMu.Unlock()
+}
+
+// MaybeCleanup 是公开的清理入口，供外部周期调用。
+func (s *TraceStore) MaybeCleanup() {
+	s.cleanupExpired()
 }

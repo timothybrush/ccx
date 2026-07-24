@@ -204,6 +204,17 @@ func (s *TraceStore) RecordOutcome(traceUID string, outcome RoutingOutcome) erro
 	}
 
 	if s.db != nil {
+		// 判断是否需要从 in-flight 索引提升为持久化
+		isException := !outcome.Success || outcome.ChannelFallback ||
+			(!snapshot.Match && snapshot.ActualChannelUID != "" && snapshot.ShadowChannelUID != "")
+		if isException {
+			// 异常样本：先从 in-flight 索引提升（若存在），再 UPDATE
+			s.promoteInflight(traceUID)
+		} else {
+			// 非异常：从 in-flight 索引移除
+			s.removeInflight(traceUID)
+		}
+
 		if _, err := s.db.Exec(`
 UPDATE autopilot_routing_traces
 SET outcome_recorded = 1, outcome = ?, success = ?, channel_fallback = ?,
@@ -442,6 +453,89 @@ WHERE window_start >= ? AND window_start < ? AND mode IN (%s)`, placeholders)
 		return RoutingWindowSummary{}, err
 	}
 	return summary, nil
+}
+
+// aggregateRoutingWindowsByRelease 按 release/policy/cohort 隔离的窗口聚合。
+// 用于 readiness/regression 按发布批次和策略隔离样本。
+func (s *TraceStore) aggregateRoutingWindowsByRelease(
+	start, end time.Time,
+	releaseID, policyFingerprint string,
+	cohort string,
+	modes ...RoutingMode,
+) (RoutingWindowSummary, error) {
+	var summary RoutingWindowSummary
+	if s == nil || s.db == nil || len(modes) == 0 {
+		return summary, nil
+	}
+	placeholders, modeArgs := modePlaceholders(modes)
+	query := fmt.Sprintf(`
+SELECT MIN(window_start), MAX(window_start),
+       COALESCE(SUM(attempt_count), 0), COALESCE(SUM(request_count), 0),
+       COALESCE(SUM(success_count), 0), COALESCE(SUM(failure_count), 0),
+       COALESCE(SUM(cancelled_count), 0), COALESCE(SUM(attempt_failure_count), 0),
+       COALESCE(SUM(channel_fallback_count), 0), COALESCE(SUM(failopen_count), 0),
+       COALESCE(SUM(compared_count), 0), COALESCE(SUM(matched_count), 0),
+       COALESCE(SUM(mismatch_count), 0), COALESCE(SUM(uncompared_count), 0),
+       COALESCE(SUM(latency_samples), 0),
+       COALESCE(SUM(latency_b0), 0), COALESCE(SUM(latency_b1), 0),
+       COALESCE(SUM(latency_b2), 0), COALESCE(SUM(latency_b3), 0),
+       COALESCE(SUM(latency_b4), 0), COALESCE(SUM(latency_b5), 0),
+       COALESCE(SUM(latency_b6), 0), COALESCE(SUM(latency_b7), 0),
+       COALESCE(SUM(first_byte_samples), 0),
+       COALESCE(SUM(first_byte_b0), 0), COALESCE(SUM(first_byte_b1), 0),
+       COALESCE(SUM(first_byte_b2), 0), COALESCE(SUM(first_byte_b3), 0),
+       COALESCE(SUM(first_byte_b4), 0), COALESCE(SUM(first_byte_b5), 0),
+       COALESCE(SUM(first_byte_b6), 0), COALESCE(SUM(first_byte_b7), 0)
+FROM autopilot_routing_windows
+WHERE window_start >= ? AND window_start < ? AND mode IN (%s)`, placeholders)
+
+	args := []any{start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339)}
+	args = append(args, modeArgs...)
+	if releaseID != "" {
+		query += " AND release_id = ?"
+		args = append(args, releaseID)
+	}
+	if policyFingerprint != "" {
+		query += " AND policy_fingerprint = ?"
+		args = append(args, policyFingerprint)
+	}
+	if cohort != "" {
+		query += " AND cohort = ?"
+		args = append(args, cohort)
+	}
+
+	if err := scanRoutingWindowSummary(s.db.QueryRow(query, args...), &summary); err != nil {
+		return RoutingWindowSummary{}, err
+	}
+	return summary, nil
+}
+
+// ComparedWindowSummary 是包含三态比较计数的窗口聚合。
+type ComparedWindowSummary struct {
+	RoutingWindowSummary
+	ComparedCount   int64
+	MatchedCount    int64
+	MismatchCount   int64
+	UncomparedCount int64
+}
+
+// AggregateComparisonStats 按发布批次聚合三态比较统计。
+func (s *TraceStore) AggregateComparisonStats(start, end time.Time, releaseID string) (*ComparedWindowSummary, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var summary ComparedWindowSummary
+	err := s.db.QueryRow(`
+SELECT COALESCE(SUM(compared_count), 0), COALESCE(SUM(matched_count), 0),
+       COALESCE(SUM(mismatch_count), 0), COALESCE(SUM(uncompared_count), 0)
+FROM autopilot_routing_windows
+WHERE window_start >= ? AND window_start < ?`,
+		start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339),
+	).Scan(&summary.ComparedCount, &summary.MatchedCount, &summary.MismatchCount, &summary.UncomparedCount)
+	if err != nil {
+		return nil, err
+	}
+	return &summary, nil
 }
 
 func scanRoutingWindowSummary(row rowScanner, summary *RoutingWindowSummary) error {
