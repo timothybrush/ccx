@@ -270,7 +270,7 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 		}
 	}
 
-	return &RoutingPlan{
+	plan := &RoutingPlan{
 		RequestProfile:     profile,
 		Candidates:         candidates,
 		SelectedChannelUID: selectedChannelUID,
@@ -280,6 +280,43 @@ func (r *SmartRouter) BuildPlan(profile *RequestProfile) *RoutingPlan {
 		Mode:               RoutingModeDryRun,
 		Weights:            weights,
 	}
+
+	// 写入 dry-run trace（设计 §3.4：所有真实或 dry-run 路由都有 trace）
+	if r.traceStore != nil {
+		traceCandidates := make([]RoutingCandidate, 0, len(candidates))
+		for _, c := range candidates {
+			traceCandidates = append(traceCandidates, RoutingCandidate{
+				ChannelUID:    c.ChannelUID,
+				MappedModel:   c.MappedModel,
+				MappingSource: c.MappingSource,
+				MappingReason: c.MappingReason,
+				TotalScore:    c.Score,
+				Selected:      c.Selected,
+				FilterReasons: c.FilterReasons,
+			})
+		}
+		dryRunTrace := &RoutingDecisionTrace{
+			SchemaVersion:      2,
+			Source:             "dry_run",
+			RequestKind:        profile.ChannelKind,
+			TaskClass:          profile.TaskClass,
+			TaskDomain:         profile.TaskDomain,
+			RequestedModel:     profile.Model,
+			AgentRole:          profile.AgentRole,
+			Mode:               RoutingModeDryRun,
+			TargetMode:         RoutingModeDryRun,
+			EffectiveMode:      RoutingModeDryRun,
+			Candidates:         traceCandidates,
+			CandidatesBefore:   len(entries),
+			CandidatesAfter:    len(selectedCandidates),
+			SelectedChannelUID: selectedChannelUID,
+			FallbackUsed:       fallbackUsed,
+			SortReasons:        sortReasons,
+		}
+		r.traceStore.Record(dryRunTrace)
+	}
+
+	return plan
 }
 
 // CandidateFilterFor 为给定请求构建 scheduler.CandidateFilterFunc。

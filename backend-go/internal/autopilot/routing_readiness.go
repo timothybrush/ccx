@@ -230,6 +230,11 @@ WHERE trace_uid = ?`,
 			return err
 		}
 	}
+
+	// 终态后清除 attempt 序号计数器和 in-flight 索引，避免内存泄漏
+	if outcome.Terminal {
+		clearAttemptCounter(traceUID)
+	}
 	return nil
 }
 
