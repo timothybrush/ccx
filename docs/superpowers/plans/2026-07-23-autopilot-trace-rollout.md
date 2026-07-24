@@ -363,7 +363,7 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要：通过 SetAttemptRecorderHook 接入 upstream_failover，CreatePendingLog 后记 "started"，成功/错误时记 "completed"。
 - [x] ReleaseController 接入 main.go 请求路径：SmartRouter 消费 RoutingReleaseSnapshot，入口冻结后回填 trace 发布维度。
 - [ ] 真实上游 smoke（opt-in）与 SSE golden 回归（TODO: 后续迭代）
-- [ ] ChannelLog 展示面跳转入口（TODO: 后续迭代）
+- [x] ChannelLog 展示面跳转入口：为非空 autopilotTraceUid 添加可点击 chip，点击打开 AutopilotTraceDetailDialog 展示决策详情。
 - [ ] L2/L3/L4 集成测试补充（TODO: 后续迭代）
 
 **文件：** `backend-go/internal/autopilot/smart_router.go`、`routing_trace.go`、`backend-go/internal/handlers/common/multi_channel_failover.go`、`upstream_failover.go`、`channel_log_helper.go`、`backend-go/internal/metrics/channel_log.go` 和相关测试。
