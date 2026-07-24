@@ -236,7 +236,7 @@ type AFPPromotionRule struct {
 
 1. dry-run 返回每个候选的安全 AFP 摘要、未比较原因和排序影响，便于在不发真实请求时复核规则。
 2. 请求结束后以实际 token 用量计算 AFP，并在 Trace/窗口指标中区分 `estimated` 与 `actual`；计量失败不影响响应。
-3. 增加独立 `afpCostRoutingEnabled` 开关，默认关闭；`shadow` 只记录建议，`assist/auto` 必须经过 Task 7 的观察门槛后才能启用。
+3. 增加独立 `afpCostRoutingEnabled` 开关，默认关闭；`shadow` 只记录建议，`assist/auto` 必须经过第 7 节的观察门槛后才能启用。
 4. 管理端只展示只读活动状态和来源；不提供在线编辑官方倍率的入口，活动更新通过版本化代码/预设发布。
 
 ### Task 6：模型策略与文档更新
