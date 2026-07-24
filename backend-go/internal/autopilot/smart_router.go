@@ -47,6 +47,7 @@ type SmartRouter struct {
 	intentStore       *ManualIntentStore
 	traceStore        *TraceStore
 	configManager     *config.ConfigManager
+	releaseController *ReleaseController     // 灰度发布控制器（nil = 使用配置直接判定模式）
 	advisor           *TrustedRoutingAdvisor // Phase 2: 可信路由顾问（nil = 不启用）
 	decisionStore     *AdvisorDecisionStore  // Phase 2: advisor 决策记录存储
 	localRuntimeStore *LocalRuntimeStore     // Phase 2: 本地运行时存储（nil = 不纳入本地候选）
@@ -118,6 +119,12 @@ func (r *SmartRouter) SetModelResolver(resolver *ModelResolver) {
 // SetModelProfileStore 设置 endpoint 模型画像，用于规范能力上界的渠道质量折算。
 func (r *SmartRouter) SetModelProfileStore(store *ModelProfileStore) {
 	r.modelProfileStore = store
+}
+
+// SetReleaseController 设置灰度发布控制器（由 main.go 在构造后调用）。
+// nil 表示不启用灰度发布分桶，模式直接从配置判定（向后兼容）。
+func (r *SmartRouter) SetReleaseController(rc *ReleaseController) {
+	r.releaseController = rc
 }
 
 // SetOnCandidatesRanked 设置候选排名回调（Phase 4 Item 8: A/B 测试用）。
@@ -368,10 +375,20 @@ func (r *SmartRouter) candidateFilterFor(
 
 	cfg := r.configManager.GetConfig()
 	autopilotCfg := cfg.AutopilotRouting
-	mode := autopilotCfg.EffectiveRoutingMode()
+
+	// 模式判定：优先使用 ReleaseController（考虑安全覆盖和灰度分桶），回退到配置直接判定
+	var routerMode RoutingMode
+	var releaseSnapshot *RoutingReleaseSnapshot
+	if r.releaseController != nil {
+		routerMode = r.releaseController.EffectiveMode()
+		snap := r.releaseController.CurrentSnapshot()
+		releaseSnapshot = &snap
+	} else {
+		routerMode = RoutingMode(autopilotCfg.EffectiveRoutingMode())
+	}
 
 	// off / kill switch 不注入
-	if mode == config.AutopilotModeOff {
+	if routerMode == RoutingModeOff {
 		return nil
 	}
 
@@ -414,7 +431,6 @@ func (r *SmartRouter) candidateFilterFor(
 	familyPrefs := r.loadFamilyPrefs(autopilotCfg.ModelFamilyPreference)
 
 	traceStore := r.traceStore
-	routerMode := RoutingMode(mode)
 	disabledChannelUIDs := toStringSet(autopilotCfg.DisabledChannelUIDs)
 
 	return func(
@@ -427,6 +443,7 @@ func (r *SmartRouter) candidateFilterFor(
 			profile, weights, familyPrefs, routerMode, traceStore, disabledChannelUIDs,
 			cfg.UpstreamModelCapabilities,
 			onTraceRecorded,
+			releaseSnapshot,
 		)
 	}
 }
@@ -466,19 +483,33 @@ func (r *SmartRouter) executeFilter(
 	disabledChannelUIDs map[string]bool,
 	upstreamModelCapabilities map[string]config.UpstreamModelCapability,
 	onTraceRecorded func(traceUID string),
+	releaseSnapshot *RoutingReleaseSnapshot,
 ) ([]scheduler.ChannelInfo, error) {
 	startTime := time.Now()
 
 	// 构建 RoutingDecisionTrace
 	trace := &RoutingDecisionTrace{
+		SchemaVersion:       2,
 		RequestKind:         profile.ChannelKind,
 		TaskClass:           profile.TaskClass,
 		TaskDomain:          profile.TaskDomain,
 		RequestedModel:      profile.Model,
 		AgentRole:           profile.AgentRole,
 		Mode:                mode,
+		TargetMode:          mode,
+		EffectiveMode:       mode,
 		CandidatesBefore:    len(channels),
 		GlobalFilterReasons: make(map[string][]string),
+	}
+
+	// 从入口冻结的 release 快照回填发布维度（热重载只影响之后进入的请求）
+	if releaseSnapshot != nil {
+		trace.ReleaseID = releaseSnapshot.ReleaseID
+		trace.PolicyFingerprint = releaseSnapshot.PolicyFingerprint
+		trace.TargetMode = releaseSnapshot.TargetMode
+		trace.EffectiveMode = releaseSnapshot.EffectiveMode
+		trace.Cohort = releaseSnapshot.Cohort
+		trace.BypassReason = releaseSnapshot.BypassReason
 	}
 
 	// 构建评分上下文
