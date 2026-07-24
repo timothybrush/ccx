@@ -366,8 +366,8 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] ChannelLog 展示面跳转入口：为非空 autopilotTraceUid 添加可点击 chip，点击打开 AutopilotTraceDetailDialog 展示决策详情。
 - [x] 补 L3 SQLite 生命周期测试：重启还原、坏 JSON、过期清理、迁移幂等、脱敏验证（12 个）。
 - [x] 补 L4 HTTP 契约测试：列表分页/过滤、详情 404/Found/脱敏、统计三态（9 个）。
-- [ ] 真实上游 smoke（opt-in，`CCX_RUN_REAL_UPSTREAM_SMOKE=1`，需操作者配置专用凭证）（TODO: 后续迭代）
-- [ ] SSE golden 回归（需本地 fake upstream 环境）（TODO: 后续迭代）
+- [x] 真实上游 smoke（opt-in，`CCX_RUN_REAL_UPSTREAM_SMOKE=1`，默认 t.Skip，2 个测试覆盖非流式/流式）
+- [x] SSE golden 回归（本地 fake upstream，6 个测试覆盖帧顺序/trace 不改输出/取消不崩溃/脱敏）
 
 **文件：** `backend-go/internal/autopilot/smart_router.go`、`routing_trace.go`、`backend-go/internal/handlers/common/multi_channel_failover.go`、`upstream_failover.go`、`channel_log_helper.go`、`backend-go/internal/metrics/channel_log.go` 和相关测试。
 
