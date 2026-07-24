@@ -360,6 +360,7 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] BuildPlan 写入 dry-run trace：Source=dry_run，必落盘。
 - [x] Scheduler SelectionTrace 规范化后附到 trace：NormalizeSelectionTrace + AttachSchedulerDecision。
 - [x] endpoint 尝试摘要追加到 TraceStore：AppendEndpointAttempt，乱序合并、容量截断。
+- [x] 在 endpoint 尝试开始/结束时向 TraceStore 追加有序、容量受限的安全摘要：通过 SetAttemptRecorderHook 接入 upstream_failover，CreatePendingLog 后记 "started"，成功/错误时记 "completed"。
 - [ ] 补集成测试（TODO: 后续迭代）
 
 **完成条件：** 一个逻辑请求可从 correlationId 关联所有安全尝试；每条尝试仍有自己的日志 ID。
