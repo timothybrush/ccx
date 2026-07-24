@@ -570,6 +570,18 @@ func TryUpstreamWithAllKeys(
 			// 创建 pending 状态日志（附带代理上下文与会话标识，用于 subagent 观测）
 			logRequestID := CreatePendingLog(channelLogStore, metricsKey, channelIndex, upstream.Name, actualAttemptModel, actualOriginalModel, originalReasoningEffort, actualReasoningEffort, apiKey, currentBaseURL, apiType, operation, metrics.RequestSourceProxy, AgentContextFromGin(c), SessionIDFromGin(c), logOpts...)
 
+			// 向 Autopilot trace 追加一条 "started" endpoint 尝试摘要（fail-open）
+			attemptTraceUID, _ := c.Get("ccx.autopilot_trace_uid")
+			if uid, ok := attemptTraceUID.(string); ok && uid != "" {
+				recordEndpointAttempt(uid, autopilot.EndpointAttemptSummary{
+					AttemptUID:    logRequestID,
+					Status:        "started",
+					ChannelUID:    upstream.ChannelUID,
+					EndpointLabel: autopilot.DeriveEndpointLabel(upstream.ChannelUID, 0),
+					Result:        "attempt_failed",
+				})
+			}
+
 			// TCP 建连开始即计数：将活跃度统计提前到发起上游请求之前；同时关联 proxyKeyMask 用于成本报表持久化
 			requestID := metricsManager.RecordRequestConnectedWithProxyKeyMask(currentBaseURL, apiKey, metricsServiceType, actualAttemptModel, proxyKeyMask)
 
@@ -626,6 +638,7 @@ func TryUpstreamWithAllKeys(
 				// 记录渠道日志
 				// 完成日志记录
 				CompleteLog(channelLogStore, metricsKey, logRequestID, 0, false, err.Error(), isRetryAttempt)
+				recordAttemptCompleted(c, logRequestID, upstream.ChannelUID, "upstream_error", 0, time.Since(attemptStartedAt).Milliseconds())
 				RequestLogf(c, "[%s-Key] 警告: API密钥失败: %v", apiType, err)
 				continue
 			}
@@ -890,6 +903,7 @@ func TryUpstreamWithAllKeys(
 			}
 			// 记录渠道日志
 			CompleteLog(channelLogStore, metricsKey, logRequestID, http.StatusOK, true, "", isRetryAttempt)
+			recordAttemptCompleted(c, logRequestID, upstream.ChannelUID, "success", http.StatusOK, time.Since(attemptStartedAt).Milliseconds())
 
 			// Phase 3B-2: 回显自动模型映射信息（受 EchoMappedModel 配置门控）。
 			if appliedMappedModel != "" {

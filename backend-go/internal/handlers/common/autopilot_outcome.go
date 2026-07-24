@@ -20,6 +20,48 @@ func SetRoutingOutcomeRecorderHook(hook func(traceUID string, outcome autopilot.
 	routingOutcomeRecorderHook = hook
 }
 
+var attemptRecorderHook func(traceUID string, attempt autopilot.EndpointAttemptSummary)
+
+// SetAttemptRecorderHook 注入 endpoint 尝试摘要记录器；nil 时保持原有请求路径。
+func SetAttemptRecorderHook(hook func(traceUID string, attempt autopilot.EndpointAttemptSummary)) {
+	attemptRecorderHook = hook
+}
+
+// recordEndpointAttempt 向对应 trace 追加一条安全的 endpoint 尝试摘要。
+// traceUID 为空或 hook 未注入时静默跳过（fail-open：不影响请求）。
+func recordEndpointAttempt(traceUID string, attempt autopilot.EndpointAttemptSummary) {
+	if attemptRecorderHook == nil || traceUID == "" {
+		return
+	}
+	defer func() {
+		// 观测失败绝不影响代理请求
+		_ = recover()
+	}()
+	attemptRecorderHook(traceUID, attempt)
+}
+
+// recordAttemptCompleted 记录一次 endpoint 尝试的终态摘要。
+// attemptUID 对应 "started" 时登记的 logRequestID，result 为 success/upstream_error/cancelled/attempt_failed。
+func recordAttemptCompleted(c *gin.Context, attemptUID, channelUID string, result string, statusCode int, durationMs int64) {
+	if attemptRecorderHook == nil {
+		return
+	}
+	traceUIDVal, _ := c.Get("ccx.autopilot_trace_uid")
+	uid, _ := traceUIDVal.(string)
+	if uid == "" {
+		return
+	}
+	recordEndpointAttempt(uid, autopilot.EndpointAttemptSummary{
+		AttemptUID:    attemptUID,
+		Status:        "completed",
+		ChannelUID:    channelUID,
+		EndpointLabel: autopilot.DeriveEndpointLabel(channelUID, 0),
+		Result:        result,
+		StatusCode:    statusCode,
+		DurationMs:    durationMs,
+	})
+}
+
 func resetAutopilotAttemptTelemetry(c *gin.Context) {
 	if c != nil {
 		c.Set(autopilotFirstByteAtKey, time.Time{})
