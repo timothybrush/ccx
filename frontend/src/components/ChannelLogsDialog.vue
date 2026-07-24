@@ -146,6 +146,17 @@
                 <v-chip v-if="log.selectionReason" size="small" color="secondary" variant="tonal" :title="log.selectionReason">
                   {{ t('channelLogs.selectionReason') }} {{ log.selectionReason }}
                 </v-chip>
+                <v-chip
+                  v-if="log.autopilotTraceUid"
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  prepend-icon="mdi-chart-timeline-variant"
+                  :title="t('channelLogs.viewAutopilotTrace')"
+                  @click.stop="openAutopilotTrace(log.autopilotTraceUid)"
+                >
+                  {{ t('channelLogs.autopilotTrace') }} {{ log.autopilotTraceUid.slice(0, 12) }}...
+                </v-chip>
                 <span v-if="log.firstContentLatencyMs" class="text-medium-emphasis log-meta">
                   {{ t('channelLogs.duration.firstContent') }} {{ formatDurationSeconds(log.firstContentLatencyMs) }}
                 </span>
@@ -175,6 +186,12 @@
       </v-card-text>
     </v-card>
   </v-dialog>
+
+  <!-- Autopilot Trace 详情对话框 -->
+  <AutopilotTraceDetailDialog
+    v-model="autopilotDetailOpen"
+    :trace-uid="autopilotDetailTraceUid"
+  />
 </template>
 
 <script setup lang="ts">
@@ -182,6 +199,7 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { api, type ChannelKind, type ChannelLogEntry, type ChannelProtocolRoute } from '../services/api'
 import { useI18n } from '../i18n'
 import { useGlobalTick } from '../composables/useGlobalTick'
+import AutopilotTraceDetailDialog from './AutopilotTraceDetailDialog.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -202,6 +220,14 @@ const autoRefresh = ref(true)
 const expandedIndex = ref<number | null>(null)
 const copiedLogKey = ref<string | null>(null)
 let copyLogResetTimer: ReturnType<typeof setTimeout> | null = null
+
+// Autopilot Trace 详情对话框
+const autopilotDetailOpen = ref(false)
+const autopilotDetailTraceUid = ref('')
+function openAutopilotTrace(traceUid: string) {
+  autopilotDetailTraceUid.value = traceUid
+  autopilotDetailOpen.value = true
+}
 
 // 全局 tick（3s），visibility hidden 时自动暂停
 const logsTick = useGlobalTick(3000, 'ChannelLogs')
