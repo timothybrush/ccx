@@ -53,6 +53,7 @@ import type {
   SmartRoutingConfig,
   AutopilotTraceListResponse,
   AutopilotTraceStats,
+  AutopilotTraceDetailResponse,
   AutoAddChannelRequest,
   AutoAddChannelResponse,
   UpdateManagedAccountResponse,
@@ -1471,12 +1472,26 @@ export class ApiService {
   }
 
   /** 获取路由决策追踪列表 */
-  async getAutopilotTraces(params?: { limit?: number; mismatch?: boolean }): Promise<AutopilotTraceListResponse> {
+  async getAutopilotTraces(params?: {
+    limit?: number
+    mismatch?: boolean
+    release?: string
+    cohort?: string
+    mode?: string
+  }): Promise<AutopilotTraceListResponse> {
     const query = new URLSearchParams()
     if (params?.limit) query.set('limit', String(params.limit))
     if (params?.mismatch) query.set('mismatch', 'true')
+    if (params?.release) query.set('release', params.release)
+    if (params?.cohort) query.set('cohort', params.cohort)
+    if (params?.mode) query.set('mode', params.mode)
     const qs = query.toString()
     return this.request(`/traces${qs ? '?' + qs : ''}`)
+  }
+
+  /** 获取单条路由追踪详情 */
+  async getAutopilotTraceDetail(traceUid: string): Promise<AutopilotTraceDetailResponse> {
+    return this.request(`/traces/${encodeURIComponent(traceUid)}`)
   }
 
   /** 获取路由追踪统计汇总 */

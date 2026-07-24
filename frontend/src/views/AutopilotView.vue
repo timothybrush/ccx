@@ -44,10 +44,18 @@
       <AutopilotTraceTable
         :traces="traces"
         :loading="tracesLoading"
+        :partial="tracesPartial"
         class="mt-4"
         @refresh="fetchTraces"
+        @select="openTraceDetail"
       />
     </template>
+
+    <!-- Trace 详情对话框 -->
+    <AutopilotTraceDetailDialog
+      v-model="detailDialogOpen"
+      :trace-uid="selectedTraceUid"
+    />
   </div>
 </template>
 
@@ -59,20 +67,26 @@ import AutopilotModePanel from '@/components/AutopilotModePanel.vue'
 import AutopilotDiagnosePanel from '@/components/AutopilotDiagnosePanel.vue'
 import AutopilotTraceStats from '@/components/AutopilotTraceStats.vue'
 import AutopilotTraceTable from '@/components/AutopilotTraceTable.vue'
+import AutopilotTraceDetailDialog from '@/components/AutopilotTraceDetailDialog.vue'
 import type {
   SmartRoutingConfig,
   AutopilotTraceStats as TraceStatsType,
-  RoutingDecisionTrace,
+  TraceSummary,
 } from '@/services/api-types'
 
 const { t } = useI18n()
 
 const config = ref<SmartRoutingConfig | null>(null)
 const traceStats = ref<TraceStatsType | null>(null)
-const traces = ref<RoutingDecisionTrace[]>([])
+const traces = ref<TraceSummary[]>([])
+const tracesPartial = ref(false)
 const loading = ref(true)
 const saving = ref(false)
 const tracesLoading = ref(false)
+
+// 详情对话框状态
+const detailDialogOpen = ref(false)
+const selectedTraceUid = ref('')
 
 async function fetchAll() {
   loading.value = true
@@ -85,6 +99,7 @@ async function fetchAll() {
     config.value = cfg
     traceStats.value = stats
     traces.value = traceResp.traces
+    tracesPartial.value = traceResp.partial ?? false
   } catch (e) {
     console.error('[Autopilot-View] 加载失败:', e)
   } finally {
@@ -97,11 +112,17 @@ async function fetchTraces() {
   try {
     const resp = await api.getAutopilotTraces({ limit: 50 })
     traces.value = resp.traces
+    tracesPartial.value = resp.partial ?? false
   } catch (e) {
     console.error('[Autopilot-View] Trace 刷新失败:', e)
   } finally {
     tracesLoading.value = false
   }
+}
+
+function openTraceDetail(traceUid: string) {
+  selectedTraceUid.value = traceUid
+  detailDialogOpen.value = true
 }
 
 async function handleConfigUpdate(updated: SmartRoutingConfig) {

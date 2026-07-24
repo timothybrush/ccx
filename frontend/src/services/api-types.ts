@@ -1477,18 +1477,125 @@ export interface RoutingDecisionTrace {
 }
 
 export interface AutopilotTraceListResponse {
-  traces: RoutingDecisionTrace[]
+  traces: TraceSummary[]
   total: number
+  partial?: boolean
+  hasMore: boolean
 }
 
 export interface AutopilotTraceStats {
   totalCount: number
   comparedCount: number
+  matchedCount?: number
   mismatchCount: number
+  uncomparedCount?: number
+  successCount?: number
+  failOpenCount?: number
   mismatchRate: number
   taskClassDist: Record<string, number>
   modeDist: Record<string, number>
 }
+
+// ── Trace v2 类型 ──
+
+export type ComparisonStatus = 'matched' | 'mismatched' | 'uncompared'
+export type Cohort = 'treatment' | 'control' | 'bypass'
+
+/** 列表摘要（v2） */
+export interface TraceSummary {
+  traceUid: string
+  schemaVersion: number
+  createdAt: string
+  releaseId?: string
+  cohort?: Cohort
+  mode: string
+  requestKind: string
+  taskClass: string
+  taskDomain?: string
+  requestedModel?: string
+  comparisonStatus: ComparisonStatus
+  recommendedChannelUid?: string
+  actualChannelUid?: string
+  outcome?: string
+  success?: boolean
+  requestDurationMs?: number
+  historicalSchema?: boolean
+}
+
+/** Scheduler 裁决摘要 */
+export interface SchedulerDecisionSummary {
+  stages?: { name: string; count: number }[]
+  skipReasons?: string[]
+  selectedUid?: string
+  selectedName?: string
+  selectionCode?: string
+}
+
+/** endpoint 尝试摘要 */
+export interface EndpointAttemptSummary {
+  attemptUid: string
+  attemptSeq: number
+  status: string
+  channelUid: string
+  endpointLabel: string
+  result: string
+  statusCode?: number
+  durationMs?: number
+}
+
+/** trace 详情（v2） */
+export interface TraceDetailV2 {
+  traceUid: string
+  schemaVersion: number
+  traceRevision?: number
+  createdAt: string
+  requestCorrelationId?: string
+  source?: string
+  releaseId?: string
+  policyFingerprint?: string
+  targetMode?: string
+  effectiveMode?: string
+  cohort?: Cohort
+  bypassReason?: string
+  persistenceClass?: string
+  comparisonStatus: ComparisonStatus
+  requestKind: string
+  taskClass: string
+  taskDomain?: string
+  requestedModel?: string
+  agentRole?: string
+  manualIntentUid?: string
+  advisorDecisionUid?: string
+  candidates?: RoutingCandidate[]
+  candidatesBefore: number
+  candidatesAfter: number
+  globalFilterReasons?: Record<string, string[]>
+  sortReasons?: string[]
+  recommendedChannelUid?: string
+  selectedChannelUid?: string
+  estimatedCost?: number
+  costConfidence?: number
+  fallbackUsed: boolean
+  schedulerDecision?: SchedulerDecisionSummary
+  endpointAttempts?: EndpointAttemptSummary[]
+  attemptsTruncated?: boolean
+  attemptsTotal?: number
+  attemptsByResult?: Record<string, number>
+  outcome?: string
+  success?: boolean
+  channelFallback?: boolean
+  statusCode?: number
+  requestDurationMs?: number
+  firstByteLatencyMs?: number
+  completedAt?: string
+  durationMs: number
+  historicalSchema?: boolean
+}
+
+export interface AutopilotTraceDetailResponse {
+  trace: TraceDetailV2
+}
+
 
 // 自动添加渠道请求
 export interface AutoAddChannelRequest {
