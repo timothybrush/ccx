@@ -357,9 +357,9 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 在公共多渠道外壳最早处生成一次 `requestCorrelationId`，用 gin context 传递；不复用客户端 header，不替换每次 endpoint 尝试已有的 `ChannelLog.RequestID`。
 - [x] 为 `ChannelLog` 增加 `RequestCorrelationID` 和 `AutopilotTraceUID`，通过新增 `WithRequestCorrelationID`/`WithAutopilotTraceUID` ChannelLogOption 从公共尝试路径写入。
 - [x] 选择渠道后将 `AutopilotTraceUID` 写入 gin context，供 ChannelLog 关联。
-- [ ] BuildPlan 写入 dry-run trace（TODO: 后续迭代）
-- [ ] Scheduler SelectionTrace 规范化后附到 trace（TODO: 后续迭代）
-- [ ] endpoint 尝试摘要追加到 TraceStore（TODO: 后续迭代）
+- [x] BuildPlan 写入 dry-run trace：Source=dry_run，必落盘。
+- [x] Scheduler SelectionTrace 规范化后附到 trace：NormalizeSelectionTrace + AttachSchedulerDecision。
+- [x] endpoint 尝试摘要追加到 TraceStore：AppendEndpointAttempt，乱序合并、容量截断。
 - [ ] 补集成测试（TODO: 后续迭代）
 
 **完成条件：** 一个逻辑请求可从 correlationId 关联所有安全尝试；每条尝试仍有自己的日志 ID。
