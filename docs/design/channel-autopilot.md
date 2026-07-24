@@ -4187,7 +4187,54 @@ trace 只记录解释性字段，不记录明文 prompt、密钥、敏感 header
 - ~~旧配置 backfill：补 `ChannelUID`、`OriginType`、`OriginTier` 时不改变原调度。~~ **已完成**：`ensureOriginBackfill` 只补 `"unknown"`，不做任何基于 URL/名称的猜测推断；已接线到 `Profiler.DeriveEndpointProfile`，`BreakTieByOriginTier` 现在能吃到真实数据（此前一直是 fallback 的 `unknown`）。
 - ~~profile 损坏或 migration 失败时 fail-open：禁用 Autopilot，保留现有调度。~~ **已确认满足并测试锁定**：`main.go` 现有结构本就是 fail-open（`NewProfileStore`/`NewManager` 出错只打日志、`autopilotManager` 保持 `nil`，下游全部有 `nil` 守卫），本次新增 `schema_migration_test.go` 用测试锁定这条不变量。
 - ~~全局 `killSwitch`、按 task class disable、按 channel disable。~~ **已完成**：新增 `AutopilotRoutingConfig.DisabledTaskClasses`/`DisabledChannelUIDs`；`CandidateFilterFor`/`executeFilter`/`BuildPlan` 三处一致接入，`smart_router_invariant_test.go` 覆盖"task class 禁用后回退默认调度""channel 禁用后不出现在候选里""dry-run 与真实路径行为一致"三条不变量。
-- active 后的 SLO regression 自动 rollback 到 shadow，并在驾驶舱显示原因。**待实现**：`TrustedRoutingAdvisor.promotionMode` 目前是 `manual`，shadow→candidate→active 已有人工审查关卡；自动回滚是独立的新子系统（需要基线捕获窗口 + 实时对比 + 阈值判定），留待下一轮单独设计落地。
+- active 后的 SLO regression 自动 rollback 到 shadow，并在驾驶舱显示原因。**部分完成**：`ReleaseController.EvaluateAndApplyRegression` 已实现三窗口回归检测和 `SafetyOverride` 降级机制；`RoutingModeActive` 已加入配置枚举和 `IsAutopilotActive`。
+
+#### P1.6 Trace v2 契约与灰度发布
+
+> 对应实施计划：`docs/superpowers/plans/2026-07-23-autopilot-trace-rollout.md`
+
+**Trace v2 核心变更：**
+
+- `RoutingDecisionTrace` 增加 `SchemaVersion`、`TraceRevision`、`RequestCorrelationId`、`ReleaseID`、`PolicyFingerprint`、`TargetMode`/`EffectiveMode`/`Cohort`、`SchedulerDecision`、`EndpointAttempts` 字段。
+- 新增 `TraceDetailV2`、`TraceSummary`、`SchedulerDecisionSummary`、`EndpointAttemptSummary` DTO；使用显式 DTO 落盘而非直接 JSON 化运行时结构。
+- `ComparisonStatus` 三态枚举（`matched`/`mismatched`/`uncompared`）替代裸 `bool`。
+- `SanitizeForPersistence` 与 `SanitizeForResponse` 双边界脱敏；`GenerateTraceUIDv2` 使用 `crypto/rand` 碰撞安全生成。
+- `RoutingReleaseSnapshot` 不可变发布快照，入口冻结后续只读。
+
+**SQLite v6 迁移：**
+
+- trace 表新增列：`schema_version`、`trace_revision`、`request_correlation_id`、`release_id`、`policy_fingerprint`、`persistence_class`、`details_json`。
+- 窗口表重建主键：增加 `release_id`/`policy_fingerprint`/`cohort` 维度，新增 `compared_count`/`matched_count`/`mismatch_count`/`uncompared_count` 全量比较计数。
+- safety event 表增加 `release_id`/`policy_fingerprint` 字段。
+
+**灰度发布状态机：**
+
+```text
+off --管理员启用--> shadow --门槛满足--> assist --门槛满足--> auto --100% 稳定--> active
+```
+
+| 状态 | 行为 | 放量规则 |
+|---|---|---|
+| `off` | 不调用 Autopilot | rolloutPercent=0 |
+| `shadow` | 计算+记录，不影响调度 | rolloutPercent=0，安全基线 |
+| `assist` | 重排候选，不删除 | rolloutPercent 1→100 |
+| `auto` | 硬约束过滤+重排 | rolloutPercent 1→100 |
+| `active` | 与 auto 语义相同 | rolloutPercent=100，1% shadow control |
+
+**ReleaseController**（`release_controller.go`）：
+
+- 集中处理相邻状态迁移校验（逐级晋升，降级随时允许）。
+- `ComputeCohort` 使用 session ID / request correlation ID 与 `rolloutSeed` 做稳定哈希分桶。
+- `EvaluateAndApplyRegression` 检查三窗口回归并应用 `SafetyOverride`。
+- `AllowedTransition` 禁止跳级，`modeRank` 确定顺序。
+
+**只读 Trace API：**
+
+| 接口 | 返回 | 约束 |
+|---|---|---|
+| `GET /api/autopilot/traces` | `TraceSummary[]` | 游标分页、release/cohort/mode 过滤、partial 标记 |
+| `GET /api/autopilot/traces/:traceUid` | `TraceDetailV2` | 404=未找到/已过期/未采样；503=存储不可用 |
+| `GET /api/autopilot/traces/stats` | `TraceStatsResponse` | 三态比较统计、Mode/TaskClass 分布 |
 
 ### 12.3 P2：体验与运营增强
 

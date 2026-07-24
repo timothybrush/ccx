@@ -27,9 +27,6 @@ type ReleaseController struct {
 	safetyOverride       RoutingMode
 	safetyOverrideActive bool
 
-	// 上次晋升时间
-	lastPromotionAt time.Time
-
 	// 配置引用
 	configManager *config.ConfigManager
 	traceStore    *TraceStore
