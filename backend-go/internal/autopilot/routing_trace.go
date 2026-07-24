@@ -957,6 +957,19 @@ WHERE trace_uid = ?`, traceUID).Scan(
 	if schemaVer >= 2 && detailsJSON != "" && detailsJSON != "{}" {
 		var detail TraceDetailV2
 		if err := json.Unmarshal([]byte(detailsJSON), &detail); err == nil {
+			// 合并由 RecordOutcome 更新的终态字段（details_json 在 Record 时写入，
+			// 终态在 RecordOutcome 时通过 UPDATE 更新顶层列，需要合并到详情）
+			if outcomeRecordedInt != 0 {
+				detail.Outcome = outcome
+				detail.Success = successInt != 0
+				detail.ChannelFallback = channelFallbackInt != 0
+				detail.StatusCode = statusCode
+				detail.RequestDurationMs = reqDurationMs
+				detail.FirstByteLatencyMs = firstByteMs
+				if completedAtTime != nil {
+					detail.CompletedAt = completedAtTime
+				}
+			}
 			SanitizeForResponse(&detail)
 			return &detail, nil
 		}
