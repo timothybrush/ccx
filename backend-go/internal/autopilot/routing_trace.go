@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -755,7 +756,272 @@ func persistenceClassForTrace(t *RoutingDecisionTrace) PersistenceClass {
 	return PersistenceSampled
 }
 
-// Close 关闭 TraceStore。当前无需特殊清理。
+// ListTraceSummary 返回最近 N 条 TraceSummary，支持过滤。
+// 按 (created_at, trace_uid) 排序降序。
+// 返回 (summaries, partial, hasMore, err)。
+func (s *TraceStore) ListTraceSummary(limit int, mismatchOnly bool, release, cohort, mode string) ([]TraceSummary, bool, bool, error) {
+	if s == nil || s.db == nil {
+		return nil, false, false, nil
+	}
+
+	query := `
+SELECT trace_uid, schema_version, request_correlation_id, release_id, policy_fingerprint,
+       mode, request_kind, task_class, task_domain, requested_model,
+       shadow_uid, actual_uid, match,
+       outcome_recorded, outcome, success,
+       request_duration_ms, completed_at, created_at,
+       details_json
+FROM autopilot_routing_traces
+WHERE 1=1`
+	var args []any
+
+	if mismatchOnly {
+		query += ` AND shadow_uid != '' AND actual_uid != '' AND match = 0`
+	}
+	if release != "" {
+		query += ` AND release_id = ?`
+		args = append(args, release)
+	}
+	if cohort != "" {
+		query += ` AND persistence_class = ?`
+		args = append(args, cohort)
+	}
+	if mode != "" {
+		query += ` AND mode = ?`
+		args = append(args, mode)
+	}
+
+	query += ` ORDER BY created_at DESC, trace_uid DESC LIMIT ?`
+	args = append(args, limit+1) // 多查一条判断 hasMore
+
+	ctx, cancel := context.WithTimeout(context.Background(), traceQueryDeadline)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, false, false, err
+	}
+	defer errutil.IgnoreDeferred(rows.Close)
+
+	var summaries []TraceSummary
+	partial := false
+	for rows.Next() {
+		var uid, correlationID, releaseID, policyFp string
+		var schemaVer int
+		var modeStr, reqKind, taskClassStr, taskDomain, reqModel string
+		var shadowUID, actualUID string
+		var matchInt int
+		var outcomeRecordedInt, successInt int
+		var outcome string
+		var reqDurationMs int64
+		var completedAt, createdAt string
+		var detailsJSON string
+
+		err := rows.Scan(
+			&uid, &schemaVer, &correlationID, &releaseID, &policyFp,
+			&modeStr, &reqKind, &taskClassStr, &taskDomain, &reqModel,
+			&shadowUID, &actualUID, &matchInt,
+			&outcomeRecordedInt, &outcome, &successInt,
+			&reqDurationMs, &completedAt, &createdAt,
+			&detailsJSON,
+		)
+		if err != nil {
+			partial = true
+			continue
+		}
+
+		createdAtTime, _ := time.Parse(time.RFC3339, createdAt)
+
+		summary := TraceSummary{
+			TraceUID:           uid,
+			SchemaVersion:      schemaVer,
+			CreatedAt:          createdAtTime,
+			ReleaseID:          releaseID,
+			Mode:               RoutingMode(modeStr),
+			RequestKind:        reqKind,
+			TaskClass:          TaskClass(taskClassStr),
+			TaskDomain:         TaskDomain(taskDomain),
+			RequestedModel:     reqModel,
+			ComparisonStatus:   ComputeComparisonStatus(shadowUID, actualUID, matchInt != 0),
+			RecommendedChannel: shadowUID,
+			ActualChannelUID:   actualUID,
+			Outcome:            outcome,
+			Success:            successInt != 0,
+			RequestDurationMs:  reqDurationMs,
+			HistoricalSchema:   schemaVer < 2,
+		}
+		summaries = append(summaries, summary)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, partial, false, err
+	}
+
+	// 判断 hasMore
+	hasMore := false
+	if len(summaries) > limit {
+		summaries = summaries[:limit]
+		hasMore = true
+	}
+
+	return summaries, partial, hasMore, nil
+}
+
+// GetTraceDetail
+
+// GetTraceDetail 按 UID 获取 trace 的安全详情。
+// v1 行通过适配器转换；不存在返回 sql.ErrNoRows。
+func (s *TraceStore) GetTraceDetail(traceUID string) (*TraceDetailV2, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("trace store 未初始化")
+	}
+
+	// 先检查内存缓存
+	s.mu.RLock()
+	for i := len(s.records) - 1; i >= 0; i-- {
+		trace := s.records[i]
+		if trace.TraceUID == traceUID {
+			// 从内存副本生成安全详情
+			detail := trace.ToTraceDetailV2(nil, trace.TraceRevision, PersistenceSampled)
+			SanitizeForResponse(detail)
+			s.mu.RUnlock()
+			return detail, nil
+		}
+	}
+	s.mu.RUnlock()
+
+	// 回退到 SQLite
+	ctx, cancel := context.WithTimeout(context.Background(), traceQueryDeadline)
+	defer cancel()
+
+	var uid, correlationID, releaseID, policyFp string
+	var schemaVer int
+	var modeStr, reqKind, taskClassStr, taskDomain, reqModel, agentRole string
+	var shadowUID, actualUID string
+	var matchInt int
+	var fallbackUsedInt, durationMs int
+	var selectedUID string
+	var promptHash, candidatesJSON string
+	var outcomeRecordedInt, successInt, channelFallbackInt int
+	var outcome string
+	var statusCode int
+	var reqDurationMs, firstByteMs int64
+	var completedAt, createdAt string
+	var detailsJSON string
+	var persistenceClassStr string
+	var traceRevision int64
+
+	err := s.db.QueryRowContext(ctx, `
+SELECT trace_uid, schema_version, trace_revision, request_correlation_id,
+       release_id, policy_fingerprint, persistence_class,
+       request_kind, task_class, task_domain, requested_model, agent_role,
+       mode, shadow_uid, actual_uid, match,
+       selected_uid, fallback_used, duration_ms,
+       prompt_hash, candidates_json, details_json,
+       outcome_recorded, outcome, success, channel_fallback,
+       status_code, request_duration_ms, first_byte_latency_ms,
+       completed_at, created_at
+FROM autopilot_routing_traces
+WHERE trace_uid = ?`, traceUID).Scan(
+		&uid, &schemaVer, &traceRevision, &correlationID,
+		&releaseID, &policyFp, &persistenceClassStr,
+		&reqKind, &taskClassStr, &taskDomain, &reqModel, &agentRole,
+		&modeStr, &shadowUID, &actualUID, &matchInt,
+		&selectedUID, &fallbackUsedInt, &durationMs,
+		&promptHash, &candidatesJSON, &detailsJSON,
+		&outcomeRecordedInt, &outcome, &successInt, &channelFallbackInt,
+		&statusCode, &reqDurationMs, &firstByteMs,
+		&completedAt, &createdAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	createdAtTime, _ := time.Parse(time.RFC3339, createdAt)
+	var completedAtTime *time.Time
+	if t, err := time.Parse(time.RFC3339, completedAt); err == nil {
+		completedAtTime = &t
+	}
+
+	// 尝试解析 v2 details_json
+	if schemaVer >= 2 && detailsJSON != "" && detailsJSON != "{}" {
+		var detail TraceDetailV2
+		if err := json.Unmarshal([]byte(detailsJSON), &detail); err == nil {
+			SanitizeForResponse(&detail)
+			return &detail, nil
+		}
+		// 解析失败：返回 v1 适配结果
+	}
+
+	// v1 行或 details_json 损坏：返回适配结果
+	trace := &RoutingDecisionTrace{
+		TraceUID:           uid,
+		RequestKind:        reqKind,
+		TaskClass:          TaskClass(taskClassStr),
+		TaskDomain:         TaskDomain(taskDomain),
+		RequestedModel:     reqModel,
+		AgentRole:          agentRole,
+		Mode:               RoutingMode(modeStr),
+		ShadowChannelUID:   shadowUID,
+		ActualChannelUID:   actualUID,
+		Match:              matchInt != 0,
+		SelectedChannelUID: selectedUID,
+		FallbackUsed:       fallbackUsedInt != 0,
+		DurationMs:         int64(durationMs),
+		OutcomeRecorded:    outcomeRecordedInt != 0,
+		Outcome:            outcome,
+		Success:            successInt != 0,
+		ChannelFallback:    channelFallbackInt != 0,
+		StatusCode:         statusCode,
+		RequestDurationMs:  reqDurationMs,
+		FirstByteLatencyMs: firstByteMs,
+		CompletedAt:        completedAtTime,
+		CreatedAt:          createdAtTime,
+	}
+	detail := AdaptV1ToTraceDetailV2(trace)
+	SanitizeForResponse(detail)
+	return detail, nil
+}
+
+// GetV2Stats 计算 v2 统计汇总，基于内存缓存。
+func (s *TraceStore) GetV2Stats() TraceStatsResponse {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	stats := TraceStatsResponse{
+		TaskClassDist: make(map[string]int),
+		ModeDist:      make(map[string]int),
+	}
+
+	for _, t := range s.records {
+		stats.TotalCount++
+		comparison := ComputeComparisonStatus(t.ShadowChannelUID, t.ActualChannelUID, t.Match)
+		switch comparison {
+		case ComparisonMatched:
+			stats.ComparedCount++
+			stats.MatchedCount++
+		case ComparisonMismatched:
+			stats.ComparedCount++
+			stats.MismatchCount++
+		case ComparisonUncompared:
+			stats.UncomparedCount++
+		}
+		if t.Success {
+			stats.SuccessCount++
+		}
+		if t.FallbackUsed {
+			stats.FailOpenCount++
+		}
+		stats.TaskClassDist[string(t.TaskClass)]++
+		stats.ModeDist[string(t.Mode)]++
+	}
+
+	if stats.ComparedCount > 0 {
+		stats.MismatchRate = float64(stats.MismatchCount) / float64(stats.ComparedCount)
+	}
+
+	return stats
+}
 func (s *TraceStore) Close() error {
 	return nil
 }
