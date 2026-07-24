@@ -321,11 +321,11 @@ func TestTraceStore_Stats(t *testing.T) {
 // ── GenerateTraceUID 稳定性测试 ──
 
 func TestGenerateTraceUID_Stability(t *testing.T) {
-	// 同样参数应生成稳定 UID
+	// v2: crypto/rand 生成碰撞安全 UID，每次调用产生不同值
 	uid1 := GenerateTraceUID("messages", TaskClassSupervisor, mustParseTime("2025-01-01T00:00:00Z"))
 	uid2 := GenerateTraceUID("messages", TaskClassSupervisor, mustParseTime("2025-01-01T00:00:00Z"))
-	if uid1 != uid2 {
-		t.Errorf("同参数生成不同 UID: %s vs %s", uid1, uid2)
+	if uid1 == uid2 {
+		t.Errorf("crypto/rand 应生成不同 UID: %s", uid1)
 	}
 
 	// 不同参数应生成不同 UID
@@ -337,6 +337,9 @@ func TestGenerateTraceUID_Stability(t *testing.T) {
 	// 前缀校验
 	if !strings.HasPrefix(uid1, "rt_") {
 		t.Errorf("UID 缺少 rt_ 前缀: %s", uid1)
+	}
+	if !strings.HasPrefix(uid2, "rt_") {
+		t.Errorf("UID 缺少 rt_ 前缀: %s", uid2)
 	}
 }
 

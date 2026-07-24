@@ -63,6 +63,20 @@ type RoutingCandidate struct {
 type RoutingDecisionTrace struct {
 	TraceUID string `json:"traceUid"`
 
+	// ── v2 身份与版本（§3.1）──
+	SchemaVersion        int    `json:"schemaVersion"`
+	TraceRevision        int64  `json:"traceRevision"`
+	RequestCorrelationId string `json:"requestCorrelationId,omitempty"` // 服务端逻辑请求关联 ID
+	Source               string `json:"source,omitempty"`               // "proxy" | "dry_run"
+
+	// ── v2 策略快照（§3.1）──
+	ReleaseID         string      `json:"releaseId,omitempty"`
+	PolicyFingerprint string      `json:"policyFingerprint,omitempty"`
+	TargetMode        RoutingMode `json:"targetMode,omitempty"`
+	EffectiveMode     RoutingMode `json:"effectiveMode,omitempty"`
+	Cohort            Cohort      `json:"cohort,omitempty"`
+	BypassReason      string      `json:"bypassReason,omitempty"`
+
 	// 请求特征摘要（脱敏）
 	RequestKind    string     `json:"requestKind"` // messages | chat | responses | gemini
 	TaskClass      TaskClass  `json:"taskClass"`
@@ -105,6 +119,15 @@ type RoutingDecisionTrace struct {
 	RequestDurationMs  int64      `json:"requestDurationMs,omitempty"`
 	FirstByteLatencyMs int64      `json:"firstByteLatencyMs,omitempty"`
 	CompletedAt        *time.Time `json:"completedAt,omitempty"`
+
+	// ── v2 尝试摘要（§3.1）──
+	EndpointAttempts  []EndpointAttemptSummary `json:"endpointAttempts,omitempty"`
+	AttemptsTruncated bool                     `json:"attemptsTruncated,omitempty"`
+	AttemptsTotal     int                      `json:"attemptsTotal,omitempty"`
+	AttemptsByResult  map[string]int           `json:"attemptsByResult,omitempty"`
+
+	// ── v2 Scheduler 裁决（§3.1）──
+	SchedulerDecision *SchedulerDecisionSummary `json:"schedulerDecision,omitempty"`
 
 	// 脱敏标识
 	PromptHash string `json:"promptHash,omitempty"` // prompt SHA256 前 16 位
@@ -162,6 +185,7 @@ func MaskKey(key string) string {
 // 副作用修改传入指针：
 //   - 对所有候选和最终选择的 metricsKey 做掩码
 //   - 清除 promptHash（API 响应不返回 hash）
+//   - 清除 v2 endpoint 摘要中的敏感信息
 //   - 不含消息正文（结构本身不存储）
 func SanitizeTrace(t *RoutingDecisionTrace) {
 	if t == nil {
@@ -178,6 +202,11 @@ func SanitizeTrace(t *RoutingDecisionTrace) {
 
 	// 清除 promptHash（API 响应层不返回，防碰撞攻击）
 	t.PromptHash = ""
+
+	// 脱敏 v2 endpoint 摘要
+	for i := range t.EndpointAttempts {
+		t.EndpointAttempts[i].EndpointLabel = SanitizeMetricsKey(t.EndpointAttempts[i].EndpointLabel)
+	}
 
 	// 清除 shadow/actual channel UID 中可能的额外信息（只保留标识符）
 	// ChannelUID 本身不含敏感信息（是 UUID），不做额外处理
@@ -209,10 +238,9 @@ func GeneratePromptHash(promptSnippet string) string {
 // ── TraceUID 生成 ──
 
 // GenerateTraceUID 生成路由追踪唯一标识。
+// 使用 crypto/rand 生成碰撞安全 UID，不依赖时间戳或请求参数。
 func GenerateTraceUID(requestKind string, taskClass TaskClass, createdAt time.Time) string {
-	h := fmt.Sprintf("%s|%s|%s", requestKind, string(taskClass), createdAt.Format(time.RFC3339Nano))
-	sum := sha256.Sum256([]byte(h))
-	return "rt_" + hex.EncodeToString(sum[:8])
+	return GenerateTraceUIDv2()
 }
 
 // ── TraceStore（内存环形 + 可选 SQLite 落盘）──
