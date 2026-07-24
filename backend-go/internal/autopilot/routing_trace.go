@@ -259,8 +259,10 @@ const (
 // TraceStore 管理 RoutingDecisionTrace 的内存环形缓存与 SQLite 可选落盘。
 // 内存环形保留最近 500 条，超出时淘汰最旧记录。
 // SQLite 落盘策略：1/10 抽样 + 所有 shadow 与实际不一致的样本。
+// 异步 writer 在后台批量写入，不阻塞代理请求。
 type TraceStore struct {
-	db *sql.DB
+	db     *sql.DB
+	writer *asyncWriter // 有界异步写入后端，db != nil 时创建
 
 	records []*RoutingDecisionTrace // 按时间排序，最新在末尾
 	mu      sync.RWMutex
@@ -302,6 +304,8 @@ func NewTraceStoreWithDB(db *sql.DB) (*TraceStore, error) {
 		}
 		// 启动时执行一次清理
 		store.cleanupExpired()
+		// 启动异步 writer
+		store.writer = newAsyncWriter(&sqlDBAdapter{db: db})
 	}
 
 	log.Printf("[TraceStore-Init] 初始化完成，已加载 %d 条追踪记录", len(store.records))
@@ -1043,6 +1047,9 @@ func (s *TraceStore) GetV2Stats() TraceStatsResponse {
 	return stats
 }
 func (s *TraceStore) Close() error {
+	if s.writer != nil {
+		s.writer.close()
+	}
 	return nil
 }
 
