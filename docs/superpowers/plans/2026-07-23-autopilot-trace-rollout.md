@@ -346,7 +346,7 @@ Fail-open 分两类记录，避免把业务约束与实现故障混为一谈：
 - [x] 把正常成功保留为 1/10 抽样；将 mismatch、失败、耗尽、fallback/fail-open、manual/advisor 和显式 dry-run 统一标记为必落盘类别。
 - [x] 建立受限 in-flight 索引：未采样 trace 登记到独立 map（max 200），终态回填时从 in-flight 提升为带 revision 的 UPSERT。
 - [x] 实现清理策略：7 天详细 trace、30 天窗口/event，启动一次并按 24 小时门限批量执行，清理/DB 错误只告警并 fail-open。
-- [ ] 实现有界异步 writer（64 KiB 单条上限、250 ms DB deadline）（TODO: 后续迭代）
+- [x] 实现有界异步 writer：512 容量队列、128 终态预留、64 KiB 单条上限、250ms DB deadline、50ms 批量间隔、1s drain 超时。
 
 **完成条件：** 新旧数据库均可启动；重启后 v2 详情完整可读；异常样本不受抽样丢失；任何观测存储故障不改变代理响应。
 
